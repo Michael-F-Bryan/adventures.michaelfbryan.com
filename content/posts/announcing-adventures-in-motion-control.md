@@ -1,8 +1,6 @@
 ---
 title: "Announcing Adventures in Motion Control"
 date: 2019-09-01T16:27:15+08:00
-categories:
-- blog
 tags:
 - adventures-in-motion-control
 ---
@@ -22,7 +20,7 @@ This motion controller will be designed to control a 3D printer, with the
 eventual idea being to compile everything to *WebAssembly* so the simulator will
 run in the browser and users can explore it using a basic web UI.
 
-## Identifying Requirements and Identifying Subsystems 
+## Identifying Requirements and Subsystems 
 
 The first step in implementing any project is to specify exactly what you want
 it to do (and *not* do) and the constraints imposed by hardware.
