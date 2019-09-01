@@ -1,4 +1,4 @@
-baseurl = "http://adventures.michaelfbryan.com/"
+baseurl = "http://adventures.michaelfbryan.com.s3-website-ap-southeast-2.amazonaws.com/"
 title = "Michael-F-Bryan"
 theme = "hugo-coder"
 languagecode = "en"
@@ -43,3 +43,22 @@ url  = "/posts/"
 [[menu.main]]
 name = "About"
 url = "/about/"
+
+[[deployment.targets]]
+name = "Amazon S3"
+URL = "s3://adventures.michaelfbryan.com?region=ap-southeast-2"
+
+[[deployment.matchers]]
+#  Cache static assets for 20 years.
+pattern = "^.+\\.(js|css|svg|ttf)$"
+cacheControl = "max-age=630720000, no-transform, public"
+gzip = true
+
+[[deployment.matchers]]
+pattern = "^.+\\.(png|jpg)$"
+cacheControl = "max-age=630720000, no-transform, public"
+gzip = false
+
+[[deployment.matchers]]
+pattern = "^.+\\.(html|xml|json)$"
+gzip = true

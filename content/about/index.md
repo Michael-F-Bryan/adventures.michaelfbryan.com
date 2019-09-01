@@ -1,7 +1,6 @@
 ---
 title: "About Me"
 date: 2019-09-01T16:38:18+08:00
-draft: false
 ---
 
 ## Resume

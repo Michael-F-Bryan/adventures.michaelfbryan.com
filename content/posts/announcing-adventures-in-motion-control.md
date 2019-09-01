@@ -1,7 +1,6 @@
 ---
 title: "Announcing Adventures in Motion Control"
 date: 2019-09-01T16:27:15+08:00
-draft: true
 categories:
 - blog
 tags:
@@ -50,6 +49,9 @@ The motion controller will need to expose some of its internal state to the
 user for diagnostic purposes.
 
 Users should be able to inject "errors" to see how the simulator would react.
+
+The motion controller should be able to execute pre-defined automation
+sequences. For example, bed levelling and axis calibration.
 
 The motion controller will have a limited amount of non-volatile memory (e.g.
 [an on-board flash chip][flash]) which can be used for caching jobs and
