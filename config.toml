@@ -1,0 +1,18 @@
+baseURL = "http://adventures.michaelfbryan.com/"
+languageCode = "en-us"
+title = "Michael-F-Bryan"
+theme = "yinyang"
+
+[author]
+name = "Michael-F-Bryan"
+homepage = "https://michaelfbryan.com/"
+
+[params]
+headTitle = "Michael-F-Bryan"
+extraHead = '<link rel="stylesheet" href="/css/syntax.css"/>'
+[[params.socials]]
+name = "GitLab"
+link = "https://gitlab.com/Michael-F-Bryan"
+[[params.socials]]
+name = "Github"
+link = "https://github.com/Michael-F-Bryan"
