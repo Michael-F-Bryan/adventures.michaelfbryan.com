@@ -20,6 +20,7 @@ author = "Michael-F-Bryan"
 info = "Professional Software Engineer"
 description = "A place to document my thoughts and experiments"
 keywords = "blog,developer,personal"
+custom_css = ["css/master.css"]
 
 [[params.social]]
 name = "Github"
