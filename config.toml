@@ -1,18 +1,45 @@
-baseURL = "http://adventures.michaelfbryan.com/"
-languageCode = "en-us"
+baseurl = "http://adventures.michaelfbryan.com/"
 title = "Michael-F-Bryan"
-theme = "yinyang"
+theme = "hugo-coder"
+languagecode = "en"
+defaultcontentlanguage = "en"
 
-[author]
-name = "Michael-F-Bryan"
-homepage = "https://michaelfbryan.com/"
+paginate = 20
+canonifyurls = true
+
+pygmentsstyle = "friendly"
+pygmentscodefences = true
+pygmentscodefencesguesssyntax = true
+
+[taxonomies]
+category = "categories"
+tag = "tags"
 
 [params]
-headTitle = "Michael-F-Bryan"
-extraHead = '<link rel="stylesheet" href="/css/syntax.css"/>'
-[[params.socials]]
-name = "GitLab"
-link = "https://gitlab.com/Michael-F-Bryan"
-[[params.socials]]
+author = "Michael-F-Bryan"
+info = "Professional Software Engineer"
+description = "A place to document my thoughts and experiments"
+keywords = "blog,developer,personal"
+
+[[params.social]]
 name = "Github"
-link = "https://github.com/Michael-F-Bryan"
+icon = "fab fa-github fa-2x"
+weight = 1
+url = "https://github.com/Michael-F-Bryan"
+[[params.social]]
+name = "GitLab"
+icon = "fab fa-gitlab fa-2x"
+weight = 2
+url = "https://gitlab.com/Michael-F-Bryan"
+[[params.social]]
+name = "Contact Me"
+icon = "fas fa-envelope fa-2x"
+weight = 3
+url = "mailto:michaelfbryan@gmail.com"
+
+[[menu.main]]
+name = "Blog"
+url  = "/posts/"
+[[menu.main]]
+name = "About"
+url = "/about/"
