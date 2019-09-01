@@ -3,6 +3,7 @@ title: "Top-Level Infrastructure"
 date: "2019-09-01T21:19:39+08:00"
 tags:
 - adventures-in-motion-control
+- rust
 draft: true
 ---
 
@@ -61,13 +62,14 @@ trait System<In, Out> {
 }
 ```
 
-## Time
+## Keeping Track of Time
 
 An important responsibility for a motion controller is being able to change
 the value of something over time (hence the *motion* in *motion controller*).
 Timing is used all over the place and each motion controller will have its
 own way of tracking the time (remember that there may not necessarily be an
-OS), so lets pull this out into its own trait.
+OS meaning we can't depend on `std::time::SystemTime`), so lets pull this
+out into its own trait.
 
 ```rust
 use core::time::Duration;
@@ -80,30 +82,54 @@ trait Clock: Sync {
 ```
 
 {{% notice note %}}
-This is some text!
+A `Clock` will be shared by almost every system and a reference may be passed
+across threads. Hence the `&self` in `elapsed()` and the `Sync` bound.
 {{% /notice %}}
 
-> **Note:** A `Clock` will be shared by almost every system and a reference
-> may be passed across threads. Hence the `&self` in `elapsed()` and the `Sync`
-> bound.
-
+{{% notice tip %}}
 Extracting the concept of time into its own trait is especially handy during 
-testing or if you want time to run faster than 1 second per second.
+testing. It can also be used to make time run faster than the usual 1 second
+per second (e.g. fast-forward).
+{{% /notice %}}
 
-```rust
-use std::time::Instant;
+## Layers
 
-#[derive(Debug)]
-pub struct OsClock {
-    started: Instant,
-}
+To reduce coupling and make things more manageable, we'll take advantage of
+[Cargo Workspaces][workspaces] to break the project into layers.
 
-impl Clock for OsClock {
-    fn elapsed(&self) -> Duration {
-        self.started.elapsed()
-    }
-}
-```
+At the very bottom is our *Hardware Abstraction Layer* (HAL). This defines
+the various platform-agnostic interfaces used by the application.
+
+Next we have the various drivers (e.g. stepper motor control) and systems (e.g.
+communication and motion planning). These are built on top of the HAL and 
+are where most of the application is implemented.
+
+At the very top is the application itself, an in-browser simulator in our case.
+Its role is to glue the various components together, performing the necessary
+setup before polling the various systems ad infinitum.
+
+Our app's dependency graph may look something like this:
+
+{{< mermaid >}}
+graph BT;
+    H[Hardware Abstraction Layer];
+    B[In-Browser Simulator];
+    C[Comms System];
+    P[Motion Planning];
+    S[Move Stepper Axis];
+    F[Flash Memory];
+
+    H-->C;
+    H-->P;
+    H-->F;
+    H-->S;
+
+    F-->B;
+    S-->B;
+    P-->B;
+    C-->B;
+{{< /mermaid >}}
 
 [next-step]: {{< ref "announcing-adventures-in-motion-control.md#the-next-step" >}}
 [interrupt]: https://en.wikipedia.org/wiki/Interrupt
+[workspaces]: https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html
