@@ -4,7 +4,6 @@ date: "2019-09-02T21:22:30+08:00"
 tags:
 - adventures-in-motion-control
 - rust
-draft: true
 ---
 
 As mentioned in [the intro article][next-step], the first task will be to set
