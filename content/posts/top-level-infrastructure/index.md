@@ -234,12 +234,15 @@ pub struct App;
 
 impl<In: Inputs, Out: Frontend> System<In, Out> for App {
     fn poll(&mut self, _inputs: &In, _outputs: &mut Out) {
-        // TODO: Implement this
+        outputs.log("Polling...");
      }
 }
 
 /// The mechanism used by the [`App`] to interact with the outside world.
-pub trait Frontend { }
+pub trait Frontend {
+    /// Log a message somewhere.
+    fn log(&mut self, message: &str);
+}
 
 pub trait Inputs { }
 ```
@@ -249,9 +252,10 @@ The `Input` and `Frontend` traits are what our `App` will use to communicate
 with the outside world. By putting it behind a trait instead of binding to
 JavaScript objects directly our `sim` crate will be able to compile on the
 host platform. This makes testing and debugging significantly easier and
-*isn't* a case of [*premature generalization*][pg]... At least I hope it
-isn't.
+*isn't* a case of [*premature generalization*][pg]... At least I hope
+it isn't.
 
+[pg]: https://blogs.msdn.microsoft.com/ericgu/2006/08/03/seven-deadly-sins-of-programming-sin-1/
 {{% /notice %}}
 
 Platform-specific code gets put in its own module which will be wrapped in a 
@@ -261,6 +265,8 @@ we'll be adding to it before long.
 ```rust
 // sim/src/platform_specific.rs
 
+use wasm_bindgen::JsValue;
+
 #[derive(Debug, Clone, Default)]
 pub struct Inputs;
 
@@ -269,7 +275,12 @@ impl crate::app::Inputs for Inputs { }
 #[derive(Debug, Clone, Default)]
 pub struct Browser;
 
-impl crate::app::Frontend for Browser { }
+impl crate::app::Frontend for Browser {
+    fn log(&mut self, msg: &str) {
+        let msg = JsValue::from(msg);
+        web_sys::console::log_1(&msg);
+    }
+}
 ```
 
 We also need to expose functions which will let JavaScript create the world
@@ -340,7 +351,6 @@ function init() {
 }
 
 function animate() {
-    console.log("Polling...")
     wasm.poll(world);
     requestAnimationFrame(animate);
 }
@@ -348,9 +358,35 @@ function animate() {
 init();
 ```
 
+Going to the dev server (http://localhost:8080/) should show an empty page,
+however if you open up the developer console you should see something like this:
+
+![It Works!!1!](it-works.png)
+
+It may not look impressive, but to just get that *"Polling..."* message we
+needed to:
+
+1. Compile the `sim` crate to WebAssembly
+2. Import that WebAssembly from a JavaScript application and make sure JS can
+   call our WASM functions
+3. Bundle the JavaScript and WebAssembly together and send it to a browser
+4. Initialize the world when the window is first loaded
+5. Call `wasm.poll()` from an JavaScript function that is called whenever the
+   browser paints
+6. Poll the underlying `App`, passing in a set of dummy `Inputs` and a `Browser`
+   object
+7. Invoke that browser's `log()` method
+8. Call back into JavaScript's `console.log()` function
+
 ## The Next Step
 
+Now the main application is wired up and we can run code in the browser the next
+step is to add some systems to our application. 
 
+A relatively easy, yet important, component is some sort of FPS counter. Ideally
+there'll be a bit of text in the corner showing the number of `poll()`s per
+second and the average duration. That way we can get a better feel for our
+simulator's performance characteristics.
 
 [next-step]: {{< ref "announcing-adventures-in-motion-control.md#the-next-step" >}}
 [interrupt]: https://en.wikipedia.org/wiki/Interrupt
@@ -359,5 +395,4 @@ init();
 [69e68832]: https://github.com/Michael-F-Bryan/adventures-in-motion-control/commit/69e68832299e459068b4263676bb9fc20987f03a
 [cargo-watch]: https://crates.io/crates/cargo-watch
 [watchexec]: https://crates.io/crates/watchexec
-[pg]: https://blogs.msdn.microsoft.com/ericgu/2006/08/03/seven-deadly-sins-of-programming-sin-1/
 [raf]: https://developer.mozilla.org/en-US/docs/Web/API/window/requestAnimationFrame
