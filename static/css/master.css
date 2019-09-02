@@ -22,7 +22,7 @@ div.notices p:first-child:after {
     position: absolute;
     top: 2px;
     color: #fff;
-    left: 2rem;
+    left: 2em;
 }
 div.notices.info p {
     border-top: 30px solid #F0B37E;
