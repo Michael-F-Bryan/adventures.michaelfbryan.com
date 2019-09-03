@@ -229,53 +229,89 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 #[derive(Debug)]
-pub struct App;
-
-impl<In: Inputs, Out: Frontend> System<In, Out> for App {
-    fn poll(&mut self, _inputs: &In, _outputs: &mut Out) {
-        outputs.log("Polling...");
-     }
+pub struct App {
+    inputs: Inputs,
+    browser: Browser,
 }
 
-/// The mechanism used by the [`App`] to interact with the outside world.
-pub trait Frontend {
-    /// Log a message somewhere.
-    fn log(&mut self, message: &str);
+impl App {
+    pub fn poll(&mut self) {
+        self.browser.log("Polling...");
+    }
 }
-
-pub trait Inputs { }
 ```
 
 {{% notice note %}}
-The `Input` and `Frontend` traits are what our `App` will use to communicate
-with the outside world. By putting it behind a trait instead of binding to
-JavaScript objects directly our `sim` crate will be able to compile on the
-host platform. This makes testing and debugging significantly easier and
-*isn't* a case of [*premature generalization*][pg]... At least I hope
-it isn't.
-
-[pg]: https://blogs.msdn.microsoft.com/ericgu/2006/08/03/seven-deadly-sins-of-programming-sin-1/
+The `Input` and `Browser` types are what hooks our `App` up to the rest of the
+world. They'll implement the various HAL traits so our systems are able run.
 {{% /notice %}}
 
-Platform-specific code gets put in its own module which will be wrapped in a 
-`#[cfg(target_arch = "wasm32")]` attribute. It's pretty empty for now, but
-we'll be adding to it before long.
+For now, the `Input` just contains a `Clock` based on JavaScript's 
+`performance.now()` function.
 
 ```rust
-// sim/src/platform_specific.rs
+// sim/src/inputs.rs
+
+use crate::PerformanceClock;
+use aimc_hal::clock::{Clock, HasClock};
+use std::time::Duration;
+
+#[derive(Debug, Clone, Default)]
+pub struct Inputs {
+    clock: PerformanceClock,
+}
+
+impl HasClock for Inputs {
+    fn clock(&self) -> &dyn Clock { &self.clock }
+}
+```
+
+The `PerformanceClock` itself isn't overly interesting. It just uses `web-sys`
+to call the native JavaScript function and converts the the result to a
+`Duration`.
+
+```rust
+// sim/src/clock.rs
+
+use aimc_hal::clock::Clock;
+use std::time::Duration;
+
+/// A [`Clock`] which uses the browser's native `performance.now()` function
+/// to keep track of time.
+#[derive(Debug, Clone, Default)]
+pub struct PerformanceClock;
+
+impl Clock for PerformanceClock {
+    fn elapsed(&self) -> Duration {
+        let perf = web_sys::window()
+            .expect("The window always exists")
+            .performance()
+            .expect("The window should always have a performance timer");
+
+        let now_ms = perf.now();
+        let secs = (now_ms / 1000.0).floor();
+        let secs = secs as u64;
+
+        let nanos = ((now_ms / 1000.0).fract() * 1e9).floor();
+        let nanos = nanos as u32;
+
+        Duration::new(secs as u64, nanos as u32)
+    }
+}
+```
+
+The `Browser` is also pretty empty at the moment.
+
+```rust
+// sim/src/browser.rs
 
 use wasm_bindgen::JsValue;
 
-#[derive(Debug, Clone, Default)]
-pub struct Inputs;
-
-impl crate::app::Inputs for Inputs { }
-
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct Browser;
 
-impl crate::app::Frontend for Browser {
-    fn log(&mut self, msg: &str) {
+impl Browser {
+    pub fn log(&mut self, msg: &str) {
         let msg = JsValue::from(msg);
         web_sys::console::log_1(&msg);
     }
@@ -288,17 +324,21 @@ and poll it.
 ```rust
 // sim/src/lib.rs
 
-pub mod app;
-#[cfg(target_arch = "wasm32")]
-mod platform_specific;
+mod app;
+mod browser;
+mod clock;
+mod inputs;
 
 pub use app::App;
+pub use browser::Browser;
+pub use clock::PerformanceClock;
+pub use inputs::Inputs;
 
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(start)]
 pub fn on_module_loaded() {
-    // wire up pretty panic messages
+    // wire up pretty panic messages when the WASM module is loaded into memory
     #[cfg(feature = "console_error_panic_hook")]
     console_error_panic_hook::set_once();
 }
@@ -306,22 +346,17 @@ pub fn on_module_loaded() {
 /// Creates a new world, initializing the various systems and wiring up any
 /// necessary interrupts.
 #[wasm_bindgen]
-#[cfg(target_arch = "wasm32")]
-pub fn setup_world() -> App { App }
+pub fn setup_world(fps_div: &str) -> App {
+    let browser = Browser::default();
+    let inputs = Inputs::default();
+
+    Ok(App::new(inputs, browser))
+}
 
 /// Poll the application, running each system in turn and letting them make
 /// progress.
 #[wasm_bindgen]
-#[cfg(target_arch = "wasm32")]
-pub fn poll(app: &mut App) {
-    use aimc_hal::System;
-    use platform_specific::{Browser, Inputs};
-
-    let inputs = Inputs::default();
-    let mut frontend = Browser::default();
-
-    app.poll(&inputs, &mut frontend);
-}
+pub fn poll(app: &mut App) { app.poll(); }
 ```
 
 Now the `sim` crate is exposing `setup_world()` and `poll()`, we can wire it
@@ -372,7 +407,7 @@ needed to:
 4. Initialize the world when the window is first loaded
 5. Call `wasm.poll()` from an JavaScript function that is called whenever the
    browser paints
-6. Poll the underlying `App`, passing in a set of dummy `Inputs` and a `Browser`
+6. Poll the underlying `App`, using in a set of dummy `Inputs` and a `Browser`
    object
 7. Invoke that browser's `log()` method
 8. Call back into JavaScript's `console.log()` function
