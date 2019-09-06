@@ -1,7 +1,9 @@
 ---
 title: "The Communications System: Part 1"
 date: "2019-09-05T23:15:00+08:00"
-draft: true
+tags:
+- adventures-in-motion-control
+- rust
 ---
 
 ## Prelude
