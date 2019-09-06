@@ -1,6 +1,6 @@
 ---
 title: "The Communications System: Part 1"
-date: "2019-09-05T23:15:00+08:00"
+date: "2019-09-06T23:00:00+08:00"
 tags:
 - adventures-in-motion-control
 - rust
@@ -8,9 +8,9 @@ tags:
 
 ## Prelude
 
-The *Communications* system is arguably one of the most important parts of our
-simulator. After all, it's kinda hard to debug a problem when you can't ask the
-simulator why it isn't working.
+The *Communications* system is arguably one of the most important parts of
+our simulator. After all, it's kinda hard to debug a program when you can't
+ask it why something isn't working.
 
 The user will interact with our simulated motion controller via a single 
 *Serial Port*, which we'll be modelling as a simple thing which sends and
@@ -354,8 +354,9 @@ impl<'a, M: MessageHandler> MessageHandler for &'a mut M {
 ```
 
 To handle **C** (CRC errors), we'll give the `MessageHandler` a method that'll
-be called whenever a CRC error occurs. That way the rest of the application can
-figure out how to handle it.
+be called whenever a CRC error occurs. That way the component in charge of 
+routing messages can note down how many errors have occurred within a single
+run.
 
 ```rust
 // comms/src/lib.rs
