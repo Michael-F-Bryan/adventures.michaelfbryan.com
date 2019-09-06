@@ -182,7 +182,6 @@ The `Browser` will also need updating so it takes a reference to the
 ```rust
 // sim/src/browser.rs
 
-use failure::Error;
 use fps_counter::{Fps, FpsSink};
 use wasm_bindgen::JsValue;
 use web_sys::Element;
@@ -193,20 +192,16 @@ pub struct Browser {
 }
 
 impl Browser {
-    pub fn from_element(fps_selector: &str) -> Result<Browser, Error> {
+    pub fn from_element(fps_selector: &str) -> Result<Browser, &'static str> {
         let document = web_sys::window()
-            .ok_or_else(|| {
-                failure::err_msg("Can't get a reference to the window")
-            })?
+            .ok_or("Can't get a reference to the window")?
             .document()
-            .ok_or_else(|| {
-                failure::err_msg("Can't get a reference to the document")
-            })?;
+            .ok_or("Can't get a reference to the document")?;
 
         let element = document
             .query_selector(fps_selector)
-            .map_err(|_| failure::err_msg("Invalid selector"))?
-            .ok_or_else(|| failure::err_msg("Can't find the FPS element"))?;
+            .map_err(|_| "Invalid selector")?
+            .ok_or("Can't find the FPS element")?;
 
         Ok(Browser { fps_div: element })
     }
@@ -221,8 +216,15 @@ While we're at it, we should probably implement `fps_counter::FpsSink` for
 
 impl FpsSink for Browser {
     fn emit_fps(&mut self, fps: Fps) {
-        let label = format!("FPS: {:.2}Hz", fps.frequency);
-        self.fps_div.set_inner_html(&label);
+        let mut buffer = ArrayString::<[u8; 128]>::default();
+
+        let result = write!(buffer, "FPS: {:.1}Hz", fps.frequency);
+
+        if result.is_ok() {
+            self.fps_div.set_inner_html(&buffer);
+        } else {
+            self.fps_div.set_inner_html("FPS: ? Hz");
+        }
     }
 }
 ```
@@ -239,7 +241,7 @@ will be notified of failure and raise the `JsValue` as an exception.
 
 #[wasm_bindgen]
 pub fn setup_world(fps_div: &str) -> Result<App, JsValue> {
-    let browser = Browser::from_element(fps_div).map_err(|e| e.to_string())?;
+    let browser = Browser::from_element(fps_div)?;
     let inputs = Inputs::default();
 
     Ok(App::new(inputs, browser))

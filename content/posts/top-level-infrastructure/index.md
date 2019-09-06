@@ -324,6 +324,8 @@ and poll it.
 ```rust
 // sim/src/lib.rs
 
+#![no_std]
+
 mod app;
 mod browser;
 mod clock;
