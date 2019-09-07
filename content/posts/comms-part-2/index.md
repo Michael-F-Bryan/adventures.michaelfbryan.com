@@ -1,7 +1,6 @@
 ---
 title: "The Communications System: Part 2"
-date: "2019-09-07T03:44:52+08:00"
-draft: true
+date: "2019-09-08T01:30:00+08:00"
 tags:
 - adventures-in-motion-control
 - rust
@@ -490,6 +489,23 @@ The backtrace isn't stellar, but it's definitely usable.
 
 If you know how to set up source maps or some other tool for translating those
 opaque WASM offsets into file names and line numbers, let me know!
+
+## The Next Step
+
+We're now able to:
+
+1. send data from the frontend to the `App`
+2. decode it in the `Communications` system
+3. pass that decoded message to a `Router`
+4. Recognise the message corresponds to an `echo`
+5. Generate the response (a copy of the original message)
+6. Send the response the entire way back up the stack to the frontend
+7. Print the binary and text representations of the response using `console.log()`
+
+Talk about a convoluted way to print "`Hello, World"` to the dev tools console!
+
+Now we've established a rudimentary communications system it's time to start
+implementing the next part of a motion controller. The *motion* bit.
 
 [packet-id]: https://docs.rs/anpp/1.0.1/anpp/struct.Packet.html#method.id
 [scroll]: https://crates.io/crates/scroll
