@@ -461,6 +461,36 @@ function init() {
 Surprisingly, reloading the *Adventures in Motion Control* tab and opening the
 dev console shows everything worked first time!
 
+![Don't you love it when things work first time?](echo.png)
+
+While we're at it, let's make sure throwing an exception in the callback doesn't
+break the world.
+
+```js
+// frontend/index.js
+
+function init() {
+    ...
+
+    world.on_data_sent(data => {
+        const str = new TextDecoder("utf-8").decode(data.slice(5));
+        throw new Error(str);
+    });
+}
+```
+
+The `<Browser as Tx>::send()` method will invoke `console.error()` whenever the
+callback returns an `Err` (`wasm_bindgen` generates shims to turn exceptions 
+into a `Result<T, JsValue>`), so in theory it should show in the dev tools 
+window with a backtrace.
+
+![Error log with backtrace](console_error.png)
+
+The backtrace isn't stellar, but it's definitely usable. 
+
+If you know how to set up source maps or some other tool for translating those
+opaque WASM offsets into file names and line numbers, let me know!
+
 [packet-id]: https://docs.rs/anpp/1.0.1/anpp/struct.Packet.html#method.id
 [scroll]: https://crates.io/crates/scroll
 [uint8-array]: https://docs.rs/js-sys/0.3.27/js_sys/struct.Uint8Array.html
