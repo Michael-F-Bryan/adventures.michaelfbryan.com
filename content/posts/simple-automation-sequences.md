@@ -28,7 +28,7 @@ of the application.
 {{% notice note %}}
 For technical reasons (the browser won't trigger our `App::poll()` more 
 frequently than 60Hz) we won't be implementing a "true" stepper motor driver
-component. Instead, we can emulate it by 
+component. Instead, we can emulate its behaviour from JavaScript.
 {{% /notice %}}
 
 ```rust
