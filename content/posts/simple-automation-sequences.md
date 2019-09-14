@@ -1,6 +1,6 @@
 ---
 title: "Simple Automation Sequences"
-date: "2019-09-14:23:55+08:00"
+date: "2019-09-14T23:55:00+08:00"
 draft: false
 ---
 
