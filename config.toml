@@ -1,4 +1,4 @@
-baseurl = "http://adventures.michaelfbryan.com//"
+baseurl = "http://adventures.michaelfbryan.com/"
 title = "Michael-F-Bryan"
 theme = "hugo-coder"
 languagecode = "en"

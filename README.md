@@ -1,6 +1,6 @@
 # Michael's Adventures
 
-(**[Rendered](http://adventures.michaelfbryan.com.s3-website-ap-southeast-2.amazonaws.com/)**)
+(**[Rendered](http://adventures.michaelfbryan.com/)**)
 
 A simple blog for documenting my thoughts and adventures.
 
