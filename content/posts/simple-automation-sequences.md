@@ -57,33 +57,39 @@ control this motion. This will typically be done on a motion controller using
 timers, setting the timer period to trigger an interrupt *exactly* when the
 next pulse needs to be sent.
 
-Additionally because our stepper motor driver is the one sending out pulses, we
-have complete control over *how many* pulses should be sent out between now and
-the next tick (e.g. imagine you only need 2 more steps to reach the desired
-location, but at the current frequency 10 steps would normally be sent between
-"ticks").
+This means we'll be using a control regime called *Velocity Control*. This is
+essentially where you control the system purely via velocity, as opposed to
+controlling the position or acceleration (or rather motor torque/force).
+
+{{% notice tip %}}
+You may want to read [Position Control vs Velocity Control vs Torque Control][1]
+on the *Robotics* section of *StackExchange* to find out about the other
+control regimes, and where one particular regime might be chosen over another.
+
+[1]: https://robotics.stackexchange.com/questions/10052/position-control-vs-velocity-control-vs-torque-control
+{{% /notice %}}
 
 ```rust
 // (not real code)
 
 trait Outputs {
-    fn set_x_motion(&mut self, step_frequency: f32, amount: i32);
-    fn set_y_motion(&mut self, step_frequency: f32, amount: i32);
-    fn set_z_motion(&mut self, step_frequency: f32, amount: i32);
+    fn set_x_motion(&mut self, steps_per_second: f32);
+    fn set_y_motion(&mut self, steps_per_second: f32);
+    fn set_z_motion(&mut self, steps_per_second: f32);
 }
 ```
 
-{{% notice note %}}
-You may have noticed everything is defined in terms of "steps" of a stepper 
-motor, not actual linear distance (e.g. millimetres). 
+One downside of *Velocity Control* is that you have less control over position
+and unless you have specific hardware which provides feedback (e.g. an
+[encoder][encoder]), the only way to know an axis' position is by counting it
+yourself based on time between ticks and the current speed (i.e. 
+`position += velocity*dt`). 
 
-For a homing sequence this isn't a concern, but later on we'll need to
-"calibrate" our stepper motor to determine the number of millimetres moved
-per step. Due to mechanical reasons (stretching, wear, temperature changes,
-what you had for breakfast, etc.) it's better to determine this calibration
-value empirically with a calibration sequence than trying to calculate it
-based on machine design.
-{{% /notice %}}
+Keep in mind that positional accuracy will depend directly on the `poll()`
+frequency. This is one of the big differentiators between realtime systems
+and "normal" systems, `poll()` frequency (and by extension performance in
+general) is a determining factor in whether something will fulfill its
+requirements.
 
 ## Planning
 
@@ -109,6 +115,207 @@ while not (at_x_lower_limit and at_y_lower_limit and at_z_lower_limit):
     move_y_backwards()
     move_z_backwards()
 ```
+
+## Implementing a *Go To Home* Sequence
+
+There are a couple tricks we'll use to make the implementation if this homing
+sequence easier. 
+
+First we'll abstract over the exact type of axis this sequence works on. That
+means it doesn't matter whether we're controlling a stepper motor attached to
+a gearbox or a simple servo. We should be able to tell the axis to move home
+at a particular velocity in human-friendly units like mm/sec, and leave the
+calculation of stepper frequency and trauma speeds to some *Stepper Motor
+Driver* component.
+
+{{% notice note %}}
+From here on we'll also be using the [uom][uom] crate for all dimensions and
+motion parameters. It helps to document what a particular variable
+corresponds to (i.e. the `speed = distance/time` calculation would be done
+with `Velocity`, `Length`, and `Time`, instead of `f32`, `f32`, and `f32`)
+and makes it almost impossible to mess up units (e.g. `mm` vs `in`, or `mm/s`
+vs `m/s`).
+
+[uom]: https://docs.rs/uom/
+{{% /notice %}}
+
+The interface for our limit switches and axes is rather simple:
+
+```rust
+// hal/src/axes.rs
+
+use uom::si::f32::Velocity;
+
+/// A driver for controlling axis motion using *velocity control*.
+pub trait Axes {
+    /// Tell the specified axis to move at a desired velocity.
+    fn set_target_velocity(&mut self, axis_number: usize, velocity: Velocity);
+
+    /// Get the actual velocity a particular axis is moving at.
+    fn velocity(&self, axis_number: usize) -> Option<Velocity>;
+}
+
+/// A driver which tracks the limit switch state.
+pub trait Limits {
+    fn limit_switches(&self, axis_number: usize) -> Option<LimitSwitchState>;
+}
+
+/// The state of a set of limit switches.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
+pub struct LimitSwitchState {
+    pub at_lower_limit: bool,
+    pub at_upper_limit: bool,
+}
+```
+
+We'll also create a generic automation sequence which moves just one axis
+to its home position.
+
+Automation sequences work by being polled frequently in order to make
+progress, eventually reaching a *Success* state or stopping early with some
+sort of *Fault*.
+
+```rust
+// hal/src/automation.rs
+
+/// An automation sequence which will either be polled to completion or abort
+/// early with a fault.
+pub trait AutomationSequence<Input, Output> {
+    /// Extra info attached to a fault.
+    type FaultInfo;
+
+    fn poll(&mut self, inputs: &Input, outputs: &mut Output) -> Transition<Self::FaultInfo>;
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum Transition<F> {
+    /// The [`AutomationSequence`] completed successfully.
+    Complete,
+    /// The [`AutomationSequence`] failed with a particular fault code.
+    Fault(F),
+    /// The [`AutomationSequence`] is still running.
+    Incomplete,
+}
+```
+Next we'll create a `MoveAxisHome` automation sequence which will try to move
+the `axis_number`'th axis to its lower limit (in the negative direction) at
+a specific `homing_speed`.
+
+```rust
+// motion/src/lib.rs
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MoveAxisHome {
+    homing_speed: Velocity,
+    axis_number: usize,
+}
+```
+
+When neither limit switch is actuated our `MoveAxisHome` automation sequence
+should tell the corresponding axis to move backwards.
+
+```rust
+// motion/src/lib.rs
+
+#[test]
+fn polling_without_hitting_limits_makes_an_axis_move_backwards() {
+    let mut seq = MoveAxisHome::new(Velocity::new::<millimeter_per_second>(100.0), 7);
+    let mut axes = DummyAxes::default();
+    let mut limits = DummyLimits::default();
+    limits.0.insert(7, LimitSwitchState::default());
+
+    let trans = seq.poll(&limits, &mut axes);
+
+    assert_eq!(trans, Transition::Incomplete);
+    assert_eq!(axes.0.len(), 1);
+    assert_eq!(axes.0.get(&7).copied(), Some(-1.0 * seq.homing_speed));
+}
+```
+
+Additionally, we want to be moving towards the lower limit so hitting the upper
+limit means something has gone wrong. Typically this means the limits are wired
+backwards.
+
+```rust
+// motion/src/lib.rs
+
+#[test]
+fn actuating_the_upper_limit_is_a_fault() {
+    let mut seq = MoveAxisHome::new(Velocity::new::<millimeter_per_second>(100.0), 7);
+    let mut axes = DummyAxes::default();
+    let mut limits = DummyLimits::default();
+    limits.0.insert(
+        7,
+        LimitSwitchState { at_lower_limit: false, at_upper_limit: true },
+    );
+
+    let trans = seq.poll(&limits, &mut axes);
+
+    assert_eq!(trans, Transition::Fault(Fault::unexpected_upper_limit(7)));
+    assert_eq!(axes.velocity(7), Some(Velocity::default()));
+}
+```
+
+And finally, reaching the lower limit should complete the sequence.
+
+```rust
+// motion/src/lib.rs
+
+#[test]
+fn actuating_the_lower_limit_completes_the_sequence() {
+    let mut seq = MoveAxisHome::new(Velocity::new::<millimeter_per_second>(100.0), 7);
+    let mut axes = DummyAxes::default();
+    let mut limits = DummyLimits::default();
+    limits.0.insert(
+        7,
+        LimitSwitchState { at_lower_limit: true, at_upper_limit: false },
+    );
+
+    let trans = seq.poll(&limits, &mut axes);
+
+    assert_eq!(trans, Transition::Complete);
+    assert_eq!(axes.velocity(7), Some(Velocity::default()));
+}
+```
+
+We've now got enough tests to implement a basic `MoveAxisHome` sequence. There
+are still a couple edge cases to cover (e.g. what happens if we start the 
+sequence on the upper limit?) but they can be an exercise for the reader.
+
+A quick'n'dirty implementation that makes all the tests pass:
+
+```rust
+// motion/src/lib.rs
+
+impl<L: Limits, A: Axes> AutomationSequence<L, A> for MoveAxisHome {
+    type FaultInfo = Fault;
+
+    fn poll(&mut self, inputs: &L, outputs: &mut A) -> Transition<Self::FaultInfo> {
+        let limits = match inputs.limit_switches(self.axis_number) {
+            Some(l) => l,
+            None => {
+                return Transition::Fault(Fault::axis_not_found(self.axis_number))
+            },
+        };
+
+        if limits.at_upper_limit {
+            outputs.set_target_velocity(self.axis_number, Velocity::default());
+            Transition::Fault(Fault::unexpected_upper_limit(self.axis_number))
+        } else if limits.at_lower_limit {
+            outputs.set_target_velocity(self.axis_number, Velocity::default());
+            Transition::Complete
+        } else {
+            outputs.set_target_velocity(self.axis_number, -1.0 * self.homing_speed);
+            Transition::Incomplete
+        }
+    }
+}
+```
+
+## Combining Automation Sequences
+
+Because we're moving multiple axes at a time, it'd be nice to have an
+abstraction that lets us execute several `AutomationSequence`s simultaneously.
 
 [requirements]: {{< ref "announcing-adventures-in-motion-control.md#identifying-requirements-and-subsystems" >}}
 [encoder]: https://en.wikipedia.org/wiki/Encoder
