@@ -1,7 +1,9 @@
 ---
 title: "Simple Automation Sequences"
 date: "2019-09-14T23:55:00+08:00"
-draft: false
+tags:
+- adventures-in-motion-control
+- rust
 ---
 
 Now we can communicate with the outside world, let's start interacting with the 
