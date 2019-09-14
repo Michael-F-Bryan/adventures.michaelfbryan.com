@@ -1,7 +1,7 @@
 ---
 title: "Simple Automation Sequences"
-date: "2019-09-10T23:08:55+08:00"
-draft: true
+date: "2019-09-14:23:55+08:00"
+draft: false
 ---
 
 Now we can communicate with the outside world, let's start interacting with the 
@@ -314,8 +314,153 @@ impl<L: Limits, A: Axes> AutomationSequence<L, A> for MoveAxisHome {
 
 ## Combining Automation Sequences
 
-Because we're moving multiple axes at a time, it'd be nice to have an
-abstraction that lets us execute several `AutomationSequence`s simultaneously.
+Because we're moving multiple axes at a time, it'd be nice to have a helper
+that lets us execute several `AutomationSequence`s simultaneously. A good
+analogy would be the `and_then()` and `join()` combinators commonly used with
+`futures`.
+
+The general idea is:
+
+- Create an array of `Option<AutomationSequence>`s 
+- to implement `AutomationSequence::poll()`, iterate over the sequences, polling
+  each sequence that is present
+- If any sequence returns a `Transition::Fault`, halt immediately with that
+  fault
+- If a sequence returns `Transition::Complete`, "remove" it from the array using
+  `Option::take()`
+- Repeat until all sequences are completed
+
+The actual declaration for this `All` combinator gets a little messy because
+we need to use `AsMut` and some other trait-level trickery to work around the
+lack of proper const generics. It also leaks some implementation details like
+needing to provide the `[Option<A>; N]` storage buffer in the constructor
+instead of just taking a list of `AutomationSequence`s.
+
+```rust
+// hal/src/automation.rs
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct All<A, V, I, O> {
+    sequences: V,
+    _automation_type: PhantomData<A>,
+    _input_type: PhantomData<I>,
+    _output_type: PhantomData<O>,
+}
+
+impl<A, V, I, O> All<A, V, I, O>
+where
+    V: AsMut<[Option<A>]>,
+    A: AutomationSequence<I, O>,
+{
+    pub fn new(items: V) -> Self {
+        All {
+            sequences: items,
+            _automation_type: PhantomData,
+            _input_type: PhantomData,
+            _output_type: PhantomData,
+        }
+    }
+}
+```
+
+The `AutomationSequence::poll()` method itself isn't overly complicated though.
+
+```rust
+// hal/src/automation.rs
+
+impl<I, O, A: AutomationSequence<I, O>, V: AsMut<[Option<A>]>>
+    AutomationSequence<I, O> for All<A, V, I, O>
+{
+    type FaultInfo = A::FaultInfo;
+
+    fn poll(
+        &mut self,
+        inputs: &I,
+        outputs: &mut O,
+    ) -> Transition<Self::FaultInfo> {
+        let variants = self.sequences.as_mut();
+
+        for variant in variants.iter_mut() {
+            if let Transition::Fault(f) = poll_variant(variant, inputs, outputs)
+            {
+                return Transition::Fault(f);
+            }
+        }
+
+        if variants.iter().all(|v| v.is_none()) {
+            Transition::Complete
+        } else {
+            Transition::Incomplete
+        }
+    }
+}
+
+fn poll_variant<I, O, A>(
+    variant: &mut Option<A>,
+    inputs: &I,
+    outputs: &mut O,
+) -> Transition<A::FaultInfo>
+where
+    A: AutomationSequence<I, O>,
+{
+    let trans = match variant {
+        Some(ref mut sequence) => sequence.poll(inputs, outputs),
+        None => Transition::Complete,
+    };
+
+    if trans.at_end_state() {
+        let _ = variant.take();
+    }
+
+    trans
+}
+```
+
+Now we've got a useable `All` combinator, it's almost trivial to make a wrapper
+that runs our *Go To Home* sequence on each axis concurrently.
+
+```rust
+// motion/src/lib.rs
+
+pub struct Home<L: Limits, A: Axes> {
+    inner: All<MoveAxisHome, [Option<MoveAxisHome>; 3], L, A>,
+}
+
+impl<L: Limits, A: Axes> Home<L, A> {
+    pub fn new(
+        x_axis: usize,
+        y_axis: usize,
+        z_axis: usize,
+        homing_speed: Velocity,
+    ) -> Self {
+        Home {
+            inner: All::new([
+                Some(MoveAxisHome::new(homing_speed, x_axis)),
+                Some(MoveAxisHome::new(homing_speed, y_axis)),
+                Some(MoveAxisHome::new(homing_speed, z_axis)),
+            ]),
+        }
+    }
+}
+
+impl<L: Limits, A: Axes> AutomationSequence<L, A> for Home<L, A> {
+    type FaultInfo = Fault;
+
+    fn poll(
+        &mut self,
+        inputs: &L,
+        outputs: &mut A,
+    ) -> Transition<Self::FaultInfo> {
+        self.inner.poll(inputs, outputs)
+    }
+}
+```
+
+## The Next Step
+
+Now we're able to work with automation sequences we should create a *Motion*
+system which can invoke those sequences in response to requests from the
+frontend.
 
 [requirements]: {{< ref "announcing-adventures-in-motion-control.md#identifying-requirements-and-subsystems" >}}
 [encoder]: https://en.wikipedia.org/wiki/Encoder
