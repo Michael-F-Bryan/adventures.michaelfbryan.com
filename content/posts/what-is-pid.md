@@ -22,6 +22,49 @@ corrections to a control function in order to minimise the error between the
 desired input and its actual value.
 {{% /notice %}}
 
-<!-- We need MathJax to make the PID equation look pretty -->
-<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
-</script>
+The textbook description for a PID controller is done using math:
+
+{{% latex %}}
+Output = K_P e(t) + K_I \int e(t) dt + K_D \frac{d}{dt} e(t)
+{{% /latex %}}
+
+This article will be building on top of Brett Beauregard's 
+[Improving the Beginner’s PID][intro]. If we translate the above equations into
+Rust we'll get something like this:
+
+```rust
+pub struct Pid {
+    k_i: f32,
+    k_d: f32,
+    k_p: f32,
+    set_point: f32,
+    cummulative_error: f32,
+    last_error: f32,
+    last_tick: Duration,
+}
+
+impl Pid {
+    pub fn compute(&self, input: f32, now: Duration) -> f32 {
+        // how much time has passed since the last tick?
+        let dt = now - self.last_tick;
+        let dt = dt.as_secs_f32();
+
+        // compute all the working error variables
+        let error = self.set_point - input;
+        self.cummulative_error += error * dt;
+        let deltaError = (error - self.last_error) / dt;
+
+        // Remember some variables for next time
+        self.last_error = error;
+        self.last_tick = now;
+
+        // Compute the PID output
+        self.k_p * error
+            + self.k_i * self.cummulative_error
+            + self.k_d * deltaError
+    }
+}
+
+```
+
+[intro]: http://brettbeauregard.com/blog/2011/04/improving-the-beginners-pid-introduction/

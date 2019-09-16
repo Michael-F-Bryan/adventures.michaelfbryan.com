@@ -11,7 +11,7 @@
     {{ end }}
     {{ if and .Site.Params.commit .GitInfo }}
     {{ if or (not .Site.Params.hideCredits) (not .Site.Params.hideCopyright) }} · {{ end }}
-    [<a href="{{ .Site.Params.commit }}{{ getenv "GIT_COMMIT_SHA" }}">{{ .GitInfo.AbbreviatedHash }}</a>]
+    [<a href="{{ .Site.Params.commit }}/{{ .GitInfo.Hash }}">{{ .GitInfo.AbbreviatedHash }}</a>]
     {{ end }}
   </section>
 
