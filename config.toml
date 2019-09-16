@@ -7,6 +7,7 @@ defaultcontentlanguage = "en"
 paginate = 20
 canonifyurls = true
 googleAnalytics = "UA-78714693-3"
+enableGitInfo = true
 
 pygmentsstyle = "friendly"
 pygmentscodefences = true
@@ -23,6 +24,7 @@ description = "A place to document my thoughts and experiments"
 keywords = "blog,developer,personal"
 custom_css = ["css/master.css"]
 custom_js = ["js/mermaid.min.js", "js/index.js"]
+commit = "https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/"
 
 [[params.social]]
 name = "Github"

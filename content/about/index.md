@@ -36,7 +36,7 @@ degree.
 I still enjoy learning about how the world works and leveraging my
 engineering knowledge wherever I can, whether that is in the geometry
 required to write a CAD program at work, or using the equations of motion and
-PID control to simulate a motion controller.
+a PID loop to simulate a motion controller.
 
 ## Resume
 
