@@ -30,9 +30,15 @@ Output = K_P e(t) + K_I \int e(t) dt + K_D \frac{d}{dt} e(t)
 
 This article will be building on top of Brett Beauregard's 
 [Improving the Beginner’s PID][intro]. If we translate the above equations into
-Rust we'll get something like this:
+Rust we'll get something like [this][pid-1]:
 
 ```rust
+// src/lib.rs
+
+#![no_std]
+use core::time::Duration;
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Pid {
     k_i: f32,
     k_d: f32,
@@ -44,15 +50,14 @@ pub struct Pid {
 }
 
 impl Pid {
-    pub fn compute(&self, input: f32, now: Duration) -> f32 {
+    pub fn compute(&mut self, input: f32, now: f32) -> f32 {
         // how much time has passed since the last tick?
         let dt = now - self.last_tick;
-        let dt = dt.as_secs_f32();
 
         // compute all the working error variables
         let error = self.set_point - input;
         self.cummulative_error += error * dt;
-        let deltaError = (error - self.last_error) / dt;
+        let delta_error = (error - self.last_error) / dt;
 
         // Remember some variables for next time
         self.last_error = error;
@@ -61,10 +66,17 @@ impl Pid {
         // Compute the PID output
         self.k_p * error
             + self.k_i * self.cummulative_error
-            + self.k_d * deltaError
+            + self.k_d * delta_error
     }
 }
-
 ```
 
+## Getting a Feeling for the PID Controller
+
+A big part of the PID controller is tuning those three variables, \\(k_p\\),
+\\(k_p\\), and \\(k_d\\), and the easiest way to understand how each knob
+affects the overall evolution of the system. We'll do this using a command-line
+program that generates graphs.
+
 [intro]: http://brettbeauregard.com/blog/2011/04/improving-the-beginners-pid-introduction/
+[pid-1]: https://github.com/Michael-F-Bryan/pid/blob/2cf54e8556d01b495e35384305649c7605f239b5/src/main.rs
