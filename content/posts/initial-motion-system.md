@@ -1,7 +1,6 @@
 ---
 title: "Initial Motion System"
-date: "2019-09-18T23:44:10+08:00"
-draft: true
+date: "2019-09-18T20:00:00+08:00"
 tags:
 - adventures-in-motion-control
 - rust
