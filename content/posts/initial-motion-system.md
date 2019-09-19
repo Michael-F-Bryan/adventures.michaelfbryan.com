@@ -272,15 +272,14 @@ components for an embedded motion controller. There is:
 - A *Motion* system which implements a state machine that can be used to move
   things around and interact with the outside world
 
-We've got one big problem though.
+We've got one big problem though...
 
-This is a simulation that runs in the browser. At the moment all we can see
+This is a simulation that runs in the browser and at the moment all we can see
 is a white screen with a rapidly changing [FPS Counter][fps-counter] in one
-corner. 
+corner. There's currently no way to interact with our simulator, set motion
+parameters, or even see what it's doing. 
 
-There's currently no way to interact with our simulator, set motion
-parameters, or even see what it's doing. That'll be the main goal for next
-time.
+That'll be our goal for next time.
 
 [previous]: {{< ref "simple-automation-sequences.md#the-next-step" >}}
 [fps-counter]: {{< ref "fps-counter.md" >}}
