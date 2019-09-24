@@ -6,6 +6,8 @@ tags:
 - adventures-in-motion-control
 - rust
 - wasm
+- vue
+- javascript
 ---
 
 Now we've got a half-usable motion controller, we need a graphical way for
@@ -310,6 +312,51 @@ Some elements they all have in common:
 - Colours which indicate whether things are "happy" (or not) at a glance
 - A 3D preview which shows how the job might look when cut
 
+I'm personally leaning towards the *OctoPrint* example. It's rather clean, and
+the UI layout/behaviour fits well in a browser (probably not surprising,
+considering it's a web UI).
+
+## Implementation
+
+We're going to lean heavily on [Bootstrap][bs] and [BootstrapVue][bs-v] for the
+CSS and UI elements here, so add them as a dependency.
+
+```console
+yarn add vue bootstrap-vue bootstrap
+```
+
+We'll also need to import the CSS and register the `BootstrapVue` plugin.
+
+```ts
+// frontend/src/main.ts
+
+import Vue from 'vue';
+import BootstrapVue from 'bootstrap-vue';
+
+import App from './App.vue';
+
+import 'bootstrap/dist/css/bootstrap.css';
+import 'bootstrap-vue/dist/bootstrap-vue.css';
+
+Vue.use(BootstrapVue)
+
+...
+```
+
+The next step is to mock out the various UI elements. This part can take a 
+while, especially if you aren't a normally frontend developer (like me!).
+
+After some tweaking, I came up with this:
+
+![TODO: Insert a gif/video of me exploring the page!](ui-preview.gif)
+
+{{% notice note %}}
+I won't include all of the UI code because it'd just be a big wall of text and
+not much use. Instead, I'd recommend checking out it out on GitHub. You'll want
+to start around commit
+[c367522](https://github.com/Michael-F-Bryan/adventures-in-motion-control/tree/c367522525bf8169523923039086257256fdfe3f)).
+{{% /notice %}}
+
 [vue-js]: https://vuejs.org/
 [vue-cli]: https://cli.vuejs.org/guide/installation.html
 [ducks]: https://rustwasm.github.io/docs/wasm-bindgen/reference/working-with-duck-typed-interfaces.html
@@ -317,3 +364,5 @@ Some elements they all have in common:
 [octo]: https://octoprint.org/
 [m4]: https://www.machsupport.com/software/mach4/
 [linux-cnc]: http://linuxcnc.org/
+[bs]: https://bootstrap-vue.js.org/docs/
+[bs-v]: https://bootstrap-vue.js.org/
