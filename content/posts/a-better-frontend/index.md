@@ -192,6 +192,12 @@ export default class App extends Vue {
     // make sure the animate method is cancelled when this component is removed
     // from the screen
     cancelAnimationFrame(this.animateToken);
+
+    // don't forget to drop() our App
+    if (this.app) {
+      this.app.free();
+      this.app = undefined;
+    }
   }
 
   animate() {
@@ -263,7 +269,7 @@ rendered document.
 Restarting the dev server and going to http://localhost:8080/ again will show
 our *Hello, World!* and a rapidly changing FPS counter.
 
-<video controls src="simple-ui.webm" type="video/webm"></video>
+<video controls src="simple-ui.webm" type="video/webm" style="width:100%"></video>
 
 {{% notice note %}}
 After letting the JIT warm up for a while, the *"average tick duration"* seems
@@ -275,7 +281,39 @@ deduplication of UI changes, our `poll()` function is a couple orders of
 magnitude faster.
 {{% /notice %}}
 
+## Scouting the Competition
+
+The first step when designing a UI is to look at what other people have done for
+inspiration.
+
+This screenshot of [OctoPrint][octo] web UI, showing their *"terminal"* tab
+looks promising. We'll probably want something similar to the terminal for 
+diagnostics and viewing the raw messages as they go back and forth.
+
+![OctoPrint terminal tab](octoprint-terminal.png)
+
+Another example, more machine-oriented this time, is [Mach4][m4]. This is a 
+commercial desktop program commonly used to control CNC machines.
+
+![Mach4](mach4.jpg)
+
+Another option is the highly configurable [LinuxCNC][linux-cnc].
+
+![LinuxCNC](linuxcnc.jpg)
+
+Some elements they all have in common:
+
+- Lots of numbers and buttons, preferring functionality over aesthetics
+- Some sort of pseudo-text editor for viewing the program sent to the machine
+- Instantaneous axis positions
+- Buttons for triggering various automation sequences
+- Colours which indicate whether things are "happy" (or not) at a glance
+- A 3D preview which shows how the job might look when cut
+
 [vue-js]: https://vuejs.org/
 [vue-cli]: https://cli.vuejs.org/guide/installation.html
 [ducks]: https://rustwasm.github.io/docs/wasm-bindgen/reference/working-with-duck-typed-interfaces.html
 [original]: https://github.com/Michael-F-Bryan/adventures-in-motion-control/blob/2459d6e02d72ac9a012fe002ffd89876716670fb/frontend/index.js
+[octo]: https://octoprint.org/
+[m4]: https://www.machsupport.com/software/mach4/
+[linux-cnc]: http://linuxcnc.org/
