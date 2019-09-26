@@ -348,7 +348,7 @@ while, especially if you aren't a normally frontend developer (like me!).
 
 After some tweaking, I came up with this:
 
-![TODO: Insert a gif/video of me exploring the page!](ui-preview.gif)
+<video controls src="mock-ui.webm" type="video/webm" style="width:100%"></video>
 
 {{% notice note %}}
 I won't include all of the UI code because it'd just be a big wall of text and
