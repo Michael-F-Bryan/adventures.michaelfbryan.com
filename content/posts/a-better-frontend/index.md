@@ -1,7 +1,6 @@
 ---
 title: "A Better Frontend"
-date: "2019-09-23T19:19:39+08:00"
-draft: true
+date: "2019-09-27T03:47:00+08:00"
 tags:
 - adventures-in-motion-control
 - rust
