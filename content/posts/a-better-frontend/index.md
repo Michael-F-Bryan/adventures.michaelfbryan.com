@@ -351,11 +351,283 @@ After some tweaking, I came up with this:
 <video controls src="mock-ui.webm" type="video/webm" style="width:100%"></video>
 
 {{% notice note %}}
-I won't include all of the UI code because it'd just be a big wall of text and
-not much use. Instead, I'd recommend checking out it out on GitHub. You'll want
-to start around commit
-[c367522](https://github.com/Michael-F-Bryan/adventures-in-motion-control/tree/c367522525bf8169523923039086257256fdfe3f)).
+If you want to see all of the code that went into that frontend, it's all on
+GitHub. You'll want to start around commit
+[24ca65c7](https://github.com/Michael-F-Bryan/adventures-in-motion-control/tree/24ca65c7d8be8194754525963193735febe36aaa)).
 {{% /notice %}}
+
+This design has roughly two areas, the *Sidebar* and *Body*.
+
+The *Sidebar* is given its own component containing information which you'll
+want to see at a glance. This includes things like the current machine state
+(axis positions, limit switches, etc.) and an overview of the simulator (FPS,
+job upload progress, etc.).
+
+The `frequency` and `tick_duration_us` are passed down from `App` as props. That
+way whenever they get updated on the `App`, the new values will be automagically
+passed down to the `Sidebar` and trigger a redraw.
+
+Rendering is just a case of tweaking [the Accordian example][accordian] from
+BootstrapVue's website. Axis positions aren't actually recorded anywhere, so 
+we'll use dummy values for the moment.
+
+```vue
+// frontend/src/components/Sidebar.vue
+
+<template>
+  <div class="sidebar" role="tablist">
+    <b-card no-body class="mb-1">
+      <b-card-header header-tag="header" class="p-1" role="tab">
+        <b-button block href="#" v-b-toggle.accordion-1 variant="info">Overview</b-button>
+      </b-card-header>
+      <b-collapse id="accordion-1" visible accordion="my-accordion" role="tabpanel">
+        <b-card-body>
+          <table class="table">
+            <tr>
+              <td>FPS</td>
+              <td>{{frequency}} Hz <small>({{tick_duration_us}} μs)</small></td>
+            </tr>
+          </table>
+        </b-card-body>
+      </b-collapse>
+    </b-card>
+
+    <b-card no-body class="mb-1">
+      <b-card-header header-tag="header" class="p-1" role="tab">
+        <b-button block href="#" v-b-toggle.accordion-2 variant="info">Current State</b-button>
+      </b-card-header>
+      <b-collapse id="accordion-2" accordion="my-accordion" role="tabpanel">
+        <b-card-body>
+          <table class="table">
+            <tr><td>X</td><td>123</td></tr> 
+            <tr><td>Y</td><td>321</td></tr>
+            <tr><td>Z</td><td>456.7</td></tr>
+          </table>
+        </b-card-body>
+      </b-collapse>
+    </b-card>
+  </div>
+</template>
+```
+
+The bulk of the page is filled with the *Body*. This contains a set of tabs 
+(may or may not be copied from BootstrapVue's [tabs example][tabs]) with a
+couple useful panels.
+
+First, as the way a user interacts with the motion controller it makes sense to
+have a *Control* panel. This will contain buttons for sending various commands
+or setting values (e.g. calibration ratios) but for now it'll just have an
+input for triggering the *Home* automation sequence, and a field for setting the
+homing speed.
+
+Again, this gets pulled out into its own component. We make use of the `@Emit`
+decorator to emit a `"home"` event whenever the *Home* button is pressed. The
+event's payload contains the homing speed (in `mm/s`) and will be used by the
+`App` later on to send a message to the motion controller.
+
+Other than that, it's fairly similar to what you may see in the Vue tutorial
+or BootstrapVue's [inline form][if] example.
+
+```vue
+// frontend/src/components/Controls.vue
+
+<template>
+  <div>
+    <b-form inline @submit="onHomePressed">
+      <label class="sr-only" for="homing-speed">Homing Speed</label>
+      <b-input-group append="mm/s" class="mb-2 mr-sm-2 mb-sm-0">
+        <b-input
+          type="number"
+          step="0.01"
+          min="0"
+          id="homing-speed"
+          v-model.number="motion.homingSpeed"
+        ></b-input>
+      </b-input-group>
+
+      <b-button type="submit" variant="primary">Home</b-button>
+    </b-form>
+  </div>
+</template>
+
+<script lang="ts">
+import { Component, Vue, Emit } from "vue-property-decorator";
+import MotionParameters from "../MotionParameters";
+
+@Component
+export default class Controls extends Vue {
+  public motion = new MotionParameters();
+
+  onHomePressed(e: Event) {
+    e.preventDefault();
+    this.home();
+  }
+
+  @Emit()
+  home() {
+    return { speed: this.motion.homingSpeed };
+  }
+}
+</script>
+```
+
+The `GCodeViewer` itself is almost trivial. It's essentially a component which
+is passed a `text` property and will display it. Whitespace is important when
+viewing a g-code program so we use `<pre>` and `<code>` tags to render the text
+line-by-line.
+
+```vue
+// frontend/src/components/GCodeViewer.vue
+
+<template>
+  <div>
+    <pre><code v-for="(line, i) in lines" :key="i">{{line}}<br /></code></pre>
+  </div>
+</template>
+
+<script lang="ts">
+import { Component, Vue, Prop } from "vue-property-decorator";
+
+@Component
+export default class GCodeViewer extends Vue {
+  @Prop({ type: String, default: "" })
+  public text!: string;
+
+  public get lines(): string[] {
+    return this.text.split("\n");
+  }
+}
+</script>
+```
+
+Other than that, implementing the `GCodeViewer` is just a case of playing with
+CSS until it looks like a proper editor.
+
+The final tab (and last major component) is the `Terminal`, a component we'll
+become quite familiar with when troubleshooting communications problems. The
+general idea is the `Terminal` will have a list of messages that have been
+recently sent or received, and will render them using a `v-for` and a
+`MessageViewer` helper.
+
+For now the `Terminal` is quite minimal, but later on it'll also include buttons
+and fields for manually sending messages to the motion controller.
+
+```vue
+// frontend/src/components/Terminal.vue 
+
+<template>
+  <div class="console">
+    <MessageViewer v-for="(msg, i) in messages" :key="i" :msg="msg" />
+  </div>
+</template>
+
+<script lang="ts">
+import { Component, Vue, Prop } from "vue-property-decorator";
+import MessageViewer from "@/components/MessageViewer.vue";
+import { Message, areMessages } from "../Message";
+
+@Component({ components: { MessageViewer } })
+export default class Terminal extends Vue {
+  @Prop({ required: true, default: () => [], validator: areMessages })
+  public messages!: Message[];
+}
+</script>
+```
+
+The `Message` itself is almost trivial:
+
+```ts
+// frontend/src/Message.ts
+
+export interface Message {
+    direction: Direction;
+    timestamp: Date;
+    toString(): string;
+}
+
+export enum Direction {
+    Sent = 1,
+    Received = 2,
+}
+```
+
+Likewise, the `MessageViewer` helper is just a widget for displaying `Message`s.
+It'll print the direction (using a unicode arrow), timestamp, and a string
+representation. Later on we may also add the ability to double-click on a
+message to show a more detailed JSON representation.
+
+```vue
+// frontend/src/components/MessageViewer.vue
+
+<template>
+  <div class="message" :class="style">
+    <span class="direction">{{arrow}}</span>
+    <span class="timestamp">{{timestamp}}</span>
+    <pre>{{msg.toString()}}</pre>
+  </div>
+</template>
+
+<script lang="ts">
+import { Component, Vue, Prop } from "vue-property-decorator";
+import { Message, isMessage, Direction } from "../Message";
+
+@Component
+export default class MessageViewer extends Vue {
+  @Prop({ required: true, validator: isMessage })
+  public msg!: Message;
+
+  public get timestamp(): string {
+    return this.msg.timestamp.toISOString().replace("T", " ").replace("Z", "");
+  }
+
+  public get arrow(): string {
+    switch (this.msg.direction) {
+      case Direction.Sent:
+        return "▶";
+      case Direction.Received:
+        return "◀";
+    }
+  }
+
+  public get style(): string {
+    switch (this.msg.direction) {
+      case Direction.Sent:
+        return "sent";
+      case Direction.Received:
+        return "received";
+    }
+  }
+}
+</script>
+```
+
+{{% notice note %}}
+As well as using a `message` class for styling the component as a whole,
+we're taking advantage of [computed styles][sb] to dynamically mark a
+particular message as `send` or `receive`. This allows us to use colour to
+differentiate between the message direction.
+
+[sb]: https://vuejs.org/v2/guide/class-and-style.html
+{{% /notice %}}
+
+## The Next Step
+
+So far we've built a *Communications* system, a *Motion* system and automation
+routines, and we've stubbed out the *User Interface*. For a change, instead of
+spending the entire time in the bowels of our Rust motion controller code, we
+jumped back up the stack and wrote a big chunk of the user-facing frontend. 
+
+This isn't uncommon when working in smaller teams. Often implementing a
+feature will require adding a bunch of low-level logic to the embedded
+system, then jumping over to the frontend code to make sure the various
+buttons, knobs, and levers are accessible to the user.
+
+Our next job will be to make sure the UI and motion controller can pass
+messages to each other. Hopefully once the two halves of our simulator can
+communicate we can start adding new functionality and begin to feel the
+productivity boost associated with our earlier infrastructure work
+([generalised message handling][messages], the [decoupling of systems from
+each other][decoupling] and the larger application, etc.).
 
 [vue-js]: https://vuejs.org/
 [vue-cli]: https://cli.vuejs.org/guide/installation.html
@@ -366,3 +638,8 @@ to start around commit
 [linux-cnc]: http://linuxcnc.org/
 [bs]: https://bootstrap-vue.js.org/docs/
 [bs-v]: https://bootstrap-vue.js.org/
+[accordian]: https://bootstrap-vue.js.org/docs/components/collapse#accordion-support
+[tabs]: https://bootstrap-vue.js.org/docs/components/tabs#basic-usage
+[if]: https://bootstrap-vue.js.org/docs/components/form#inline-form
+[decoupling]: {{% ref "posts/top-level-infrastructure/index.md#inter-system-communication" %}}
+[messages]: {{% ref "posts/comms-part-2/index.md#making-sense-of-messages" %}}
