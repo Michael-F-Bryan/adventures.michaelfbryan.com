@@ -147,7 +147,7 @@ The `PluginDeclaration` struct itself is quite simple:
 pub struct PluginDeclaration {
     pub rustc_version: &'static str,
     pub core_version: &'static str,
-    pub register: extern "C" fn(&mut dyn PluginRegistrar),
+    pub register: unsafe extern "C" fn(&mut dyn PluginRegistrar),
 }
 ```
 
@@ -418,6 +418,313 @@ extern "C" fn register(registrar: &mut dyn PluginRegistrar) {
 }
 ```
 
+## Loading Plugins
+
+Now we've defined a plugin we need a way to load it into memory and use it as
+part of our application.
+
+The first step is to create a new crate and add some dependencies.
+
+```console
+$ cargo new --lib --name plugins_app app
+$ cat Cargo.toml
+[workspace]
+members = ["core", "random", "app"]
+$ cd app
+$ cargo add libloading ../core
+    Updating 'https://github.com/rust-lang/crates.io-index' index
+      Adding libloading v0.5.2 to dependencies
+      Adding plugins_core (unknown version) to dependencies
+```
+
+When a library is loaded into memory, we need to make sure that it outlives 
+anything created from it. For example, a trait object's vtable (and all the 
+functions it points to) is embedded in the library's code. If we tried to invoke
+a plugin object's methods after its parent library was unloaded from memory,
+we'd try to execute garbage and crash the entire application.
+
+This means we need a way to make sure plugins can't outlive the library they
+were loaded from.
+
+We'll do this using the [*Proxy Pattern*][proxy].
+
+```rust
+// app/src/main.rs
+
+/// A proxy object which wraps a [`Function`] and makes sure it can't outlive
+/// the library it came from.
+pub struct FunctionProxy {
+    function: Box<dyn Function>,
+    _lib: Rc<Library>,
+}
+
+impl Function for FunctionProxy {
+    fn call(&self, args: &[f64]) -> Result<f64, InvocationError> {
+        self.function.call(args)
+    }
+
+    fn help(&self) -> Option<&str> {
+        self.function.help()
+    }
+}
+```
+
+We also need something which can contain all loaded plugins.
+
+```rust
+// app/src/main.rs
+
+pub struct ExternalFunctions {
+    functions: HashMap<String, FunctionProxy>,
+    libraries: Vec<Rc<Library>>,
+}
+
+impl ExternalFunctions {
+    pub fn new() -> ExternalFunctions {
+        ExternalFunctions::default()
+    }
+
+    pub fn load<P: AsRef<OsStr>>(&mut self, library_path: P) -> io::Result<()> {
+        unimplemented!()
+    }
+}
+```
+
+The `ExternalFunctions::load()` method is the real meat and potatoes of our 
+plugin system. It's where we:
+
+1. Load the library into memory
+2. Get a reference to the static `PluginDeclaration`
+3. Check the `rustc` and `plugins_core` versions match
+4. Create a `PluginRegistrar` which will create `FunctionProxy`s associated with
+   the library
+5. Pass the `PluginRegistrar` to the plugin's `register()` function
+6. Add any loaded plugins to the internal functions map
+
+The `PluginRegistrar` type itself is almost trivial:
+
+```rust
+// app/src/main.rs
+
+struct PluginRegistrar {
+    functions: HashMap<String, FunctionProxy>,
+    lib: Rc<Library>,
+}
+
+impl PluginRegistrar {
+    fn new(lib: Rc<Library>) -> PluginRegistrar {
+        PluginRegistrar {
+            lib,
+            functions: HashMap::default(),
+        }
+    }
+}
+
+impl plugins_core::PluginRegistrar for PluginRegistrar {
+    fn register_function(&mut self, name: &str, function: Box<dyn Function>) {
+        let proxy = FunctionProxy {
+            function,
+            _lib: Rc::clone(&self.lib),
+        };
+        self.functions.insert(name.to_string(), proxy);
+    }
+}
+```
+
+And now our `PluginRegistrar` helper is implemented, we have everything required
+to complete `ExternalFunctions::load()`.
+
+```rust
+// app/src/main.rs
+
+impl ExternalFunctions {
+    ...
+
+    pub fn load<P: AsRef<OsStr>>(&mut self, library_path: P) -> io::Result<()> {
+        // load the library into memory
+        let library = Rc::new(Library::new(library_path)?);
+
+        // get a pointer to the plugin_declaration symbol.
+        // 
+        // This is safe because plugin_declaration was created using our
+        // export_plugin!() macro. If an author creates a static with the same
+        // name but different type they've violated the plugin interface
+        let decl = unsafe {
+            library
+                .get::<*mut PluginDeclaration>(b"plugin_declaration\0")?
+                .read()
+        };
+
+        // version checks to prevent accidental ABI incompatibilities
+        if decl.rustc_version != plugins_core::RUSTC_VERSION
+            || decl.core_version != plugins_core::CORE_VERSION
+        {
+            return Err(io::Error::new(io::ErrorKind::Other, "Version mismatch"));
+        }
+
+        let mut registrar = PluginRegistrar::new(Rc::clone(&library));
+
+        // same safety justification as above
+        unsafe {
+            (decl.register)(&mut registrar);
+        }
+
+        // add all loaded plugins to the functions map
+        self.functions.extend(registrar.functions);
+        // and make sure ExternalFunctions keeps a reference to the library
+        self.libraries.push(library);
+
+        Ok(())
+    }
+}
+```
+
+## Using the Plugin
+
+At this point we've actually completed the plugin system. The only thing left is
+to demonstrate it works and start using the thing.
+
+For our purposes, it should be good enough to create a command-line app that
+loads a library then invokes a function by name, passing in any specified
+arguments.
+
+```
+Usage: app <plugin-path> <function> <args>...
+```
+
+First we'll create a quick `Args` struct to parse our command-line arguments 
+into.
+
+```rust
+// app/src/main.rs
+
+struct Args {
+    plugin_library: PathBuf,
+    function: String,
+    arguments: Vec<f64>,
+}
+```
+
+Then hack together a quick'n'dirty command-line parser. Real applications should
+prefer to use something like `clap` or `structopt` instead.
+
+```rust
+// app/src/main.rs
+
+impl Args {
+    fn parse(mut args: impl Iterator<Item = String>) -> Option<Args> {
+        let plugin_library = PathBuf::from(args.next()?);
+        let function = args.next()?;
+        let mut arguments = Vec::new();
+
+        for arg in args {
+            arguments.push(arg.parse().ok()?);
+        }
+
+        Some(Args {
+            plugin_library,
+            function,
+            arguments,
+        })
+    }
+}
+```
+
+We'll also need a way to `call()` a function by name.
+
+```rust
+// app/src/main.rs
+
+impl ExternalFunctions {
+    ...
+
+    pub fn call(&self, function: &str, arguments: &[f64]) -> Result<f64, InvocationError> {
+        self.functions
+            .get(function)
+            .ok_or_else(|| format!("\"{}\" not found", function))?
+            .call(arguments)
+    }
+}
+```
+
+And funally, we can write `main()`'s body.
+
+```rust
+// app/src/main.rs
+
+fn main() {
+    // parse arguments
+    let args = env::args().skip(1);
+    let args = Args::parse(args).expect("Usage: app <plugin-path> <function> <args>...");
+
+    // create our functions table and load the plugin
+    let mut functions = ExternalFunctions::new();
+    functions
+        .load(&args.plugin_library)
+        .expect("Function loading failed");
+
+    // then call the function
+    let result = functions
+        .call(&args.function, &args.arguments)
+        .expect("Invocation failed");
+
+    // print out the result
+    println!(
+        "{}({}) = {}",
+        args.function,
+        args.arguments
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", "),
+        result
+    );
+}
+```
+
+If everything goes to plan, the `app` tool should *Just Work*.
+
+```console
+$ cargo run -- ../target/release/libplugins_random.so random
+random() = 40
+$ cargo run -- ../target/release/libplugins_random.so random 42
+random(42) = 15
+$ cargo run -- ../target/release/libplugins_random.so random 42 64
+random(42, 64) = 54
+
+# Note: the function doesn't support 3 arguments
+$ cargo run -- ../target/release/libplugins_random.so random 1 2 3    
+thread 'main' panicked at 'Invocation failed: Other { msg: "0, 1, or 2 arguments are required" }', src/libcore/result.rs:1165:5
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace.
+```
+
+If a plugin author forgot to invoke the `export_plugin!()` macro, they may see
+an error like this:
+
+```console
+$ cargo run -- ../target/debug/libplugins_random.so random  
+    Finished dev [unoptimized + debuginfo] target(s) in 0.02s
+     Running `/home/michael/Documents/plugins/target/debug/plugins_app ../target/debug/libplugins_random.so random`
+thread 'main' panicked at 'Function loading failed: Custom { kind: Other, error: "../target/debug/libplugins_random.so: undefined symbol: plugin_declaration" }', src/libcore/result.rs:1165:5
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace.
+```
+
+This is saying we couldn't find the `plugin_declaration` symbol. You can
+use the `nm` tool to help with troubleshooting, it shows all symbols exported by
+a library.
+
+```console
+nm ../target/release/libplugins_random.so  | grep plugin            
+00000000004967b0 D plugin_declaration
+0000000000056c60 t _ZN12plugins_core8Function4help17hc92b9e8d4917f964E
+0000000000057f60 t _ZN14plugins_random8register17hd43ebfdd726021a4E
+0000000000057f80 t _ZN65_$LT$plugins_random..Random$u20$as$u20$plugins_core..Function$GT$4call17h7434ef9b1f1ca59eE
+00000000000590f0 t _ZN78_$LT$plugins_core..InvocationError$u20$as$u20$core..convert..From$LT$S$GT$$GT$4from17h3a759bcd267b48a1E
+```
+
+And there you have it, a relatively simple, yet safe and robust, plugin
+system which you can use in your own projects.
+
 ## See Also
 
 - [Building a Simple C++ Cross-platform Plugin System](https://sourcey.com/articles/building-a-simple-cpp-cross-platform-plugin-system)
@@ -434,3 +741,4 @@ extern "C" fn register(registrar: &mut dyn PluginRegistrar) {
 [rustc_version]: https://docs.rs/rustc_version/
 [rand-int]: https://www.random.org/integers/
 [reqwest]: https://crates.io/crates/reqwest
+[proxy]: https://refactoring.guru/design-patterns/proxy
