@@ -729,6 +729,7 @@ system which you can use in your own projects.
 - [Building a Simple C++ Cross-platform Plugin System](https://sourcey.com/articles/building-a-simple-cpp-cross-platform-plugin-system)
 - [The (unofficial) Rust FFI Guide: Dynamic Loading & Plugins](https://michael-f-bryan.github.io/rust-ffi-guide/dynamic_loading.html)
 - [Plugins in C](https://eli.thegreenplace.net/2012/08/24/plugins-in-c)
+- The code written alongside this article [on GitHub](https://github.com/Michael-F-Bryan/plugins_in_rust)
 
 [r-o]: https://random.org/
 [rand]: https://crates.io/crates/rand
