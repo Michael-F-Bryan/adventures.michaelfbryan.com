@@ -1,7 +1,6 @@
 ---
 title: "Plugins in Rust"
-date: "2019-09-30T00:04:58+08:00"
-draft: true
+date: "2019-09-30T22:04:58+08:00"
 tags:
 - rust
 ---
