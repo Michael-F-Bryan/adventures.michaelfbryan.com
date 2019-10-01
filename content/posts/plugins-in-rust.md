@@ -646,7 +646,28 @@ impl ExternalFunctions {
 }
 ```
 
-And funally, we can write `main()`'s body.
+By default a `cdylib` will use the system allocator, but executables aren't guaranteed
+to use
+
+According to the docs from `std::alloc`,
+
+> Currently the default global allocator is unspecified. Libraries, however,
+> like `cdylib`s and `staticlib`s are guaranteed to use the `System` by default.
+
+To make sure there's no chance of allocator mismatch (i.e. a plugin allocates
+a `String` using the `System` allocator and we try to free it using Jemalloc) we
+need to explicitly declare that the app uses the `System` allocator.
+
+```rust
+// app/src/main.rs
+
+use std::alloc::System;
+
+#[global_allocator]
+static ALLOCATOR: System = System;
+```
+
+And finally, we can write `main()`'s body.
 
 ```rust
 // app/src/main.rs
