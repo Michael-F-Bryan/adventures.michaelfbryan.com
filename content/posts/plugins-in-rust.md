@@ -539,34 +539,40 @@ to complete `ExternalFunctions::load()`.
 impl ExternalFunctions {
     ...
 
-    pub fn load<P: AsRef<OsStr>>(&mut self, library_path: P) -> io::Result<()> {
+    /// Load a plugin library and add all contained functions to the internal
+    /// function table.
+    ///
+    /// # Safety
+    ///
+    /// A plugin library **must** be implemented using the
+    /// [`plugins_core::plugin_declaration!()`] macro. Trying manually implement
+    /// a plugin without going through that macro will result in undefined
+    /// behaviour.
+    pub unsafe fn load<P: AsRef<OsStr>>(
+        &mut self,
+        library_path: P,
+    ) -> io::Result<()> {
         // load the library into memory
         let library = Rc::new(Library::new(library_path)?);
 
         // get a pointer to the plugin_declaration symbol.
-        // 
-        // This is safe because plugin_declaration was created using our
-        // export_plugin!() macro. If an author creates a static with the same
-        // name but different type they've violated the plugin interface
-        let decl = unsafe {
-            library
-                .get::<*mut PluginDeclaration>(b"plugin_declaration\0")?
-                .read()
-        };
+        let decl = library
+            .get::<*mut PluginDeclaration>(b"plugin_declaration\0")?
+            .read();
 
         // version checks to prevent accidental ABI incompatibilities
         if decl.rustc_version != plugins_core::RUSTC_VERSION
             || decl.core_version != plugins_core::CORE_VERSION
         {
-            return Err(io::Error::new(io::ErrorKind::Other, "Version mismatch"));
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Version mismatch",
+            ));
         }
 
         let mut registrar = PluginRegistrar::new(Rc::clone(&library));
 
-        // same safety justification as above
-        unsafe {
-            (decl.register)(&mut registrar);
-        }
+        (decl.register)(&mut registrar);
 
         // add all loaded plugins to the functions map
         self.functions.extend(registrar.functions);
@@ -577,6 +583,13 @@ impl ExternalFunctions {
     }
 }
 ```
+
+{{% notice note %}}
+Note the *Safety* section in the function's doc-comments. The process of
+loading a plugin is inherently `unsafe` (the compiler can't guarantee
+whatever is behind the `plugin_declaration` symbol is a `PluginDeclaration`)
+and this section documents the contract that must be upheld.
+{{% /notice %}}
 
 ## Using the Plugin
 
@@ -675,13 +688,17 @@ And finally, we can write `main()`'s body.
 fn main() {
     // parse arguments
     let args = env::args().skip(1);
-    let args = Args::parse(args).expect("Usage: app <plugin-path> <function> <args>...");
+    let args = Args::parse(args)
+        .expect("Usage: app <plugin-path> <function> <args>...");
 
     // create our functions table and load the plugin
     let mut functions = ExternalFunctions::new();
-    functions
-        .load(&args.plugin_library)
-        .expect("Function loading failed");
+
+    unsafe {
+        functions
+            .load(&args.plugin_library)
+            .expect("Function loading failed");
+    }
 
     // then call the function
     let result = functions
