@@ -37,7 +37,7 @@ As far as the frontend is concerned, when a user clicks a button we should:
    decode them back into a `Packet`
 6. The frontend will need to inspect the packet to figure out which message is
    being responded to
-7. The original `async` function will either be `resolve()`-ed with the
+7. The original `async` call will either be `resolve()`-ed with the
    response, or `reject()`-ed with an error (e.g. `Nack`)
 
 [next-step]: {{< ref "a-better-frontend/index.md#the-next-step" >}}
