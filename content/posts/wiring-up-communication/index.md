@@ -1,7 +1,6 @@
 ---
 title: "Wiring Up Communication"
-date: "2019-10-01T20:51:35+08:00"
-draft: true
+date: "2019-10-10T22:58:00+08:00"
 tags:
 - adventures-in-motion-control
 - vue
