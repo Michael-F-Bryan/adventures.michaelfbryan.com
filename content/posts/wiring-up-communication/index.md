@@ -347,9 +347,9 @@ export default class App extends Vue {
 </script>
 ```
 
-The frontend should now be able to communicate with the backend. By adding a
-few well-placed `console.log()` calls to `Controls.onHomePressed()` we can see
-the 
+The frontend should now be able to communicate with the backend. Let's add a
+few well-placed `console.log()` calls to `Controls.onHomePressed()` to make this
+easier to see.
 
 ```vue
 // frontend/src/components/Controls.vue
@@ -369,13 +369,102 @@ export default class Controls extends Vue {
 </script>
 ```
 
+We can also hook into the send/receive process so the *Terminal* is able to 
+visually display messages. This requires adding a `Messages[]` property which
+contains a message, timestamp it was sent/received, and its direction, and will
+be passed through to the `Terminal` control as a prop.
+
+```ts
+// frontend/src/CommsBus.ts
+
+export default class CommsBus {
+    public messages: Message[] = [];
+    ...
+
+    public send(req: Request): Promise<Response> {
+        if (this.sendToBackend) {
+            this.onRequestSent(req);
+            ...
+        }
+    }
+
+    private handlePacket(pkt: Packet) {
+        ...
+
+        try {
+            const response = parse(pkt);
+            this.onResponseReceived(response);
+            pending.resolve(response);
+        } catch (error) {
+            ...
+        }
+    }
+
+    private onRequestSent(req: Request) {
+        this.pushMessage(Direction.Sent, req);
+    }
+
+    private onResponseReceived(resp: Response) {
+        this.pushMessage(Direction.Received, resp);
+    }
+
+    private pushMessage(direction: Direction, value: any) {
+        this.messages.push({ direction, value, timestamp: new Date() });
+    }
+}
+```
+
+```vue
+// frontend/src/App.vue
+
+<template>
+        ...
+        <b-tab title="Terminal">
+          <Terminal :messages="messages" />
+        </b-tab>
+        ...
+</template>
+
+<script lang="ts">
+@Component({ components: { Sidebar, GCodeViewer, Terminal, Controls } })
+export default class App extends Vue {
+  ...
+
+  public get messages(): Message[] {
+    return this.comms.messages;
+  }
+}
+</script>
+```
+
+
 Pressing the *"Home"* button and pulling up the dev tools now shows the backend
-responded with a *NACK*.
+responded with a *NACK* (the default response when the backend doesn't know what
+to do with a message). 
 
 {{< figure src="console-log.png" title="Progress!" alt="Clicking Home" >}}
+
+## The Next Step
+
+We're now at the point where the frontend can send messages to the backend, and
+the backend can send back a response. This unblocks quite a few features, so 
+from here we can:
+
+- Start periodically polling the backend to check its status (e.g. axis
+  positions, current [*control mode*][cm])
+- Read in a g-code program and send it chunk-by-chunk to the backend so it can
+  go through the pipeline of `parse -> motion planning -> execute`
+- Continue fleshing out the `Controls` with a software-defined handset (e.g. 
+  axis jogging)
+- Implement more of the communications monitor so we can manually send arbitrary
+  messages
+- Add more automation sequences
+
+Let me know which one you'd like to see tackled next.
 
 [next-step]: {{< ref "a-better-frontend/index.md#the-next-step" >}}
 [send-data]: https://michael-f-bryan.github.io/adventures-in-motion-control/aimc_sim/struct.Browser.html#method.send_data
 [recv-data]: https://michael-f-bryan.github.io/adventures-in-motion-control/aimc_sim/struct.App.html#method.on_data_received
 [anpp-ts]: https://www.npmjs.com/package/anpp
 [abf]: {{< ref "a-better-frontend/index.md#wiring-aimc-sim-up-to-the-frontend-again" >}}
+[cm]: {{< ref "initial-motion-system.md" >}}
