@@ -24,12 +24,6 @@ to make a couple message definitions.
 /// A message containing part of a g-code program.
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 pub struct GcodeProgram<'a> {
-    /// A number used to indicate which chunk of the program this is.
-    ///
-    /// The `chunk_number` should be reset to `0` when sending a new program
-    /// and incremented for every chunk thereafter, wrapping back to `0` on
-    /// overflow.
-    chunk_number: u16,
     /// The (zero-based) line number this chunk starts on.
     ///
     /// Primarily used for error messages and progress reporting.
@@ -60,14 +54,10 @@ impl<'a> GcodeProgram<'a> {
     ///
     /// The `text` must be smaller than [`GcodeProgram::MAX_TEXT_SIZE`] bytes
     /// long.
-    pub fn new(
-        chunk_number: u16,
-        first_line: u32,
-        text: &'a str,
-    ) -> GcodeProgram<'a> {
+    pub fn new(first_line: u32, text: &'a str) -> GcodeProgram<'a> {
         assert!(text.len() < Self::MAX_TEXT_SIZE);
 
-        GcodeProgram { chunk_number, first_line, text }
+        GcodeProgram { first_line, text }
     }
 }
 ```
@@ -80,9 +70,9 @@ of convenience, the `sim` crate will expose a WASM function for writing a
 // sim/src/utils.rs
 
 #[wasm_bindgen]
-pub fn encode_gcode_program(chunk_number: u16, first_line: u32, text: &str) -> Uint8Array {
+pub fn encode_gcode_program(first_line: u32, text: &str) -> Uint8Array {
     let mut buffer = [0; anpp::Packet::MAX_PACKET_SIZE];
-    let msg = GcodeProgram::new(chunk_number, first_line, text);
+    let msg = GcodeProgram::new(first_line, text);
     let bytes_written = buffer
         .pwrite_with(msg, 0, Endian::network())
         .expect("Will always succeed");
@@ -116,7 +106,6 @@ it to an ANPP `Packet`.
 export type Request = GoHome | GcodeProgram;
 
 export class GcodeProgram {
-    public readonly chunkNumber: number;
     public readonly firstLine: number;
     public readonly text: Uint8Array;
 }
@@ -129,8 +118,8 @@ function toPacket(request: Request): Packet {
     if (request instanceof GoHome) {
         ...
     } else if (request instanceof GcodeProgram) {
-        const { chunkNumber, firstLine, text } = request;
-        return new Packet(5, wasm.encode_gcode_program(chunkNumber, firstLine, text));
+        const { firstLine, text } = request;
+        return new Packet(5, wasm.encode_gcode_program(firstLine, text));
     } else {
         ...
     }
@@ -235,7 +224,7 @@ Typing `G90 asdf` into the *"Manual g-code"* box and pressing enter gives us a
 nice stack trace containing the `GcodeProgram` message:
 
 ```
-panicked at 'not yet implemented: Received a GcodeProgram { chunk_number: 0, first_line: 0, text: "G90 asdf" }', motion/src/motion.rs:85:9
+panicked at 'not yet implemented: Received a GcodeProgram { first_line: 0, text: "G90 asdf" }', motion/src/motion.rs:85:9
 
 Stack:
 
@@ -256,4 +245,125 @@ poll@webpack-internal:///../sim/pkg/aimc_sim.js:91:52
 animate@webpack-internal:///./node_modules/cache-loader/dist/cjs.js?!./node_modules/babel-loader/lib/index.js!./node_modules/ts-loader/index.js?!./node_modules/cache-loader/dist/cjs.js?!./node_modules/vue-loader/lib/index.js?!./src/App.vue?vue&type=script&lang=ts&:108:48
 ```
 
+Excellent!
+
+## Processing the G-Code Program
+
+Now we're able to send a gcode program as text to the backend we need to turn
+it into something more machine-readable. Fortunately most of the heavy lifting
+of parsing is already handled for us, courtesy of the [`gcode`][gcode] crate.
+
+
+The first step is to create a `Translator` for turning the generic
+*"received the number `01` `G` command with arguments `(X, 42.0)` and `(Y,
+-3.14)` on line 123"* message into something more specific to our use case.
+
+```rust
+// motion/src/movements/mod.rs
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Translator {}
+
+impl Translator {
+    pub fn translate<C: Callbacks>(&mut self, _command: &GCode, _cb: C) {
+        unimplemented!()
+    }
+}
+
+pub trait Callbacks {}
+
+impl<'a, C: Callbacks + ?Sized> Callbacks for &'a mut C {}
+```
+
+{{% notice note %}}
+If you are familiar with parsers, this would be referred to as a *Push
+Parser*. We're notifying the caller of parse results via callbacks that get
+invoked during the parsing process.
+
+An alternative approach is called *Pull Parsing*. This is where the caller 
+will ask the parse for the next item, typically implemented using the 
+`Iterator` trait.
+
+*Push Parsing* happens to be slightly easier to implement and test in this
+case, so that's what we'll go with.
+{{% /notice %}}
+
+We'll also want a way to report warnings (e.g. unsupported commands) or
+errors (e.g. *"this command would move an axis out of bounds"*) back to the
+user.
+
+```rust
+// motion/src/movements/mod.rs
+
+pub trait Callbacks {
+    fn unsupported_command(&mut self, _command: &GCode) {}
+    fn invalid_argument(
+        &mut self,
+        _command: &GCode,
+        _arg: char,
+        _reason: &'static str,
+    ) {}
+}
+```
+
+For convenience, we'll make a helper method which uses parses text using the
+`gcode` crate then iterates over every command invoking `translate()`.
+
+```rust
+// motion/src/movements/mod.rs
+
+impl Translator {
+    ...
+
+    pub fn translate_src<C, G>(
+        &mut self,
+        src: &str,
+        cb: &mut C,
+        parse_errors: &mut G,
+    ) where
+        C: Callbacks + ?Sized,
+        G: gcode::Callbacks + ?Sized,
+    {
+        for line in gcode::parse_with_callbacks(src, parse_errors) {
+            for command in line.gcodes() {
+                self.translate(&command, &mut *cb);
+            }
+        }
+    }
+}
+```
+
+Annoyingly, the gcode language is only loosly specified with each vendor using
+their own dialect and associating different meanings to different commands. 
+
+For our purposes we'll only need to support the most common commands, though.
+
+These are:
+
+| Command             | Parameters             | Description                              |
+| ------------------- | ---------------------- | ---------------------------------------- |
+| *Motions*           | *(X Y Z apply to all)* |                                          |
+| G00                 |                        | Rapid Move                               |
+| G01                 |                        | Linear Interpolation                     |
+| G02,G03             | I J K  or R            | Circular Interpolation (CW or ACW)       |
+| G04                 | P                      | Pause for `P` seconds                    |
+| *Coordinate System* |                        |                                          |
+| G20                 |                        | Inches                                   |
+| G21                 |                        | Millimeters                              |
+| G90                 |                        | Absolute coordinates                     |
+| G91                 |                        | Relative coordinates                     |
+| *Miscellaneous*     |                        |                                          |
+| M30                 |                        | End of program. <br/> (Stops all motion) |
+
+{{% notice info %}}
+Some links for further reading:
+
+- [Wikipedia](https://en.wikipedia.org/wiki/G-code)
+- [LinuxCNC "G-Code" Quick Reference](http://linuxcnc.org/docs/html/gcode.html)
+- [The flavour of gcode recognised by RepRap firmware](https://reprap.org/wiki/G-code)
+- [The NIST RS274NGC Interpreter](https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=823374)
+{{% /notice %}}
+
+
 [next-step]: {{< ref "wiring-up-communication/index.md#the-next-step" >}}
+[gcode]: https://crates.io/crates/gcodekk
