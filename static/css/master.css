@@ -3,7 +3,7 @@ div.notices {
     position: relative;
 }
 
-div.notices p {
+div.notices > * {
     padding: 15px;
     display: block;
     margin-top: 0rem;
@@ -11,6 +11,11 @@ div.notices p {
     color: #666;
 }
 
+div.notices > ul {
+    padding-left: 40px;
+}
+
+/* The notice "header" */
 div.notices p:first-child:before {
     position: absolute;
     top: 2px;
@@ -18,9 +23,10 @@ div.notices p:first-child:before {
     font-family: "Font Awesome 5 Free";
     font-weight: 900;
     content: "\f06a";
-    left: 10px;
+    left: 0.5em;
 }
 
+/* Style the header text */
 div.notices p:first-child:after {
     position: absolute;
     top: 2px;
@@ -60,15 +66,15 @@ div.notices.info p:first-child {
 
 /* Background colour for the notice body */
 
-div.notices.warning p {
+div.notices.warning {
     background: #FAE2E2;
 }
-div.notices.note p {
+div.notices.note {
     background: #E7F2FA;
 }
-div.notices.tip p {
+div.notices.tip {
     background: #E6F9E6;
 }
-div.notices.info p {
+div.notices.info {
     background: #FFF2DB;
 }
