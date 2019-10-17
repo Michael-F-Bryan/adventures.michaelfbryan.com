@@ -261,7 +261,6 @@ The first step is to create a `Translator` for turning the generic
 ```rust
 // motion/src/movements/mod.rs
 
-#[derive(Debug, Clone, PartialEq)]
 pub struct Translator {}
 
 impl Translator {
@@ -364,6 +363,380 @@ Some links for further reading:
 - [The NIST RS274NGC Interpreter](https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=823374)
 {{% /notice %}}
 
+To turn the gcode commands into something more usable we're going to need a
+type to represent a 3-dimensional point in space. We *could* pull in a 3rd party
+geometry library for this, but sometimes [*"a little copying is better than a
+little dependency"*][proverbs].
+
+```rust
+// motion/src/movements/point.rs
+
+use core::ops::Add;
+use uom::{si::{f32::Length, length::Unit}, Conversion};
+
+pub struct Point {
+    pub x: Length,
+    pub y: Length,
+    pub z: Length,
+}
+
+impl Point {
+    /// Create a new [`Point`] in a particular unit system.
+    pub fn new<N>(x: f32, y: f32, z: f32) -> Self
+    where
+        N: Unit + Conversion<f32, T = f32>,
+    {
+        Point {
+            x: Length::new::<N>(x),
+            y: Length::new::<N>(y),
+            z: Length::new::<N>(z),
+        }
+    }
+
+    /// Get the underlying values in a particular unit system.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use aimc_motion::movements::Point;
+    /// use uom::si::length::{inch, millimeter};
+    ///
+    /// let p = Point::new::<inch>(10.0, 20.0, 30.0);
+    /// # let p = p.round::<millimeter>(); // ugh, floating point math...
+    /// assert_eq!(p.converted_to::<millimeter>(), (254.0, 254.0*2.0, 254.0*3.0));
+    /// ```
+    pub fn converted_to<N>(self) -> (f32, f32, f32)
+    where
+        N: Unit + Conversion<f32, T = f32>,
+    {
+        (self.x.get::<N>(), self.y.get::<N>(), self.z.get::<N>())
+    }
+
+    /// Round `x`, `y`, and `z` to the nearest integer when converted to `N`
+    /// units.
+    pub fn round<N>(self) -> Self
+    where
+        N: Unit + Conversion<f32, T = f32>,
+    {
+        Point {
+            x: self.x.round::<N>(),
+            y: self.y.round::<N>(),
+            z: self.z.round::<N>(),
+        }
+    }
+}
+
+impl Add<Point> for Point { ... }
+```
+
+We also need some helper enums to keep track of the coordinate system and units
+being used.
+
+```rust
+// motion/movements/translator.rs
+
+enum CoordinateMode {
+    Absolute,
+    Relative,
+}
+
+impl Default for CoordinateMode {
+    fn default() -> CoordinateMode { CoordinateMode::Absolute }
+}
+
+enum Units {
+    Millimetres,
+    Inches,
+}
+
+impl Default for Units {
+    fn default() -> Units { Units::Millimetres }
+}
+```
+
+Next, let's add a couple methods which use these enums to calculate absolute
+locations and the end position for a *motion* command. The `Translator` type
+will need a couple new fields too.
+
+```rust
+// motion/src/movements/translator.rs
+
+pub struct Translator {
+    current_location: Point,
+    coordinate_mode: CoordinateMode,
+    units: Units,
+    feed_rate: Velocity,
+}
+
+impl Translator {
+    ...
+
+    fn calculate_end(&self, command: &GCode) -> Point {
+        let x = command.value_for('X').unwrap_or(0.0);
+        let y = command.value_for('Y').unwrap_or(0.0);
+        let z = command.value_for('Z').unwrap_or(0.0);
+        self.absolute_location(x, y, z)
+    }
+
+    fn absolute_location(&self, x: f32, y: f32, z: f32) -> Point {
+        let raw = match self.units {
+            Units::Millimetres => Point::new::<millimeter>(x, y, z),
+            Units::Inches => Point::new::<inch>(x, y, z),
+        };
+
+        match self.coordinate_mode {
+            CoordinateMode::Absolute => raw,
+            CoordinateMode::Relative => raw + self.current_location,
+        }
+    }
+
+    fn calculate_feed_rate(&self, command: &GCode) -> Velocity {
+        let raw = match command.value_for('F') {
+            Some(f) => f,
+            None => return self.feed_rate,
+        };
+
+        // there's no inch_per_minute unit, so calculate inch/minute manually
+        let time = Time::new::<minute>(1.0);
+
+        match self.units {
+            Units::Inches => Length::new::<inch>(raw) / time,
+            Units::Millimetres => Length::new::<millimeter>(raw) / time,
+        }
+    }
+
+    /// Gets the centre of a circular interpolate move (G02, G03), bailing out
+    /// if the centre coordinates aren't provided.
+    fn get_centre(&self, command: &GCode) -> Result<Point, char> {
+        let x = command.value_for('I').ok_or('I')?;
+        let y = command.value_for('J').ok_or('J')?;
+
+        // TODO: Take the plane into account (G17, G18, G19)
+        Ok(Point {
+            x: self.to_length(x),
+            y: self.to_length(y),
+            z: self.current_location.z,
+        })
+    }
+}
+```
+
+We need a way to notify the caller when a motion is translated, so the 
+`Callbacks` trait needs a couple more methods.
+
+```rust
+// motion/src/movements/translator.rs
+
+pub trait Callbacks {
+    fn unsupported_command(&mut self, _command: &GCode) {}
+    fn invalid_argument(
+        &mut self,
+        _command: &GCode,
+        _arg: char,
+        _reason: &'static str,
+    ) {
+    }
+
+    fn end_of_program(&mut self) {}
+    fn linear_interpolate(
+        &mut self,
+        _start: Point,
+        _end: Point,
+        _feed_rate: Velocity,
+    ) {
+    }
+    fn circular_interpolate(
+        &mut self,
+        _start: Point,
+        _centre: Point,
+        _end: Point,
+        _direction: Direction,
+        _feed_rate: Velocity,
+    ) {
+    }
+    fn dwell(&mut self, _period: Duration) {}
+}
+
+pub enum Direction {
+    Clockwise,
+    Anticlockwise,
+}
+```
+
+From here on out, processing a `GCode` command becomes mostly a mechanical 
+process of:
+
+1. `match`ing on the `Mnemonic`
+2. `match`ing on the `major_number`
+3. Convert arguments to `uom` types
+4. Depending on the operation:
+   - If it is a *motion* command, notify the caller via the callbacks
+   - Update some internal state (e.g. if changing from inches to millimetres)
+   - Maybe notify the caller if something unexpected/invalid was encountered
+
+Let's handle the *Miscellaneous* commands first, seeing as there's only one
+of them (`M30`).
+
+```rust
+// motion/src/movements/translator.rs
+
+impl Translator {
+    pub fn translate<C: Callbacks>(&mut self, command: &GCode, mut cb: C) {
+        match command.mnemonic() {
+            Mnemonic::Miscellaneous => self.handle_miscellaneous(command, cb),
+            _ => cb.unsupported_command(command),
+        }
+    }
+
+    fn handle_miscellaneous<C: Callbacks>(
+        &mut self,
+        command: &GCode,
+        mut cb: C,
+    ) {
+        match command.major_number() {
+            30 => cb.end_of_program(),
+            _ => cb.unsupported_command(command),
+        }
+    }
+}
+```
+
+Handling the motion commands requires us to massage the arguments a bit to take
+into account things like units and coordinate systems, so when `match`ing on the
+`major_number` we'll pull the handling code into their own methods.
+
+```rust
+// motion/src/movements/translator.rs
+
+impl Translator {
+    pub fn translate<C: Callbacks>(&mut self, command: &GCode, mut cb: C) {
+        match command.mnemonic() {
+            Mnemonic::Miscellaneous => self.handle_miscellaneous(command, cb),
+            Mnemonic::General => self.handle_general(command, cb),
+            _ => cb.unsupported_command(command),
+        }
+    }
+
+    fn handle_general<C: Callbacks>(&mut self, command: &GCode, mut cb: C) {
+        match command.major_number() {
+            0 | 1 => self.handle_linear_interpolate(command, cb),
+            2 | 3 => self.handle_circular_interpolate(command, cb),
+            4 => self.handle_dwell(command, cb),
+
+            20 => self.units = Units::Inches,
+            21 => self.units = Units::Millimetres,
+            90 => self.coordinate_mode = CoordinateMode::Absolute,
+            91 => self.coordinate_mode = CoordinateMode::Relative,
+
+            _ => cb.unsupported_command(command),
+        }
+    }
+
+    fn handle_dwell<C: Callbacks>(&mut self, command: &GCode, mut cb: C) { ... }
+    fn handle_linear_interpolate<C: Callbacks>(
+        &mut self,
+        command: &GCode,
+        mut cb: C,
+    ) { ... }
+    fn handle_circular_interpolate<C: Callbacks>(
+        &mut self,
+        command: &GCode,
+        mut cb: C,
+    ) { ... }
+}
+```
+
+The dwell command (`G04`) is easiest to handle. It has a single required 
+argument, `P`, the time to wait in seconds.
+
+```rust
+// motion/src/movements/translator.rs
+
+impl Translator {
+    ...
+
+    fn handle_dwell<C: Callbacks>(&mut self, command: &GCode, mut cb: C) {
+        match command.value_for('P') {
+            Some(dwell_time) => cb.dwell(Duration::from_secs_f32(dwell_time)),
+            None => {
+                cb.invalid_argument(command, 'P', "Dwell time not provided")
+            },
+        }
+    }
+}
+```
+
+The linear interpolate commands (`G00` and `G01`) are a bit more complicated.
+We need to determine the end point and feed rate (using the helpers defined
+earlier) then after notifying the caller, the `Translator`'s state needs to be
+updated with the new values.
+
+```rust
+// motion/src/movements/translator.rs
+
+impl Translator {
+    ...
+
+    fn handle_linear_interpolate<C: Callbacks>(
+        &mut self,
+        command: &GCode,
+        mut cb: C,
+    ) {
+        let end = self.calculate_end(command);
+        let feed_rate = self.calculate_feed_rate(command);
+        cb.linear_interpolate(self.current_location, end, feed_rate);
+
+        self.current_location = end;
+        self.feed_rate = feed_rate;
+    }
+}
+```
+
+And finally, we need to implement the circular interpolation commands (`G02` and
+`G03`). Circular interpolation is handled in much the same way as linear
+interpolation, except we also need to account for the centre point and direction
+of movement.
+
+To make things simpler, we'll require the user to specify the centre location
+using `I` and `J`. Working with different definitions or in different planes is
+left as an exercise for later.
+
+```rust
+// motion/src/movements/translator.rs
+
+impl Translator {
+    ...
+
+    fn handle_circular_interpolate<C: Callbacks>(
+        &mut self,
+        command: &GCode,
+        mut cb: C,
+    ) {
+        let end = self.calculate_end(command);
+        let start = self.current_location;
+        let feed_rate = self.calculate_feed_rate(command);
+        let direction = if command.major_number() == 2 {
+            Direction::Clockwise
+        } else {
+            Direction::Anticlockwise
+        };
+
+        match self.get_centre(command) {
+            Ok(centre) => {
+                cb.circular_interpolate(
+                    start, centre, end, direction, feed_rate,
+                );
+
+                self.feed_rate = feed_rate;
+                self.current_location = end;
+            },
+            Err(arg) => cb.invalid_argument(command, arg, "Missing"),
+        }
+    }
+}
+```
+
 
 [next-step]: {{< ref "wiring-up-communication/index.md#the-next-step" >}}
 [gcode]: https://crates.io/crates/gcodekk
+[proverbs]: https://go-proverbs.github.io/
