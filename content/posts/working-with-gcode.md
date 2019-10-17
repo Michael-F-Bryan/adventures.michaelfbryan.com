@@ -736,6 +736,11 @@ impl Translator {
 }
 ```
 
+## The Next Step
+
+Now we're able to parse a string into strongly-typed instructions for the motion
+planner, the next step is to bring this machine to life and start executing
+those instructions!
 
 [next-step]: {{< ref "wiring-up-communication/index.md#the-next-step" >}}
 [gcode]: https://crates.io/crates/gcodekk
