@@ -1,7 +1,6 @@
 ---
 title: "Working With G-Code"
-date: "2019-10-13T16:55:25+08:00"
-draft: true
+date: "2019-10-18T00:05:00+08:00"
 tags:
 - adventures-in-motion-control
 - rust
