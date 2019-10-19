@@ -349,6 +349,108 @@ running 0 tests
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
+## Writing a Safe Rust Wrapper
+
+We can now *technically* use the CHMLib from Rust, but it requires a lot of 
+`unsafe` to call library functions. That's okay for a quick'n'dirty
+implementation, but if this is going to be published to crates.io it's worth
+writing a safe wrapper around the `unsafe` code.
+
+Looking at the `chmlib-sys` crate with `cargo doc --open` shows it exposes half
+a dozen functions, most of which accept a `*mut ChmFile` as the first parameter.
+This maps quite nicely to object methods.
+
+Let's start off by creating a type that uses `chm_open()` in its constructor and
+calls `chm_close()` in its destructor.
+
+```rust
+pub unsafe extern "C" fn chm_open(filename: *const c_char) -> *mut chmFile;
+pub unsafe extern "C" fn chm_close(h: *mut chmFile);
+```
+
+To make error handling easier we'll pull in the [`thiserror`][te] crate to 
+automatically derive `std::error::Error`.
+
+```console
+$ cd chmlib
+$ cargo add thiserror
+```
+
+We now need some way to convert from a `std::path::Path` to a `*const c_char`.
+Unfortunately, due to various OS-specific quirks [this][1] [isn't][2] 
+[simple][3].
+
+```rust
+// chmlib/src/lib.rs
+
+use thiserror::Error;
+use std::{ffi::CString, path::Path};
+
+#[cfg(unix)]
+fn path_to_cstring(path: &Path) -> Result<CString, OpenError> {
+    use std::os::unix::ffi::OsStrExt;
+    let bytes = path.as_os_str().as_bytes();
+    CString::new(bytes).map_err(|_| OpenError::InvalidPath)
+}
+
+#[cfg(not(unix))]
+fn path_to_cstring(path: &Path) -> Result<CString, OpenError> {
+    // Unfortunately, on Windows CHMLib uses CreateFileA() which means all
+    // paths will need to be ascii. This can get quite messy, so let's just
+    // cross our fingers and hope for the best?
+    let rust_str = path.as_os_str().as_str().ok_or(OpenError::InvalidPath)?;
+    CString::new(rust_str).map_err(|_| OpenError::InvalidPath)
+}
+
+/// The error returned when we are unable to open a [`ChmFile`].
+#[derive(Error, Debug, Copy, Clone, PartialEq)]
+pub enum OpenError {
+    #[error("Invalid path")]
+    InvalidPath,
+    #[error("Unable to open the ChmFile")]
+    Other,
+}
+```
+
+Next we'll create a `ChmFile` which contains a non-null pointer to a 
+`chmlib_sys::chmFile`. If `chm_open()` returns a null pointer we'll know that
+opening the file failed and some sort of error occurred.
+
+```rust
+// chmlib/src/lib.rs
+
+use std::{ffi::CString, path::Path, ptr::NonNull};
+
+#[derive(Debug)]
+pub struct ChmFile {
+    raw: NonNull<chmlib_sys::chmFile>,
+}
+
+impl ChmFile {
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<ChmFile, OpenError> {
+        let c_path = path_to_cstring(path.as_ref())?;
+
+        // safe because we know c_path is valid
+        unsafe {
+            let raw = chmlib_sys::chm_open(c_path.as_ptr());
+
+            match NonNull::new(raw) {
+                Some(raw) => Ok(ChmFile { raw }),
+                None => Err(OpenError::Other),
+            }
+        }
+    }
+}
+
+impl Drop for ChmFile {
+    fn drop(&mut self) {
+        unsafe {
+            chmlib_sys::chm_close(self.raw.as_ptr());
+        }
+    }
+}
+```
+
 [riir]: https://transitiontech.ca/random/RIIR
 [chmlib]: https://github.com/jedwing/CHMLib
 [at]: https://en.wikipedia.org/wiki/GNU_Autotools
@@ -356,3 +458,7 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 [cc]: https://docs.rs/cc
 [bg]: https://github.com/rust-lang/rust-bindgen
 [st]: http://softwaretestingfundamentals.com/smoke-testing/
+[te]: https://github.com/dtolnay/thiserror
+[1]: https://stackoverflow.com/questions/38948669/whats-the-most-direct-way-to-convert-a-path-to-a-c-char "Whats the most direct way to convert a Path to a *c_char?"
+[2]: https://stackoverflow.com/questions/29590943/how-to-convert-a-path-into-a-const-char-for-ffi "How to convert a Path into a const char* for FFI?"
+[3]: https://stackoverflow.com/questions/46342644/how-can-i-get-a-path-from-a-raw-c-string-cstr-or-const-u8 "How can I get a Path from a raw C string (CStr or *const u8)?"
