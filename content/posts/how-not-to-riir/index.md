@@ -539,7 +539,7 @@ impl ChmFile {
     ...
 
     /// Find a particular object in the archive.
-    pub fn find<P: AsRef<Path>>(&self, path: P) -> Option<UnitInfo> {
+    pub fn find<P: AsRef<Path>>(&mut self, path: P) -> Option<UnitInfo> {
         let path = path_to_cstring(path.as_ref()).ok()?;
 
         unsafe {
@@ -571,6 +571,12 @@ impl UnitInfo {
 }
 ```
 
+{{% notice info %}}
+Note that `ChmFile::find()` takes `&mut self`, even though none of our Rust code
+seems to do any mutation. This is because under the hood it uses things like 
+`fseek()` to move back and forth around a file... which mutates internal state.
+{{% /notice %}}
+
 We can test that `ChmFile::find()` works using the sample CHM file from before.
 
 ```rust
@@ -585,6 +591,152 @@ fn find_an_item_in_the_sample() {
     assert!(chm.find("doesn't exist.txt").is_none());
 }
 ```
+
+CHMLib exposes an API for inspecting items in the CHM file filtering the items
+to inspect based on a bitmask. 
+
+We'll be using the `bitflags` crate.
+
+```console
+$ cargo add bitflags
+    Updating 'https://github.com/rust-lang/crates.io-index' index
+      Adding bitflags v1.2.1 to dependencies
+```
+
+The `Filter` flags are defined straight from the `#define`s in `chm_lib.h`.
+
+```rust
+// chmlib/src/lib.rs
+
+bitflags::bitflags! {
+    pub struct Filter: c_int {
+        /// A normal file.
+        const NORMAL = chmlib_sys::CHM_ENUMERATE_NORMAL as c_int;
+        /// A meta file (typically used by the CHM system).
+        const META = chmlib_sys::CHM_ENUMERATE_META as c_int;
+        /// A special file (starts with `#` or `$`).
+        const SPECIAL = chmlib_sys::CHM_ENUMERATE_SPECIAL as c_int;
+        /// It's a file.
+        const FILES = chmlib_sys::CHM_ENUMERATE_FILES as c_int;
+        /// It's a directory.
+        const DIRS = chmlib_sys::CHM_ENUMERATE_DIRS as c_int;
+    }
+}
+```
+
+We also need an `extern "C"` adaptor to use a Rust closure as a normal
+function pointer.
+
+```rust
+// chmlib/src/lib.rs
+
+unsafe extern "C" fn function_wrapper<F>(
+    file: *mut chmlib_sys::chmFile,
+    unit: *mut chmlib_sys::chmUnitInfo,
+    state: *mut c_void,
+) -> c_int
+where
+    F: FnMut(&mut ChmFile, UnitInfo) -> Continuation,
+{
+    // we need to make sure panics can't escape across the FFI boundary.
+    let result = panic::catch_unwind(|| {
+        // Use ManuallyDrop because we want to give the caller a `&mut ChmFile`
+        // but want to make sure the destructor is never called (to
+        // prevent double-frees).
+        let mut file = ManuallyDrop::new(ChmFile {
+            raw: NonNull::new_unchecked(file),
+        });
+        let unit = UnitInfo::from_raw(unit.read());
+        // the opaque state pointer is guaranteed to point to an instance of our
+        // closure
+        let closure = &mut *(state as *mut F);
+        closure(&mut file, unit)
+    });
+
+    match result {
+        Ok(Continuation::Continue) => {
+            chmlib_sys::CHM_ENUMERATOR_CONTINUE as c_int
+        },
+        Ok(Continuation::Stop) => chmlib_sys::CHM_ENUMERATOR_SUCCESS as c_int,
+        Err(_) => chmlib_sys::CHM_ENUMERATOR_FAILURE as c_int,
+    }
+}
+```
+
+{{% notice warning %}}
+This `function_wrapper` is a fairly tricky bit of `unsafe` code and there are
+a couple things to keep in mind:
+
+- The `state` pointer **must** point to an instance of our `F` closure
+- Unwinding the stack from Rust to C is Undefined behaviour, and our `closure`
+  may trigger a panic. We need to use `std::panic::catch_unwind()` to prevent
+  panics from escaping the `function_wrapper`.
+- The `chmlib_sys::chmFile` passed to `function_wrapper` is also pointed to by
+  the calling `ChmFile`. We need to make sure `closure` is the only thing able
+  to mutate the `chmlib_sys::chmFile` otherwise we'll open ourselves up to
+  race conditions
+- We want to pass a `&mut ChmFile` to the closure which means we'll need to 
+  construct a temporary one on the stack using the `file` pointer. However if
+  it gets dropped then the `chmlib_sys::chmFile` will be freed prematurely. This
+  can be prevented using `std::mem::ManuallyDrop`.
+{{% /notice %}}
+
+We can now use `function_wrapper` to implement `ChmFile::for_each()`.
+
+```rust
+// chmlib/src/lib.rs
+
+impl ChmFile {
+    ...
+
+    /// Inspect each item within the [`ChmFile`].
+    pub fn for_each<F>(&mut self, filter: Filter, mut cb: F)
+    where
+        F: FnMut(&mut ChmFile, UnitInfo) -> Continuation,
+    {
+        unsafe {
+            chmlib_sys::chm_enumerate(
+                self.raw.as_ptr(),
+                filter.bits(),
+                Some(function_wrapper::<F>),
+                &mut cb as *mut _ as *mut c_void,
+            );
+        }
+    }
+
+    /// Inspect each item within the [`ChmFile`] inside a specified directory.
+    pub fn for_each_item_in_dir<F, P>(
+        &mut self,
+        filter: Filter,
+        prefix: P,
+        mut cb: F,
+    ) where
+        P: AsRef<Path>,
+        F: FnMut(&mut ChmFile, UnitInfo) -> Continuation,
+    {
+        let path = match path_to_cstring(prefix.as_ref()) {
+            Ok(p) => p,
+            Err(_) => return,
+        };
+
+        unsafe {
+            chmlib_sys::chm_enumerate_dir(
+                self.raw.as_ptr(),
+                path.as_ptr(),
+                filter.bits(),
+                Some(function_wrapper::<F>),
+                &mut cb as *mut _ as *mut c_void,
+            );
+        }
+    }
+}
+```
+
+{{% notice info %}}
+This trick works by using the `F` type parameter to instantiate
+`function_wrapper` for our closure type. This is a trick that comes up often
+when wanting to pass a Rust closure across the FFI barrier.
+{{% /notice %}}
 
 [riir]: https://transitiontech.ca/random/RIIR
 [chmlib]: https://github.com/jedwing/CHMLib
