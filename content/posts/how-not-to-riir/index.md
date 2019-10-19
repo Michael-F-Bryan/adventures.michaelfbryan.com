@@ -387,29 +387,24 @@ use thiserror::Error;
 use std::{ffi::CString, path::Path};
 
 #[cfg(unix)]
-fn path_to_cstring(path: &Path) -> Result<CString, OpenError> {
+fn path_to_cstring(path: &Path) -> Result<CString, InvalidPath> {
     use std::os::unix::ffi::OsStrExt;
     let bytes = path.as_os_str().as_bytes();
-    CString::new(bytes).map_err(|_| OpenError::InvalidPath)
+    CString::new(bytes).map_err(|_| InvalidPath)
 }
 
 #[cfg(not(unix))]
-fn path_to_cstring(path: &Path) -> Result<CString, OpenError> {
+fn path_to_cstring(path: &Path) -> Result<CString, InvalidPath> {
     // Unfortunately, on Windows CHMLib uses CreateFileA() which means all
     // paths will need to be ascii. This can get quite messy, so let's just
     // cross our fingers and hope for the best?
-    let rust_str = path.as_os_str().as_str().ok_or(OpenError::InvalidPath)?;
-    CString::new(rust_str).map_err(|_| OpenError::InvalidPath)
+    let rust_str = path.as_os_str().as_str().ok_or(InvalidPath)?;
+    CString::new(rust_str).map_err(|_| InvalidPath)
 }
 
-/// The error returned when we are unable to open a [`ChmFile`].
 #[derive(Error, Debug, Copy, Clone, PartialEq)]
-pub enum OpenError {
-    #[error("Invalid path")]
-    InvalidPath,
-    #[error("Unable to open the ChmFile")]
-    Other,
-}
+#[error("Invalid Path")]
+pub struct InvalidPath;
 ```
 
 Next we'll create a `ChmFile` which contains a non-null pointer to a 
@@ -449,6 +444,146 @@ impl Drop for ChmFile {
         }
     }
 }
+
+/// The error returned when we are unable to open a [`ChmFile`].
+#[derive(Error, Debug, Copy, Clone, PartialEq)]
+pub enum OpenError {
+    #[error("Invalid path")]
+    InvalidPath(#[from] InvalidPath),
+    #[error("Unable to open the ChmFile")]
+    Other,
+}
+```
+
+To make sure we're not leaking memory, we can use `valgrind` to run a test that
+constructs a `ChmFile` then immediately drops it.
+
+The test:
+
+```rust
+// chmlib/src/lib.rs
+
+#[test]
+fn open_valid_chm_file() {
+    let sample = sample_path();
+
+    // open the file
+    let chm_file = ChmFile::open(&sample).unwrap();
+    // then immediately close it
+    drop(chm_file);
+}
+
+fn sample_path() -> PathBuf {
+    let project_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let sample = project_dir.parent().unwrap().join("topics.classic.chm");
+    assert!(sample.exists());
+
+    sample
+}
+```
+
+And the output from `valgrind` shows nothing is amiss.
+
+```console
+$ valgrind ../target/debug/deps/chmlib-8d8c740d57832498 open_valid_chm_file
+==8953== Memcheck, a memory error detector
+==8953== Copyright (C) 2002-2017, and GNU GPL'd, by Julian Seward et al.
+==8953== Using Valgrind-3.14.0 and LibVEX; rerun with -h for copyright info
+==8953== Command: /home/michael/Documents/chmlib/target/debug/deps/chmlib-8d8c740d57832498 open_valid_chm_file
+==8953== 
+
+running 1 test
+test tests::open_valid_chm_file ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+==8953== 
+==8953== HEAP SUMMARY:
+==8953==     in use at exit: 0 bytes in 0 blocks
+==8953==   total heap usage: 249 allocs, 249 frees, 43,273 bytes allocated
+==8953== 
+==8953== All heap blocks were freed -- no leaks are possible
+==8953== 
+==8953== For counts of detected and suppressed errors, rerun with: -v
+==8953== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+```
+
+Next, we'll implement the `chm_resolve_object()` function.
+
+```rust
+pub const CHM_RESOLVE_SUCCESS : u32 = 0;
+pub const CHM_RESOLVE_FAILURE: u32 = 1;
+/* resolve a particular object from the archive */
+pub unsafe extern "C" fn chm_resolve_object(
+    h: *mut chmFile, 
+    objPath: *const c_char, 
+    ui: *mut chmUnitInfo
+) -> c_int;
+```
+
+This is a fallible operation, so the `chm_resolve_object()` function returns a
+status code indicating success or failure and a pointer to some `chmUnitInfo`
+object which will be populated if something was found.
+
+The [`std::mem::MaybeUninit`][uninit] type was create for the exact purpose of
+representing the `ui` "out pointer".
+
+For now we'll create an empty `UnitInfo` struct to be the Rust equivalent of
+`chmUnitInfo`. It will be populated when we start reading items out of the
+`ChmFile`.
+
+```rust
+// chmlib/src/lib.rs
+
+impl ChmFile {
+    ...
+
+    /// Find a particular object in the archive.
+    pub fn find<P: AsRef<Path>>(&self, path: P) -> Option<UnitInfo> {
+        let path = path_to_cstring(path.as_ref()).ok()?;
+
+        unsafe {
+            // put an uninitialized chmUnitInfo on the stack
+            let mut resolved = MaybeUninit::<chmlib_sys::chmUnitInfo>::uninit();
+
+            // then try to resolve the unit info
+            let ret = chmlib_sys::chm_resolve_object(
+                self.raw.as_ptr(),
+                path.as_ptr(),
+                resolved.as_mut_ptr(),
+            );
+
+            if ret == chmlib_sys::CHM_RESOLVE_SUCCESS {
+                // if successful, "resolved" would have been initialized by C
+                Some(UnitInfo::from_raw(resolved.assume_init()))
+            } else {
+                None
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct UnitInfo;
+
+impl UnitInfo {
+    fn from_raw(ui: chmlib_sys::chmUnitInfo) -> UnitInfo { UnitInfo }
+}
+```
+
+We can test that `ChmFile::find()` works using the sample CHM file from before.
+
+```rust
+// chmlib/src/lib.rs
+
+#[test]
+fn find_an_item_in_the_sample() {
+    let sample = sample_path();
+    let chm = ChmFile::open(&sample).unwrap();
+
+    assert!(chm.find("/BrowserView.html").is_some());
+    assert!(chm.find("doesn't exist.txt").is_none());
+}
 ```
 
 [riir]: https://transitiontech.ca/random/RIIR
@@ -462,3 +597,4 @@ impl Drop for ChmFile {
 [1]: https://stackoverflow.com/questions/38948669/whats-the-most-direct-way-to-convert-a-path-to-a-c-char "Whats the most direct way to convert a Path to a *c_char?"
 [2]: https://stackoverflow.com/questions/29590943/how-to-convert-a-path-into-a-const-char-for-ffi "How to convert a Path into a const char* for FFI?"
 [3]: https://stackoverflow.com/questions/46342644/how-can-i-get-a-path-from-a-raw-c-string-cstr-or-const-u8 "How can I get a Path from a raw C string (CStr or *const u8)?"
+[uninit]: https://doc.rust-lang.org/std/mem/union.MaybeUninit.html#out-pointers
