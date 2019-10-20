@@ -1,7 +1,6 @@
 ---
 title: "How to not RiiR"
-date: "2019-10-19T14:06:47+08:00"
-draft: true
+date: "2019-10-20T19:45:00+08:00"
 tags:
 - rust
 ---
