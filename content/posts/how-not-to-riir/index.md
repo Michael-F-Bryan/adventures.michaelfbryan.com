@@ -7,7 +7,7 @@ tags:
 ---
 
 Once you get past the growing pains of the *Borrow Checker* and realise Rust
-gives you the power to do things which would be unheard of (or just plain 
+gives you the power to do things which would be unheard of (or just plain
 dangerous) in other languages, the temptation to [*Rewrite it in Rust*][riir]
 can be quite strong. However at best, the temptation to *RiiR* is unproductive
 (unnecessary duplication of effort), and at worst it can promote the creation
@@ -17,12 +17,23 @@ some domain-specific purpose than the original author?).
 A much better alternative is to reuse the original library and just publish a
 safe interface to it.
 
+- [Getting Started](#getting-started)
+- [Building `chmlib-sys`](#building-chmlib-sys)
+- [Writing a Safe Rust Wrapper](#writing-a-safe-rust-wrapper)
+  - [Finding an Item by Name](#finding-an-item-by-name)
+  - [Enumerating Items in a CHM File](#enumerating-items-in-a-chm-file)
+  - [Reading File Contents](#reading-file-contents)
+- [Implementing the Examples](#implementing-the-examples)
+  - [Enumerating All Items](#enumerating-all-items)
+  - [Extracting A CHM File To Disk](#extracting-a-chm-file-to-disk)
+- [Where To From Here?](#where-to-from-here)
+
 ## Getting Started
 
 The first step in interfacing with a native library is to understand how it was
 originally intended to work.
 
-{{% notice tip %}}
+{{% notice info %}}
 Not only does this show us how to use the library, it also acts as a sanity
 check to make sure it builds, as well as providing build instructions and
 potential tests or examples.
@@ -43,7 +54,7 @@ $ cargo new --lib chmlib
   Created library `chmlib` package
 $ cargo new --lib chmlib-sys
   Created library `chmlib-sys` package
-$ cat Cargo.toml 
+$ cat Cargo.toml
   [workspace]
   members = ["chmlib", "chmlib-sys"]
 $ git submodule add git@github.com:jedwing/CHMLib.git vendor/CHMLib
@@ -57,7 +68,7 @@ $ git submodule add git@github.com:jedwing/CHMLib.git vendor/CHMLib
 We can then use the `tree` command to see what files are contained in the 
 repository.
 
-```
+```command
 $ tree vendor/CHMLib
 vendor/CHMLib
 ├── acinclude.m4
@@ -102,7 +113,7 @@ for later.
 Upon further inspection, the `lzx.h` and `lzx.c` files are vendored copies of
 code for decompression using the [LZX][lzx] compression algorithm. Normally it'd
 be better to link with whatever `lzx` library is installed on the user's
-machine so we receive updates, but it'll be a lot easier to compile it into 
+machine so we receive updates, but it'll be a lot easier to compile it into
 `chmlib`.
 
 The `enum_chmLib.c`, `enumdir_chmLib.c`, and `extract_chmLib.c` appear to be
@@ -157,7 +168,7 @@ output/compiled/topics.classic.chm: MS Windows HtmlHelp Data
 Let's see what `enum_chLib` makes of it.
 
 ```console
-$ ./enum_chmLib output/compiled/topics.classic.chm 
+$ ./enum_chmLib output/compiled/topics.classic.chm
 output/compiled/topics.classic.chm:
  spc    start   length   type			name
  ===    =====   ======   ====			====
@@ -360,6 +371,155 @@ Looking at the `chmlib-sys` crate with `cargo doc --open` shows it exposes half
 a dozen functions, most of which accept a `*mut ChmFile` as the first parameter.
 This maps quite nicely to object methods.
 
+{{% expand "CHMLib Header File" %}}
+```c
+/* $Id: chm_lib.h,v 1.10 2002/10/09 01:16:33 jedwin Exp $ */
+/***************************************************************************
+ *             chm_lib.h - CHM archive manipulation routines               *
+ *                           -------------------                           *
+ *                                                                         *
+ *  author:     Jed Wing <jedwin@ugcs.caltech.edu>                         *
+ *  version:    0.3                                                        *
+ *  notes:      These routines are meant for the manipulation of microsoft *
+ *              .chm (compiled html help) files, but may likely be used    *
+ *              for the manipulation of any ITSS archive, if ever ITSS     *
+ *              archives are used for any other purpose.                   *
+ *                                                                         *
+ *              Note also that the section names are statically handled.   *
+ *              To be entirely correct, the section names should be read   *
+ *              from the section names meta-file, and then the various     *
+ *              content sections and the "transforms" to apply to the data *
+ *              they contain should be inferred from the section name and  *
+ *              the meta-files referenced using that name; however, all of *
+ *              the files I've been able to get my hands on appear to have *
+ *              only two sections: Uncompressed and MSCompressed.          *
+ *              Additionally, the ITSS.DLL file included with Windows does *
+ *              not appear to handle any different transforms than the     *
+ *              simple LZX-transform.  Furthermore, the list of transforms *
+ *              to apply is broken, in that only half the required space   *
+ *              is allocated for the list.  (It appears as though the      *
+ *              space is allocated for ASCII strings, but the strings are  *
+ *              written as unicode.  As a result, only the first half of   *
+ *              the string appears.)  So this is probably not too big of   *
+ *              a deal, at least until CHM v4 (MS .lit files), which also  *
+ *              incorporate encryption, of some description.               *
+ ***************************************************************************/
+
+/***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU Lesser General Public License as        *
+ *   published by the Free Software Foundation; either version 2.1 of the  *
+ *   License, or (at your option) any later version.                       *
+ *                                                                         *
+ ***************************************************************************/
+
+#ifndef INCLUDED_CHMLIB_H
+#define INCLUDED_CHMLIB_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* RWE 6/12/1002 */
+#ifdef PPC_BSTR
+#include <wtypes.h>
+#endif
+
+#ifdef WIN32
+#ifdef __MINGW32__
+#define __int64 long long
+#endif
+typedef unsigned __int64 LONGUINT64;
+typedef __int64          LONGINT64;
+#else
+typedef unsigned long long LONGUINT64;
+typedef long long          LONGINT64;
+#endif
+
+/* the two available spaces in a CHM file                      */
+/* N.B.: The format supports arbitrarily many spaces, but only */
+/*       two appear to be used at present.                     */
+#define CHM_UNCOMPRESSED (0)
+#define CHM_COMPRESSED   (1)
+
+/* structure representing an ITS (CHM) file stream             */
+struct chmFile;
+
+/* structure representing an element from an ITS file stream   */
+#define CHM_MAX_PATHLEN  (512)
+struct chmUnitInfo
+{
+    LONGUINT64         start;
+    LONGUINT64         length;
+    int                space;
+    int                flags;
+    char               path[CHM_MAX_PATHLEN+1];
+};
+
+/* open an ITS archive */
+#ifdef PPC_BSTR
+/* RWE 6/12/2003 */
+struct chmFile* chm_open(BSTR filename);
+#else
+struct chmFile* chm_open(const char *filename);
+#endif
+
+/* close an ITS archive */
+void chm_close(struct chmFile *h);
+
+/* methods for ssetting tuning parameters for particular file */
+#define CHM_PARAM_MAX_BLOCKS_CACHED 0
+void chm_set_param(struct chmFile *h,
+                   int paramType,
+                   int paramVal);
+
+/* resolve a particular object from the archive */
+#define CHM_RESOLVE_SUCCESS (0)
+#define CHM_RESOLVE_FAILURE (1)
+int chm_resolve_object(struct chmFile *h,
+                       const char *objPath,
+                       struct chmUnitInfo *ui);
+
+/* retrieve part of an object from the archive */
+LONGINT64 chm_retrieve_object(struct chmFile *h,
+                              struct chmUnitInfo *ui,
+                              unsigned char *buf,
+                              LONGUINT64 addr,
+                              LONGINT64 len);
+
+/* enumerate the objects in the .chm archive */
+typedef int (*CHM_ENUMERATOR)(struct chmFile *h,
+                              struct chmUnitInfo *ui,
+                              void *context);
+#define CHM_ENUMERATE_NORMAL    (1)
+#define CHM_ENUMERATE_META      (2)
+#define CHM_ENUMERATE_SPECIAL   (4)
+#define CHM_ENUMERATE_FILES     (8)
+#define CHM_ENUMERATE_DIRS      (16)
+#define CHM_ENUMERATE_ALL       (31)
+#define CHM_ENUMERATOR_FAILURE  (0)
+#define CHM_ENUMERATOR_CONTINUE (1)
+#define CHM_ENUMERATOR_SUCCESS  (2)
+int chm_enumerate(struct chmFile *h,
+                  int what,
+                  CHM_ENUMERATOR e,
+                  void *context);
+
+int chm_enumerate_dir(struct chmFile *h,
+                      const char *prefix,
+                      int what,
+                      CHM_ENUMERATOR e,
+                      void *context);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* INCLUDED_CHMLIB_H */
+```
+{{% /expand %}}
+
 Let's start off by creating a type that uses `chm_open()` in its constructor and
 calls `chm_close()` in its destructor.
 
@@ -508,6 +668,8 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ==8953== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
 ```
 
+### Finding an Item by Name
+
 Next, we'll implement the `chm_resolve_object()` function.
 
 ```rust
@@ -591,6 +753,8 @@ fn find_an_item_in_the_sample() {
     assert!(chm.find("doesn't exist.txt").is_none());
 }
 ```
+
+### Enumerating Items in a CHM File
 
 CHMLib exposes an API for inspecting items in the CHM file filtering the items
 to inspect based on a bitmask. 
@@ -737,6 +901,683 @@ This trick works by using the `F` type parameter to instantiate
 `function_wrapper` for our closure type. This is a trick that comes up often
 when wanting to pass a Rust closure across the FFI barrier.
 {{% /notice %}}
+
+### Reading File Contents
+
+The last function we need to wrap is actually reading the contents of a file
+into memory with `chm_retrieve_object()`.
+
+The implementation is almost trivial, and quite similar to the `std::io::Read`
+trait except with the addition of a starting `offset`.
+
+```rust
+// chmlib/src/lib.rs
+
+impl ChmFile {
+    ...
+
+    pub fn read(
+        &mut self,
+        unit: &UnitInfo,
+        offset: u64,
+        buffer: &mut [u8],
+    ) -> Result<usize, ReadError> {
+        let mut unit = unit.0.clone();
+
+        let bytes_written = unsafe {
+            chmlib_sys::chm_retrieve_object(
+                self.raw.as_ptr(),
+                &mut unit,
+                buffer.as_mut_ptr(),
+                offset,
+                buffer.len() as _,
+            )
+        };
+
+        if bytes_written >= 0 {
+            Ok(bytes_written as usize)
+        } else {
+            Err(ReadError)
+        }
+    }
+}
+
+#[derive(Error, Debug, Copy, Clone, PartialEq)]
+#[error("The read failed")]
+pub struct ReadError;
+```
+
+It would be nice to provide more useful error messages than *"the read failed"*,
+but reading through the source code for `chm_retrieve_object()` shows it doesn't
+differentiate between:
+
+- Returning `0` when all data is read
+- Invalid arguments - null pointers or out of bounds reads return `0`
+- failed file reads - `man 2 read` says `read()` may return `-1` and 
+set `errno`
+- decompression failure - not being able to `malloc()` a scratch buffer or 
+  the decompression algorithm encountering malformed input will return `-1`
+
+We can also test the `ChmFile::read()` function by looking for known input.
+
+```rust
+// chmlib/src/lib.rs
+
+#[test]
+fn read_an_item() {
+    let sample = sample_path();
+    let mut chm = ChmFile::open(&sample).unwrap();
+    let filename = "/template/packages/core-web/css/index.responsive.css";
+
+    // look for a known file
+    let item = chm.find(filename).unwrap();
+
+    // then read it into a buffer
+    let mut buffer = vec![0; item.length() as usize];
+    let bytes_written = chm.read(&item, 0, &mut buffer).unwrap();
+
+    // we should have read everything
+    assert_eq!(bytes_written, item.length() as usize);
+
+    // ... and got what we expected
+    let got = String::from_utf8(buffer).unwrap();
+    assert!(got.starts_with(
+        "html, body, div#i-index-container, div#i-index-body"
+    ));
+}
+```
+
+## Implementing the Examples
+
+We've now covered the vast majority of the CHMLib API and by this point most 
+people would be happy to call it a day, however it's worth taking the time to
+make the crate more approachable for our users. This is primarily accomplished
+by adding examples and documentation, two things I've noticed the Rust and Go
+communities tend to put a lot of effort into (probably thanks to `rustdoc` and
+`godoc` being first-class citizens in the language toolchain).
+
+Luckily the underlying CHMLib came with examples, so we should just be able
+to port them to use the `chmlib` crate.
+
+It's also useful as a sanity check to make sure the underlying library and our
+wrapper generate the same output.
+
+### Enumerating All Items
+
+This example opens the provided CHM file and generates a table with information
+about all items inside.
+
+{{% expand "Original Example" %}}
+```c
+/* $Id: enum_chmLib.c,v 1.7 2002/10/09 12:38:12 jedwin Exp $ */
+/***************************************************************************
+ *          enum_chmLib.c - CHM archive test driver                        *
+ *                           -------------------                           *
+ *                                                                         *
+ *  author:     Jed Wing <jedwin@ugcs.caltech.edu>                         *
+ *  notes:      This is a quick-and-dirty test driver for the chm lib      *
+ *              routines.  The program takes as its input the paths to one *
+ *              or more .chm files.  It attempts to open each .chm file in *
+ *              turn, and display a listing of all of the files in the     *
+ *              archive.                                                   *
+ *                                                                         *
+ *              It is not included as a particularly useful program, but   *
+ *              rather as a sort of "simplest possible" example of how to  *
+ *              use the enumerate portion of the API.                      *
+ ***************************************************************************/
+
+/***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU Lesser General Public License as        *
+ *   published by the Free Software Foundation; either version 2.1 of the  *
+ *   License, or (at your option) any later version.                       *
+ *                                                                         *
+ ***************************************************************************/
+
+#include "chm_lib.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/*
+ * callback function for enumerate API
+ */
+int _print_ui(struct chmFile *h,
+              struct chmUnitInfo *ui,
+              void *context)
+{
+    static char szBuf[128];
+    memset(szBuf, 0, 128);
+    if(ui->flags & CHM_ENUMERATE_NORMAL)
+        strcpy(szBuf, "normal ");
+    else if(ui->flags & CHM_ENUMERATE_SPECIAL)
+        strcpy(szBuf, "special ");
+    else if(ui->flags & CHM_ENUMERATE_META)
+        strcpy(szBuf, "meta ");
+    
+    if(ui->flags & CHM_ENUMERATE_DIRS)
+        strcat(szBuf, "dir");
+    else if(ui->flags & CHM_ENUMERATE_FILES)
+        strcat(szBuf, "file");
+
+    printf("   %1d %8d %8d   %s\t\t%s\n",
+           (int)ui->space,
+           (int)ui->start,
+           (int)ui->length,
+           szBuf,
+           ui->path);
+    return CHM_ENUMERATOR_CONTINUE;
+}
+
+int main(int c, char **v)
+{
+    struct chmFile *h;
+    int i;
+
+    for (i=1; i<c; i++)
+    {
+        h = chm_open(v[i]);
+        if (h == NULL)
+        {
+            fprintf(stderr, "failed to open %s\n", v[i]);
+            exit(1);
+        }
+
+        printf("%s:\n", v[i]);
+        printf(" spc    start   length   type\t\t\tname\n");
+        printf(" ===    =====   ======   ====\t\t\t====\n");
+
+        if (! chm_enumerate(h,
+                            CHM_ENUMERATE_ALL,
+                            _print_ui,
+                            NULL))
+            printf("   *** ERROR ***\n");
+
+        chm_close(h);
+    }
+
+    return 0;
+}
+
+```
+{{% /expand %}}
+
+The `_print_ui()` function can be translated to Rust quite with ease. It's just
+creating a description based on the `UnitInfo`'s flags and string concatenation,
+then playing around with padding to generate tabulated output.
+
+```rust
+// chmlib/examples/enumerate-items.rs
+
+fn describe_item(item: UnitInfo) {
+    let mut description = String::new();
+
+    if item.is_normal() {
+        description.push_str("normal ");
+    } else if item.is_special() {
+        description.push_str("special ");
+    } else if item.is_meta() {
+        description.push_str("meta ");
+    }
+
+    if item.is_dir() {
+        description.push_str("dir");
+    } else if item.is_file() {
+        description.push_str("file");
+    }
+
+    println!(
+        "   {} {:8} {:8}   {}\t\t{}",
+        item.space(),
+        item.start(),
+        item.length(),
+        description,
+        item.path().unwrap_or(Path::new("")).display()
+    );
+}
+```
+
+Then the `main()` function will do some naive command-line argument parsing before
+opening the file and passing `describe()` to `ChmFile::for_each()`.
+
+```rust
+// chmlib/examples/enumerate-items.rs
+
+fn main() {
+    let filename = env::args()
+        .nth(1)
+        .unwrap_or_else(|| panic!("Usage: enumerate-items <filename>"));
+
+    let mut file = ChmFile::open(&filename).expect("Unable to open the file");
+
+    println!("{}:", filename);
+    println!(" spc    start   length   type\t\t\tname");
+    println!(" ===    =====   ======   ====\t\t\t====");
+
+    file.for_each(Filter::all(), |_file, item| {
+        describe_item(item);
+        Continuation::Continue
+    });
+}
+```
+
+As a sanity check we'll compare the output from our Rust example with the 
+original.
+
+```console
+$ cargo run --example enumerate-items topics.classic.chm > rust-example.txt
+$ cd vendor/CHMLib/src
+$ clang chm_lib.c enum_chmLib.c lzx.c -o enum_chmLib
+$ cd ../../..
+$ ./vendor/CHMLib/src/enum_chmLib topics.classic.chm > c-example.txt
+$ diff -u rust-example.txt c-example.txt
+$ echo $?
+0
+```
+
+The diff indicates both examples generate identical output, but to make sure
+`diff` is actually doing something let's inject some dodgy output and see the
+`diff` complain.
+
+```diff
+diff --git a/chmlib/examples/enumerate-items.rs b/chmlib/examples/enumerate-items.rs
+index e68fa58..ef855ac 100644
+--- a/chmlib/examples/enumerate-items.rs
++++ b/chmlib/examples/enumerate-items.rs
+@@ -36,6 +36,10 @@ fn describe_item(item: UnitInfo) {
+         description.push_str("file");
+     }
+ 
++    if item.length() % 7 == 0 {
++        description.push_str("🦀");
++    }
++
+     println!(
+         "   {} {:8} {:8}   {}\t\t{}",
+         item.space(),
+```
+
+And re-running with the new code:
+
+```console
+$ cargo run --example enumerate-items topics.classic.chm > rust-example.txt
+$ diff -u rust-example.txt c-example.txt
+--- rust-example.txt	2019-10-20 16:51:53.933560892 +0800
++++ c-example.txt	2019-10-20 16:40:42.007053966 +0800
+@@ -1,9 +1,9 @@
+ topics.classic.chm:
+  spc    start   length   type			name
+  ===    =====   ======   ====			====
+-   0        0        0   normal dir🦀		/
++   0        0        0   normal dir		/
+    1  5125797     4096   special file		/#IDXHDR
+-   0        0        0   special file🦀		/#ITBITS
++   0        0        0   special file		/#ITBITS
+    1  5104520      148   special file		/#IVB
+    1  5132009     1227   special file		/#STRINGS
+    0     1430     4283   special file		/#SYSTEM
+@@ -13,9 +13,9 @@
+...
+```
+
+Success!
+
+### Extracting A CHM File To Disk
+
+Another example provided with CHMLib is to extract all "normal" files to disk.
+
+{{% expand "Original Example" %}}
+```c
+/* $Id: extract_chmLib.c,v 1.4 2002/10/10 03:24:51 jedwin Exp $ */
+/***************************************************************************
+ *          extract_chmLib.c - CHM archive extractor                       *
+ *                           -------------------                           *
+ *                                                                         *
+ *  author:     Jed Wing <jedwin@ugcs.caltech.edu>                         *
+ *  notes:      This is a quick-and-dirty chm archive extractor.           *
+ ***************************************************************************/
+
+/***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU Lesser General Public License as        *
+ *   published by the Free Software Foundation; either version 2.1 of the  *
+ *   License, or (at your option) any later version.                       *
+ *                                                                         *
+ ***************************************************************************/
+
+#include "chm_lib.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#ifdef WIN32
+#include <windows.h>
+#include <direct.h>
+#define mkdir(X, Y) _mkdir(X)
+#define snprintf _snprintf
+#else
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#endif
+
+struct extract_context
+{
+    const char *base_path;
+};
+
+static int dir_exists(const char *path)
+{
+#ifdef WIN32
+        /* why doesn't this work?!? */
+        HANDLE hFile;
+
+        hFile = CreateFileA(path,
+                        FILE_LIST_DIRECTORY,
+                        0,
+                        NULL,
+                        OPEN_EXISTING,
+                        FILE_ATTRIBUTE_NORMAL,
+                        NULL);
+        if (hFile != INVALID_HANDLE_VALUE)
+        {
+        CloseHandle(hFile);
+        return 1;
+        }
+        else
+        return 0;
+#else
+        struct stat statbuf;
+        if (stat(path, &statbuf) != -1)
+                return 1;
+        else
+                return 0;
+#endif
+}
+
+static int rmkdir(char *path)
+{
+    /*
+     * strip off trailing components unless we can stat the directory, or we
+     * have run out of components
+     */
+
+    char *i = strrchr(path, '/');
+
+    if(path[0] == '\0'  ||  dir_exists(path))
+        return 0;
+
+    if (i != NULL)
+    {
+        *i = '\0';
+        rmkdir(path);
+        *i = '/';
+        mkdir(path, 0777);
+    }
+
+#ifdef WIN32
+        return 0;
+#else
+    if (dir_exists(path))
+        return 0;
+    else
+        return -1;
+#endif
+}
+
+/*
+ * callback function for enumerate API
+ */
+int _extract_callback(struct chmFile *h,
+              struct chmUnitInfo *ui,
+              void *context)
+{
+    LONGUINT64 ui_path_len;
+    char buffer[32768];
+    struct extract_context *ctx = (struct extract_context *)context;
+    char *i;
+
+    if (ui->path[0] != '/')
+        return CHM_ENUMERATOR_CONTINUE;
+
+    /* quick hack for security hole mentioned by Sven Tantau */
+    if (strstr(ui->path, "/../") != NULL)
+    {
+        /* fprintf(stderr, "Not extracting %s (dangerous path)\n", ui->path); */
+        return CHM_ENUMERATOR_CONTINUE;
+    }
+
+    if (snprintf(buffer, sizeof(buffer), "%s%s", ctx->base_path, ui->path) > 1024)
+        return CHM_ENUMERATOR_FAILURE;
+
+    /* Get the length of the path */
+    ui_path_len = strlen(ui->path)-1;
+
+    /* Distinguish between files and dirs */
+    if (ui->path[ui_path_len] != '/' )
+    {
+        FILE *fout;
+        LONGINT64 len, remain=ui->length;
+        LONGUINT64 offset = 0;
+
+        printf("--> %s\n", ui->path);
+        if ((fout = fopen(buffer, "wb")) == NULL)
+    {
+        /* make sure that it isn't just a missing directory before we abort */ 
+        char newbuf[32768];
+        strcpy(newbuf, buffer);
+        i = strrchr(newbuf, '/');
+        *i = '\0';
+        rmkdir(newbuf);
+        if ((fout = fopen(buffer, "wb")) == NULL)
+              return CHM_ENUMERATOR_FAILURE;
+    }
+
+        while (remain != 0)
+        {
+            len = chm_retrieve_object(h, ui, (unsigned char *)buffer, offset, 32768);
+            if (len > 0)
+            {
+                fwrite(buffer, 1, (size_t)len, fout);
+                offset += len;
+                remain -= len;
+            }
+            else
+            {
+                fprintf(stderr, "incomplete file: %s\n", ui->path);
+                break;
+            }
+        }
+
+        fclose(fout);
+    }
+    else
+    {
+        if (rmkdir(buffer) == -1)
+            return CHM_ENUMERATOR_FAILURE;
+    }
+
+    return CHM_ENUMERATOR_CONTINUE;
+}
+
+int main(int c, char **v)
+{
+    struct chmFile *h;
+    struct extract_context ec;
+
+    if (c < 3)
+    {
+        fprintf(stderr, "usage: %s <chmfile> <outdir>\n", v[0]);
+        exit(1);
+    }
+
+    h = chm_open(v[1]);
+    if (h == NULL)
+    {
+        fprintf(stderr, "failed to open %s\n", v[1]);
+        exit(1);
+    }
+
+    printf("%s:\n", v[1]);
+    ec.base_path = v[2];
+    if (! chm_enumerate(h,
+                        CHM_ENUMERATE_ALL,
+                        _extract_callback,
+                        (void *)&ec))
+        printf("   *** ERROR ***\n");
+
+    chm_close(h);
+
+    return 0;
+}
+```
+
+{{% /expand %}}
+
+The original example is quite verbose due to C's lack of high-level abstractions
+and crippled standard library, hopefully our example will be much more readable.
+
+The interesting code lies inside our `extract()` function. The code is rather
+self-explanatory, so I'll let you read that instead of describing the process
+of extracting items in plain English.
+
+```rust
+// chmlib/examples/extract.rs
+
+fn extract(
+    root_dir: &Path,
+    file: &mut ChmFile,
+    item: &UnitInfo,
+) -> Result<(), Box<dyn Error>> {
+    if !item.is_file() || !item.is_normal() {
+        // we only care about normal files
+        return Ok(());
+    }
+    let path = match item.path() {
+        Some(p) => p,
+        // if we can't get the path, ignore it and continue
+        None => return Ok(()),
+    };
+
+    let mut dest = root_dir.to_path_buf();
+    // Note: by design, the path for a normal file is absolute (starts with "/")
+    // so when joining it with the root_dir we need to drop the initial "/".
+    dest.extend(path.components().skip(1));
+
+    // make sure the parent directory exists
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let mut f = File::create(dest)?;
+    let mut start_offset = 0;
+    // CHMLib doesn't give us a &[u8] with the file contents directly (e.g.
+    // because it may be compressed) so we need to copy chunks to an
+    // intermediate buffer
+    let mut buffer = vec![0; 1 << 16];
+
+    loop {
+        let bytes_read = file.read(item, start_offset, &mut buffer)?;
+        if bytes_read == 0 {
+            // we've reached the end of the file
+            break;
+        } else {
+            // write this chunk to the file and continue
+            start_offset += bytes_read as u64;
+            f.write_all(&buffer)?;
+        }
+    }
+
+    Ok(())
+}
+```
+
+Compared to `extract()`, our `main()` function is relatively simple, with the
+handling of failures during extraction being the only real difference from the
+previous example.
+
+```rust
+// chmlib/examples/extract.rs
+
+fn main() {
+    let args: Vec<_> = env::args().skip(1).collect();
+    if args.len() != 2 || args.iter().any(|arg| arg.contains("-h")) {
+        println!("Usage: extract <chm-file> <out-dir>");
+        return;
+    }
+
+    let mut file = ChmFile::open(&args[0]).expect("Unable to open the file");
+
+    let out_dir = PathBuf::from(&args[1]);
+
+    file.for_each(Filter::all(), |file, item| {
+        match extract(&out_dir, file, &item) {
+            Ok(_) => Continuation::Continue,
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                Continuation::Stop
+            },
+        }
+    });
+}
+```
+
+Running this example against our sample CHM file gives us a set of files which
+can be opened using a normal web browser.
+
+```console
+$ cargo run --example extract -- ./topics.classic.chm ./extracted
+$ tree ./extracted
+./extracted
+├── default.html
+├── BrowserForward.html
+...
+├── Images
+│   ├── Commands
+│   │   └── RealWorld
+│   │       ├── BrowserBack.bmp
+...
+├── script
+│   ├── _community
+│   │   └── disqus.js
+│   ├── hs-common.js
+...
+└── userinterface.html
+$ firefox topics.classic/default.html
+(opens default.html in firefox)
+```
+
+Some of the JavaScript is broken (I'm assuming implementation quirks with the
+Microsoft Help viewer?) and there is no search functionality, but overall the
+website is quite usable.
+
+## Where To From Here?
+
+The `chmlib` crate is now essentially feature complete and (with a couple minor
+tweaks) ready to be published to crates.io.
+
+There are a couple places I've left as an exercise to the reader, though:
+
+- If the `closure` in `ChmFile::for_each()` or
+  `ChmFile::for_each_item_in_dir()` panic, we should resume unwinding after
+  returning from C to Rust instead of swallowing the error. 
+
+- It'd be nice if the simple case of iterating over every item in a `ChmFile`
+  didn't need to return `Continuation::Continue` for the closure passed to
+  `ChmFile::for_each()` and friends. This could probably be implemented by 
+  accepting `F: FnMut(&mut ChmFile, UnitInfo) -> C` where `C: Into<Continuation>`
+  and then adding an `impl From<()> for Continuation`.
+
+- Errors encountered during iteration (e.g. like our `extract()` example) should
+  also be passed back to the caller of `ChmFile::for_each()` and abort iteration
+  early. This could tie in with the previous point by adding an implementation
+  of `impl<E> From<Result<(), E>> for Continuation where E: Error + 'static`
+
+- Having to manually copy chunks into an intermediate buffer before writing them
+  to a `File` in the `extract()` example is annoying. We may want to add a 
+  convenience function which will call `ChmFile:read()` in a loop and write the
+  entire item into some `std::io::Write`r.
 
 [riir]: https://transitiontech.ca/random/RIIR
 [chmlib]: https://github.com/jedwing/CHMLib
