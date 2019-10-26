@@ -19,6 +19,17 @@ runtime.
 
 This can be achieved using a technique called [Dynamic Loading][wiki].
 
+{{% notice note %}}
+The code written in this article is available [on GitHub][repo]. Feel free to
+browse through and steal code or inspiration.
+
+If you found this useful or spotted a bug, let me know on the blog's 
+[issue tracker][issue]!
+
+[repo]: https://github.com/Michael-F-Bryan/plugins_in_rust
+[issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
+{{% /notice %}}
+
 ## What Is Dynamic Loading?
 
 Dynamic loading is a mechanism provided by all mainstream Operating Systems

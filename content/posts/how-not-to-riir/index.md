@@ -27,6 +27,19 @@ safe interface to it.
   - [Extracting A CHM File To Disk](#extracting-a-chm-file-to-disk)
 - [Where To From Here?](#where-to-from-here)
 
+{{% notice note %}}
+This article actually works towards a real-world project, I want to extract
+some information from existing CHM files without doing all the hard work
+myself. I'm lazy like that.
+
+The [chmlib crate is published on crates.io](https://crate.io/crates/chmlib),
+and the source code is [available on GitHub][repo]. If you found this useful
+or spotted a bug, let me know on the blog's [issue tracker][issue]!
+
+[repo]: https://github.com/Michael-F-Bryan/chmlib
+[issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
+{{% /notice %}}
+
 ## Getting Started
 
 The first step in interfacing with a native library is to understand how it was
