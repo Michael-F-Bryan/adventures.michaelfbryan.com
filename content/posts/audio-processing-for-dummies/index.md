@@ -535,16 +535,301 @@ Now let's run the benchmarks.
 
 ```console
 $ cargo bench
+     Running target/release/deps/throughput-dbdb305fc8a0e002
+Benchmarking throughput/a-turtle-of-an-issue: Warming up for 3.0000 s
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 37.5s or reduce sample count to 20
+throughput/a-turtle-of-an-issue                                                                             
+                        time:   [7.0509 ms 7.1617 ms 7.2892 ms]
+                        thrpt:  [113.14 Melem/s 115.15 Melem/s 116.96 Melem/s]
+                 change:
+                        time:   [-6.5194% -3.2691% -0.1646%] (p = 0.07 > 0.05)
+                        thrpt:  [+0.1648% +3.3796% +6.9740%]
+                        No change in performance detected.
+Found 9 outliers among 100 measurements (9.00%)
+  8 (8.00%) high mild
+  1 (1.00%) high severe
+
+...
 ```
 
 If you've got `gnuplot` installed, this also generates [a report][bench-report]
 under `target/criterion`.
+
+On my machine the report says our `NoiseFilter` can process 103.47 million
+samples per second. This is about 2000 times faster than we need, so it gives us
+hope that the *algorithm* won't add any unnecessary overhead... Of course
+that just moves the bottleneck from `NoiseFilter` to the caller's `Sink`
+implementation.
+
+## Experimenting With Our Sample Data
+
+We're now at the point where we have a fully implemented *Noise Gate*. Let's
+create an example program for splitting WAV files and see what happens when
+we point it at our sample data!
+
+Even though it's an example, we should probably implement proper command-line 
+argument handling to make experimentation easier. By far the easiest way to
+do this is with [the structopt crate][structopt].
+
+```rust
+// examples/wav-splitter.rs
+
+#[derive(Debug, Clone, StructOpt)]
+pub struct Args {
+    #[structopt(help = "The WAV file to read")]
+    pub input_file: PathBuf,
+    #[structopt(short = "t", long = "threshold", help = "The noise threshold")]
+    pub noise_threshold: i16,
+    #[structopt(
+        short = "r",
+        long = "release-time",
+        help = "The release time in seconds",
+        default_value = "0.25"
+    )]
+    pub release_time: f32,
+    #[structopt(
+        short = "o",
+        long = "output-dir",
+        help = "Where to write the split files",
+        default_value = "."
+    )]
+    pub output_dir: PathBuf,
+    #[structopt(
+        short = "p",
+        long = "prefix",
+        help = "A prefix to insert before each clip",
+        default_value = "clip_"
+    )]
+    pub prefix: String,
+}
+```
+
+Now we'll need a `Sink` type. The general idea is every time the `record()` 
+method is called we'll write another frame to a cached `hound::WavWriter`. If
+the `WavWriter` doesn't exist we'll need to create a new one which writes to
+a file named like `output_dir/clip_1.wav`. An `end_of_transmission()` tells
+us to `finalize()` the `WavWriter` and remove it from our cache.
+
+```rust
+// examples/wav-splitter.rs
+
+pub struct Sink {
+    output_dir: PathBuf,
+    clip_number: usize,
+    prefix: String,
+    spec: WavSpec,
+    writer: Option<WavWriter<BufWriter<File>>>,
+}
+
+impl Sink {
+    pub fn new(output_dir: PathBuf, prefix: String, spec: WavSpec) -> Self {
+        Sink {
+            output_dir,
+            prefix,
+            spec,
+            clip_number: 0,
+            writer: None,
+        }
+    }
+
+    fn get_writer(&mut self) -> &mut WavWriter<BufWriter<File>> {
+        if self.writer.is_none() {
+            let filename = self
+                .output_dir
+                .join(format!("{}{}.wav", self.prefix, self.clip_number));
+            self.clip_number += 1;
+            self.writer = Some(WavWriter::create(filename, self.spec).unwrap());
+        }
+
+        self.writer.as_mut().unwrap()
+    }
+}
+
+impl<F> noise_gate::Sink<F> for Sink
+where
+    F: Frame,
+    F::Sample: hound::Sample,
+{
+    fn record(&mut self, frame: F) {
+        let writer = self.get_writer();
+
+        for channel in frame.channels() {
+            writer.write_sample(channel).unwrap();
+        }
+    }
+
+    fn end_of_transmission(&mut self) {
+        if let Some(writer) = self.writer.take() {
+            writer.finalize().unwrap();
+        }
+    }
+}
+```
+
+From there the `main` function is quite simple. It parses some arguments, reads
+the WAV file into memory, then throws it at our `NoiseGate` so the `Sink` can
+write the clips to the `output/` directory.
+
+```rust
+// examples/wav-splitter.rs
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let args = Args::from_args();
+
+    let reader = WavReader::open(&args.input_file)?;
+    let header = reader.spec();
+    let samples = reader
+        .into_samples::<i16>()
+        .map(|result| result.map(|sample| [sample]))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let release_time = (header.sample_rate as f32 * args.release_time).round();
+
+    fs::create_dir_all(&args.output_dir)?;
+    let mut sink = Sink::new(args.output_dir, args.prefix, header);
+
+    let mut gate = NoiseGate::new(args.noise_threshold, release_time as usize);
+    gate.process_frames(&samples, &mut sink);
+
+    Ok(())
+}
+```
+
+Let's take this for a test-run.
+
+The original clip:
+
+<audio controls>
+  <source src="N11379_KSCK.mp3" type="audio/mp3">
+  Your browser does not support the audio tag.
+</audio>
+
+Now let's split it into pieces with our `wav-splitter` program. At this point
+I don't really know what values of `noise_threshold` or `release_time` are
+acceptible for this audio, but I figure `50` and `0.3s` should be usable?
+
+```console
+$ ./target/release/examples/wav-splitter -o output --threshold 50 --release-time 0.3 data/N11379_KSCK.wav
+$ ls output   
+clip_0.wav clip_3.wav clip_6.wav clip_9.wav clip_12.wav clip_15.wav
+clip_18.wav clip_21.wav clip_1.wav clip_4.wav clip_7.wav clip_10.wav
+clip_13.wav clip_16.wav clip_19.wav clip_22.wav clip_2.wav clip_5.wav
+clip_8.wav clip_11.wav clip_14.wav clip_17.wav clip_20.wav
+```
+
+<audio controls>
+  <source src="split/clip_0.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_1.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_2.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_3.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_4.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_5.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_6.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_7.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_8.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_9.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_10.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_11.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_12.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_13.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_14.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_15.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_16.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_17.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_18.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_19.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_20.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_21.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_22.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_23.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_24.wav" type="audio/wav">
+</audio>
+
+<audio controls>
+  <source src="split/clip_25.wav" type="audio/wav">
+</audio>
+
+Wow it actually worked on the first try. Now that's something you don't see
+every day.
 
 [wiki]: https://en.wikipedia.org/wiki/Noise_gate
 [thread]: https://rust-audio.discourse.group/t/splitting-an-audio-stream-based-on-volume-silence/171?u=michael-f-bryan
 [lan]: https://www.liveatc.net/recordings.php
 [wav]: https://en.wikipedia.org/wiki/WAV
 [hound]: https://crates.io/crates/hound
+[structopt]: https://crates.io/crates/structopt
 [sample-crate]: https://crates.io/crates/sample
 [frame]: https://docs.rs/sample/latest/sample/frame/trait.Frame.html
 [sample]: https://docs.rs/sample/latest/sample/trait.Sample.html
