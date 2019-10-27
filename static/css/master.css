@@ -15,6 +15,10 @@ div.notices > ul {
     padding-left: 40px;
 }
 
+div.notices pre {
+    background-color: #FAFAFA !important;
+}
+
 /* The notice "header" */
 div.notices p:first-child:before {
     position: absolute;
