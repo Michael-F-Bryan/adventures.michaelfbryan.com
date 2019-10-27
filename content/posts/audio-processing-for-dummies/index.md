@@ -116,7 +116,7 @@ You can download the sample clip and convert it to WAV using `ffmpeg`:
 ```console
 $ mkdir -p tests/data
 $ curl "https://forums.liveatc.net/index.php?action=dlattach;topic=15455.0;attach=10441" > a-turtle-of-an-issue.mp3
-$ ffmpeg -i a-turtle-of-an-issue.mp3 a-turtle-of-an-issue.wav
+$ ffmpeg -i a-turtle-of-an-issue.mp3 -ac 1 a-turtle-of-an-issue.wav
 ```
 
 ## Implementing the Noise Gate Algorithm
@@ -380,6 +380,166 @@ impl<S: Sample> NoiseGate<S> {
 }
 ```
 
+## Measuring Performance
+
+If we want to use the `NoiseGate` in realtime applications we'll need to make
+sure it can handle typical sample rates. 
+
+I don't expect our algorithm to add much in terms of a performance overhead, but
+it's always a good idea to check.
+
+The gold standard for benchmarking in Rust is [criterion][criterion], so let's
+add that as a dev dependency.
+
+```toml
+# Cargo.toml
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "throughput"
+harness = false
+```
+
+We'll need a `Sink` implementation which will add as little overhead as
+possible without being completely optimised out by the compiler.
+
+```rust
+// benches/throughput.rs
+
+struct Counter {
+    samples: usize,
+    chunks: usize,
+}
+
+impl<F> Sink<F> for Counter {
+    fn record(&mut self, _: F) {
+        self.samples += criterion::black_box(1);
+    }
+
+    fn end_of_transmission(&mut self) {
+        self.chunks += criterion::black_box(1);
+    }
+}
+```
+
+We've already downloaded a handful of example WAV files to the `data/` 
+directory, so we can register a new benchmark group (a group of related 
+benchmarks which should be graphed together) and register a benchmark for every
+WAV file in the `data/` directory.
+
+```rust
+// benches/throughput.rs
+
+const DATA_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/data/");
+
+fn bench_throughput(c: &mut Criterion) {
+    let mut group = c.benchmark_group("throughput");
+
+    for entry in fs::read_dir(DATA_DIR).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+
+        if path.is_file() {
+            let name = path.file_stem().unwrap().to_str().unwrap();
+            add_benchmark(&mut group, name, &path);
+        }
+    }
+}
+```
+
+The setup work for each WAV file benchmark is non-trivial, so we've pulled it
+out into its own function. To set things up we'll use [`hound`][hound] to read
+the entire audio clip into a `Vec<[i16; 1]>` in memory and guess a reasonable 
+`release_time` and `noise_threshold`.
+
+Then it's just a case of telling the `BenchmarkGroup` how many samples we're
+working with (throughput) and processing the frames.
+
+```rust
+// benches/throughput.rs
+
+fn add_benchmark(
+    group: &mut BenchmarkGroup<WallTime>,
+    name: &str,
+    path: &Path,
+) {
+    let reader = WavReader::open(path).unwrap();
+
+    let desc = reader.spec();
+    assert_eq!(desc.channels, 1, "We've hard-coded frames to be [i16; 1]");
+    let release_time = 2 * desc.sample_rate as usize;
+
+    let samples = reader
+        .into_samples::<i16>()
+        .map(|s| [s.unwrap()])
+        .collect::<Vec<_>>();
+
+    let noise_threshold = average(&samples);
+
+    group
+        .throughput(Throughput::Elements(samples.len() as u64))
+        .bench_function(name, |b| {
+            b.iter(|| {
+                let mut counter = Counter::default();
+                let mut gate = NoiseGate::new(noise_threshold, release_time);
+                gate.process_frames(&samples, &mut counter);
+            });
+        });
+}
+
+/// A fancy way to add up all the channels in all the frames and get the average
+/// sample value.
+fn average<F>(samples: &[F]) -> F::Sample
+where
+    F: Frame,
+    F::Sample: FromSample<f32>,
+    F::Sample: ToSample<f32>,
+{
+    let sum: f32 = samples.iter().fold(0.0, |sum, frame| {
+        sum + frame.channels().map(|s| s.to_sample()).sum::<f32>()
+    });
+    (sum / samples.len() as f32).round().to_sample()
+}
+```
+
+Finally, we need to invoke a couple macros to register the `"throughput"`
+benchmark group and create a `main` function (remember when declaring the
+`[[bench]]` table we told `rustc` not to write `main()` for us with `harness
+= false`).
+
+```rust
+// benches/throughput.rs
+
+criterion_group!(benches, bench_throughput);
+criterion_main!(benches);
+```
+
+These are the WAV files I've downloaded to the `data/` directory:
+
+```console
+$ ls -l data 
+.rw-r--r-- 1.6M michael 27 Oct 21:21 a-turtle-of-an-issue.wav
+.rw-r--r-- 4.2M michael 27 Oct 21:17 KBDL-B17-Tribute-20191005.wav
+.rw-r--r-- 7.6M michael 27 Oct 21:17 N11379_KSCK.wav
+.rw-r--r--  12M michael 27 Oct 21:26 tornado-warning-ground.wav
+$ file data/*
+data/a-turtle-of-an-issue.wav:      RIFF (little-endian) data, WAVE audio, Microsoft PCM, 16 bit, mono 22050 Hz
+data/KBDL-B17-Tribute-20191005.wav: RIFF (little-endian) data, WAVE audio, Microsoft PCM, 16 bit, mono 24000 Hz
+data/N11379_KSCK.wav:               RIFF (little-endian) data, WAVE audio, Microsoft PCM, 16 bit, mono 22050 Hz
+data/tornado-warning-ground.wav:    RIFF (little-endian) data, WAVE audio, Microsoft PCM, 16 bit, mono 44100 Hz
+```
+
+Now let's run the benchmarks.
+
+```console
+$ cargo bench
+```
+
+If you've got `gnuplot` installed, this also generates [a report][bench-report]
+under `target/criterion`.
+
 [wiki]: https://en.wikipedia.org/wiki/Noise_gate
 [thread]: https://rust-audio.discourse.group/t/splitting-an-audio-stream-based-on-volume-silence/171?u=michael-f-bryan
 [lan]: https://www.liveatc.net/recordings.php
@@ -392,3 +552,5 @@ impl<S: Sample> NoiseGate<S> {
 [sl]: https://en.wikipedia.org/wiki/Sound_localization
 [sr]: https://en.wikipedia.org/wiki/Sampling_(signal_processing)#Sampling_rate
 [de]: https://en.wikipedia.org/wiki/Delta_encoding
+[criterion]: https://github.com/bheisler/criterion.rs
+[bench-report]: /criterion/report/index.html
