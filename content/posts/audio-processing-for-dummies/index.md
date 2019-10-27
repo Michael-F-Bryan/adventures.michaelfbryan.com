@@ -101,6 +101,7 @@ graph TD;
   Open-- above threshold -->Open;
   Closing-- above threshold -->Open;
   Closing-- remaining_samples = 0 -->Closed;
+  Closing-- remaining_samples > 0 -->Closing;
   Closed-- above threshold -->Open;
   Closed-- below threshold -->Closed;
 {{< /mermaid >}}
@@ -191,7 +192,138 @@ fn next_state<F: Frame>(
 There's a bit more rightward drift here than I'd like, but the function itself
 is quite self-contained and readable enough.
 
-To actually process
+That said, as a sanity check it's a good idea to write some tests exercising
+each state machine transition.
+
+```rust
+// src/lib.rs
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const OPEN_THRESHOLD: i16 = 100;
+    const RELEASE_TIME: usize = 5;
+
+    test_state_transition!(open_to_open: State::Open, 101 => State::Open);
+    test_state_transition!(open_to_closing: State::Open, 40 => State::Closing { remaining_samples: RELEASE_TIME });
+    test_state_transition!(closing_to_closed: State::Closing { remaining_samples: 0 }, 40 => State::Closed);
+    test_state_transition!(closing_to_closing: State::Closing { remaining_samples: 1 }, 40 => State::Closing { remaining_samples: 0 });
+    test_state_transition!(reopen_when_closing: State::Closing { remaining_samples: 1 }, 101 => State::Open);
+    test_state_transition!(closed_to_closed: State::Closed, 40 => State::Closed);
+    test_state_transition!(closed_to_open: State::Closed, 101 => State::Open);
+}
+```
+
+{{% notice tip %}}
+When writing these sorts of tests you'll probably want to minimise boilerplate
+by pulling the testing code out into a macro. That way you just need to write
+to case being tested, inputs, and expected outputs, and the macro will do the
+rest.
+
+This is the definition for `test_state_transition!()`:
+
+```rust
+macro_rules! test_state_transition {
+    ($name:ident, $from:expr, $sample:expr => $expected:expr) => {
+        #[test]
+        fn $name() {
+            let start: State = $from;
+            let expected: State = $expected;
+            let frame: [i16; 1] = [$sample];
+
+            let got = next_state(start, frame, OPEN_THRESHOLD, RELEASE_TIME);
+
+            assert_eq!(got, expected);
+        }
+    };
+}
+```
+{{% /notice %}}
+
+To implement the *Noise Gate*, we'll wrap our state and configuration into a
+single `NoiseGate` struct.
+
+```rust
+// src/lib.rs
+
+pub struct NoiseGate<S> {
+    /// The volume level at which the gate will open (begin recording).
+    pub open_threshold: S,
+    /// The amount of time (in samples) the gate takes to go from open to fully
+    /// closed.
+    pub release_time: usize,
+    state: State,
+}
+
+impl<S> NoiseGate<S> {
+    /// Create a new [`NoiseGate`].
+    pub const fn new(open_threshold: S, release_time: usize) -> Self {
+        NoiseGate {
+            open_threshold,
+            release_time,
+            state: State::Closed,
+        }
+    }
+
+    /// Is the gate currently passing samples through to the [`Sink`]?
+    pub fn is_open(&self) -> bool {
+        match self.state {
+            State::Open | State::Closing { .. } => true,
+            State::Closed => false,
+        }
+    }
+
+    /// Is the gate currently ignoring silence?
+    pub fn is_closed(&self) -> bool {
+        !self.is_open()
+    }
+}
+```
+
+We'll need to declare a `Sink` trait that can be implemented by consumers of
+our *Noise Gate* in the next step.
+
+```rust
+// src/lib.rs
+
+pub trait Sink<F> {
+    /// Add a frame to the current recording, starting a new recording if
+    /// necessary.
+    fn record(&mut self, frame: F);
+    /// Reached the end of the samples, do necessary cleanup (e.g. flush to disk).
+    fn end_of_transmission(&mut self);
+}
+```
+
+Processing frames is just a case of iterating over each frame, updating the
+state, and checking whether we need to pass the frame through to the `Sink` or
+detect an `end_of_transmission`.
+
+```rust
+// src/lib.rs
+
+impl<S: Sample> NoiseGate<S> {
+    pub fn process_frames<K, F>(&mut self, frames: &[F], sink: &mut K)
+    where
+        F: Frame<Sample = S>,
+        K: Sink<F>,
+    {
+        for &frame in frames {
+            let previously_open = self.is_open();
+
+            self.state = next_state(self.state, frame, self.open_threshold, self.release_time);
+
+            if self.is_open() {
+                sink.record(frame);
+            } else if previously_open {
+                // the gate was previously open and has just closed
+                sink.end_of_transmission();
+            }
+        }
+    }
+}
+```
 
 [wiki]: https://en.wikipedia.org/wiki/Noise_gate
 [thread]: https://rust-audio.discourse.group/t/splitting-an-audio-stream-based-on-volume-silence/171?u=michael-f-bryan
