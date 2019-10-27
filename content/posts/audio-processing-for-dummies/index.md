@@ -30,6 +30,65 @@ If you found this useful or spotted a bug, let me know on the blog's
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
 {{% /notice %}}
 
+## What Even Is Audio?
+
+We've all consumed audio media at some point, but have you ever stopped and 
+wondered how it works under the hood?
+
+At its core, audio works by rapidly reading the volume level (a "sample"),
+typically 44,100 times per second (44.1 kHz is called the [*Sample
+Rate*][sr]). These samples are then encoded using [*Pulse Code
+Modulation*][pcm].
+
+According to Wikipedia:
+
+> Pulse-code modulation (PCM) is a method used to digitally represent sampled
+> analog signals. It is the standard form of digital audio in computers,
+> compact discs, digital telephony and other digital audio applications. In a
+> PCM stream, the amplitude of the analog signal is sampled regularly at
+> uniform intervals, and each sample is quantized to the nearest value within a
+> range of digital steps.
+
+{{% notice tip %}}
+If it helps, a sample can be thought of as how far a speaker/microphone's
+membrane is deflected at a particular point in time.
+{{% /notice %}}
+
+It's not uncommon to record multiple audio tracks at a time, for example
+imagine multiple microphones were used to provide a sense of
+direction/perspective (see [Sound Localisation][sl] for more). These multiple
+tracks are usually referred to as *Channels*. 
+
+**TL;DR:** In Rust lingo, you can think of an audio stream as:
+
+```rust
+type AudioStream = Vec<Frame>;
+type Frame = [Sample; N]; // where `N` is the number of channels in the stream
+type Sample = i16 | f32;
+```
+
+The audio formats you are used to (MP3, WAV, OGG) are just different ways to
+store an `AudioStream` on disk, along with some metadata describing the audio
+(artist, year, etc.), typically using tricks like compression or [Delta
+Encoding][de] to make the resulting file as small as possible.
+
+If you're wondering why compression is important, these are the numbers for a
+simple uncompressed audio stream with:
+
+- 30 seconds of audio
+- 44.1 kHz sample rate
+- 2 channels (e.g. left and right speaker)
+- bit depth of 16 (i.e. the samples are `i16`)
+
+```text
+sizeof(Sample) = 2 bytes
+sizeof(Frame) = 2 * sizeof(Sample) = 4 bytes
+sizeof(1 second) = sizeof(Frame) * 44100 = 176400 bytes
+full clip = 30 * sizeof(1 second) = 5292000 bytes = 5.3 MB
+```
+
+... That's a lot of data!
+
 ## Finding Sample Data
 
 If we want to implement a noise gate we're going to need some sample clips to
@@ -60,11 +119,7 @@ $ curl "https://forums.liveatc.net/index.php?action=dlattach;topic=15455.0;attac
 $ ffmpeg -i a-turtle-of-an-issue.mp3 a-turtle-of-an-issue.wav
 ```
 
-## What Even Is Audio?
-
-TODO: Talk about samples, frames, and PCM.
-
-## The Rough Algorithm
+## Implementing the Noise Gate Algorithm
 
 For now, our *Noise Gate* will have two knobs for tweaking its behaviour:
 
@@ -333,3 +388,7 @@ impl<S: Sample> NoiseGate<S> {
 [sample-crate]: https://crates.io/crates/sample
 [frame]: https://docs.rs/sample/latest/sample/frame/trait.Frame.html
 [sample]: https://docs.rs/sample/latest/sample/trait.Sample.html
+[pcm]: https://en.wikipedia.org/wiki/Pulse-code_modulation
+[sl]: https://en.wikipedia.org/wiki/Sound_localization
+[sr]: https://en.wikipedia.org/wiki/Sampling_(signal_processing)#Sampling_rate
+[de]: https://en.wikipedia.org/wiki/Delta_encoding
