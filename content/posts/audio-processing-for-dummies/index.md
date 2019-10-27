@@ -11,8 +11,8 @@ unit has is to run the radio network and keep track of what's happening. This
 can be a pretty stressful job, especially when there's lots of radio traffic,
 and it's not unusual to miss words or entire transmissions.
 
-To help make the job easier I'd like to implement a basic component of audio
-processing, the [Noise Gate][wiki].
+To help with a personal project that could make the job easier I'd like to
+implement a basic component of audio processing, the [Noise Gate][wiki].
 
 The basic idea is to scan through an audio stream and split it into individual
 clips based on volume, similar to the algorithm mentioned [on this Rust Audio
