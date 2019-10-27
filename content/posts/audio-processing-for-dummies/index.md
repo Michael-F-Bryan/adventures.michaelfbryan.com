@@ -1,7 +1,6 @@
 ---
 title: "Audio Processing for Dummies"
-date: "2019-10-26T17:59:06+08:00"
-draft: true
+date: "2019-10-26T23:34:00+08:00"
 tags:
 - rust
 - audio
@@ -21,13 +20,15 @@ discourse thread][thread].
 
 {{% notice note %}}
 The code written in this article is available [on GitHub][repo]. Feel free to
-browse through and steal code or inspiration.
+browse through and steal code or inspiration. It's also been published as a
+crate [on crates.io][crate].
 
 If you found this useful or spotted a bug, let me know on the blog's 
 [issue tracker][issue]!
 
 [repo]: https://github.com/Michael-F-Bryan/noise-gate
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
+[crate]: crates.io/crates/noise-gate
 {{% /notice %}}
 
 ## What Even Is Audio?
