@@ -257,7 +257,6 @@ We also need to expose a safe `push()` method. Preferably one which will return
 the original item when there is no more space.
 
 ```rust
-```rust
 // src/lib.rs
 
 use core::fmt::{self, Display, Formatter};
@@ -379,7 +378,7 @@ impl<T, const N: usize> ArrayVec<T, { N }> {
 {{% notice note %}}
 Note the use of `core::ptr::drop_in_place()`, this will call the destructor of
 every item in the `tail` and leave them in a logically uninitialized state.
-{% /notice %}
+{{% /notice %}}
 
 Next comes one of the trickier methods for our collection, `try_insert()`. When
 inserting, after doing a couple bounds checks we'll need to move everything
@@ -442,14 +441,13 @@ impl<T, const N: usize> ArrayVec<T, { N }> {
 }
 ```
 
-## Implementing Useful Conversion Traits
+## Implementing Useful Traits
 
-We're now at the point where we can implement `Deref` and `DerefMut` to make our
-`ArrayVec` more array-like.
+We're now at the point where should start making our `ArrayVec` easier to use.
 
 The implementation itself is quite boring (we just call
 `core::slice::from_raw_parts()`), but this is the first step on the way to being
-a first-class container.
+a first class vec-like container.
 
 ```rust
 // src/lib.rs
@@ -471,6 +469,118 @@ impl<T, const N: usize> DerefMut for ArrayVec<T, { N }> {
 }
 ```
 
+From here we get things like `as_slice()` and `AsRef<[T]>` for free.
+
+```rust
+impl<T, const N: usize> ArrayVec<T, { N }> {
+    ...
+
+    pub fn as_slice(&self) -> &[T] { self.deref() }
+
+    pub fn as_slice_mut(&mut self) -> &mut [T] { self.deref_mut() }
+}
+
+impl<T, const N: usize> AsRef<[T]> for ArrayVec<T, { N }> {
+    fn as_ref(&self) -> &[T] { self.as_slice() }
+}
+
+impl<T, const N: usize> AsMut<[T]> for ArrayVec<T, { N }> {
+    fn as_mut(&mut self) -> &mut [T] { self.as_slice_mut() }
+}
+```
+
+You may have noticed that we didn't use any custom derives when declaring
+`ArrayVec`. Now we can use `as_slice()` it's easy enough to defer the 
+implementation of traits you'd normally `#[derive]` to their `&[T]` 
+implementation.
+
+The traits we're going to implement manually:
+
+- Debug
+- PartialEq/Eq
+- PartialOrd/Ord
+- Hash
+- Default (just calls `ArrayVec::new()`)
+
+We'll leave `Copy` and `Clone` for later.
+
+```rust
+// src/lib.rs
+
+use core::{
+    hash::Hasher,
+    fmt::{self, Debug, Formatter},
+    cmp::Ordering,
+};
+
+impl<T: Debug, const N: usize> Debug for ArrayVec<T, { N }> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self.as_slice()).finish()
+    }
+}
+
+impl<T: PartialEq, const N: usize> PartialEq for ArrayVec<T, { N }> {
+    fn eq(&self, other: &Self) -> bool { self.as_slice() == other.as_slice() }
+}
+
+impl<T: PartialEq, const N: usize> PartialEq<[T]> for ArrayVec<T, { N }> {
+    fn eq(&self, other: &[T]) -> bool { self.as_slice() == other }
+}
+
+impl<T: Eq, const N: usize> Eq for ArrayVec<T, { N }> {}
+
+impl<T: PartialOrd, const N: usize> PartialOrd for ArrayVec<T, { N }> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.as_slice().partial_cmp(other.as_slice())
+    }
+}
+
+impl<T: Ord, const N: usize> Ord for ArrayVec<T, { N }> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.as_slice().cmp(other.as_slice())
+    }
+}
+
+impl<T: Hash, const N: usize> Hash for ArrayVec<T, { N }> {
+    fn hash<H: Hasher>(&self, hasher: &mut H) { self.as_slice().hash(hasher); }
+}
+
+impl<T, const N: usize> Default for ArrayVec<T, { N }> {
+    fn default() -> Self { ArrayVec::new() }
+}
+```
+
+Users will want to index into our vector (i.e. `some_vector[i]`), but if you
+look at the docs [implementing `Index` for `[T]`][slice-index] you'll see it
+uses the unstable [`core::slice::SliceIndex`][SliceIndex] trait. We *could*
+enable another feature flag, but a smarter way would be to say *"`ArrayVec` can
+be indexed using whatever can index into a `[T]`"*.
+
+```rust
+// src/lib.rs
+
+use core::ops::{Index, IndexMut};
+
+impl<Ix, T, const N: usize> Index<Ix> for ArrayVec<T, { N }>
+where
+    [T]: Index<Ix>,
+{
+    type Output = <[T] as Index<Ix>>::Output;
+
+    fn index(&self, ix: Ix) -> &Self::Output { self.as_slice().index(ix) }
+}
+
+impl<Ix, T, const N: usize> IndexMut<Ix> for ArrayVec<T, { N }>
+where
+    [T]: IndexMut<Ix>,
+{
+    fn index_mut(&mut self, ix: Ix) -> &mut Self::Output {
+        self.as_slice_mut().index_mut(ix)
+    }
+}
+```
+
+
 [arrayvec]: https://crates.io/crates/arrayvec
 [aimc]: http://adventures.michaelfbryan.com/tags/aimc
 [cg]: https://github.com/rust-lang/rust/issues/44580
@@ -479,3 +589,5 @@ impl<T, const N: usize> DerefMut for ArrayVec<T, { N }> {
 [MaybeUninit]: https://doc.rust-lang.org/core/mem/union.MaybeUninit.html
 [forum]: https://doc.rust-lang.org/core/mem/union.MaybeUninit.html
 [vec]: https://github.com/rust-lang/rust/blob/a19f93410d4315408f8775e1be29536302adc223/src/liballoc/vec.rs#L993-L1016
+[slice-index]: https://doc.rust-lang.org/std/primitive.slice.html#impl-Index%3CI%3E
+[SliceIndex]: https://doc.rust-lang.org/std/slice/trait.SliceIndex.html
