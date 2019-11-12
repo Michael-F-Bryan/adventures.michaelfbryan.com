@@ -438,6 +438,30 @@ impl<T, const N: usize> ArrayVec<T, { N }> {
 
         Ok(())
     }
+
+    pub fn insert(&mut self, index: usize, item: T) {
+        match self.try_insert(index, item) {
+            Ok(_) => {},
+            Err(e) => panic!("Insert failed: {}", e),
+        }
+    }
+}
+```
+
+Something we haven't done up until now is make sure destructors are called for
+the items in our collection. Leaking memory is bad, so we need to add a `Drop`
+impl.
+
+This is easier than you'd think because we can just use the `clear()` method.
+
+```rust
+// src/lib.rs
+
+impl<T, const N: usize> Drop for ArrayVec<T, { N }> {
+    fn drop(&mut self) {
+        // Makes sure the destructors for all items are run.
+        self.clear();
+    }
 }
 ```
 
@@ -472,6 +496,8 @@ impl<T, const N: usize> DerefMut for ArrayVec<T, { N }> {
 From here we get things like `as_slice()` and `AsRef<[T]>` for free.
 
 ```rust
+// src/lib.rs
+
 impl<T, const N: usize> ArrayVec<T, { N }> {
     ...
 
@@ -500,6 +526,7 @@ The traits we're going to implement manually:
 - PartialEq/Eq
 - PartialOrd/Ord
 - Hash
+- Clone
 - Default (just calls `ArrayVec::new()`)
 
 We'll leave `Copy` and `Clone` for later.
@@ -548,7 +575,31 @@ impl<T: Hash, const N: usize> Hash for ArrayVec<T, { N }> {
 impl<T, const N: usize> Default for ArrayVec<T, { N }> {
     fn default() -> Self { ArrayVec::new() }
 }
+
+impl<T: Clone, const N: usize> Clone for ArrayVec<T, { N }> {
+    fn clone(&self) -> ArrayVec<T, { N }> {
+        let mut other: ArrayVec<T, { N }> = ArrayVec::new();
+
+        for item in self.as_slice() {
+            unsafe {
+                // if it fit into the original, it'll fit into the clone
+                other.push_unchecked(item.clone());
+            }
+        }
+
+        other
+    }
+}
 ```
+
+{{% notice tip %}}
+I imagine we could use [specialization][spec] to convert the `Clone` impl to
+a simple `memcpy()` when `T: Copy` to give us a nice speed boost, but there's
+a good chance LLVM will figure out what we're doing and apply that
+optimisation anyway.
+
+[spec]: https://github.com/rust-lang/rust/issues/31844
+{{% /notice %}}
 
 Users will want to index into our vector (i.e. `some_vector[i]`), but if you
 look at the docs [implementing `Index` for `[T]`][slice-index] you'll see it
@@ -580,6 +631,41 @@ where
 }
 ```
 
+## Bulk Copies
+
+Another useful operation is to copy items directly from another slice.
+
+```rust
+// src/lib.rs
+
+impl<T, const N: usize> ArrayVec<T, { N }> {
+    ...
+
+    pub const fn remaining_capacity(&self) -> usize { N - self.len() }
+
+    pub fn try_extend_from_slice(
+        &mut self,
+        other: &[T],
+    ) -> Result<(), CapacityError<()>>
+    where
+        T: Copy,
+    {
+        if self.remaining_capacity() < other.len() {
+            return Err(CapacityError(()));
+        }
+
+        let self_len = self.len();
+        let other_len = other.len();
+
+        unsafe {
+            let dst = self.as_mut_ptr().offset(self_len as isize);
+            ptr::copy_nonoverlapping(other.as_ptr(), dst, other_len);
+            self.set_len(self_len + other_len);
+        }
+        Ok(())
+    }
+}
+```
 
 [arrayvec]: https://crates.io/crates/arrayvec
 [aimc]: http://adventures.michaelfbryan.com/tags/aimc
