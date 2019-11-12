@@ -667,6 +667,19 @@ impl<T, const N: usize> ArrayVec<T, { N }> {
 }
 ```
 
+## Implementing Drain
+
+Most collections have a so-called *Draining Iterator* that removes a specified 
+range from the vector and yields the removed items.
+
+Implementing this pattern *correctly* can be a non-trivial task however, as
+Alexis Beingessner's insightful [Pre-Pooping Your Pants With Rust][ppyp] 
+demonstrates.
+
+{{% notice info %}}
+TODO: Implement drain...
+{{% /notice %}}
+
 [arrayvec]: https://crates.io/crates/arrayvec
 [aimc]: http://adventures.michaelfbryan.com/tags/aimc
 [cg]: https://github.com/rust-lang/rust/issues/44580
@@ -677,3 +690,4 @@ impl<T, const N: usize> ArrayVec<T, { N }> {
 [vec]: https://github.com/rust-lang/rust/blob/a19f93410d4315408f8775e1be29536302adc223/src/liballoc/vec.rs#L993-L1016
 [slice-index]: https://doc.rust-lang.org/std/primitive.slice.html#impl-Index%3CI%3E
 [SliceIndex]: https://doc.rust-lang.org/std/slice/trait.SliceIndex.html
+[ppyp]: http://cglab.ca/~abeinges/blah/everyone-poops/
