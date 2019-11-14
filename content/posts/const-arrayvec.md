@@ -28,6 +28,26 @@ this neat feature on *nightly* at the moment called [*"Const Generics"*][cg]...
     alt="Nerd Sniping" 
 >}}
 
+{{% notice note %}}
+The code written in this article is available [on GitHub][repo]. Feel free to
+browse through and steal code or inspiration. It's also been published as a
+crate [on crates.io][crate].
+
+I'd also like to give a shout out to the original `arrayvec` author, 
+[@bluss][bluss]. This project takes a **lot** of ideas and inspiration from
+`arrayvec`, and it would have made things a lot harder (and more error-prone)
+if there wasn't prior art to refer to.
+
+If you found this useful or spotted a bug, let me know on the blog's 
+[issue tracker][issue]. I *especially* want to hear from you if you feel a piece
+of `unsafe` code is unsound!
+
+[repo]: https://github.com/Michael-F-Bryan/const_arrayvec
+[issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
+[crate]: crates.io/crates/const-arrayvec
+[bluss]: https://github.com/bluss
+{{% /notice %}}
+
 ## Getting Started
 
 Okay, so the first thing we'll need to do is create a crate and enable this 
@@ -650,7 +670,9 @@ Another useful operation is to copy items directly from another slice.
 impl<T, const N: usize> ArrayVec<T, { N }> {
     ...
 
-    pub const fn remaining_capacity(&self) -> usize { N - self.len() }
+    pub const fn remaining_capacity(&self) -> usize { 
+        self.capacity() - self.len() 
+    }
 
     pub fn try_extend_from_slice(
         &mut self,
@@ -891,8 +913,6 @@ impl<'a, T, const N: usize> Drop for Drain<'a, T, { N }> {
 }
 ```
 
----
-
 Besides the usual problems associated with our (possibly uninitialized)
 backing buffer, we need to remember that the `ArrayVec` will temporarily be
 in a broken state while `Drain`-ing items, because some slots in the backing
@@ -940,13 +960,71 @@ fn main() {
 }
 {{< /playpen >}}
 
+It takes a couple seconds to realise but this seemingly innocent code snippet
+has big ramifications for Rust, or any code that makes use of the RAII pattern
+for that matter...
+
+{{% notice warning %}}
+With zero lines of `unsafe` code, users are able subvert any invariant upheld
+by a RAII guard!
+
+This can cause *Undefined Behaviour* if these invariants are relied on for
+memory safety.
+{{% /notice %}}
+
+In their post Alexis proposes a rather pragmatic solution. I would highly
+recommend reading the article, but to paraphrase it's like the `Drain` author
+saying:
+
+> Well if you leak my `Drain` I'm going to go and leak the drained range, plus
+> every item after it.
+
+This can be accomplished by adding a single line to `Drain`'s constructor.
+
+```diff
+ impl<'a, T, const N: usize> Drain<'a, T, { N }> {
+     pub(crate) fn with_range(
+         vector: &'a mut ArrayVec<T, { N }>,
+         range: Range<usize>,
+     ) -> Self {
+ 
+         unsafe {
+             ...
+ 
++            // prevent a leaked Drain from letting users read from
++            // uninitialized memory
++            vector.set_len(range.start);
+ 
+             Drain { ... }
+         }
+     }
+ }
+```
+
+Leaking destructors is definitely not ideal, but it's a big improvement over
+letting users access uninitialized memory or trigger a double-free.
+
+## Conclusion
+
+While `ArrayVec` isn't quite polished, it's definitely at a place where people
+can begin to use it to build cool things.
+
+As a bonus, I didn't run into a single ICE while writing `const-arrayvec`! 
+
+Most of the times I'd like to use *Const Generics* are when working on
+`#[no_std]` applications where I'd prefer to let the caller specify a buffer 
+size at compile time, so I'm definitely going to try and use it more from now
+on.
+
+Now what was I doing before going down this rabbit hole...
+
 [arrayvec]: https://crates.io/crates/arrayvec
 [aimc]: http://adventures.michaelfbryan.com/tags/aimc
 [cg]: https://github.com/rust-lang/rust/issues/44580
 [cargo-generate]: https://crates.io/crates/cargo-generate
 [cw]: https://crates.io/crates/cargo-watch
 [MaybeUninit]: https://doc.rust-lang.org/core/mem/union.MaybeUninit.html
-[forum]: https://doc.rust-lang.org/core/mem/union.MaybeUninit.html
+[forum]: https://users.rust-lang.org/t/array-lengths-cant-depend-on-generic-parameters-with-const-generics-bug-or-expected-behavior/30579
 [vec]: https://github.com/rust-lang/rust/blob/a19f93410d4315408f8775e1be29536302adc223/src/liballoc/vec.rs#L993-L1016
 [slice-index]: https://doc.rust-lang.org/std/primitive.slice.html#impl-Index%3CI%3E
 [SliceIndex]: https://doc.rust-lang.org/std/slice/trait.SliceIndex.html
