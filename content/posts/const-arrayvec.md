@@ -724,9 +724,221 @@ Implementing this pattern *correctly* can be a non-trivial task however, as
 Alexis Beingessner's insightful [Pre-Pooping Your Pants With Rust][ppyp] 
 demonstrates.
 
-{{% notice info %}}
-TODO: Implement drain...
-{{% /notice %}}
+The way a `Drain` type usually works is:
+
+- Take a `&mut` reference to the parent collection and keep track of the 
+  requested range.
+- The `Iterator::next()` method should yield the item at the front of the range,
+  and increment the range's lower bound. This leaves the item's original
+  location logically uninitialized (*important!*).
+- When the `Drain` is dropped, call destructors for any unyielded items and
+  clean up the logically uninitialized memory by shuffling all items after the
+  end of the range forwards.
+
+
+```rust
+// src/drain.rs
+
+#[derive(Debug, PartialEq)]
+pub struct Drain<'a, T, const N: usize> {
+    inner: &'a mut ArrayVec<T, { N }>,
+    /// The first item after the drained range.
+    start_of_tail: usize,
+    tail_length: usize,
+    /// The front of the remaining drained range.
+    head: *mut T,
+    /// One after the last item in the range being drained.
+    tail: *mut T,
+}
+```
+
+There are a couple invariants that must be upheld for `Drain` to be valid:
+
+1. The `head` pointer must point within `inner`'s backing array 
+2. The `head` pointer must be before the `tail` pointer
+3. The `tail` pointer must be greater than or equal to `head`, and the furthest
+   it can go is one item after the end of the buffer
+4. `T` must not be a zero-sized type because we are using pointer arithmetico
+
+From here the `Iterator` implementation for `Drain` is rather straightforward.
+We have two pointers into an array and when we've finished iterating these
+pointers will come together somewhere in the middle. Getting the next item is
+just a case of checking whether we're done, then reading the value and
+incrementing the `head` pointer.
+
+```rust
+
+impl<'a, T, const N: usize> Iterator for Drain<'a, T, { N }> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.head == self.tail {
+            // No more items
+            return None;
+        }
+
+        unsafe {
+            // The tail points at tne end of our
+            // copy the item onto the stack. The tail
+            let item = self.head.read();
+            // increment the head pointer
+            self.head = self.head.add(1);
+            Some(item)
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len(), Some(self.len()))
+    }
+}
+```
+
+Implementing `DoubleEndedIterator` is almost identical, except we're working
+with `tail`.
+
+```rust
+// src/drain.rs
+
+impl<'a, T, const N: usize> DoubleEndedIterator for Drain<'a, T, { N }> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.head == self.tail {
+            // No more items
+            return None;
+        }
+
+        unsafe {
+            // the tail pointer is one PAST the end of our selection.
+            // Pre-decrement so we're pointing at a valid item before reading
+            self.tail = self.tail.sub(1);
+            let item = self.tail.read();
+            Some(item)
+        }
+    }
+}
+```
+
+There are a couple other iterator traits which we can implement. These are
+mainly used in combination with *specialization* to improve performance.
+
+We'll implement the `ExactSizeIterator` because getting the iterator's length
+is just a case of subtracting `tail - head`.
+
+```rust
+// src/drain.rs
+
+impl<'a, T, const N: usize> Iterator for Drain<'a, T, { N }> {
+    ...
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len(), Some(self.len()))
+    }
+}
+
+impl<'a, T, const N: usize> ExactSizeIterator for Drain<'a, T, { N }> {
+    fn len(&self) -> usize {
+        let size = mem::size_of::<T>();
+        assert!(0 < size && size <= isize::max_value() as usize);
+
+        let difference = (self.tail as isize) - (self.head as isize);
+        debug_assert!(difference >= 0, "Tail should always be after head");
+
+        difference as usize / size
+    }
+}
+```
+
+The `FusedIterator` trait may also be handy.
+
+```rust
+// src/drain.rs
+
+impl<'a, T, const N: usize> FusedIterator for Drain<'a, T, { N }> {}
+```
+
+Most importantly, we'll need to implement the `Drop` trait to make sure the 
+remaining items within the drained range are destroyed and the other items
+shuffled forwards to fill in the space.
+
+```rust
+// src/drain.rs
+
+impl<'a, T, const N: usize> Drop for Drain<'a, T, { N }> {
+    fn drop(&mut self) {
+        // remove any remaining items so their destructors can run
+        while let Some(item) = self.next() {
+            mem::drop(item);
+        }
+
+        if self.tail_length == 0 {
+            // there are no items after the drained range
+            return;
+        }
+
+        unsafe {
+            let tail_start = self.inner.as_ptr().add(self.tail_start);
+            let drain_range_start =
+                self.inner.as_mut_ptr().add(self.drain_range_start);
+
+            // moves the tail (items after drained range) forwards now that the
+            // drained items are destroyed
+            ptr::copy(tail_start, drain_range_start, self.tail_length);
+
+            // we can now update the length
+            self.inner
+                .set_len(self.drain_range_start + self.tail_length);
+        }
+    }
+}
+```
+
+---
+
+Besides the usual problems associated with our (possibly uninitialized)
+backing buffer, we need to remember that the `ArrayVec` will temporarily be
+in a broken state while `Drain`-ing items, because some slots in the backing
+buffer will contain logically uninitialized data.
+
+Normally you'd assume this won't be a problem. The borrow checker should make
+sure our `ArrayVec` is inaccessible as long as the `Drain` is alive, and
+`Drain`'s destructor should fix everything before the `ArrayVec` is
+accessible again. Right?
+
+What about this?
+
+{{< playpen >}}
+struct World {
+    broken: bool,
+}
+
+/// A RAII guard which should be held 
+struct CleanupWorld<'a>(&'a mut World);
+
+impl<'a> Drop for CleanupWorld<'a> {
+    fn drop(&mut self) { 
+        // We're done updating. Make sure the world is no longer broken.
+        self.0.broken = false; 
+    }
+}
+
+fn main() {
+    let mut world = World { broken: false };
+
+    {
+        // make a RAII guard that will fix things up after we're done updating
+        // the world
+        let cleanup = CleanupWorld(&mut world);
+
+        // temporarily break the world while we're doing things
+        cleanup.0.broken = true;
+
+        // do something which causes cleanup's destructor to never be called
+        std::mem::forget(cleanup);
+    }
+
+    // cleanup's destructor never ran, the world is still broken!
+    assert!(world.broken);
+}
+{{< /playpen >}}
 
 [arrayvec]: https://crates.io/crates/arrayvec
 [aimc]: http://adventures.michaelfbryan.com/tags/aimc
