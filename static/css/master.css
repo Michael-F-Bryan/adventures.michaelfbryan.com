@@ -82,3 +82,21 @@ div.notices.tip {
 div.notices.info {
     background: #FFF2DB;
 }
+
+/* Let us link to the playpen */
+
+.playpen {
+    position: relative;
+}
+
+.playpen .buttons {
+    position: absolute;
+    right: 1em;
+    top: 1em;
+}
+
+.playpen .buttons a {
+    text-decoration: none;
+    color: slategray;
+    outline: none;
+}

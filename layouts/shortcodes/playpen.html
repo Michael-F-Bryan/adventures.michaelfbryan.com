@@ -1,0 +1,9 @@
+{{ $_hugo_config := `{ "version": 1 }` }}
+<div class="playpen">
+    <div class="buttons">
+        <a class="fa fa-play play-button" title="Run this code" target="_blank" aria-label="Run this code"
+            href="https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&code={{ trim .Inner "\n\t" }}"></a>
+    </div>
+
+    {{ highlight (trim .Inner "\n\t ") "rust" "" }}
+</div>
