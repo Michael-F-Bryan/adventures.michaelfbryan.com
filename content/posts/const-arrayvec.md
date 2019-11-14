@@ -251,7 +251,7 @@ impl<T, const N: usize> ArrayVec<T, { N }> {
     /// elements the vector thinks it contains, without adding or removing any
     /// elements. Use with care.
     pub unsafe fn set_len(&mut self, new_length: usize) {
-        debug_assert!(new_length < self.capacity());
+        debug_assert!(new_length <= self.capacity());
         self.length = new_length;
     }
 }
