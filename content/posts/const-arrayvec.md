@@ -42,9 +42,9 @@ If you found this useful or spotted a bug, let me know on the blog's
 [issue tracker][issue]. I *especially* want to hear from you if you feel a piece
 of `unsafe` code is unsound!
 
-[repo]: https://github.com/Michael-F-Bryan/const_arrayvec
+[repo]: https://github.com/Michael-F-Bryan/const-arrayvec
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
-[crate]: crates.io/crates/const-arrayvec
+[crate]: https://crates.io/crates/const-arrayvec
 [bluss]: https://github.com/bluss
 {{% /notice %}}
 
@@ -1019,7 +1019,7 @@ on.
 Now what was I doing before going down this rabbit hole...
 
 [arrayvec]: https://crates.io/crates/arrayvec
-[aimc]: http://adventures.michaelfbryan.com/tags/aimc
+[aimc]: http://adventures.michaelfbryan.com/tags/adventures-in-motion-control/
 [cg]: https://github.com/rust-lang/rust/issues/44580
 [cargo-generate]: https://crates.io/crates/cargo-generate
 [cw]: https://crates.io/crates/cargo-watch
