@@ -546,12 +546,16 @@ impl<T: Debug, const N: usize> Debug for ArrayVec<T, { N }> {
     }
 }
 
-impl<T: PartialEq, const N: usize> PartialEq for ArrayVec<T, { N }> {
-    fn eq(&self, other: &Self) -> bool { self.as_slice() == other.as_slice() }
-}
-
 impl<T: PartialEq, const N: usize> PartialEq<[T]> for ArrayVec<T, { N }> {
     fn eq(&self, other: &[T]) -> bool { self.as_slice() == other }
+}
+
+impl<T: PartialEq, const N: usize, const M: usize> PartialEq<ArrayVec<T, { M }>>
+    for ArrayVec<T, { N }>
+{
+    fn eq(&self, other: &ArrayVec<T, { M }>) -> bool {
+        self.as_slice() == other.as_slice()
+    }
 }
 
 impl<T: Eq, const N: usize> Eq for ArrayVec<T, { N }> {}
@@ -601,6 +605,11 @@ optimisation anyway.
 [spec]: https://github.com/rust-lang/rust/issues/31844
 {{% /notice %}}
 
+That's a pretty big wall of code, but you may have noticed instead of 
+implementing `PartialEq`, we instead implemented `PartialEq<ArrayVec<T, { M }>>`
+for `ArrayVec<T, { N }>`. This makes things more flexible by allowing vectors
+of different sizes can be compared for equality.
+
 Users will want to index into our vector (i.e. `some_vector[i]`), but if you
 look at the docs [implementing `Index` for `[T]`][slice-index] you'll see it
 uses the unstable [`core::slice::SliceIndex`][SliceIndex] trait. We *could*
@@ -631,7 +640,7 @@ where
 }
 ```
 
-## Bulk Copies
+## Bulk Copies and Insertion
 
 Another useful operation is to copy items directly from another slice.
 
@@ -659,10 +668,49 @@ impl<T, const N: usize> ArrayVec<T, { N }> {
 
         unsafe {
             let dst = self.as_mut_ptr().offset(self_len as isize);
+            // Note: we have a mutable reference to self, so it's not possible
+            // for the two arrays to overlap
             ptr::copy_nonoverlapping(other.as_ptr(), dst, other_len);
             self.set_len(self_len + other_len);
         }
         Ok(())
+    }
+}
+```
+
+It's also useful to add a `From` to allow construction of a vector from an
+array. 
+
+This is can be tricky to do correctly because you can't iterate over the items
+(`T`, not `&T`) in an array `[T; N]` due to the lack of an `IntoIterator` impl
+for arrays. Instead we'll need to use `unsafe` to directly copy bytes into our
+buffer.
+
+```rust
+// src/lib.rs
+
+impl<T, const N: usize> From<[T; N]> for ArrayVec<T, { N }> {
+    fn from(other: [T; N]) -> ArrayVec<T, { N }> {
+        let mut vec = ArrayVec::<T, { N }>::new();
+
+        unsafe {
+            // Copy the items from the array directly to the backing buffer
+
+            // Note: Safe because a [T; N] is identical to [MaybeUninit<T>; N]
+            ptr::copy_nonoverlapping(
+                other.as_ptr(),
+                vec.as_mut_ptr(),
+                other.len(),
+            );
+            // ownership has been transferred to the backing buffer, make sure
+            // the original array's destructors aren't called prematurely
+            mem::forget(other);
+            // the memory has now been initialized so it's safe to set the
+            // length
+            vec.set_len(N);
+        }
+
+        vec
     }
 }
 ```
