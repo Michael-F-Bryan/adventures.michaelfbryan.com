@@ -1,7 +1,6 @@
 ---
 title: "Implementing ArrayVec Using Const Generics"
-date: "2019-11-12T20:57:53+08:00"
-draft: true
+date: "2019-11-15T00:57:00+08:00"
 tags:
 - rust
 ---
