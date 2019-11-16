@@ -793,8 +793,10 @@ The way a `Drain` type usually works is:
 #[derive(Debug, PartialEq)]
 pub struct Drain<'a, T, const N: usize> {
     inner: &'a mut ArrayVec<T, { N }>,
-    /// The first item after the drained range.
-    start_of_tail: usize,
+    /// The index of the first item being removed.
+    drain_range_start: usize,
+    /// The index of the first item after the drained range.
+    tail_start: usize,
     tail_length: usize,
     /// The front of the remaining drained range.
     head: *mut T,
@@ -803,6 +805,7 @@ pub struct Drain<'a, T, const N: usize> {
 }
 ```
 
+
 There are a couple invariants that must be upheld for `Drain` to be valid:
 
 1. The `head` pointer must point within `inner`'s backing array 
@@ -810,6 +813,43 @@ There are a couple invariants that must be upheld for `Drain` to be valid:
 3. The `tail` pointer must be greater than or equal to `head`, and the furthest
    it can go is one item after the end of the buffer
 4. `T` must not be a zero-sized type because we are using pointer arithmetico
+
+With those invariants in mind, let's give `Drain` a constructor.
+
+```rust
+// src/drain.rs
+
+impl<'a, T, const N: usize> Drain<'a, T, { N }> {
+    pub(crate) fn with_range(
+        vector: &'a mut ArrayVec<T, { N }>,
+        range: Range<usize>,
+    ) -> Self {
+        debug_assert!(
+            range.start <= range.end,
+            "The range start must be before end"
+        );
+        debug_assert!(range.end <= vector.len(), "The range is out of bounds");
+        debug_assert!(
+            core::mem::size_of::<T>() != 0,
+            "We can't deal with zero-sized types"
+        );
+
+        unsafe {
+            let head = vector.as_mut_ptr().add(range.start);
+            let tail = vector.as_mut_ptr().add(range.end);
+            let tail_length = vector.len() - (range.end - range.start);
+
+            Drain {
+                inner: vector,
+                drain_range_start: range.start,
+                tail_start: range.end,
+                tail_length,
+                head,
+                tail,
+            }
+        }
+    }
+```
 
 From here the `Iterator` implementation for `Drain` is rather straightforward.
 We have two pointers into an array and when we've finished iterating these
