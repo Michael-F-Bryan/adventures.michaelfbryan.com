@@ -396,6 +396,8 @@ shortening the vector and dropping any items after the new end.
 ```rust
 // src/lib.rs
 
+use core::slice;
+
 impl<T, const N: usize> ArrayVec<T, { N }> {
     ...
 
@@ -736,6 +738,8 @@ buffer.
 ```rust
 // src/lib.rs
 
+use core::mem;
+
 impl<T, const N: usize> From<[T; N]> for ArrayVec<T, { N }> {
     fn from(other: [T; N]) -> ArrayVec<T, { N }> {
         let mut vec = ArrayVec::<T, { N }>::new();
@@ -814,6 +818,7 @@ just a case of checking whether we're done, then reading the value and
 incrementing the `head` pointer.
 
 ```rust
+// src/drain.rs
 
 impl<'a, T, const N: usize> Iterator for Drain<'a, T, { N }> {
     type Item = T;
@@ -846,6 +851,8 @@ with `tail`.
 ```rust
 // src/drain.rs
 
+use core::iter::DoubleEndedIterator;
+
 impl<'a, T, const N: usize> DoubleEndedIterator for Drain<'a, T, { N }> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.head == self.tail {
@@ -873,6 +880,8 @@ is just a case of subtracting `tail - head`.
 ```rust
 // src/drain.rs
 
+use core::{iter::ExactSizedIterator, mem};
+
 impl<'a, T, const N: usize> Iterator for Drain<'a, T, { N }> {
     ...
 
@@ -899,6 +908,8 @@ The `FusedIterator` trait may also be handy.
 ```rust
 // src/drain.rs
 
+use core::iter::FusedIterator;
+
 impl<'a, T, const N: usize> FusedIterator for Drain<'a, T, { N }> {}
 ```
 
@@ -908,6 +919,8 @@ shuffled forwards to fill in the space.
 
 ```rust
 // src/drain.rs
+
+use core::{mem, ptr};
 
 impl<'a, T, const N: usize> Drop for Drain<'a, T, { N }> {
     fn drop(&mut self) {
