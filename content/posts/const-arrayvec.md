@@ -878,7 +878,7 @@ impl<'a, T, const N: usize> Iterator for Drain<'a, T, { N }> {
             Some(item)
         }
     }
-    }
+}
 ```
 
 Implementing `DoubleEndedIterator` is almost identical, except we're working
