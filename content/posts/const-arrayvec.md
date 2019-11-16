@@ -838,11 +838,7 @@ impl<'a, T, const N: usize> Iterator for Drain<'a, T, { N }> {
             Some(item)
         }
     }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.len(), Some(self.len()))
     }
-}
 ```
 
 Implementing `DoubleEndedIterator` is almost identical, except we're working
@@ -902,6 +898,20 @@ impl<'a, T, const N: usize> ExactSizeIterator for Drain<'a, T, { N }> {
     }
 }
 ```
+
+{{% notice note %}}
+One of the contracts that `ExactSizeIterator` specifies in [its
+documentation][docs] is that the `Iterator::size_hint()` method *must* return
+the exact size of the iterator. 
+
+> When implementing an ExactSizeIterator, you must also implement Iterator.
+When doing so, the implementation of size_hint must return the exact size of
+the iterator.
+
+Hence the need to manually override `size_hint()` above.
+
+[docs]: https://doc.rust-lang.org/std/iter/trait.ExactSizeIterator.html
+{{% /notice %}}
 
 The `FusedIterator` trait may also be handy.
 
