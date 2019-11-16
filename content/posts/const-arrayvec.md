@@ -194,6 +194,10 @@ impl<T, const N: usize> ArrayVec<T, { N }> {
 
     pub const fn capacity(&self) -> usize { N }
 
+    pub const fn remaining_capacity(&self) -> usize {
+        self.capacity() - self.len()
+    }
+
     pub const fn is_full(&self) -> bool { self.len() == self.capacity() }
 }
 ```
@@ -595,7 +599,7 @@ use core::{
 
 impl<T: Debug, const N: usize> Debug for ArrayVec<T, { N }> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_list().entries(self.as_slice()).finish()
+        self.as_slice().fmt(f)
     }
 }
 
