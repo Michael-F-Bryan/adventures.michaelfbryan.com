@@ -127,6 +127,8 @@ to write...
 ```rust
 // src/lib.rs
 
+use core::mem::MaybeUninit;
+
 impl<T, const N: usize> ArrayVec<T, { N }> {
     pub const fn new() -> ArrayVec<T, { N }> {
         ArrayVec {
@@ -158,6 +160,8 @@ creating our array of uninitialized data.
 
 ```rust
 // src/lib.rs
+
+use core::mem::MaybeUninit;
 
 impl<T, const N: usize> ArrayVec<T, { N }> {
     pub fn new() -> ArrayVec<T, { N }> {
@@ -396,7 +400,7 @@ shortening the vector and dropping any items after the new end.
 ```rust
 // src/lib.rs
 
-use core::slice;
+use core::{ptr, slice};
 
 impl<T, const N: usize> ArrayVec<T, { N }> {
     ...
@@ -438,6 +442,8 @@ Most of this code is lifted straight from [`alloc::vec::Vec::insert()`][vec].
 
 ```rust
 // src/lib.rs
+
+use core::ptr;
 
 macro_rules! out_of_bounds {
     ($method:expr, $index:expr, $len:expr) => {
@@ -523,7 +529,7 @@ a first class vec-like container.
 ```rust
 // src/lib.rs
 
-use core::ops::{Deref, DerefMut};
+use core::{ops::{Deref, DerefMut}, slice};
 
 impl<T, const N: usize> Deref for ArrayVec<T, { N }> {
     type Target = [T];
@@ -694,6 +700,8 @@ Another useful operation is to copy items directly from another slice.
 ```rust
 // src/lib.rs
 
+use core::ptr;
+
 impl<T, const N: usize> ArrayVec<T, { N }> {
     ...
 
@@ -738,7 +746,7 @@ buffer.
 ```rust
 // src/lib.rs
 
-use core::mem;
+use core::{mem, ptr};
 
 impl<T, const N: usize> From<[T; N]> for ArrayVec<T, { N }> {
     fn from(other: [T; N]) -> ArrayVec<T, { N }> {
@@ -819,6 +827,8 @@ With those invariants in mind, let's give `Drain` a constructor.
 ```rust
 // src/drain.rs
 
+use core::{mem, ops::Range};
+
 impl<'a, T, const N: usize> Drain<'a, T, { N }> {
     pub(crate) fn with_range(
         vector: &'a mut ArrayVec<T, { N }>,
@@ -830,7 +840,7 @@ impl<'a, T, const N: usize> Drain<'a, T, { N }> {
         );
         debug_assert!(range.end <= vector.len(), "The range is out of bounds");
         debug_assert!(
-            core::mem::size_of::<T>() != 0,
+            mem::size_of::<T>() != 0,
             "We can't deal with zero-sized types"
         );
 
