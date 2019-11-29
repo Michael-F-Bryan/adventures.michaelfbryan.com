@@ -115,8 +115,8 @@ needing to install random `*-dev` packages or mess with the build system 🎉
 
 Unfortunately the library doesn't contain any tests so we won't be able to
 (initially) make sure individual functions have been translated correctly,
-but it *does* contain several examples that we can use to explore the high-level
-functionality.
+but it *does* contain an example interpreter that we can use to explore the
+high-level functionality.
 
 Okay, so we know we can build it from the command-line without much hassle, now
 we need to make sure our `tinyvm` crate can build everything programmatically.
@@ -267,6 +267,309 @@ $ cargo run --example tvmi -- vendor/tinyvm/programs/tinyvm/fact.vm
 362880
 3628800
 ```
+
+LGTM 👍
+
+## Low Hanging Fruit
+
+When you start out with something like this it's tempting to dive into the most
+important functions and port those first. Try to resist this urge. It can be
+easy to bite off more than you can chew and end up either wasting time or
+becoming demoralized and give up.
+
+Instead, let's look for the easiest item.
+
+```console
+$ ls libtvm
+tvm.c  tvm_file.c  tvm_htab.c  tvm_lexer.c  tvm_memory.c  tvm_parser.c  tvm_preprocessor.c  tvm_program.c
+```
+
+That `tvm_htab.c` file looks promising. I'm pretty sure `htab` stands for
+*"Hash Table"*, and Rust's standard library already contains a high-quality
+implementation. We should be able to swap that in easily enough.
+
+Let's look at the `tvm_htab.h` header file and see what we're dealing with.
+
+```c
+// vendor/tinyvm/include/tvm/tvm_htab.h
+
+#ifndef TVM_HTAB_H_
+#define TVM_HTAB_H_
+
+#define KEY_LENGTH 64
+#define HTAB_SIZE 4096
+
+struct tvm_htab_node {
+	char *key;
+	int value;
+	void *valptr;
+	struct tvm_htab_node *next;
+};
+
+struct tvm_htab_ctx {
+	unsigned int num_nodes;
+	unsigned int size;
+	struct tvm_htab_node **nodes;
+};
+
+struct tvm_htab_ctx *tvm_htab_create();
+void tvm_htab_destroy(struct tvm_htab_ctx *htab);
+
+int tvm_htab_add(struct tvm_htab_ctx *htab, const char *key, int value);
+int tvm_htab_add_ref(struct tvm_htab_ctx *htab,
+	const char *key, const void *valptr, int len);
+int tvm_htab_find(struct tvm_htab_ctx *htab, const char *key);
+char *tvm_htab_find_ref(struct tvm_htab_ctx *htab, const char *key);
+
+#endif
+```
+
+Looks easy enough to implement. Our only problem is the definition for
+`tvm_htab_ctx` and `tvm_htab_node` are included in the header file, meaning it's
+possible that some code accesses the hash table's internals directly instead of
+going through the published interface.
+
+The easiest way to see if this is the case is to move the struct definitions
+into `tvm_htab.c` and see if everything still compiles.
+
+```diff
+diff --git a/include/tvm/tvm_htab.h b/include/tvm/tvm_htab.h
+index 9feb7a9..e7346b7 100644
+--- a/include/tvm/tvm_htab.h
++++ b/include/tvm/tvm_htab.h
+@@ -4,18 +4,8 @@
+ #define KEY_LENGTH 64
+ #define HTAB_SIZE 4096
+
+-struct tvm_htab_node {
+-       char *key;
+-       int value;
+-       void *valptr;
+-       struct tvm_htab_node *next;
+-};
+-
+-struct tvm_htab_ctx {
+-       unsigned int num_nodes;
+-       unsigned int size;
+-       struct tvm_htab_node **nodes;
+-};
++struct tvm_htab_node;
++struct tvm_htab_ctx;
+
+ struct tvm_htab_ctx *tvm_htab_create();
+ void tvm_htab_destroy(struct tvm_htab_ctx *htab);
+```
+
+And after running `make` again:
+
+```console
+$ make
+make
+clang -Wall -pipe -Iinclude/ -std=gnu11 -Werror -pedantic -pedantic-errors -O3 -c libtvm/tvm_htab.c -o libtvm/tvm_htab.o
+ar rcs lib/libtvm.a libtvm/tvm_program.o libtvm/tvm_lexer.o libtvm/tvm.o libtvm/tvm_htab.o libtvm/tvm_memory.o libtvm/tvm_preprocessor.o libtvm/tvm_parser.o libtvm/tvm_file.o
+clang src/tvmi.c -ltvm -Wall -pipe -Iinclude/ -std=gnu11 -Werror -pedantic -pedantic-errors -O3 -Llib/ -o bin/tvmi
+clang tdb/main.o tdb/tdb.o -ltvm -Wall -pipe -Iinclude/ -std=gnu11 -Werror -pedantic -pedantic-errors -O3 -Llib/ -o bin/tdb
+```
+
+Looks like it all still works, now onto phase B; Create an identical set of
+functions which use a `HashMap<K, V>` under the hood.
+
+Stubbing out the bare minimum, we get:
+
+```rust
+// src/htab.rs
+
+use std::{
+    collections::HashMap,
+    ffi::CString,
+    os::raw::{c_char, c_int, c_void},
+};
+
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct HashTable(HashMap<CString, Item>);
+
+#[derive(Debug, Clone, PartialEq)]
+struct Item {}
+
+#[no_mangle]
+pub unsafe extern "C" fn tvm_htab_create() -> *mut HashTable{
+    unimplemented!()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn tvm_htab_destroy(htab: *mut HashTable) {
+    unimplemented!()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn tvm_htab_add(
+    htab: *mut HashTable,
+    key: *const c_char,
+    value: c_int,
+) -> c_int {
+    unimplemented!()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn tvm_htab_add_ref(
+    htab: *mut HashTable,
+    key: *const c_char,
+    value_ptr: *mut c_void,
+    length: c_int,
+) -> c_int {
+    unimplemented!()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn tvm_htab_find(
+    htab: *mut HashTable,
+    key: *const c_char,
+) -> c_int {
+    unimplemented!()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn tvm_htab_find_ref(
+    htab: *mut HashTable,
+    key: *const c_char,
+) -> *mut char {
+    unimplemented!()
+}
+```
+
+We also need to declare the `htab` module and re-export its functions from
+`lib.rs`.
+
+```rust
+// src/lib.rs
+
+mod htab;
+pub use htab::*;
+```
+
+Now we need to make sure the original `tvm_htab.c` doesn't get compiled and
+linked into the final library, otherwise we'll be greeted with a wall of
+duplicate symbol errors by the linker.
+
+{{% expand "A wall of duplicate symbol errors" %}}
+```
+error: linking with `/usr/bin/clang` failed: exit code: 1
+  |
+  = note: "/usr/bin/clang" "-Wl,--as-needed" "-Wl,-z,noexecstack" "-m64" "-L" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.17q5thi94e1eoj5i.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.19e8sqirbm56nu8g.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.1g6ljku8dwzpfvhi.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.1h5e5mxmiptpb7iz.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.1herotdop66zv9ot.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.1qbfxpvgd885u6o.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.21psdg8ni4vgdrzk.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.2albhpxlxxvc0ccu.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.2btm2dc9rhjhhna1.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.2kct5ftnkrqqr0mf.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.2lwgg3uosup4mkh0.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.2xduj46e9sw5vuan.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.35h8y7f23ua1qnz0.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.3cgfdtku63ltd8oc.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.3ot768hzkzzy7r76.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.3u2xnetcch8f2o02.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.4ldrdjvfzk58myrv.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.4omnum6bdjqsrq8b.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.4s8ch4ccmewulj22.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.4syl3x2rb8328h8x.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.532awiysf0h9r50f.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.5b2qwmmtc5pvnbh.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.dfjs079cp9si4o5.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.qxp6yb2gjpj0v6n.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.xz7ld20yvprst1r.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.z35ukhvchmmby1c.rcgu.o" "-o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.1d7wvlwdjap8p3g4.rcgu.o" "-Wl,--gc-sections" "-pie" "-Wl,-zrelro" "-Wl,-znow" "-nodefaultlibs" "-L" "/home/michael/Documents/tinyvm-rs/target/debug/deps" "-L" "/home/michael/Documents/tinyvm-rs/target/debug/build/tinyvm-3f1a2766f78b5580/out" "-L" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib" "-Wl,-Bstatic" "-Wl,--whole-archive" "-ltvm" "-Wl,--no-whole-archive" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libtest-a39a3e9a77b17f55.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libterm-97a69cd310ff0925.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libgetopts-66a42b1d94e3e6f9.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libunicode_width-dd7761d848144e0d.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_std_workspace_std-f722acdb78755ba0.rlib" "-Wl,--start-group" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd-974c3c08f6def4b3.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libpanic_unwind-eb49676f33a2c8a6.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libhashbrown-7ae0446feecc60f2.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_std_workspace_alloc-2de299b65d7f5721.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libbacktrace-64514775bc06309a.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libbacktrace_sys-1ed8aa185c63b9a5.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_demangle-a839df87f563fba5.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libunwind-8e726bdc2018d836.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcfg_if-5285f42cbadf207d.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/liblibc-b0362d20f8aa58fa.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/liballoc-f3dd7051708453a4.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_std_workspace_core-83744846c43307ce.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcore-d5565a3a0f4cfe21.rlib" "-Wl,--end-group" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcompiler_builtins-ea790e85415e3bbf.rlib" "-Wl,-Bdynamic" "-ldl" "-lrt" "-lpthread" "-lgcc_s" "-lc" "-lm" "-lrt" "-lpthread" "-lutil" "-lutil" "-fuse-ld=lld"
+  = note: ld.lld: error: duplicate symbol: tvm_htab_create
+          >>> defined at htab.rs:14 (src/htab.rs:14)
+          >>>            /home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.5b2qwmmtc5pvnbh.rcgu.o:(tvm_htab_create)
+          >>> defined at tvm_htab.c:23 (vendor/tinyvm/libtvm/tvm_htab.c:23)
+          >>>            tvm_htab.o:(.text.tvm_htab_create+0x0) in archive /home/michael/Documents/tinyvm-rs/target/debug/build/tinyvm-3f1a2766f78b5580/out/libtvm.a
+
+          ld.lld: error: duplicate symbol: tvm_htab_destroy
+          >>> defined at htab.rs:17 (src/htab.rs:17)
+          >>>            /home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.5b2qwmmtc5pvnbh.rcgu.o:(tvm_htab_destroy)
+          >>> defined at tvm_htab.c:35 (vendor/tinyvm/libtvm/tvm_htab.c:35)
+          >>>            tvm_htab.o:(.text.tvm_htab_destroy+0x0) in archive /home/michael/Documents/tinyvm-rs/target/debug/build/tinyvm-3f1a2766f78b5580/out/libtvm.a
+
+          ld.lld: error: duplicate symbol: tvm_htab_add_ref
+          >>> defined at htab.rs:29 (src/htab.rs:29)
+          >>>            /home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.5b2qwmmtc5pvnbh.rcgu.o:(tvm_htab_add_ref)
+          >>> defined at tvm_htab.c:160 (vendor/tinyvm/libtvm/tvm_htab.c:160)
+          >>>            tvm_htab.o:(.text.tvm_htab_add_ref+0x0) in archive /home/michael/Documents/tinyvm-rs/target/debug/build/tinyvm-3f1a2766f78b5580/out/libtvm.a
+
+          ld.lld: error: duplicate symbol: tvm_htab_add
+          >>> defined at htab.rs:20 (src/htab.rs:20)
+          >>>            /home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.5b2qwmmtc5pvnbh.rcgu.o:(tvm_htab_add)
+          >>> defined at tvm_htab.c:147 (vendor/tinyvm/libtvm/tvm_htab.c:147)
+          >>>            tvm_htab.o:(.text.tvm_htab_add+0x0) in archive /home/michael/Documents/tinyvm-rs/target/debug/build/tinyvm-3f1a2766f78b5580/out/libtvm.a
+
+          ld.lld: error: duplicate symbol: tvm_htab_find
+          >>> defined at htab.rs:39 (src/htab.rs:39)
+          >>>            /home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.5b2qwmmtc5pvnbh.rcgu.o:(tvm_htab_find)
+          >>> defined at tvm_htab.c:189 (vendor/tinyvm/libtvm/tvm_htab.c:189)
+          >>>            tvm_htab.o:(.text.tvm_htab_find+0x0) in archive /home/michael/Documents/tinyvm-rs/target/debug/build/tinyvm-3f1a2766f78b5580/out/libtvm.a
+
+          ld.lld: error: duplicate symbol: tvm_htab_find_ref
+          >>> defined at htab.rs:47 (src/htab.rs:47)
+          >>>            /home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.5b2qwmmtc5pvnbh.rcgu.o:(tvm_htab_find_ref)
+          >>> defined at tvm_htab.c:199 (vendor/tinyvm/libtvm/tvm_htab.c:199)
+          >>>            tvm_htab.o:(.text.tvm_htab_find_ref+0x0) in archive /home/michael/Documents/tinyvm-rs/target/debug/build/tinyvm-3f1a2766f78b5580/out/libtvm.a
+          clang: error: linker command failed with exit code 1 (use -v to see invocation)
+
+
+error: aborting due to previous error
+
+error: could not compile `tinyvm`.
+```
+{{% /expand %}}
+
+The fix is actually quite simple.
+
+```diff
+diff --git a/build.rs b/build.rs
+index 6f274c8..af9d467 100644
+--- a/build.rs
++++ b/build.rs
+@@ -9,7 +9,6 @@ fn main() {
+     Build::new()
+         .warnings(false)
+         .file(src.join("tvm_file.c"))
+-        .file(src.join("tvm_htab.c"))
+         .file(src.join("tvm_lexer.c"))
+         .file(src.join("tvm_memory.c"))
+         .file(src.join("tvm_parser.c"))
+```
+
+And trying to run the `tvmi` example again crashes, just as you'd expect a
+program full of `unimplemented!()`.
+
+```console
+$ cargo run --example tvmi -- vendor/tinyvm/programs/tinyvm/fact.vm
+    Finished dev [unoptimized + debuginfo] target(s) in 0.02s
+     Running `target/debug/examples/tvmi vendor/tinyvm/programs/tinyvm/fact.vm`
+thread 'main' panicked at 'not yet implemented', src/htab.rs:14:57
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace.
+```
+
+When adding FFI support for a new type, the easiest place to start is with the
+constructor and destructor.
+
+{{% notice info %}}
+The C code can only ever access our `HashTable` via a pointer, so we need to
+allocate one on the heap and then pass ownership of that heap-allocated object
+to the caller.
+{{% /notice %}}
+
+```rust
+// src/htab.rs
+
+#[no_mangle]
+pub unsafe extern "C" fn tvm_htab_create() -> *mut HashTable {
+    let hashtable = Box::new(HashTable::default());
+    Box::into_raw(hashtable)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn tvm_htab_destroy(htab: *mut HashTable) {
+    if htab.is_null() {
+        // nothing to free
+        return;
+    }
+
+    let hashtable = Box::from_raw(htab);
+    // explicitly destroy the hashtable
+    drop(hashtable);
+}
+```
+
+
+{{% notice warning %}}
+It is important that callers only ever destroy the `HashTable` by using the
+`tvm_htab_destroy()` function!
+
+If they don't do that and instead try to call `free()` directly, we'll
+almost certainly have a bad time. At best, it'll leak a bunch of memory, but
+it's also quite possible that our Rust `Box` doesn't use the same heap as
+`malloc()` and `free()`, meaning freeing a Rust object from C could corrupt
+the heap and leave the world in a broken state.
+{{% /notice %}}
 
 [previous-riir]: {{< ref "how-not-to-riir/index.md" >}}
 [p-invoke]: https://docs.microsoft.com/en-us/dotnet/standard/native-interop/pinvoke
