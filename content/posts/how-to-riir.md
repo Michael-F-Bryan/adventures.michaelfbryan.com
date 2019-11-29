@@ -392,7 +392,7 @@ pub struct HashTable(HashMap<CString, Item>);
 struct Item {}
 
 #[no_mangle]
-pub unsafe extern "C" fn tvm_htab_create() -> *mut HashTable{
+pub unsafe extern "C" fn tvm_htab_create() -> *mut HashTable {
     unimplemented!()
 }
 
@@ -432,7 +432,7 @@ pub unsafe extern "C" fn tvm_htab_find(
 pub unsafe extern "C" fn tvm_htab_find_ref(
     htab: *mut HashTable,
     key: *const c_char,
-) -> *mut char {
+) -> *mut c_char {
     unimplemented!()
 }
 ```
@@ -570,6 +570,168 @@ it's also quite possible that our Rust `Box` doesn't use the same heap as
 `malloc()` and `free()`, meaning freeing a Rust object from C could corrupt
 the heap and leave the world in a broken state.
 {{% /notice %}}
+
+Adding items to our hashmap is almost as easy to implement.
+
+```rust
+// src/hmap.rs
+
+#[derive(Debug, Clone, PartialEq)]
+struct Item {
+    value: c_int,               // <-- these fields were added
+    value_ptr: *mut c_void,
+    length: c_int,
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn tvm_htab_add(
+    htab: *mut HashTable,
+    key: *const c_char,
+    value: c_int,
+) -> c_int {
+    let hashtable = &mut *htab;
+    let key = CStr::from_ptr(key).to_owned();
+
+    let item = Item {
+        value,
+        value_ptr: ptr::null_mut(),
+        length: 0,
+    };
+
+    hashtable.0.insert(key, item);
+
+    // the only time insertion can fail is if allocation fails. In that case
+    // we'll abort the process anyway, so if this function returns we can
+    // assume it was successful (0 = success).
+    0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn tvm_htab_add_ref(
+    htab: *mut HashTable,
+    key: *const c_char,
+    value_ptr: *mut c_void,
+    length: c_int,
+) -> c_int {
+    let hashtable = &mut *htab;
+    let key = CStr::from_ptr(key).to_owned();
+
+    let item = Item {
+        value_ptr,
+        length,
+        value: 0,
+    };
+
+    hashtable.0.insert(key, item);
+
+    0
+}
+```
+
+{{% notice note %}}
+It's important to make sure we're using a `CString` as the hashtable key here
+instead of a normal `String`. A `*const c_char` can contain *any* non-null
+bytes, whereas a Rust `String` requires the string to be valid UTF-8.
+
+We could probably get away with converting the `CStr` to a `&str` and then an
+owned `String` because most input will be ASCII, but considering we'd need one
+or two `unwrap()`s, it's easier to just do things correctly and store a
+`CString`.
+{{% /notice %}}
+
+The two `*_find()` functions can be delegated straight to the inner
+`HashMap<CString, Item>`.
+
+The only thing we need to be careful about is making sure the right value is
+returned when an item can't be found. In this case, by looking at
+`tvm_htab.c` we can see that `tvm_htab_find()` returns `-1` and
+`tvm_htab_find_ref()` returns `NULL`.
+
+```rust
+// src/hmap.rs
+
+#[no_mangle]
+pub unsafe extern "C" fn tvm_htab_find(
+    htab: *mut HashTable,
+    key: *const c_char,
+) -> c_int {
+    let hashtable = &mut *htab;
+    let key = CStr::from_ptr(key);
+
+    match hashtable.get(key) {
+        Some(item) => item.value,
+        None => -1,
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn tvm_htab_find_ref(
+    htab: *mut HashTable,
+    key: *const c_char,
+) -> *mut c_char {
+    let hashtable = &mut *htab;
+    let key = CStr::from_ptr(key);
+
+    match hashtable.0.get(key) {
+        Some(item) => item.value_ptr as *mut c_char,
+        None => ptr::null_mut(),
+    }
+}
+```
+
+Now we've actually implemented the stubbed out functions, everything should work
+again.
+
+The easiest way to check is by running our example.
+
+```rust
+cargo run --example tvmi -- vendor/tinyvm/programs/tinyvm/fact.vm
+    Finished dev [unoptimized + debuginfo] target(s) in 0.02s
+     Running `target/debug/examples/tvmi vendor/tinyvm/programs/tinyvm/fact.vm`
+1
+2
+6
+24
+120
+720
+5040
+40320
+362880
+3628800
+```
+
+And to double-check we can run it through `valgrind` to make sure we aren't
+leaking memory or doing anything dodgy with pointers.
+
+```console
+$ valgrind target/debug/examples/tvmi vendor/tinyvm/programs/tinyvm/fact.vm
+==1492== Memcheck, a memory error detector
+==1492== Copyright (C) 2002-2017, and GNU GPL'd, by Julian Seward et al.
+==1492== Using Valgrind-3.15.0 and LibVEX; rerun with -h for copyright info
+==1492== Command: target/debug/examples/tvmi vendor/tinyvm/programs/tinyvm/fact.vm
+==1492==
+1
+2
+6
+24
+120
+720
+5040
+40320
+362880
+3628800
+==1492==
+==1492== HEAP SUMMARY:
+==1492==     in use at exit: 0 bytes in 0 blocks
+==1492==   total heap usage: 270 allocs, 270 frees, 67,129,392 bytes allocated
+==1492==
+==1492== All heap blocks were freed -- no leaks are possible
+==1492==
+==1492== For lists of detected and suppressed errors, rerun with: -s
+==1492== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+```
+
+Success!
 
 [previous-riir]: {{< ref "how-not-to-riir/index.md" >}}
 [p-invoke]: https://docs.microsoft.com/en-us/dotnet/standard/native-interop/pinvoke
