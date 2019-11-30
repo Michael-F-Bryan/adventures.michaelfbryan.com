@@ -578,9 +578,16 @@ Adding items to our hashmap is almost as easy to implement.
 
 #[derive(Debug, Clone, PartialEq)]
 struct Item {
-    value: c_int,               // <-- these fields were added
-    value_ptr: *mut c_void,
-    length: c_int,
+    /// An integer value.
+    value: c_int,
+    /// An opaque value used with [`tvm_htab_add_ref()`].
+    ///
+    /// # Safety
+    ///
+    /// Storing the contents of a `void *` in a `Vec<u8>` *would* normally
+    /// result in alignment issues, but we've got access to the `libtvm` source
+    /// code and know it will only ever store `char *` strings.
+    opaque_value: Vec<u8>,
 }
 
 #[no_mangle]
@@ -616,9 +623,16 @@ pub unsafe extern "C" fn tvm_htab_add_ref(
     let hashtable = &mut *htab;
     let key = CStr::from_ptr(key).to_owned();
 
+    // we need to create an owned copy of the value
+    let opaque_value = if value_ptr.is_null() {
+        Vec::new()
+    } else {
+        std::slice::from_raw_parts(value_ptr as *mut u8, length as usize)
+            .to_owned()
+    };
+
     let item = Item {
-        value_ptr,
-        length,
+        opaque_value,
         value: 0,
     };
 
@@ -733,11 +747,214 @@ $ valgrind target/debug/examples/tvmi vendor/tinyvm/programs/tinyvm/fact.vm
 
 Success!
 
+## Implementing Preprocessing
+
+The `tinyvm` virtual machine consumes [a simplified form of assembly][grammar]
+similar to traditional Intel x86 assembly. The first step in parsing `tinyvm`
+assembly is to run a preprocessor which interprets `%include filename` and
+`%define identifier value` statements.
+
+This sort of text manipulation should be a lot easier to accomplish using
+Rust's `&str` types, so let's have a look at the interface our crate needs to
+implement.
+
+```c
+// vendor/tinyvm/include/tvm/tvm_preprocessor.h
+
+#ifndef TVM_PREPROCESSOR_H_
+#define TVM_PREPROCESSOR_H_
+
+#include "tvm_htab.h"
+
+int tvm_preprocess(char **src, int *src_len, struct tvm_htab_ctx *defines);
+
+#endif
+```
+
+Using `char **` and `int *` for the `src` and `src_len` variables may seem a
+bit odd at first, but if you were to write the equivalent in Rust you'd get
+something like this:
+
+```rust
+fn tvm_preprocess(
+    src: String,
+    defines: &mut HashTable,
+) -> Result<String, PreprocessorError> {
+    ...
+}
+```
+
+The C code is just using output parameters to swap the `src` string in-place
+because it can't return both a new string and an error code.
+
+Before we do anything else, we should write a test for `tvm_preprocess()`. That
+way we can ensure our Rust function is functionally equivalent to the original.
+
+We're interacting with the filesystem so we'll want to pull in
+[the `tempfile` crate][tempfile].
+
+```console
+$ cargo add --dev tempfile
+    Updating 'https://github.com/rust-lang/crates.io-index' index
+      Adding tempfile v3.1.0 to dev-dependencies
+```
+
+We'll also need the `libc` crate because we're going to be passing `libtvm`
+strings which it may need to free.
+
+```console
+cargo add --dev libc
+    Updating 'https://github.com/rust-lang/crates.io-index' index
+      Adding libc v0.2.66 to dev-dependencies
+```
+
+Looking at the source code, we can see that the `tvm_preprocess()` function
+will keep resolving `%include`s and `%define`s until there are none left.
+
+First let's create a test to make sure the preprocessor handles `%define`s. We
+know this code already works (it's the code from `tinyvm` after all), so there
+shouldn't be any surprises.
+
+
+```rust
+// src/preprocess.rs
+
+#[cfg(test)]
+mod tests {
+    use crate::ffi;
+    use std::{
+        ffi::{CStr, CString},
+        io::Write,
+        os::raw::c_int,
+    };
+
+    #[test]
+    fn find_all_defines() {
+        let src = "%define true 1\nsome random text\n%define FOO_BAR -42\n";
+        let original_length = src.len();
+        let src = CString::new(src).unwrap();
+
+        unsafe {
+            // get a copy of `src` that was allocated using C's malloc
+            let mut src = libc::strdup(src.as_ptr());
+            let mut len = original_length as c_int;
+            let defines = ffi::tvm_htab_create();
+
+            let ret = ffi::tvm_preprocess(&mut src, &mut len, defines);
+
+            // preprocessing should have been successful
+            assert_eq!(ret, 0);
+
+            // make sure the define lines were removed
+            let preprocessed = CStr::from_ptr(src).to_bytes();
+            let preprocessed =
+                std::str::from_utf8(&preprocessed[..len as usize]).unwrap();
+            assert_eq!(preprocessed, "\nsome random text\n\n");
+
+            // make sure the "true" and "FOO_BAR" defines were set
+            let true_define =
+                ffi::tvm_htab_find_ref(defines, b"true\0".as_ptr().cast());
+            let got = CStr::from_ptr(true_define).to_str().unwrap();
+            assert_eq!(got, "1");
+            let foo_bar =
+                ffi::tvm_htab_find_ref(defines, b"FOO_BAR\0".as_ptr().cast());
+            let got = CStr::from_ptr(foo_bar).to_str().unwrap();
+            assert_eq!(got, "-42");
+
+            // clean up our hashtable and copied source text
+            ffi::tvm_htab_destroy(defines);
+            libc::free(src.cast());
+        }
+    }
+}
+```
+
+Weighing in at 45 lines that's a lot more than I usually like when writing
+tests, but there's a fair amount of extra code required to convert back and
+forth between C strings.
+
+We also need to test including another file.
+
+```rust
+// src/preprocessor.rs
+
+#[cfg(test)]
+mod tests {
+    ...
+
+    #[test]
+    fn include_another_file() {
+        const TOP_LEVEL: &str = "first line\n%include nested\nlast line\n";
+        const NESTED: &str = "nested\n";
+
+        // the preprocessor imports files from the filesystem, so we need to
+        // copy NESTED to a temporary location
+        let mut nested = NamedTempFile::new().unwrap();
+        nested.write_all(NESTED.as_bytes()).unwrap();
+        let nested_filename = nested.path().display().to_string();
+
+        // substitute the full path to the "nested" file
+        let top_level_src = TOP_LEVEL.replace("nested", &nested_filename);
+        std::fs::write(&nested, NESTED).unwrap();
+
+        unsafe {
+            let top_level_src = CString::new(top_level_src).unwrap();
+            // create a copy of the top_level_src which can be freed by C
+            let mut src = libc::strdup(top_level_src.as_ptr());
+            let mut len = libc::strlen(src) as c_int;
+            let defines = ffi::tvm_htab_create();
+
+            // after all that setup code we can *finally* call the preprocessor
+            let ret = ffi::tvm_preprocess(&mut src, &mut len, defines);
+
+            assert_eq!(ret, 0);
+
+            // make sure the define and import lines were removed
+            let preprocessed = CStr::from_ptr(src).to_bytes();
+            let got =
+                std::str::from_utf8(&preprocessed[..len as usize]).unwrap();
+
+            // after preprocessing, all include and define lines should have
+            // been removed
+            assert_eq!(got, "first line\nnested\nlast line\n");
+
+            ffi::tvm_htab_destroy(defines);
+            libc::free(src.cast());
+        }
+    }
+```
+
+{{% notice note %}}
+As an aside, this test was originally written to nest things three layers
+deep (e.g. `top_level.vm` includes `nested.vm` which includes `really_nested.vm`)
+to make sure it handles more than one level of `%include`, but no matter how
+it was written the test kept segfaulting.
+
+Then I tried running the original C `tvmi` binary...
+
+```console
+$ cd vendor/tinyvm/
+$ cat top_level.vm
+  %include nested
+$ cat nested.vm
+  %include really_nested
+$ cat really_nested.vm
+  Hello World
+$ ./bin/tvmi top_level.vm
+  [1]    10607 segmentation fault (core dumped)  ./bin/tvmi top_level.vm
+```
+
+Turns out the original `tinyvm` will crash instead of reporting a parse error
+when it doesn't get well-formed assembly 😕
+{{% /notice %}}
+
 [previous-riir]: {{< ref "how-not-to-riir/index.md" >}}
 [p-invoke]: https://docs.microsoft.com/en-us/dotnet/standard/native-interop/pinvoke
 [template]: https://github.com/Michael-F-Bryan/github-template
 [cg]: https://crates.io/crates/cargo-generate
 [tinyvm]: https://github.com/jakogut/tinyvm
 [cc]: https://crates.io/crates/cc
+[tempfile]: https://crates.io/crates/tempfile
 [extern]: https://doc.rust-lang.org/reference/items/external-blocks.html
 [bg]: https://crates.io/crates/bindgen
+[grammar]: https://github.com/jakogut/tinyvm/blob/10c25d83e442caf0c1fc4b0ab29a91b3805d72ec/SYNTAX
