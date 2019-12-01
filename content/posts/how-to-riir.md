@@ -965,44 +965,133 @@ Turns out the original `tinyvm` will crash instead of reporting a parse error
 when it doesn't get well-formed assembly 😕
 {{% /notice %}}
 
-Okay, so now we've got some tests we can start to implement `tvm_preprocess()`.
-To make things easier, we'll initially try to keep our implementation as close
-to [`tvm_preprocessor.c`][preprocessor.c] as possible.
+Okay, so now we've got some tests we can start to implement
+`tvm_preprocess()`.
+
+
+First off we should define an error type.
 
 ```rust
 // src/preprocessing.rs
 
-fn process_defines(
-    mut src: String,
-    defines: &mut HashTable,
-) -> Result<(String, usize), PreprocessingError> {
-    const TOK_DEFINE: &str = "%define";
+#[derive(Debug)]
+pub enum PreprocessingError {
+    FailedInclude {
+        name: String,
+        inner: IoError,
+    },
+    DuplicateDefine {
+        name: String,
+        original_value: String,
+        new_value: String,
+    },
+    EmptyDefine,
+    DefineWithoutValue(String),
+}
+```
 
-    // try to find the first "%define"
-    let directive_delimiter = match src.find(TOK_DEFINE) {
+Looking at the [`process_includes()` and `process_derives()`
+functions][preprocessor.c], both seem to scan through a string looking for a
+particular directive, then replace that line with something else (either the
+contents of a file or nothing if the line should be removed).
+
+```rust
+// src/preprocessing.rs
+
+/// Scan through the input string looking for a line starting with some
+/// directive, using a callback to figure out what to replace the directive line
+/// with.
+fn process_line_starting_with_directive<F>(
+    mut src: String,
+    directive: &str,
+    mut replace_line: F,
+) -> Result<(String, usize), PreprocessingError>
+where
+    F: FnMut(&str) -> Result<String, PreprocessingError>,
+{
+    // try to find the first instance of the directive
+    let directive_delimiter = match src.find(directive) {
         Some(ix) => ix,
         None => return Ok((src, 0)),
     };
 
-    // find the span from %define to the end of the line
-    let begin = &src[directive_delimiter..];
-    let end = begin.find('\n').unwrap_or(begin.len());
+    // calculate the span from the directive to the end of the line
+    let end_ix = src[directive_delimiter..]
+        .find('\n')
+        .map(|ix| ix + directive_delimiter)
+        .unwrap_or(src.len());
 
-    let define_line = &begin[..end];
-    let rest_of_define_line = define_line[TOK_DEFINE.len()..].trim();
+    // the rest of the line after the directive
+    let directive_line =
+        src[directive_delimiter + directive.len()..end_ix].trim();
 
-    if rest_of_define_line.is_empty() {
+    // use the callback to figure out what we should replace the line with
+    let replacement = replace_line(directive_line)?;
+
+    // remove the original line
+    let _ = src.drain(directive_delimiter..end_ix);
+    // then insert our replacement
+    src.insert_str(directive_delimiter, &replacement);
+
+    Ok((src, 1))
+}
+```
+
+Now we've got our `process_line_starting_with_directive()` helper we can
+implement include parsing.
+
+```rust
+// src/preprocessing.rs
+
+fn process_includes(
+    src: String,
+) -> Result<(String, usize), PreprocessingError> {
+    const TOK_INCLUDE: &str = "%include";
+
+    process_line_starting_with_directive(src, TOK_INCLUDE, |line| {
+        std::fs::read_to_string(line).map_err(|e| {
+            PreprocessingError::FailedInclude {
+                name: line.to_string(),
+                inner: e,
+            }
+        })
+    })
+}
+```
+
+Unfortunately, define parsing is a little more involved.
+
+```rust
+// src/preprocessing.rs
+
+n process_defines(
+    src: String,
+    defines: &mut HashTable,
+) -> Result<(String, usize), PreprocessingError> {
+    const TOK_DEFINE: &str = "%define";
+
+    process_line_starting_with_directive(src, TOK_DEFINE, |line| {
+        parse_define(line, defines)?;
+        Ok(String::new())
+    })
+}
+
+fn parse_define(
+    line: &str,
+    defines: &mut HashTable,
+) -> Result<(), PreprocessingError> {
+    if line.is_empty() {
         return Err(PreprocessingError::EmptyDefine);
     }
 
     // The syntax is "%define key value", so after removing the leading
     // "%define" everything after the next space is the value
-    let first_space = rest_of_define_line.find(' ').ok_or_else(|| {
-        PreprocessingError::DefineWithoutValue(rest_of_define_line.to_string())
+    let first_space = line.find(' ').ok_or_else(|| {
+        PreprocessingError::DefineWithoutValue(line.to_string())
     })?;
 
     // split the rest of the line into key and value
-    let (key, value) = rest_of_define_line.split_at(first_space);
+    let (key, value) = line.split_at(first_space);
     let value = value.trim();
 
     match defines.0.entry(
@@ -1027,11 +1116,7 @@ fn process_defines(
         },
     }
 
-    // we've processed the %define line, so remove it from the original source
-    // text
-    let _ = src.drain(directive_delimiter..directive_delimiter + end);
-
-    Ok((src, 1))
+    Ok(())
 }
 ```
 
@@ -1118,8 +1203,10 @@ mod tests {
         let src = String::from("%define key value\n");
         let mut hashtable = HashTable::default();
 
-        let _ = process_defines(src.clone(), &mut hashtable).unwrap();
+        let (got, num_defines) = process_defines(src.clone(), &mut hashtable).unwrap();
 
+        assert_eq!(got, "\n");
+        assert_eq!(num_defines, 1);
         assert_eq!(hashtable.0.len(), 1);
         let key = CString::new("key").unwrap();
         let item = hashtable.0.get(&key).unwrap();
