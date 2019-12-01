@@ -1391,7 +1391,8 @@ error handling and ergonomics.
 If you're still reading by this point, congratulations, we've just ported two
 modules from `tinyvm` to Rust.
 
-By now you've probably noticed the pattern,
+Unfortunately this article is already long enough, but hopefully by now you
+can see the general pattern,
 
 1. Look through the application's header files and find an easy function/module
 2. Write some tests so you understand how the existing function should work
