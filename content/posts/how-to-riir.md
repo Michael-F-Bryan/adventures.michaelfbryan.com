@@ -386,10 +386,10 @@ use std::{
 };
 
 #[derive(Debug, Default, Clone, PartialEq)]
-pub struct HashTable(HashMap<CString, Item>);
+pub struct HashTable(pub(crate) HashMap<CString, Item>);
 
 #[derive(Debug, Clone, PartialEq)]
-struct Item {}
+pub(crate) struct Item {}
 
 #[no_mangle]
 pub unsafe extern "C" fn tvm_htab_create() -> *mut HashTable {
@@ -577,7 +577,7 @@ Adding items to our hashmap is almost as easy to implement.
 // src/hmap.rs
 
 #[derive(Debug, Clone, PartialEq)]
-struct Item {
+pub(crate) struct Item {
     /// An integer value.
     value: c_int,
     /// An opaque value used with [`tvm_htab_add_ref()`].
@@ -590,6 +590,42 @@ struct Item {
     opaque_value: Vec<u8>,
 }
 
+impl Item {
+    pub(crate) fn integer(value: c_int) -> Item {
+        Item {
+            value,
+            opaque_value: Vec::new(),
+        }
+    }
+
+    pub(crate) fn opaque<V>(opaque_value: V) -> Item
+    where
+        V: Into<Vec<u8>>,
+    {
+        Item {
+            value: 0,
+            opaque_value: opaque_value.into(),
+        }
+    }
+
+    pub(crate) fn from_void(pointer: *mut c_void, length: c_int) -> Item {
+        // we need to create an owned copy of the value
+        let opaque_value = if pointer.is_null() {
+            Vec::new()
+        } else {
+            unsafe {
+                std::slice::from_raw_parts(pointer as *mut u8, length as usize)
+                    .to_owned()
+            }
+        };
+
+        Item {
+            opaque_value,
+            value: 0,
+        }
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn tvm_htab_add(
     htab: *mut HashTable,
@@ -599,13 +635,7 @@ pub unsafe extern "C" fn tvm_htab_add(
     let hashtable = &mut *htab;
     let key = CStr::from_ptr(key).to_owned();
 
-    let item = Item {
-        value,
-        value_ptr: ptr::null_mut(),
-        length: 0,
-    };
-
-    hashtable.0.insert(key, item);
+    hashtable.0.insert(key, Item::integer(value));
 
     // the only time insertion can fail is if allocation fails. In that case
     // we'll abort the process anyway, so if this function returns we can
@@ -623,20 +653,7 @@ pub unsafe extern "C" fn tvm_htab_add_ref(
     let hashtable = &mut *htab;
     let key = CStr::from_ptr(key).to_owned();
 
-    // we need to create an owned copy of the value
-    let opaque_value = if value_ptr.is_null() {
-        Vec::new()
-    } else {
-        std::slice::from_raw_parts(value_ptr as *mut u8, length as usize)
-            .to_owned()
-    };
-
-    let item = Item {
-        opaque_value,
-        value: 0,
-    };
-
-    hashtable.0.insert(key, item);
+    hashtable.0.insert(key, Item::from_void(value_ptr, length));
 
     0
 }
@@ -948,6 +965,169 @@ Turns out the original `tinyvm` will crash instead of reporting a parse error
 when it doesn't get well-formed assembly 😕
 {{% /notice %}}
 
+Okay, so now we've got some tests we can start to implement `tvm_preprocess()`.
+To make things easier, we'll initially try to keep our implementation as close
+to [`tvm_preprocessor.c`][preprocessor.c] as possible.
+
+```rust
+// src/preprocessing.rs
+
+fn process_defines(
+    mut src: String,
+    defines: &mut HashTable,
+) -> Result<(String, usize), PreprocessingError> {
+    const TOK_DEFINE: &str = "%define";
+
+    // try to find the first "%define"
+    let directive_delimiter = match src.find(TOK_DEFINE) {
+        Some(ix) => ix,
+        None => return Ok((src, 0)),
+    };
+
+    // find the span from %define to the end of the line
+    let begin = &src[directive_delimiter..];
+    let end = begin.find('\n').unwrap_or(begin.len());
+
+    let define_line = &begin[..end];
+    let rest_of_define_line = define_line[TOK_DEFINE.len()..].trim();
+
+    if rest_of_define_line.is_empty() {
+        return Err(PreprocessingError::EmptyDefine);
+    }
+
+    // The syntax is "%define key value", so after removing the leading
+    // "%define" everything after the next space is the value
+    let first_space = rest_of_define_line.find(' ').ok_or_else(|| {
+        PreprocessingError::DefineWithoutValue(rest_of_define_line.to_string())
+    })?;
+
+    // split the rest of the line into key and value
+    let (key, value) = rest_of_define_line.split_at(first_space);
+    let value = value.trim();
+
+    match defines.0.entry(
+        CString::new(key).expect("The text shouldn't contain null bytes"),
+    ) {
+        // the happy case, this symbol hasn't been defined before so we can just
+        // insert it.
+        Entry::Vacant(vacant) => {
+            vacant.insert(Item::opaque(value));
+        },
+        // looks like this key has already been defined, report an error
+        Entry::Occupied(occupied) => {
+            return Err(PreprocessingError::DuplicateDefine {
+                name: key.to_string(),
+                original_value: occupied
+                    .get()
+                    .opaque_value_str()
+                    .unwrap_or("<invalid>")
+                    .to_string(),
+                new_value: value.to_string(),
+            });
+        },
+    }
+
+    // we've processed the %define line, so remove it from the original source
+    // text
+    let _ = src.drain(directive_delimiter..directive_delimiter + end);
+
+    Ok((src, 1))
+}
+```
+
+We'll need to give `Item` a couple more helper methods:
+
+```rust
+// src/htab.rs
+
+impl Item {
+    ...
+
+    pub(crate) fn opaque_value(&self) -> &[u8] { &self.opaque_value }
+
+    pub(crate) fn opaque_value_str(&self) -> Option<&str> {
+        std::str::from_utf8(self.opaque_value()).ok()
+    }
+}
+```
+
+At this point it's a good idea to add some more tests.
+
+```rust
+// src/preprocessing.rs
+
+#[cfg(test)]
+mod tests {
+    ...
+
+    #[test]
+    fn empty_string() {
+        let src = String::from("");
+        let mut hashtable = HashTable::default();
+
+        let (got, replacements) = process_defines(src, &mut hashtable).unwrap();
+
+        assert!(got.is_empty());
+        assert_eq!(replacements, 0);
+        assert!(hashtable.0.is_empty());
+    }
+
+    #[test]
+    fn false_percent() {
+        let src = String::from("this string contains a % symbol");
+        let mut hashtable = HashTable::default();
+
+        let (got, replacements) =
+            process_defines(src.clone(), &mut hashtable).unwrap();
+
+        assert_eq!(got, src);
+        assert_eq!(replacements, 0);
+        assert!(hashtable.0.is_empty());
+    }
+
+    #[test]
+    fn define_without_key_and_value() {
+        let src = String::from("%define\n");
+        let mut hashtable = HashTable::default();
+
+        let err = process_defines(src.clone(), &mut hashtable).unwrap_err();
+
+        match err {
+            PreprocessingError::EmptyDefine => {},
+            other => panic!("Expected EmptyDefine, found {:?}", other),
+        }
+    }
+
+    #[test]
+    fn define_without_value() {
+        let src = String::from("%define key\n");
+        let mut hashtable = HashTable::default();
+
+        let err = process_defines(src.clone(), &mut hashtable).unwrap_err();
+
+        match err {
+            PreprocessingError::DefineWithoutValue(key) => {
+                assert_eq!(key, "key")
+            },
+            other => panic!("Expected DefineWithoutValue, found {:?}", other),
+        }
+    }
+
+    #[test]
+    fn valid_define() {
+        let src = String::from("%define key value\n");
+        let mut hashtable = HashTable::default();
+
+        let _ = process_defines(src.clone(), &mut hashtable).unwrap();
+
+        assert_eq!(hashtable.0.len(), 1);
+        let key = CString::new("key").unwrap();
+        let item = hashtable.0.get(&key).unwrap();
+        assert_eq!(item.opaque_value_str().unwrap(), "value");
+    }
+}
+```
+
 [previous-riir]: {{< ref "how-not-to-riir/index.md" >}}
 [p-invoke]: https://docs.microsoft.com/en-us/dotnet/standard/native-interop/pinvoke
 [template]: https://github.com/Michael-F-Bryan/github-template
@@ -958,3 +1138,4 @@ when it doesn't get well-formed assembly 😕
 [extern]: https://doc.rust-lang.org/reference/items/external-blocks.html
 [bg]: https://crates.io/crates/bindgen
 [grammar]: https://github.com/jakogut/tinyvm/blob/10c25d83e442caf0c1fc4b0ab29a91b3805d72ec/SYNTAX
+[preprocessor.c]: https://github.com/jakogut/tinyvm/blob/10c25d83e442caf0c1fc4b0ab29a91b3805d72ec/libtvm/tvm_preprocessor.c
