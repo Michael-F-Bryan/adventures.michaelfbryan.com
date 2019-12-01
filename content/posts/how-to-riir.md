@@ -13,12 +13,14 @@ In most languages you'd need to rewrite the entire library from the ground
 up, waiting until the port is almost finished before you can start seeing
 results. These sorts of ports tend to be quite expensive and error-prone, and
 often they'll fail midway and you'll have nothing to show for your effort.
+*Joel Spolsky* does a much better job of explaining this than I ever could, see
+[his article on why full rewrites are a bad idea][rewrites] for more.
 
 However, Rust has a killer feature when it comes to this sort of thing. It
-can call into C code with no overhead (i.e. you don't need automatic
-marshalling like [C#'s P/Invoke][p-invoke]) and it can expose functions which
-can be consumed by C just like any other C function. This opens the door for an
-alternative approach:
+can call into C code with no overhead (i.e. the runtime doesn't need to
+inject automatic marshalling like [C#'s P/Invoke][p-invoke]) and it can
+expose functions which can be consumed by C just like any other C function.
+This opens the door for an alternative approach:
 
 Port the library to Rust one function at a time.
 
@@ -117,7 +119,7 @@ Unfortunately the library doesn't contain any tests so we won't be able to
 but it *does* contain an example interpreter that we can use to explore the
 high-level functionality.
 
-Okay, so we know we can build it from the command-line without much hassle, now
+So we know we can build it from the command-line without much hassle, now
 we need to make sure our `tinyvm` crate can build everything programmatically.
 
 This is where build scripts come in. Our strategy will be for the Rust crate to
@@ -166,8 +168,7 @@ If you've looked at the `cc` crate's documentation you may have noticed there's
 a [`Build::files()`][files] method which accepts an iterator of paths. We
 *could* have programmatically detected all the `*.c` files inside
 `vendor/tinyvm/libtvm`, but because we're porting code one function at a time
-it'll be much easier to delete `.files()` calls when individual files are
-ported.
+it'll be much easier to delete individual `.file()` calls as bits are ported.
 
 [files]: https://docs.rs/cc/1.0.47/cc/struct.Build.html#method.files
 {{% /notice %}}
@@ -280,7 +281,8 @@ Instead, let's look for the easiest item.
 
 ```console
 $ ls libtvm
-tvm.c  tvm_file.c  tvm_htab.c  tvm_lexer.c  tvm_memory.c  tvm_parser.c  tvm_preprocessor.c  tvm_program.c
+tvm.c  tvm_file.c  tvm_htab.c  tvm_lexer.c  tvm_memory.c  tvm_parser.c
+tvm_preprocessor.c  tvm_program.c
 ```
 
 That `tvm_htab.c` file looks promising. I'm pretty sure `htab` stands for
@@ -328,8 +330,9 @@ Looks easy enough to implement. Our only problem is the definition for
 possible that some code accesses the hash table's internals directly instead of
 going through the published interface.
 
-The easiest way to see if this is the case is to move the struct definitions
-into `tvm_htab.c` and see if everything still compiles.
+We can check whether anything accesses hash table internals by temporarily
+moving the struct definitions into `tvm_htab.c` and see if everything still
+compiles.
 
 ```diff
 diff --git a/include/tvm/tvm_htab.h b/include/tvm/tvm_htab.h
@@ -388,7 +391,9 @@ use std::{
 pub struct HashTable(pub(crate) HashMap<CString, Item>);
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct Item {}
+pub(crate) struct Item {
+    // not sure what to put here yet
+}
 
 #[no_mangle]
 pub unsafe extern "C" fn tvm_htab_create() -> *mut HashTable {
@@ -517,7 +522,7 @@ index 6f274c8..af9d467 100644
 ```
 
 And trying to run the `tvmi` example again crashes, just as you'd expect a
-program full of `unimplemented!()`.
+program full of `unimplemented!()` to.
 
 ```console
 $ cargo run --example tvmi -- vendor/tinyvm/programs/tinyvm/fact.vm
@@ -527,8 +532,8 @@ thread 'main' panicked at 'not yet implemented', src/htab.rs:14:57
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace.
 ```
 
-When adding FFI support for a new type, the easiest place to start is with the
-constructor and destructor.
+When adding FFI support for a new type, the easiest place to start is often
+with the constructor and destructor.
 
 {{% notice info %}}
 The C code can only ever access our `HashTable` via a pointer, so we need to
@@ -618,10 +623,7 @@ impl Item {
             }
         };
 
-        Item {
-            opaque_value,
-            value: 0,
-        }
+        Item::opaque(opaque_value)
     }
 }
 
@@ -819,7 +821,7 @@ We'll also need the `libc` crate because we're going to be passing `libtvm`
 strings which it may need to free.
 
 ```console
-cargo add --dev libc
+cargo add libc
     Updating 'https://github.com/rust-lang/crates.io-index' index
       Adding libc v0.2.66 to dev-dependencies
 ```
@@ -994,6 +996,9 @@ functions][preprocessor.c], both seem to scan through a string looking for a
 particular directive, then replace that line with something else (either the
 contents of a file or nothing if the line should be removed).
 
+We should be able to extract that logic into a helper and avoid unnecessary
+duplication.
+
 ```rust
 // src/preprocessing.rs
 
@@ -1058,7 +1063,7 @@ fn process_includes(
 }
 ```
 
-Unfortunately, define parsing is a little more involved.
+Unfortunately, `%define` parsing is a little more involved.
 
 ```rust
 // src/preprocessing.rs
@@ -1396,8 +1401,9 @@ By now you've probably noticed the pattern,
    linker uses the Rust code instead of C
 5. Go to step 1
 
-The best thing about this method is you are incrementally improving a codebase
-while ensuring everything can still keep moving and the application still works.
+The best thing about this method is you are incrementally improving a
+codebase while while ensuring the application still works and avoiding a
+ground-up rewrite.
 
 Kinda like changing your tyre while driving down the highway.
 
@@ -1416,3 +1422,4 @@ Kinda like changing your tyre while driving down the highway.
 [bg]: https://crates.io/crates/bindgen
 [grammar]: https://github.com/jakogut/tinyvm/blob/10c25d83e442caf0c1fc4b0ab29a91b3805d72ec/SYNTAX
 [preprocessor.c]: https://github.com/jakogut/tinyvm/blob/10c25d83e442caf0c1fc4b0ab29a91b3805d72ec/libtvm/tvm_preprocessor.c
+[rewrites]: https://www.joelonsoftware.com/2000/04/06/things-you-should-never-do-part-i/
