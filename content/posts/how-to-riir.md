@@ -1,7 +1,6 @@
 ---
 title: "How to RiiR"
-date: "2019-11-30T00:17:06+08:00"
-draft: true
+date: "2019-12-2:00:35+08:00"
 tags:
 - rust
 ---
@@ -834,7 +833,7 @@ shouldn't be any surprises.
 
 
 ```rust
-// src/preprocess.rs
+// src/preprocessing.rs
 
 #[cfg(test)]
 mod tests {
@@ -893,7 +892,7 @@ forth between C strings.
 We also need to test including another file.
 
 ```rust
-// src/preprocessor.rs
+// src/preprocessing.rs
 
 #[cfg(test)]
 mod tests {
@@ -961,8 +960,8 @@ $ ./bin/tvmi top_level.vm
   [1]    10607 segmentation fault (core dumped)  ./bin/tvmi top_level.vm
 ```
 
-Turns out the original `tinyvm` will crash instead of reporting a parse error
-when it doesn't get well-formed assembly 😕
+Turns out the original `tinyvm` will crash for some reason when you have
+multiple layers of includes 😕
 {{% /notice %}}
 
 Okay, so now we've got some tests we can start to implement
@@ -1120,7 +1119,8 @@ fn parse_define(
 }
 ```
 
-We'll need to give `Item` a couple more helper methods:
+To access the text stored in our hashtable, we'll need to give `Item` a
+couple helper methods:
 
 ```rust
 // src/htab.rs
@@ -1214,6 +1214,196 @@ mod tests {
     }
 }
 ```
+
+At this point we've reproduced most of the preprocessing logic, so now we just
+need a function which will keep expanding `%include` statements and handling
+`%define`s until there's nothing more to do.
+
+```rust
+// src/preprocessing.rs
+
+pub fn preprocess(
+    src: String,
+    defines: &mut HashTable,
+) -> Result<String, PreprocessingError> {
+    let mut src = src;
+
+    loop {
+        let (modified, num_includes) = process_includes(src)?;
+        let (modified, num_defines) = process_defines(modified, defines)?;
+
+        if num_includes + num_defines == 0 {
+            return Ok(modified);
+        }
+
+        src = modified;
+    }
+}
+```
+
+Of course, this `preprocess()` function is only accessible to Rust. We need to
+create an `extern "C" fn` which translates arguments from C types to something
+Rust can handle, then translate back to C land at the end.
+
+```rust
+// src/preprocessing.rs
+
+#[no_mangle]
+pub unsafe extern "C" fn tvm_preprocess(
+    src: *mut *mut c_char,
+    src_len: *mut c_int,
+    defines: *mut tvm_htab_ctx,
+) -> c_int {
+    if src.is_null() || src_len.is_null() || defines.is_null() {
+        return -1;
+    }
+
+    // Safety: This assumes the tvm_htab_ctx is actually our ported HashTable
+    let defines = &mut *(defines as *mut HashTable);
+
+    // convert the input string to an owned Rust string so it can be
+    // preprocessed
+    let rust_src = match CStr::from_ptr(*src).to_str() {
+        Ok(s) => s.to_string(),
+        // just error out if it's not valid UTF-8
+        Err(_) => return -1,
+    };
+
+    match preprocess(rust_src, defines) {
+        Ok(s) => {
+            let preprocessed = CString::new(s).unwrap();
+            // create a copy of the preprocessed string that can be free'd by C
+            // and use the output arguments to pass it to the caller
+            *src = libc::strdup(preprocessed.as_ptr());
+            // the original C implementation didn't add a null terminator to the
+            // preprocessed string, so we're required to set the length as well.
+            *src_len = libc::strlen(*src) as c_int;
+
+            // returning 0 indicates success
+            0
+        },
+        // tell the caller "an error occurred"
+        Err(_) => -1,
+    }
+}
+```
+
+{{% notice tip %}}
+You may have noticed that our `tvm_preprocess()` doesn't have any preprocessing
+logic, and is more like an adapter to translate arguments and return values, and
+make sure errors are propagated correctly.
+
+This is no accident.
+
+The secret to FFI code is to write as little as possible, and avoid *"clever"*
+tricks. Unlike most Rust code, making mistakes in these sorts of interop
+functions can lead to unsound logic and memory bugs.
+
+Creating a thin wrapper around our `preprocess()` function also makes things
+easier later on, because when more of the codebase is written in Rust we can
+delete the wrapper and call `preprocess()` directly.
+{{% /notice %}}
+
+Now the `tvm_preprocess()` function is defined we should be good to go.
+
+```console
+ Compiling tinyvm v0.1.0 (/home/michael/Documents/tinyvm-rs)
+error: linking with `/usr/bin/clang` failed: exit code: 1
+  |
+  = note: "/usr/bin/clang" "-Wl,--as-needed" "-Wl,-z,noexecstack" "-m64" "-L" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.13h6j6k0dzqf6zi2.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.13l2b4uvr7p3ht4k.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.14bdbjhozo3id49g.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.14fw2gyd6mrq5730.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.19xc7n0bb25uaxgk.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.1duzy573vjvyihco.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.1e0yejy24qufh7ie.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.1k4xuir9ezt4vkzp.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.1mqdnrarww1zjlt.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.1ubflbxzxkx7grpn.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.1vtvcpzzusyku3mk.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.1wal3ebwyfg4qllf.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.235k75fk09i43ba3.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.253rt7mnjcp3n8ex.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.27phuscrye2lmkyq.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2bwv51h7gucjizh0.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2ghuai4hs88aroml.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2gqnd9h4nmhvgxbn.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2hjvtf620gtog0qz.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2hq7kc2w3vix8i5q.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2ibwag4iedx494ft.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2jdt9fes53g5mxlp.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2kv4bwega1wfr8z6.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2lja418hz58xlryz.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2o0foimqe73p8ujt.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2ouuhyii88vg8tqs.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2tnynvvdxge4sv9a.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2u1hzhj3v0d8kn4s.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2v1ii2legejcp3ir.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2vkkoofkb7zs04v1.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2w5mgql1gpr1f9uz.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2wdyioq7lxh9uxu7.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2wokgurbjsmgz12r.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2wwcrmvusj07mx2n.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.310mxv7piqfbf4tr.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.3352aele91geo33m.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.36f4wrjtv0x5y00b.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.38f6o2m900r5q63j.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.3b67z5wg30f9te4l.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.3gyajmii4500y81t.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.3ovwslgcz03sp0ov.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.3vwhwp967j90qfpp.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.41ox17npnikcezii.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4472ut4qn508rg19.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4bbcvjauqmyr7tjc.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4c9lrc1xbvaru030.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4fzwdkjhjtwv5uik.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4gy2dy14zw2o60sh.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4i8qxpi0pmwn8d2e.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4isstj7ytb9d9yep.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4isz4o5d1flv8pme.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4lnnaom9zd4u3xmv.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4mgvbbhn4jewmy60.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4q7wf9d53jp9j6y6.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4qimnegzmsif2zbr.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4scm7492lh4yspgt.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4ten9b8okg10ap4i.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4vrj7dhlet4j6oe.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4wtf4i2ggbrvqt63.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4zsqxnhj8yusiplh.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.50o8i1bmvqwd5eg7.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.50urmck1r52hucuw.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.51w3uc6agh3gynn3.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.55o6ad6nlq4o2zyt.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.57gih8p2bu1jbo0l.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.57rpuf5wpgkfmf1z.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.5920w55mlosqy9aj.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.5c1ra5cheein740g.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.5cuuq0m7tzehyrti.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.5e85z18y46lhofte.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.6yu7c01lw47met2.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.cn69np51jgriev2.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.d224rq9cs4mbv0q.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.e0vaqgnhc25c4ox.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.edm0ce3nfzegp4d.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.elxjhifv4wlzkc2.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.ifqyaukx6gnbb0a.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.kr8s9rcy6ux2d02.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.ley637x8c2etn66.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.njyqsm0frvb1j4d.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.r9ttxk3s5kacz9k.rcgu.o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.xrorvssabbgfjqz.rcgu.o" "-o" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88" "/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.1iplfu0pt8fy07e4.rcgu.o" "-Wl,--gc-sections" "-pie" "-Wl,-zrelro" "-Wl,-znow" "-nodefaultlibs" "-L" "/home/michael/Documents/tinyvm-rs/target/debug/deps" "-L" "/home/michael/Documents/tinyvm-rs/target/debug/build/tinyvm-3f1a2766f78b5580/out" "-L" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib" "-Wl,-Bstatic" "-Wl,--whole-archive" "-ltvm" "-Wl,--no-whole-archive" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libtest-a39a3e9a77b17f55.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libterm-97a69cd310ff0925.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libgetopts-66a42b1d94e3e6f9.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libunicode_width-dd7761d848144e0d.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_std_workspace_std-f722acdb78755ba0.rlib" "/home/michael/Documents/tinyvm-rs/target/debug/deps/libtempfile-b08849d192e5c2e1.rlib" "/home/michael/Documents/tinyvm-rs/target/debug/deps/librand-c85ceffb304c7385.rlib" "/home/michael/Documents/tinyvm-rs/target/debug/deps/librand_chacha-4e4839e3036afe89.rlib" "/home/michael/Documents/tinyvm-rs/target/debug/deps/libc2_chacha-7555b62a53de8bdf.rlib" "/home/michael/Documents/tinyvm-rs/target/debug/deps/libppv_lite86-0097c0f425957d6e.rlib" "/home/michael/Documents/tinyvm-rs/target/debug/deps/librand_core-de2208c863d15e9b.rlib" "/home/michael/Documents/tinyvm-rs/target/debug/deps/libgetrandom-c696cd809d660e17.rlib" "/home/michael/Documents/tinyvm-rs/target/debug/deps/liblibc-d52d0b97a33a5f02.rlib" "/home/michael/Documents/tinyvm-rs/target/debug/deps/libremove_dir_all-4035fb46dbd6fb92.rlib" "/home/michael/Documents/tinyvm-rs/target/debug/deps/libcfg_if-6adeb646d05b676c.rlib" "-Wl,--start-group" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd-974c3c08f6def4b3.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libpanic_unwind-eb49676f33a2c8a6.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libhashbrown-7ae0446feecc60f2.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_std_workspace_alloc-2de299b65d7f5721.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libbacktrace-64514775bc06309a.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libbacktrace_sys-1ed8aa185c63b9a5.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_demangle-a839df87f563fba5.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libunwind-8e726bdc2018d836.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcfg_if-5285f42cbadf207d.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/liblibc-b0362d20f8aa58fa.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/liballoc-f3dd7051708453a4.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_std_workspace_core-83744846c43307ce.rlib" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcore-d5565a3a0f4cfe21.rlib" "-Wl,--end-group" "/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcompiler_builtins-ea790e85415e3bbf.rlib" "-Wl,-Bdynamic" "-lutil" "-lutil" "-ldl" "-lrt" "-lpthread" "-lgcc_s" "-lc" "-lm" "-lrt" "-lpthread" "-lutil" "-lutil" "-fuse-ld=lld"
+  = note: ld.lld: error: duplicate symbol: tvm_preprocess
+          >>> defined at preprocessing.rs:13 (src/preprocessing.rs:13)
+          >>>            /home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4mgvbbhn4jewmy60.rcgu.o:(tvm_preprocess)
+          >>> defined at tvm_preprocessor.c:135 (vendor/tinyvm/libtvm/tvm_preprocessor.c:135)
+          >>>            tvm_preprocessor.o:(.text.tvm_preprocess+0x0) in archive /home/michael/Documents/tinyvm-rs/target/debug/build/tinyvm-3f1a2766f78b5580/out/libtvm.a
+          clang: error: linker command failed with exit code 1 (use -v to see invocation)
+
+
+error: aborting due to previous error
+
+error: could not compile `tinyvm`.
+
+To learn more, run the command again with --verbose.
+```
+
+Oh, the linker is complaining because both `preprocessing.rs` and
+`tvm_preprocessor.c` define a `tvm_preprocess()` function. Looks like we forgot
+to remove `tvm_preprocessor.c` from the build...
+
+```diff
+diff --git a/build.rs b/build.rs
+index 0ed012c..42b8fa0 100644
+--- a/build.rs
++++ b/build.rs
+@@ -14,6 +14,7 @@ fn main() {
+         .file(src.join("tvm_memory.c"))
+         .file(src.join("tvm_parser.c"))
+         .file(src.join("tvm_program.c"))
+-        .file(src.join("tvm_preprocessor.c"))
+         .file(src.join("tvm.c"))
+         .include(&include)
+         .compile("tvm");
+(END)
+```
+
+Let's try again.
+
+```console
+cargo run --example tvmi -- vendor/tinyvm/programs/tinyvm/fact.vm
+    Finished dev [unoptimized + debuginfo] target(s) in 0.02s
+     Running `target/debug/examples/tvmi vendor/tinyvm/programs/tinyvm/fact.vm`
+1
+2
+6
+24
+120
+720
+5040
+40320
+362880
+3628800
+```
+
+Much better!
+
+Remember that example from before where `tvmi` would crash when encountering
+includes three levels deep? As a happy side-effect, porting to Rust means nested
+includes *Just Work*.
+
+{{% notice note %}}
+You may have also noticed that our `preprocess()` function doesn't use any of
+the hashtable functions from `tvm_htab.h`. Instead we take advantage of the fact
+that the module has already been ported to Rust and just use the Rust types
+directly.
+
+That's the beauty of this process. Once you've moved something to Rust you can
+leverage that to use the types/functions directly to get some easy wins in
+error handling and ergonomics.
+{{% /notice %}}
+
+## Conclusion
+
+If you're still reading by this point, congratulations, we've just ported two
+modules from `tinyvm` to Rust.
+
+By now you've probably noticed the pattern,
+
+1. Look through the application's header files and find an easy function/module
+2. Write some tests so you understand how the existing function should work
+3. Write equivalent functions in Rust and make sure they pass the same tests
+4. Create a thin shim which exports the Rust function with the same C interface,
+   making sure to remove the original function/module from the build so the
+   linker uses the Rust code instead of C
+5. Go to step 1
+
+The best thing about this method is you are incrementally improving a codebase
+while ensuring everything can still keep moving and the application still works.
+
+Kinda like changing your tyre while driving down the highway.
+
+{{< figure src="/img/changing-tyre.gif"
+    caption="The preferred method of porting an application from C to Rust"
+    alt="Changing tyres while driving" >}}
 
 [previous-riir]: {{< ref "how-not-to-riir/index.md" >}}
 [p-invoke]: https://docs.microsoft.com/en-us/dotnet/standard/native-interop/pinvoke
