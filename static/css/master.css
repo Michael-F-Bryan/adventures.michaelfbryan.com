@@ -100,3 +100,9 @@ div.notices.info {
     color: slategray;
     outline: none;
 }
+
+/* Make sure images are centred */
+
+figure {
+    text-align: center;
+}

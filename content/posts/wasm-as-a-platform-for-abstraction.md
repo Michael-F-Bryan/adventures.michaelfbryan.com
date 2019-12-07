@@ -13,40 +13,42 @@ application logic using the system, but at the same want to keep that logic
 decoupled from the implementation details of whatever platform the
 application is running on.
 
-## What do you mean by a platform for abstraction?
+If you've been programming for any amount of time your immediate reaction is
+probably *"why bother mentioning this, doesn't it just fall out of good
+library design?"*, and normally I would totally agree with you, except I
+forgot to mention a couple important details...
 
-This all sounds quite abstract and theoretical, so I'll give you a real life
-example of how application logic and the underlying runtime can be successfully
-decoupled.
+1. People need to be able to upload new code while the system is still running
+2. This application will be interacting with the real world, and we *really*
+   don't want a crash in user-provided code to make the entire system
+   stop responding
 
-At `$JOB`, one of our projects uses a proprietary motion controller as the
-brains controlling a robotic system. The way you program this system is via a
-custom *Domain Specific Language* (DSL). A simple program may look something
-like this:
+The normal solution for the first point is to use some sort of [plugin
+architecture][plugins], however using something like *Dynamic Loading*
+doesn't solve the second point and the large amounts of `unsafe` code needed
+can arguably make the situation worse. For that we'll need some sort of
+sandboxing mechanism.
 
-```bas
-' check if there's anything at the entry sensor
-IF input(3) = ON THEN
-  ' make sure all further commands are sent to axis 5
-  base(5)
-  ' start the conveyor
-  forward
-  ' keep moving forward until we're in position
-  WAIT UNTIL input(2) = OFF
-  ' then stop the conveyor
-  stop
-END
-```
+Introducing...
 
-While seemingly innocuous, I've seen those 4 lines of code require several
-hundred lines of C to achieve the equivalent functionality.
+{{< figure
+    src="https://webassembly.org/css/webassembly.svg"
+    link="https://webassembly.org/"
+    alt="Web Assembly Logo"
+    width="50%"
+>}}
 
-- Reading an input may be done by communicating with a bank of IOs over an
-  EtherCAT bus or I2C, possibly with multiple different types of IO device
-  available at the same time
-- Axis 5
-- Axis 5 is actually sending messages to a servo drive over the EtherCAT bus
-- Several programs can be running concurrently (the runtime handles pre-emptive
-  multitasking) and that `WAIT UNTIL some_condition` statement lets you
-  suspend the current program until a particular condition is satisfied
+Web Assembly has gained a lot of traction over the last couple years as a way
+to write code in any language and run it in the browser, but it can be used for
+so much more.
 
+There are already [several][wasmer] [general-purpose][lucet]
+[runtimes][wasmtime] available for running WASM in a Rust program. These
+runtimes give you a virtual machine which can run arbitrary code, and the
+only way this code can interact with the outside world is via the functions you
+explicitly give it access to.
+
+[plugins]: {{< ref "plugins-in-rust.md" >}}
+[wasmer]: https://github.com/wasmerio/wasmer
+[lucet]: https://github.com/bytecodealliance/lucet
+[wasmtime]: https://github.com/bytecodealliance/wasmtime
