@@ -290,6 +290,16 @@ for a throughput of 530.4 KB/sec.
 
 That's pretty good!
 
+## Stubbing Out Some Platform Abstractions
+
+## Dependency Injection
+
+## Creating Our *"Standard Library"*
+
+## Writing Programs in Other Languages
+
+## Conclusion
+
 [plugins]: {{< ref "plugins-in-rust.md" >}}
 [wasmer]: https://github.com/wasmerio/wasmer
 [lucet]: https://github.com/bytecodealliance/lucet
