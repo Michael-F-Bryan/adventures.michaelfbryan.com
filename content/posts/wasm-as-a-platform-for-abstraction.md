@@ -459,8 +459,8 @@ definition of the functionality exposed by the runtime.
 
 We now have a fairly solid interface that can be used by WASM code, but it'd
 be really nice if we didn't hard-code the implementation for each function.
-Luckily the `Ctx` passed to our functions by wasmer allows you to attach
-arbitrary data via [`Ctx::data`][ctx-data].
+Luckily the `Ctx` passed to our functions by wasmer allows you to attach a
+pointer to arbitrary data (`*mut c_void`) via [`Ctx::data`][ctx-data].
 
 The normal way this is done is using *Dependency Injection*. Accept a generic
 `Environment` object in the `poll()` method then set `Ctx::data` to point to
@@ -517,7 +517,322 @@ pub trait Environment {
 }
 ```
 
+The next thing we need to do is use the `data: *mut c_void` field on `Ctx` to
+make sure each host function gets a reference to the current `Environment`.
 
+This can be tricky because we're interacting with a lot of `unsafe`
+code, in particular:
+
+- We can't make the `poll()` function generic over any type `E: Environment`
+  because then when `Ctx::data` is read by our functions, they won't know
+  which type of `*mut E` to cast it to. The easiest way around this is to use
+  dynamic dispatch (i.e. `&mut dyn Environment`)
+- You can't cast a fat pointer (`&mut dyn Environment`) to a thin pointer
+  (`*mut c_void`) so we need a second level of indirection
+- The item pointed to by `Ctx::data` (our `Environment` object) is only
+  guaranteed to stay valid for the duration of `poll()` so we need to make sure
+  it gets cleared before returning
+- Code that we call may `panic!()` and we need to make sure `Ctx::data` is
+  cleared *no matter what*, otherwise we'll be leaving a dangling pointer behind
+  and future calls may try to use it
+
+To solve the first two problems we'll introduce an intermediate `State` object
+which can be placed on the stack.
+
+```rust
+// src/lib.rs
+
+/// Temporary state passed to each host function via [`Ctx::data`].
+struct State<'a> {
+    env: &'a mut dyn Environment,
+}
+```
+
+From here, the naive implementation for `poll()` would look something like this:
+
+```rust
+// src/lib.rs
+
+impl Program {
+    ...
+
+    pub fn poll(&mut self, env: &mut dyn Environment) -> Result<(), Error> {
+        let mut state = State { env };
+        self.instance.context_mut().data = &mut state as *mut State as *mut _;
+
+        self.instance.call("poll", &[])?;
+
+        Ok(())
+    }
+}
+```
+
+And yes, while it *does* correctly thread our `&mut dyn Environment` through to
+the instance-global context data, we've completely ignored the last two points;
+preventing our temporary `state` pointer from dangling, even if `wasmer`
+panics.
+
+The normal way to implement this is by putting `self.instance.call("poll", &[])`
+inside a closure, then using a helper function to
+
+1. Do some setup
+2. Call the closure from `std::panic::catch_unwind()`
+3. Do safety-critical cleanup, then
+4. Resume panicking
+
+```rust
+// src/lib.rs
+
+impl Program {
+    ...
+
+    pub fn poll(&mut self, env: &mut dyn Environment) -> Result<(), Error> {
+        let mut state = State { env };
+        self.instance.context_mut().data = &mut state as *mut State as *mut _;
+
+        self.with_environment_context(env, |instance| {
+            instance.call("poll", &[])?;
+            Ok(())
+        })
+    }
+
+    fn with_environment_context<F, T>(
+        &mut self,
+        env: &mut dyn Environment,
+        func: F,
+    ) -> Result<T, Error>
+    where
+        F: FnOnce(&Instance) -> Result<T, Error>,
+    {
+        let mut state = State { env };
+        let instance = &mut self.instance;
+
+        // point the data pointer at our temporary state.
+        instance.context_mut().data = &mut state as *mut State<'_> as *mut _;
+        // we can't use the old state variable any more (we'd have aliased
+        // pointers) so deliberately shadow it
+        #[allow(unused_variables)]
+        let state = ();
+
+        // execute the callback. We need to catch panics so we can clear the
+        // data pointer no matter what. Using AssertUnwindSafe is
+        // correct here because we'll continue panicking once the data
+        // pointer is cleared
+        let got = panic::catch_unwind(AssertUnwindSafe(|| func(instance)));
+
+        // make sure the context data pointer is cleared. We don't need to drop
+        // anything because it was just a `&mut State
+        instance.context_mut().data = ptr::null_mut();
+
+        match got {
+            Ok(value) => value,
+            Err(e) => panic::resume_unwind(e),
+        }
+    }
+}
+```
+
+{{% notice info %}}
+If you spot something here that looks odd, or you feel like my logic may be
+unsound, I really want to hear about it! If you're not sure how to contact
+me, you can create an issue against this blog's [issue tracker][issue].
+
+[issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues
+{{% /notice %}}
+
+We can now start creating our host functions.
+
+First up, let's implement `wasm_current_time()`. The general strategy is:
+
+1. Get a pointer to our `State`
+2. Call the corresponding method on the `&mut dyn Environment`
+3. Error out if something went wrong
+4. Copy the result into WASM memory
+
+```rust
+// src/lib.rs
+
+const WASM_SUCCESS: i32 = 0;
+const WASM_GENERIC_ERROR: i32 = 1;
+
+fn wasm_current_time(
+    ctx: &mut Ctx,
+    secs: WasmPtr<u64>,
+    nanos: WasmPtr<u32>,
+) -> i32 {
+    // the data pointer should have been set by `with_environment_context()`
+    if ctx.data.is_null() {
+        return WASM_GENERIC_ERROR;
+    }
+
+    let elapsed = unsafe {
+        // the data pointer was set, we can assume it points to a valid State
+        let state = &mut *(ctx.data as *mut State);
+
+        // and now we can call
+        match state.env.elapsed() {
+            Ok(duration) => duration,
+            Err(e) => {
+                log::error!("Unable to get the elapsed time: {}", e);
+                return e.code();
+            },
+        }
+    };
+
+    let memory = ctx.memory(0);
+    // the verbose equivalent of a null check and `*secs = elapsed.as_secs()`
+    match secs.deref(memory) {
+        Some(cell) => cell.set(elapsed.as_secs()),
+        None => return WASM_GENERIC_ERROR,
+    }
+    match nanos.deref(memory) {
+        Some(cell) => cell.set(elapsed.subsec_nanos()),
+        None => return WASM_GENERIC_ERROR,
+    }
+
+    WASM_SUCCESS
+}
+```
+
+This part is up to you, but you *can* reduce a lot of the boilerplate around
+this with a couple simple macros.
+
+For example, instead of manually calling `deref()` on a `WasmPtr<T>` and
+setting the `&Cell<T>` we could define a `wasm_deref!()` macro like so:
+
+```rust
+// src/lib.rs
+
+macro_rules! wasm_deref {
+    (with $ctx:expr, * $ptr:ident = $value:expr) => {
+        match $ptr.deref($ctx.memory(0)) {
+            Some(cell) => cell.set($value),
+            None => return WASM_GENERIC_ERROR,
+        }
+    };
+}
+```
+
+This reduces the bottom half of `wasm_current_time()` to
+
+```rust
+// src/lib.rs
+
+fn wasm_current_time(
+    ctx: &mut Ctx,
+    secs: WasmPtr<u64>,
+    nanos: WasmPtr<u32>,
+) -> i32 {
+    ...
+
+    wasm_deref!(with ctx, *secs = elapsed.as_secs());
+    wasm_deref!(with ctx, *nanos = elapsed.subsec_nanos());
+
+    WASM_SUCCESS
+}
+```
+
+We can replace the error handling around calling `env.elapsed()` with another
+macro. While we're at it, we should also iterate over each `cause` in an error
+and print a "backtrace".
+
+```rust
+// src/lib.rs
+
+impl Error {
+    fn code(&self) -> i32 {
+        match self {
+            Error::AddressOutOfBounds => WASM_ADDRESS_OUT_OF_BOUNDS,
+            Error::UnknownVariable => WASM_UNKNOWN_VARIABLE,
+            Error::BadVariableType => WASM_BAD_VARIABLE_TYPE,
+            _ => WASM_GENERIC_ERROR,
+        }
+    }
+}
+
+impl<'a> State<'a> {
+    /// # Safety
+    ///
+    /// This assumes the [`Ctx`] was set up correctly using
+    /// [`Program::with_environment_context()`].
+    unsafe fn from_ctx(ctx: &mut Ctx) -> &'a mut State<'a> {
+        assert!(!ctx.data.is_null());
+        &mut *(ctx.data as *mut State)
+    }
+}
+
+/// Convenience macro for executing a method using the [`Environment`] pointer
+/// attached to [`Ctx::data`].
+///
+/// # Safety
+///
+/// See [`State::from_ctx()`] for the assumptions and invariants around safety.
+macro_rules! try_with_env {
+    ($ctx:expr, $method:ident ( $($arg:expr),* ), $failure_msg:expr) => {{
+        // the data pointer should have been set by `with_environment_context()`
+        if $ctx.data.is_null() {
+            return WASM_GENERIC_ERROR;
+        }
+
+        let state = State::from_ctx($ctx);
+
+        // call the method using the provided arguments
+        match state.env.$method( $( $arg ),* ) {
+            // happy path
+            Ok(value) => value,
+            Err(e) => {
+                // log the original error using the failure_msg
+                log::error!(concat!($failure_msg, ": {}"), e);
+
+                // then iterate through the causes and log those too
+                let mut cause = std::error::Error::source(&e);
+                while let Some(inner) = cause {
+                    log::error!("Caused by: {}", inner);
+                    cause = inner.source();
+                }
+
+                // the operation failed, return the corresponding error code
+                return e.code();
+            }
+        }
+    }};
+}
+```
+
+With those two changes, our `wasm_current_time()` function now spends a lot more
+time doing "interesting" things and isn't as cluttered by error-handling.
+
+```rust
+// src/lib.rs
+
+fn wasm_current_time(
+    ctx: &mut Ctx,
+    secs: WasmPtr<u64>,
+    nanos: WasmPtr<u32>,
+) -> i32 {
+    let elapsed = unsafe {
+        try_with_env!(ctx, elapsed(), "Unable to calculate the elapsed time")
+    };
+
+    wasm_deref!(with ctx, *secs = elapsed.as_secs());
+    wasm_deref!(with ctx, *nanos = elapsed.subsec_nanos());
+
+    WASM_SUCCESS
+}
+```
+
+{{% notice warning %}}
+It may not necessarily be a good thing to introduce macros which try to
+handle error cases and `unsafe` code automatically.
+
+The best `unsafe` code is stupid and boring because another programmer can
+easily skim through the function and check it for correctness, because
+everything does what it says on the tin. Burying error cases and `unsafe`ty
+by using macros or helper functions may just make it easy to obfuscate otherwise
+obvious bugs.
+
+The decision is very much up to the author's discretion.
+{{% /notice %}}
 
 ## Creating Our *"Standard Library"*
 
