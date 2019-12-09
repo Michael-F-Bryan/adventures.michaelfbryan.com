@@ -283,14 +283,192 @@ $ wc out.txt
  180668  180668 1445344 out.txt
 ```
 
-It looks like we wrote 1445344 bytes in 3.879 seconds for a throughput of
+It looks like we wrote 1,445,344 bytes in 3.879 seconds for a throughput of
 approximately 372.6 KB/sec. For comparison, the equivalent pure Rust program
-(`fn main() { loop { println!("Polling"); } }`) printed 2240816 bytes in 4.225
-for a throughput of 530.4 KB/sec.
+(`fn main() { loop { println!("Polling"); } }`) printed 2,240,816 bytes in
+4.225 for a throughput of 530.4 KB/sec.
 
 That's pretty good!
 
-## Stubbing Out Some Platform Abstractions
+## Declaring the Rest of the Platform Interface
+
+Okay, so we know how to expose functions to the WASM code so it can interact
+with the rest of the environment. Now the next task is look at the problem
+we're trying to solve, and provide functions which will help solve it. While
+this section will be fairly specific to my use case (creating some sort of
+programmable logic controller that people can upload code to), it should be
+fairly easy to adapt to suit your application.
+
+In our system, there are a handful of ways a program can interact with the
+outside world:
+
+- Log a message so it can be printed to some sort of debug window
+- Read an input from some memory-mapped IO
+- Write an output to some memory-mapped IO
+- Get the current time
+- Read and write named global variables
+
+The easiest way to declare which functions will be exposed by the runtime
+("intrinsics") is with a normal C header file. This may seem a bit strange
+for a Rust project, but just hear me out...
+
+1. A header file decouples the declaration of a function from its
+   implementation.
+2. You can use `bindgen` to generate the corresponding Rust declarations
+3. Using C header files enables people to write code for our application in
+   other languages (mainly C and C++)
+
+First off, it's a good idea to explain how we'll be handling fallible
+operations. We'll be returning error codes, where anything other than
+`WASM_SUCCESS` indicates an error.
+
+```c
+// src/intrinsics.h
+
+/**
+ * The various error codes used by this library.
+ *
+ * Every non-trivial function should return a wasm_result_t to indicate
+ * whether it executed successfully.
+ */
+enum wasm_result_t {
+    // The operation was successful.
+    WASM_SUCCESS = 0,
+    // An unspecified error occurred.
+    WASM_GENERIC_ERROR = 1,
+    // Tried to access an input/output address which is out of bounds.
+    WASM_ADDRESS_OUT_OF_BOUNDS = 2,
+    // Tried to read an unknown variable.
+    WASM_UNKNOWN_VARIABLE = 3,
+    // Tried to read/write a variable using the wrong type (e.g. you tried to
+    // write a boolean to an integer variable).
+    WASM_BAD_VARIABLE_TYPE = 4,
+};
+```
+
+Instead of our original `print()` function, let's create a fully-fledged logger.
+
+```c
+// src/intrinsics.h
+
+/**
+ * The log levels used with `wasm_log()`.
+ */
+enum wasm_log_level {
+    LOG_ERROR = 0,
+    LOG_WARN = 1,
+    LOG_INFO = 2,
+    LOG_DEBUG = 3,
+    LOG_TRACE = 4,
+};
+
+/**
+ * Log a message at the specified level, including information about the file
+ * and line the message was logged from.
+ */
+int wasm_log(int level, const char *file, int file_len, int line,
+             const char *message, int message_len);
+```
+
+We should also make a helper macro so people don't constantly need to enter in
+the filename and line number.
+
+```c
+// src/intrinsics.h
+
+/**
+ * Convenience macro for logging a message.
+ */
+#define LOG(level, message) wasm_log(level, __FILE__, strlen(__FILE__), __LINE__, message, strlen(message))
+```
+
+Next we'll give users a way to read input and write output. The runtime will
+make sure inputs are copied to a section of memory before calling `poll()` and
+outputs will sit in another section of memory and be synchronised with the real
+world after `poll()` completes. This is somewhat similar to how [Memory-mapped
+IO][mmio] works in embedded systems, or the [Process Image][img] on a PLC.
+
+It's not uncommon to have batches of 16 digital outputs or read from a 24-bit
+analogue sensor, so let's allow users to read/write in batches instead of one
+bit/byte at a time.
+
+```c
+// src/intrinsics.h
+
+/**
+ * Read from an input from memory-mapped IO.
+ */
+int wasm_read_input(uint32_t address, char *buffer, int buffer_len);
+
+/**
+ * Write to an output using memory-mapped IO.
+ */
+int wasm_write_output(uint32_t address, const char *data, int data_len);
+```
+
+Measuring the time should be fairly straightforward. The user doesn't
+necessarily care about the actual time (plus [timezones are complicated!][tz])
+so the we'll provide a way to get the number of seconds and nanoseconds since an
+arbitrary point in time (probably when the runtime started) and they can use
+that to see how much time has passed.
+
+```c
+// src/intrinsics.h
+
+/**
+ * Get a measurement of a monotonically nondecreasing clock.
+ *
+ * The absolute numbers don't necessarily mean anything, the difference
+ * between two measurements can be used to tell how much time has passed.
+ */
+int wasm_current_time(uint64_t *secs, uint32_t *nanos);
+```
+
+Next we need a way for different programs to communicate. For this, we'll keep
+a table of *"global variables"* which can either be booleans, integers, or
+floating-point numbers (`bool`, `i32`, and `f64` respectively).
+
+```c
+// src/intrinsics.h
+
+/**
+ * Read a globally defined boolean variable.
+ *
+ * Reading an unknown variable or trying to access a variable using the wrong
+ * type will result in an error.
+ */
+int wasm_variable_read_boolean(const char *name, int name_len, bool *value);
+
+/**
+ * Read a globally defined floating-point variable.
+ */
+int wasm_variable_read_double(const char *name, int name_len, double *value);
+
+/**
+ * Read a globally defined integer variable.
+ */
+int wasm_variable_read_int(const char *name, int name_len, int32_t *value);
+
+/**
+ * Write to a globally defined boolean variable.
+ *
+ * This may fail if the variable already exists and has a different type.
+ */
+int wasm_variable_write_boolean(const char *name, int name_len, bool value);
+
+/**
+ * Write to a globally defined floating-point variable.
+ */
+int wasm_variable_write_double(const char *name, int name_len, double value);
+
+/**
+ * Write to a globally defined integer variable.
+ */
+int wasm_variable_write_int(const char *name, int name_len, int32_t value);
+```
+
+Add in a couple `#include`s and a header guard, and we should now have a proper
+definition of the functionality exposed by the runtime.
 
 ## Dependency Injection
 
@@ -304,3 +482,6 @@ That's pretty good!
 [wasmer]: https://github.com/wasmerio/wasmer
 [lucet]: https://github.com/bytecodealliance/lucet
 [wasmtime]: https://github.com/bytecodealliance/wasmtime
+[mmio]: https://en.wikipedia.org/wiki/Memory-mapped_I/O
+[img]: http://www.eng.utoledo.edu/~wevans/chap3_S.pdf
+[tz]: https://www.youtube.com/watch?v=-5wpm-gesOY
