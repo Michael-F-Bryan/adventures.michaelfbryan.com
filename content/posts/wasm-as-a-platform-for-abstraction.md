@@ -424,9 +424,10 @@ that to see how much time has passed.
 int wasm_current_time(uint64_t *secs, uint32_t *nanos);
 ```
 
-Next we need a way for different programs to communicate. For this, we'll keep
-a table of *"global variables"* which can either be booleans, integers, or
-floating-point numbers (`bool`, `i32`, and `f64` respectively).
+Next we need a way for different programs to communicate. For this, the
+runtime will maintain a table of *"global variables"* which can either be
+booleans, integers, or floating-point numbers (`bool`, `i32`, and `f64`
+respectively).
 
 ```c
 // src/intrinsics.h
@@ -438,15 +439,7 @@ floating-point numbers (`bool`, `i32`, and `f64` respectively).
  * type will result in an error.
  */
 int wasm_variable_read_boolean(const char *name, int name_len, bool *value);
-
-/**
- * Read a globally defined floating-point variable.
- */
 int wasm_variable_read_double(const char *name, int name_len, double *value);
-
-/**
- * Read a globally defined integer variable.
- */
 int wasm_variable_read_int(const char *name, int name_len, int32_t *value);
 
 /**
@@ -455,15 +448,7 @@ int wasm_variable_read_int(const char *name, int name_len, int32_t *value);
  * This may fail if the variable already exists and has a different type.
  */
 int wasm_variable_write_boolean(const char *name, int name_len, bool value);
-
-/**
- * Write to a globally defined floating-point variable.
- */
 int wasm_variable_write_double(const char *name, int name_len, double value);
-
-/**
- * Write to a globally defined integer variable.
- */
 int wasm_variable_write_int(const char *name, int name_len, int32_t value);
 ```
 
@@ -471,6 +456,68 @@ Add in a couple `#include`s and a header guard, and we should now have a proper
 definition of the functionality exposed by the runtime.
 
 ## Dependency Injection
+
+We now have a fairly solid interface that can be used by WASM code, but it'd
+be really nice if we didn't hard-code the implementation for each function.
+Luckily the `Ctx` passed to our functions by wasmer allows you to attach
+arbitrary data via [`Ctx::data`][ctx-data].
+
+The normal way this is done is using *Dependency Injection*. Accept a generic
+`Environment` object in the `poll()` method then set `Ctx::data` to point to
+this `Environment` object while `poll()` is running.
+
+First we're going to need an error type and a way to work with global variables
+that may have different types.
+
+```rust
+// src/lib.rs
+
+#[derive(Debug)]
+pub enum Error {
+    AddressOutOfBounds,
+    UnknownVariable,
+    BadVariableType,
+    Other(Box<dyn std::error::Error>),
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum Value {
+    Bool(bool),
+    Integer(i32),
+    Float(f64),
+}
+```
+
+Now we can define the `Environment` trait. It's essentially the Rust version of
+our `intrinsics.h`, so its definition shouldn't be too surprising.
+
+```rust
+// src/lib.rs
+
+pub trait Environment {
+    fn elapsed(&self) -> Result<Duration, Error>;
+
+    fn read_input(
+        &self,
+        address: usize,
+        buffer: &mut [u8],
+    ) -> Result<(), Error>;
+
+    fn write_output(
+        &mut self,
+        address: usize,
+        buffer: &[u8],
+    ) -> Result<(), Error>;
+
+    fn log(&self, record: &Record) -> Result<(), Error>;
+
+    fn get_variable(&self, name: &str) -> Result<Value, Error>;
+
+    fn set_variable(&mut self, name: &str, value: Value) -> Result<(), Error>;
+}
+```
+
+
 
 ## Creating Our *"Standard Library"*
 
@@ -485,3 +532,4 @@ definition of the functionality exposed by the runtime.
 [mmio]: https://en.wikipedia.org/wiki/Memory-mapped_I/O
 [img]: http://www.eng.utoledo.edu/~wevans/chap3_S.pdf
 [tz]: https://www.youtube.com/watch?v=-5wpm-gesOY
+[ctx-data]: https://docs.rs/wasmer-runtime/0.11.0/wasmer_runtime/struct.Ctx.html#structfield.data
