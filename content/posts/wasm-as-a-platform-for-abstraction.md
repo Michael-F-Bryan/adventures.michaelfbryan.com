@@ -750,23 +750,13 @@ impl Error {
     }
 }
 
-impl<'a> State<'a> {
-    /// # Safety
-    ///
-    /// This assumes the [`Ctx`] was set up correctly using
-    /// [`Program::with_environment_context()`].
-    unsafe fn from_ctx(ctx: &mut Ctx) -> &'a mut State<'a> {
-        assert!(!ctx.data.is_null());
-        &mut *(ctx.data as *mut State)
-    }
-}
-
 /// Convenience macro for executing a method using the [`Environment`] pointer
 /// attached to [`Ctx::data`].
 ///
 /// # Safety
 ///
-/// See [`State::from_ctx()`] for the assumptions and invariants around safety.
+/// This assumes the [`Ctx`] was set up correctly using
+/// [`Program::with_environment_context()`].
 macro_rules! try_with_env {
     ($ctx:expr, $method:ident ( $($arg:expr),* ), $failure_msg:expr) => {{
         // the data pointer should have been set by `with_environment_context()`
@@ -774,7 +764,7 @@ macro_rules! try_with_env {
             return WASM_GENERIC_ERROR;
         }
 
-        let state = State::from_ctx($ctx);
+        let state = &mut *($ctx.data as *mut State);
 
         // call the method using the provided arguments
         match state.env.$method( $( $arg ),* ) {
@@ -825,14 +815,67 @@ fn wasm_current_time(
 It may not necessarily be a good thing to introduce macros which try to
 handle error cases and `unsafe` code automatically.
 
-The best `unsafe` code is stupid and boring because another programmer can
-easily skim through the function and check it for correctness, because
-everything does what it says on the tin. Burying error cases and `unsafe`ty
-by using macros or helper functions may just make it easy to obfuscate otherwise
-obvious bugs.
+The best `unsafe` code is boring because another programmer can easily skim
+through the function and check it for correctness, because everything does
+what it says on the tin. Burying error cases and `unsafe` by using macros or
+helper functions may just make it easy to obfuscate otherwise obvious bugs.
 
 The decision is very much up to the author's discretion.
 {{% /notice %}}
+
+Next we'll wire up the `wasm_log` function. The plan is to massage the provided
+information into a form Rust's [`log`][log] crate can handle, then let the
+`Environment` pass the resulting `LogRecord` through to its logger.
+
+```rust
+// src/lib.rs
+
+fn wasm_log(
+    ctx: &mut Ctx,
+    level: i32,
+    file: WasmPtr<u8, Array>,
+    file_len: i32,
+    line: i32,
+    message: WasmPtr<u8, Array>,
+    message_len: i32,
+) -> i32 {
+    // Note: We can't directly accept the Level enum here because out-of-range
+    // enum variants are UB
+    let level = match level {
+        LOG_ERROR => Level::Error,
+        LOG_WARN => Level::Warn,
+        LOG_INFO => Level::Info,
+        LOG_DEBUG => Level::Debug,
+        LOG_TRACE => Level::Trace,
+        _ => Level::Debug,
+    };
+    let filename = file.get_utf8_string(ctx.memory(0), file_len as u32);
+    let message = message
+        .get_utf8_string(ctx.memory(0), message_len as u32)
+        .unwrap_or_default();
+
+    unsafe {
+        try_with_env!(
+            ctx,
+            // unfortunately constructing a log and using it needs to be in a
+            // single statement because lifetimes
+            // https://users.rust-lang.org/t/using-format-args-and-log-builder/22695
+            log(&Record::builder()
+                .level(level)
+                .file(filename.as_deref())
+                .line(Some(line as u32))
+                .args(format_args!("{}", message))
+                .build()),
+            "Logging failed"
+        );
+    }
+
+    WASM_SUCCESS
+}
+```
+
+The rest of the host functions follow in a similar vein and aren't actually that
+interesting.
 
 ## Creating Our *"Standard Library"*
 
@@ -848,3 +891,4 @@ The decision is very much up to the author's discretion.
 [img]: http://www.eng.utoledo.edu/~wevans/chap3_S.pdf
 [tz]: https://www.youtube.com/watch?v=-5wpm-gesOY
 [ctx-data]: https://docs.rs/wasmer-runtime/0.11.0/wasmer_runtime/struct.Ctx.html#structfield.data
+[log]: https://crates.io/crates/log
