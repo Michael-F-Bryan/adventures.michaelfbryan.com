@@ -1369,6 +1369,28 @@ Huzzah!
 
 ## Testing Everything
 
+So now we can run an example program, but needing to manually set up a crate
+and compile it every time isn't the best method of testing. It'd be better if
+our test suite could automatically compile and run a collection of programs,
+feeding it pre-defined inputs, and making sure it behaved as expected.
+
+Rust's [compiletest][ct] is a really good example of this in action. The
+`compiletest` crate is a fairly complex piece of machinery, but you can get
+surprisingly far using just the basics.
+
+Let's come up with a basic testing procedure:
+
+1. Write a file containing some program that uses our standard library and
+  does something interesting
+2. Create a new crate in a temporary directory
+3. Make sure that crate depends on our standard library
+4. Copy the file from step 1 to `lib.rs` in the temporary crate
+5. Compile it
+6. Find the `*.wasm` file under
+   `/some-temp-dir/target/wasm32-unknown-unknown/debug/` and read it into memory
+7. Use `Program::load()` to instantiate that WASM module
+8. `poll()` the WASM module and make sure it behaves as we expect
+
 ## Writing Programs in Other Languages
 
 ## Conclusion
@@ -1385,3 +1407,4 @@ Huzzah!
 [std-intrinsics]: https://doc.rust-lang.org/std/intrinsics/index.html
 [interface-types]: https://github.com/WebAssembly/interface-types/blob/master/proposals/interface-types/Explainer.md
 [bg-issue]: https://github.com/rust-lang/rust-bindgen/issues/1583
+[ct]: https://rust-lang.github.io/rustc-guide/compiletest.html
