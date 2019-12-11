@@ -1245,7 +1245,7 @@ edition = "2018"
 crate-type = ["cdylib"]
 
 [dependencies]
-wasm-std = { path = "../../../../iec-std/" }
+wasm-std = { path = "../../../../std/" }
 ```
 
 We'll need to create a nice `println!()` macro instead of invoking the
