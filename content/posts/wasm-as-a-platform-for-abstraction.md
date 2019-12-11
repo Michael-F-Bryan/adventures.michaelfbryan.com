@@ -1285,6 +1285,91 @@ pub extern "C" fn poll() {
 }
 ```
 
+We should now be able to build this crate.
+
+```console
+$ cargo build
+   Compiling wasm-std v0.1.0 (/home/michael/Documents/wasm/std)
+   Compiling example-program v0.1.0 (/home/michael/Documents/wasm/examples/wasm-programs/example-program)
+error: `#[panic_handler]` function required, but not found
+
+error: aborting due to previous error
+
+error: could not compile `example-program`.
+
+To learn more, run the command again with --verbose.
+```
+
+Oops! Looks like using `assert_eq!()` requires code for handling panics.
+
+To make sure normal users don't need to define a `#[panic_handler]` for every
+program, we'll implement it in our standard library. We can just use WASM's
+`unreachable` command for now. This will trigger the corresponding "trap" on the
+WASM virtual machine and immediately stop execution.
+
+```rust
+// std/src/sys.rs
+
+#![cfg(all(not(test), target_arch = "wasm32"))]
+
+use core::panic::PanicInfo;
+
+#[panic_handler]
+pub fn panic_handler(info: &PanicInfo) -> ! {
+    core::arch::wasm32::unreachable()
+```
+
+Now we can successfully compile and run our program.
+
+```console
+$ cargo build --target wasm32-unknown-unknown
+   Compiling wasm-std v0.1.0 (/home/michael/Documents/wasm/std)
+   Compiling example-program v0.1.0 (/home/michael/Documents/wasm/examples/wasm-programs/example-program)
+    Finished dev [unoptimized + debuginfo] target(s) in 0.21s
+$ ls target/wasm32-unknown-unknown/debug
+build  deps  example_program.d  example_program.wasm  examples  incremental
+$ cd ../../..
+$ cargo run --example basic-runtime -- examples/wasm-programs/example-program/target/wasm32-unknown-unknown/debug/example_program.wasm
+
+^C
+```
+
+Oh, we forgot to initialize `env_logger` in the `basic-runtime.rs` example.
+
+```diff
+diff --git a/wasm/examples/basic-runtime.rs b/wasm/examples/basic-runtime.rs
+index de2017d..586d54d 100644
+--- a/wasm/examples/basic-runtime.rs
++++ b/wasm/examples/basic-runtime.rs
+@@ -2,6 +2,8 @@ use rustmatic_wasm::{InMemory, Program};
+ use std::env;
+
+ fn main() -> Result<(), Box<dyn std::error::Error>> {
++    env_logger::init();
++
+     let wasm_file = match env::args().skip(1).next() {
+         Some(filename) => filename,
+         None => panic!("Usage: basic-runtime <wasm-file>"),
+```
+
+Now it should work.
+
+```console
+RUST_LOG=info cargo run --example basic-runtime -- examples/wasm-programs/example-program/target/wasm32-unknown-unknown/debug/example_program.wasm
+   Compiling wasm v0.1.0 (/home/michael/Documents/wasm)
+    Finished dev [unoptimized + debuginfo] target(s) in 1.14s
+     Running `/home/michael/Documents/wasm/target/debug/examples/basic-runtime examples/wasm-programs/example-program/target/wasm32-unknown-unknown/debug/example_program.wasm`
+[2019-12-11T10:12:25Z INFO ] Polling
+[2019-12-11T10:12:25Z INFO ] Polling
+[2019-12-11T10:12:25Z INFO ] Polling
+[2019-12-11T10:12:25Z INFO ] Polling
+[2019-12-11T10:12:25Z INFO ] Polling
+[2019-12-11T10:12:25Z INFO ] Polling
+^C
+```
+
+Huzzah!
+
 ## Testing Everything
 
 ## Writing Programs in Other Languages
