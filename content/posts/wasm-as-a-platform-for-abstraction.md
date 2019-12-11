@@ -853,7 +853,7 @@ fn wasm_log(
     let message = message
         .get_utf8_string(ctx.memory(0), message_len as u32)
         .unwrap_or_default();
-
+gt
     unsafe {
         try_with_env!(
             ctx,
@@ -874,10 +874,418 @@ fn wasm_log(
 }
 ```
 
-The rest of the host functions follow in a similar vein and aren't actually that
-interesting.
+Implementing the other host functions follows the same steps. After writing a
+couple of these function "trampolines", it goes from being a scary `unsafe`
+task to a mechanical job of translating arguments and error values.
+
+{{% expand "A big wall of code that translates arguments and error values." %}}
+```rust
+// src/lib.rs
+
+impl TryFrom<Value> for bool {
+    type Error = Error;
+
+    fn try_from(other: Value) -> Result<bool, Self::Error> {
+        match other {
+            Value::Bool(b) => Ok(b),
+            _ => Err(Error::BadVariableType),
+        }
+    }
+}
+
+impl TryFrom<Value> for i32 {
+    type Error = Error;
+
+    fn try_from(other: Value) -> Result<i32, Self::Error> {
+        match other {
+            Value::Integer(i) => Ok(i),
+            _ => Err(Error::BadVariableType),
+        }
+    }
+}
+
+impl TryFrom<Value> for f64 {
+    type Error = Error;
+
+    fn try_from(other: Value) -> Result<f64, Self::Error> {
+        match other {
+            Value::Float(f) => Ok(f),
+            _ => Err(Error::BadVariableType),
+        }
+    }
+}
+
+impl From<bool> for Value {
+    fn from(b: bool) -> Value { Value::Bool(b) }
+}
+
+impl From<i32> for Value {
+    fn from(i: i32) -> Value { Value::Integer(i) }
+}
+impl From<f64> for Value {
+    fn from(d: f64) -> Value { Value::Float(d) }
+}
+
+fn wasm_read_input(
+    ctx: &mut Ctx,
+    address: u32,
+    buffer: WasmPtr<u8, Array>,
+    buffer_len: i32,
+) -> i32 {
+    let mut temp_buffer = vec![0; buffer_len.try_into().unwrap()];
+
+    unsafe {
+        try_with_env!(
+            ctx,
+            read_input(address.try_into().unwrap(), &mut temp_buffer[..]),
+            "Unable to read the input"
+        );
+    }
+
+    wasm_deref!(with ctx, *buffer = for byte in temp_buffer);
+
+    WASM_SUCCESS
+}
+
+fn wasm_write_output(
+    ctx: &mut Ctx,
+    address: u32,
+    data: WasmPtr<u8, Array>,
+    data_len: i32,
+) -> i32 {
+    let buffer: Vec<u8> =
+        match data.deref(ctx.memory(0), 0, data_len.try_into().unwrap()) {
+            Some(slice) => slice.iter().map(|cell| cell.get()).collect(),
+            None => return WASM_GENERIC_ERROR,
+        };
+
+    unsafe {
+        try_with_env!(
+            ctx,
+            write_output(address.try_into().unwrap(), &buffer),
+            "Unable to set outputs"
+        );
+    }
+
+    WASM_SUCCESS
+}
+
+fn variable_get_and_map<F, Q, T>(
+    ctx: &mut Ctx,
+    name: WasmPtr<u8, Array>,
+    name_len: i32,
+    value: WasmPtr<Q>,
+    map: F,
+) -> i32
+where
+    F: FnOnce(T) -> Q,
+    T: TryFrom<Value>,
+    Q: wasmer_runtime::types::ValueType,
+{
+    let name = match name
+        .get_utf8_string(ctx.memory(0), name_len.try_into().unwrap())
+    {
+        Some(n) => n,
+        None => return WASM_GENERIC_ERROR,
+    };
+
+    let variable = unsafe {
+        try_with_env!(
+            ctx,
+            get_variable(name),
+            "Unable to retrieve the variable"
+        )
+    };
+
+    let variable = match T::try_from(variable) {
+        Ok(v) => v,
+        _ => return WASM_BAD_VARIABLE_TYPE,
+    };
+
+    match value.deref(ctx.memory(0)) {
+        Some(cell) => {
+            cell.set(map(variable));
+            WASM_SUCCESS
+        },
+        None => WASM_GENERIC_ERROR,
+    }
+}
+
+fn wasm_variable_read_boolean(
+    ctx: &mut Ctx,
+    name: WasmPtr<u8, Array>,
+    name_len: i32,
+    value: WasmPtr<u8>,
+) -> i32 {
+    variable_get_and_map(
+        ctx,
+        name,
+        name_len,
+        value,
+        |b: bool| if b { 1 } else { 0 },
+    )
+}
+
+fn wasm_variable_read_int(
+    ctx: &mut Ctx,
+    name: WasmPtr<u8, Array>,
+    name_len: i32,
+    value: WasmPtr<i32>,
+) -> i32 {
+    variable_get_and_map(ctx, name, name_len, value, |i| i)
+}
+
+fn wasm_variable_read_double(
+    ctx: &mut Ctx,
+    name: WasmPtr<u8, Array>,
+    name_len: i32,
+    value: WasmPtr<f64>,
+) -> i32 {
+    variable_get_and_map(ctx, name, name_len, value, |d| d)
+}
+
+fn set_variable<F, Q, T>(
+    ctx: &mut Ctx,
+    name: WasmPtr<u8, Array>,
+    name_len: i32,
+    value: Q,
+    map: F,
+) -> i32
+where
+    F: FnOnce(Q) -> T,
+    T: Into<Value>,
+{
+    let name = match name
+        .get_utf8_string(ctx.memory(0), name_len.try_into().unwrap())
+    {
+        Some(n) => n,
+        None => return WASM_GENERIC_ERROR,
+    };
+
+    let value = map(value).into();
+
+    unsafe {
+        try_with_env!(
+            ctx,
+            set_variable(name, value),
+            "Unable to set the variable"
+        )
+    };
+
+    WASM_SUCCESS
+}
+
+fn wasm_variable_write_boolean(
+    ctx: &mut Ctx,
+    name: WasmPtr<u8, Array>,
+    name_len: i32,
+    value: u8,
+) -> i32 {
+    set_variable(ctx, name, name_len, value, |v| v != 0)
+}
+
+fn wasm_variable_write_int(
+    ctx: &mut Ctx,
+    name: WasmPtr<u8, Array>,
+    name_len: i32,
+    value: i32,
+) -> i32 {
+    set_variable(ctx, name, name_len, value, |v| v)
+}
+
+fn wasm_variable_write_double(
+    ctx: &mut Ctx,
+    name: WasmPtr<u8, Array>,
+    name_len: i32,
+    value: f64,
+) -> i32 {
+    set_variable(ctx, name, name_len, value, |v| v)
+}
+```
+{{% /expand %}}
 
 ## Creating Our *"Standard Library"*
+
+Technically we now have everything we need so users can write programs that run
+on our motion controller, but manually writing `extern` blocks at the top of
+every program is pretty clunky.
+
+In most systems you'll have a *"Standard Library"* which provides bindings to
+the host environment (typically the OS) and higher-level abstractions. Why
+should our system be any different?
+
+We'll start by creating a new crate for our standard library, imaginatively
+called `wasm_std`, and add it to the current workspace.
+
+```console
+$ cd ..
+$ cargo new --lib --name wasm_std std
+     Created library `wasm_std` package
+```
+
+I've also moved `intrinsics.h` (declaring the host interface) to this
+`std` crate because it's a more appropriate place.
+
+Before we can throw `intrinsics.h` at `bindgen` we need to create type
+definitions for the various integer types in `stdint.h`. Normally `bindgen`
+would be able to use types from `std::os::raw`, but because we aren't using the
+standard library we don't have access to them. Likewise we can't use the types
+from `libc` because that would mean linking to `libc`, which isn't an option
+either. See the [issue on GitHub][bg-issue] if you're interested.
+
+```rust
+// std/src/ctypes.rs
+
+//! Re-exports of C types on a "normal" x86 computer. Normally you'd use
+//! `std::os::raw` or `libc`, but in our case that's not possible.
+
+#![allow(bad_style, dead_code)]
+
+// /src/libc/unix/linux_like/linux/gnu/b64/x86_64/mod.rs
+pub type c_char = i8;
+pub type wchar_t = i32;
+
+// /src/libc/unix/linux_like/linux/gnu/b64/x86_64/not_x32.rs
+pub type c_long = i64;
+pub type c_ulong = u64;
+
+// src/libc/unix/mod.rs
+pub type c_schar = i8;
+pub type c_uchar = u8;
+pub type c_short = i16;
+pub type c_ushort = u16;
+pub type c_int = i32;
+pub type c_uint = u32;
+pub type c_float = f32;
+pub type c_double = f64;
+pub type c_longlong = i64;
+pub type c_ulonglong = u64;
+pub type intmax_t = i64;
+pub type uintmax_t = u64;
+pub type size_t = usize;
+pub type ptrdiff_t = isize;
+pub type intptr_t = isize;
+pub type uintptr_t = usize;
+pub type ssize_t = isize;
+```
+
+We can now generate declarations for `intrinsics.h`. This will
+be analogous to [`std::intrinsics`][std-intrinsics] in Rust's standard library.
+
+```console
+$ cp ../intrinsics.h .
+$ bindgen intrinsics.h \
+    --whitelist-type 'wasm_.*' \
+    --whitelist-function 'wasm_.*' \
+    --output src/intrinsics.rs \
+    --use-core \
+    --ctypes-prefix crate::ctypes \
+     --raw-line '#![allow(bad_style, dead_code)]'
+$ tail src/intrinsics.rs
+extern "C" {
+    /// Write to a globally defined integer variable.
+    ///
+    /// This may fail if the variable already exists and has a different type.
+    pub fn wasm_variable_write_int(
+        name: *const ::std::os::raw::c_char,
+        name_len: ::std::os::raw::c_int,
+        value: i32,
+    ) -> wasm_result_t;
+}
+```
+
+Our `lib.rs` needs to be updated to use `intrinsics`.
+
+```rust
+// std/lib.rs
+
+//! The standard library, providing host bindings and abstractions.
+
+// we are the standard library.
+#![no_std]
+
+pub mod intrinsics;
+```
+
+While it's still quite small at the moment, as we gain more experience using
+this system we'll be able to move commonly-used elements into the standard
+library to provide a more *batteries included* feel.
+
+Seeing as the end goal is for users to write programs for our controller in
+any language, not just Rust, this may eventually require tools like
+[*Interface Types*][interface-types].
+
+Now we have a standard library we can rewrite our previous `example-program.rs`.
+
+```console
+$ cd ../examples/wasm-programs
+$ rm example-program.rs
+$ cargo new example-program
+$ cd example-program
+```
+
+We need to add our standard library as a dependency.
+
+```console
+$ cargo add ../../../std
+    Updating 'https://github.com/rust-lang/crates.io-index' index
+      Adding wasm-std (unknown version) to dependencies
+```
+
+Because this crate is being compiled to WASM we'll need to make sure it is
+compiled using the `cdylib` crate type.
+
+```toml
+# examples/wasm-programs/example-program/Cargo.toml
+
+[package]
+name = "example-program"
+version = "0.1.0"
+authors = ["Michael Bryan <michaelfbryan@gmail.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-std = { path = "../../../../iec-std/" }
+```
+
+We'll need to create a nice `println!()` macro instead of invoking the
+`wasm_log()` intrinsic directly, but for now here's the equivalent of our
+original program.
+
+```rust
+// examples/wasm-programs/example-program/src/lib.rs
+
+#![no_std]
+
+use rustmatic_iec_std::intrinsics::{
+    self, wasm_log_level_LOG_INFO as LOG_INFO,
+    wasm_result_t_WASM_SUCCESS as WASM_SUCCESS,
+};
+
+#[no_mangle]
+pub extern "C" fn poll() {
+    unsafe {
+        let file = file!();
+        let msg = "Polling\n";
+
+        let ret = intrinsics::wasm_log(
+            LOG_INFO,
+            file.as_ptr() as *const _,
+            file.len() as _,
+            line!() as _,
+            msg.as_ptr() as *const _,
+            msg.len() as _,
+        );
+
+        assert_eq!(ret, WASM_SUCCESS);
+    }
+}
+```
+
+## Testing Everything
 
 ## Writing Programs in Other Languages
 
@@ -892,3 +1300,6 @@ interesting.
 [tz]: https://www.youtube.com/watch?v=-5wpm-gesOY
 [ctx-data]: https://docs.rs/wasmer-runtime/0.11.0/wasmer_runtime/struct.Ctx.html#structfield.data
 [log]: https://crates.io/crates/log
+[std-intrinsics]: https://doc.rust-lang.org/std/intrinsics/index.html
+[interface-types]: https://github.com/WebAssembly/interface-types/blob/master/proposals/interface-types/Explainer.md
+[bg-issue]: https://github.com/rust-lang/rust-bindgen/issues/1583
