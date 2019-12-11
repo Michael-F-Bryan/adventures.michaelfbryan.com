@@ -1391,6 +1391,134 @@ experimentation, let's write down a simple testing procedure:
 7. Use `Program::load()` to instantiate that WASM module
 8. `poll()` the WASM module and make sure it behaves as we expect
 
+To make things a little easier, we'll add the `anyhow` and `tempfile` crates
+as dev-dependencies.
+
+```console
+$ cargo add --dev anyhow tempfile
+    Updating 'https://github.com/rust-lang/crates.io-index' index
+      Adding anyhow v1.0.25 to dev-dependencies
+      Adding tempfile v3.1.0 to dev-dependencies
+```
+
+Next we can crate a `CARGO_TOML_TEMPLATE` which uses our poor man's templating
+system (`string.replace("$VARIABLE", "some_value")`) for our temporary crate's
+`Cargo.toml`.
+
+```rust
+// tests/compiletest.rs
+
+const CARGO_TOML_TEMPLATE: &str = r#"
+[package]
+name = "$TEST_NAME"
+version = "0.1.0"
+authors = ["Michael Bryan <michaelfbryan@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+wasm-std = { path = "$STD_PATH" }
+
+[lib]
+path = "lib.rs"
+crate-type = ["cdylib"]
+"#;
+```
+
+Now we can implement steps 1 to 5 in one big function. We'll develop better
+tooling in time, but this crude implementation should suffice for our needs.
+
+```rust
+// tests/compiletest.rs
+
+fn compile_to_wasm(
+    name: &str,
+    src: &str,
+    std_manifest_dir: &Path,
+) -> Result<Vec<u8>, Error> {
+    // first we'll need a crate
+    let dir = TempDir::new().context("Unable to create a temporary dir")?;
+
+    // then create a Cargo.toml file
+    let std_manifest_dir = std_manifest_dir.display().to_string();
+    let cargo_toml = CARGO_TOML_TEMPLATE
+        .replace("$TEST_NAME", name)
+        .replace("$STD_PATH", &std_manifest_dir);
+    let cargo_toml_path = dir.path().join("Cargo.toml");
+    fs::write(&cargo_toml_path, cargo_toml)
+        .context("Couldn't write Cargo.toml")?;
+
+    // copy our source code across
+    fs::write(dir.path().join("lib.rs"), src)
+        .context("Couldn't write lib.rs")?;
+
+    // compile to wasm
+    let target_dir = dir.path().join("target");
+    let output = Command::new("cargo")
+        .arg("build")
+        .arg("--manifest-path")
+        .arg(&cargo_toml_path)
+        .arg("--target-dir")
+        .arg(&target_dir)
+        .arg("--target")
+        .arg("wasm32-unknown-unknown")
+        .status()
+        .context("Unable to start cargo")?;
+
+    anyhow::ensure!(output.success(), "Compilation failed");
+
+    let blob = target_dir
+        .join("wasm32-unknown-unknown")
+        .join("debug")
+        .join(name)
+        .with_extension("wasm");
+
+    fs::read(&blob)
+        .with_context(|| format!("Unable to read \"{}\"", blob.display()))
+}
+```
+
+We'll also need a function for calling this compilation function and
+instantiating the WASM module.
+
+```rust
+// tests/compiletest.rs
+
+fn std_manifest_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("std")
+}
+
+fn instantiate(name: &str, src: &str) -> Result<Program, Error> {
+    let std_path = std_manifest_path();
+    let wasm = compile_to_wasm(name, src, &std_path).unwrap();
+
+    Program::load(&wasm)
+        .map_err(|e| anyhow::format_err!("WASM loading failed: {}", e))
+}
+```
+
+And finally we can write a test to make sure compilation succeeds.
+
+```rust
+// tests/compiletest.rs
+
+#[test]
+fn compile_the_example_program() {
+    let _wasm =
+        instantiate("example_program", include_str!("data/example-program.rs"))
+            .unwrap();
+}
+```
+
+{{% notice tip %}}
+I've copied our `example-program.rs` from the last section into the
+`tests/data/` directory, but feel free to write your own code which uses
+functionality from the *Standard Library*.
+{{% /notice %}}
+
+
 ## Writing Programs in Other Languages
 
 ## Conclusion
