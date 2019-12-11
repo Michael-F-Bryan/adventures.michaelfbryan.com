@@ -1374,11 +1374,11 @@ and compile it every time isn't the best method of testing. It'd be better if
 our test suite could automatically compile and run a collection of programs,
 feeding it pre-defined inputs, and making sure it behaved as expected.
 
-Rust's [compiletest][ct] is a really good example of this in action. The
-`compiletest` crate is a fairly complex piece of machinery, but you can get
-surprisingly far using just the basics.
+Rust's [compiletest][ct] is a really good example of this in action.
 
-Let's come up with a basic testing procedure:
+The `compiletest` crate is a fairly complex piece of machinery, but you can
+get surprisingly far using just the basics. Based on our previous
+experimentation, let's write down a simple testing procedure:
 
 1. Write a file containing some program that uses our standard library and
   does something interesting
