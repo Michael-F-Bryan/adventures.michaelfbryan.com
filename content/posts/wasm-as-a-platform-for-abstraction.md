@@ -9,14 +9,14 @@ tags:
 
 In a project I've been playing around with recently, we've encountered the
 dilemma where you want to make it easy for users to write their own
-application logic using the system, but at the same want to keep that logic
+application logic using the system, but at the same time want to keep that logic
 decoupled from the implementation details of whatever platform the
 application is running on.
 
 If you've been programming for any amount of time your immediate reaction is
 probably *"why bother mentioning this, doesn't it just fall out of good
 library design?"*, and normally I would totally agree with you, except I
-forgot to mention a couple important details...
+forgot to mention a couple of important details...
 
 1. People need to be able to upload new code while the system is still running
 2. This application will be interacting with the real world (think robots and
@@ -38,7 +38,7 @@ Introducing...
     width="50%"
 >}}
 
-Web Assembly has gained a lot of traction over the last couple years as a way
+Web Assembly has gained a lot of traction over the last couple of years as a way
 to write code in any language and run it in the browser, but it can be used for
 so much more.
 
@@ -88,7 +88,7 @@ the `Cargo.toml` file. You can get this nifty little subcommand from the
 [ce]: https://crates.io/crates/cargo-edit
 {{% /notice %}}
 
-Let's start off by creating a wrapper around an instantiated WASM module. This
+Let's start off by creating a wrapper around an instantiated WASM module.
 
 ```rust
 // src/lib.rs
