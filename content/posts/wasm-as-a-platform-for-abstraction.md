@@ -140,7 +140,7 @@ kill two birds with one stone.
 ```rust
 // examples/basic-runtime.rs
 
-use rustmatic_wasm::Program;
+use wasm::Program;
 use std::{env, error::Error};
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -1260,7 +1260,7 @@ original program.
 
 #![no_std]
 
-use rustmatic_iec_std::intrinsics::{
+use wasm_std::intrinsics::{
     self, wasm_log_level_LOG_INFO as LOG_INFO,
     wasm_result_t_WASM_SUCCESS as WASM_SUCCESS,
 };
@@ -1341,7 +1341,7 @@ diff --git a/wasm/examples/basic-runtime.rs b/wasm/examples/basic-runtime.rs
 index de2017d..586d54d 100644
 --- a/wasm/examples/basic-runtime.rs
 +++ b/wasm/examples/basic-runtime.rs
-@@ -2,6 +2,8 @@ use rustmatic_wasm::{InMemory, Program};
+@@ -2,6 +2,8 @@ use wasm::{InMemory, Program};
  use std::env;
 
  fn main() -> Result<(), Box<dyn std::error::Error>> {
