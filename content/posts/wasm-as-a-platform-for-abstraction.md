@@ -1374,160 +1374,18 @@ and compile it every time isn't the best method of testing. It'd be better if
 our test suite could automatically compile and run a collection of programs,
 feeding it pre-defined inputs, and making sure it behaved as expected.
 
-Rust's [compiletest][ct] is a really good example of this in action.
-
-The `compiletest` crate is a fairly complex piece of machinery, but you can
-get surprisingly far using just the basics. Based on our previous
-experimentation, let's write down a simple testing procedure:
-
-1. Write a file containing some program that uses our standard library and
-  does something interesting
-2. Create a new crate in a temporary directory
-3. Make sure that crate depends on our standard library
-4. Copy the file from step 1 to `lib.rs` in the temporary crate
-5. Compile it
-6. Find the `*.wasm` file under
-   `/some-temp-dir/target/wasm32-unknown-unknown/debug/` and read it into memory
-7. Use `Program::load()` to instantiate that WASM module
-8. `poll()` the WASM module and make sure it behaves as we expect
-
-To make things a little easier, we'll add the `anyhow` and `tempfile` crates
-as dev-dependencies.
-
-```console
-$ cargo add --dev anyhow tempfile
-    Updating 'https://github.com/rust-lang/crates.io-index' index
-      Adding anyhow v1.0.25 to dev-dependencies
-      Adding tempfile v3.1.0 to dev-dependencies
-```
-
-Next we can crate a `CARGO_TOML_TEMPLATE` which uses our poor man's templating
-system (`string.replace("$VARIABLE", "some_value")`) for our temporary crate's
-`Cargo.toml`.
-
-```rust
-// tests/compiletest.rs
-
-const CARGO_TOML_TEMPLATE: &str = r#"
-[package]
-name = "$TEST_NAME"
-version = "0.1.0"
-authors = ["Michael Bryan <michaelfbryan@gmail.com>"]
-edition = "2018"
-
-[dependencies]
-wasm-std = { path = "$STD_PATH" }
-
-[lib]
-path = "lib.rs"
-crate-type = ["cdylib"]
-"#;
-```
-
-Now we can implement steps 1 to 5 in one big function. We'll develop better
-tooling in time, but this crude implementation should suffice for our needs.
-
-```rust
-// tests/compiletest.rs
-
-fn compile_to_wasm(
-    name: &str,
-    src: &str,
-    std_manifest_dir: &Path,
-) -> Result<Vec<u8>, Error> {
-    // first we'll need a crate
-    let dir = TempDir::new().context("Unable to create a temporary dir")?;
-
-    // then create a Cargo.toml file
-    let std_manifest_dir = std_manifest_dir.display().to_string();
-    let cargo_toml = CARGO_TOML_TEMPLATE
-        .replace("$TEST_NAME", name)
-        .replace("$STD_PATH", &std_manifest_dir);
-    let cargo_toml_path = dir.path().join("Cargo.toml");
-    fs::write(&cargo_toml_path, cargo_toml)
-        .context("Couldn't write Cargo.toml")?;
-
-    // copy our source code across
-    fs::write(dir.path().join("lib.rs"), src)
-        .context("Couldn't write lib.rs")?;
-
-    // compile to wasm
-    let target_dir = dir.path().join("target");
-    let output = Command::new("cargo")
-        .arg("build")
-        .arg("--manifest-path")
-        .arg(&cargo_toml_path)
-        .arg("--target-dir")
-        .arg(&target_dir)
-        .arg("--target")
-        .arg("wasm32-unknown-unknown")
-        .status()
-        .context("Unable to start cargo")?;
-
-    anyhow::ensure!(output.success(), "Compilation failed");
-
-    let blob = target_dir
-        .join("wasm32-unknown-unknown")
-        .join("debug")
-        .join(name)
-        .with_extension("wasm");
-
-    fs::read(&blob)
-        .with_context(|| format!("Unable to read \"{}\"", blob.display()))
-}
-```
-
-We'll also need a function for calling this compilation function and
-instantiating the WASM module.
-
-```rust
-// tests/compiletest.rs
-
-fn std_manifest_path() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("std")
-}
-
-fn instantiate(name: &str, src: &str) -> Result<Program, Error> {
-    let std_path = std_manifest_path();
-    let wasm = compile_to_wasm(name, src, &std_path).unwrap();
-
-    Program::load(&wasm)
-        .map_err(|e| anyhow::format_err!("WASM loading failed: {}", e))
-}
-```
-
-And finally we can write a test to make sure compilation succeeds.
-
-```rust
-// tests/compiletest.rs
-
-#[test]
-fn compile_the_example_program() {
-    let _wasm =
-        instantiate("example_program", include_str!("data/example-program.rs"))
-            .unwrap();
-}
-```
-
-{{% notice tip %}}
-I've copied our `example-program.rs` from the last section into the
-`tests/data/` directory, but feel free to write your own code which uses
-functionality from the *Standard Library*.
-{{% /notice %}}
-
-Now that we can successfully compile our test program and load it into memory we
-need to think about how it'll be tested. At this point it's worth taking a peek
-at `rustc`'s test suite to see how similar projects are tested.
+Rust's [compiletest][ct] is a really good example of this in action. At this
+point it's worth taking a peek at `rustc`'s test suite to see how similar
+projects are tested. Hopefully we can use it as inspiration.
 
 When testing the compiler's error message the compiler's test suite will contain
 a `*.rs` file containing code which annotates offending lines (e.g. using a
 comment like `//~ ERROR: ...`) and a `*.stderr` file containing the exact output
 from STDOUT.
 
-A simple example of this is [rust/src/test/ui/empty/empty-linkname.rs](https://github.com/rust-lang/rust/blob/cf7e019b42cd523d91cb350ab49acbda1b11e571/src/test/ui/empty/empty-linkname.rs).
+A simple example of this is
+[rust/src/test/ui/empty/empty-linkname.rs][empty-linkname.rs] for detecting
+when the `name` parameter passed to `#[link]` is empty.
 
 ```rust
 #[link(name = "")] //~ ERROR: given with empty name
@@ -1537,9 +1395,7 @@ extern {
 fn main() {}
 ```
 
-The contents of
-[empty-linkname.stderr](https://github.com/rust-lang/rust/blob/master/src/test/ui/empty/empty-linkname.stderr)
-looks like this:
+The contents of [empty-linkname.stderr][empty-linkname.stderr] looks like this:
 
 ```
 error[E0454]: `#[link(name = "")]` given with empty name
@@ -1557,8 +1413,447 @@ We can take a fairly similar approach when designing a test suite for the
 runtime. Tests will consist of two files, some source code (written in Rust) and
 a file containing some representation of the expected output.
 
-The main difference between our runtime's tests and `rustc`'s is that we'll need
-to incorporate a time element into the expected output.
+The main difference between our runtime's tests and `rustc`'s UI tests is
+that we'll need to incorporate a time element into the expected output. The
+output is also less tangible, `rustc`'s error messages are just text written to
+STDERR compared to the array of binary that our runtime uses for outputs.
+
+It's also easy for `rustc`'s test suite to compile a single `*.rs` file and
+inspect the output, it's something you could concievably implement using a bash
+script. On the other hand, our compilation process is non-trivial, and the
+requirement for inspecting changing outputs over time requires us to instrument
+the runtime and insert assertions after every call to `Program::poll()`.
+
+Based on our previous experimentation, let's write down a simple testing
+procedure:
+
+1. Write a file containing some program that uses our standard library and
+  does something interesting
+2. Create a new crate in a temporary directory (e.g. `/tmp.123/`)
+3. Make sure that crate depends on our standard library
+4. Copy the file from step 1 to `lib.rs` in the temporary crate
+5. Compile it
+6. Find the `*.wasm` file under
+   `/tmp.123/target/wasm32-unknown-unknown/debug/` and read it into memory
+7. Use `Program::load()` to instantiate that WASM module
+8. Continually `poll()` the program setting up inputs according to some
+   pre-defined *Recipe* and make sure outputs change as expected
+
+This may end up being a little complex so let's create a `wasm-test` helper
+crate and add it to our workspace.
+
+```console
+$ cargo new --lib wasm-test
+```
+
+We'll also be needing a couple dependencies.
+
+```console
+$ cargo add log tempfile serde serde_derive serde_json anyhow ../wasm
+    Updating 'https://github.com/rust-lang/crates.io-index' index
+      Adding log v0.4.8 to dependencies
+      Adding tempfile v3.1.0 to dependencies
+      Adding serde v1.0.103 to dependencies
+      Adding serde_derive v1.0.103 to dependencies
+      Adding serde_json v1.0.44 to dependencies
+      Adding anyhow v1.0.25 to dependencies
+      Adding wasm (unknown version) to dependencies
+```
+
+Looking back at steps 2 and 3, when creating our temporary crate we'll need to
+make sure the `Cargo.toml` is set up correctly. There are a lot of advanced
+templating libraries out there, but for our purposes `string.replace()`-style
+"templates" should be more than sufficient.
+
+```rust
+// wasm-test/src/compile.rs
+
+const CARGO_TOML_TEMPLATE: &str = r#"
+[package]
+name = "$TEST_NAME"
+version = "0.1.0"
+authors = ["Michael Bryan <michaelfbryan@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+rustmatic-iec-std = { path = "$STD_PATH" }
+
+[lib]
+path = "lib.rs"
+crate-type = ["cdylib"]
+"#;
+```
+
+The other compilation-related tasks are fairly straightforward to automate
+using by just shelling out to `std::process::Command`. We can develop better
+tooling in time, but this crude implementation should suffice for now.
+
+```rust
+// wasm-test/src/compile.rs
+
+use anyhow::{Error, Context};
+use std::{fs, path::Path};
+use tempfile::TempDir;
+
+fn compile_to_wasm(
+    name: &str,
+    src: &str,
+    target_dir: &Path,
+    std_manifest_dir: &Path,
+) -> Result<Vec<u8>, Error> {
+    // first we'll need a directory for our crate
+    let dir = TempDir::new().context("Unable to create a temporary dir")?;
+
+    // then create a Cargo.toml file
+    let std_manifest_dir = std_manifest_dir.display().to_string();
+    let cargo_toml = CARGO_TOML_TEMPLATE
+        .replace("$TEST_NAME", name)
+        .replace("$STD_PATH", &std_manifest_dir);
+    let cargo_toml_path = dir.path().join("Cargo.toml");
+    fs::write(&cargo_toml_path, cargo_toml)
+        .context("Couldn't write Cargo.toml")?;
+
+    // copy our source code across
+    fs::write(dir.path().join("lib.rs"), src)
+        .context("Couldn't write lib.rs")?;
+
+    // compile to wasm
+    let output = Command::new("cargo")
+        .arg("build")
+        .arg("--manifest-path")
+        .arg(&cargo_toml_path)
+        .arg("--target-dir")
+        .arg(&target_dir)
+        .arg("--target")
+        .arg("wasm32-unknown-unknown")
+        .arg("--offline")
+        .status()
+        .context("Unable to start cargo")?;
+
+    anyhow::ensure!(output.success(), "Compilation failed");
+
+    // look for the WASM file using a hard-coded path
+    let blob = target_dir
+        .join("wasm32-unknown-unknown")
+        .join("debug")
+        .join(name)
+        .with_extension("wasm");
+
+    fs::read(&blob)
+        .with_context(|| format!("Unable to read \"{}\"", blob.display()))
+}
+```
+
+To avoid having to always provide the `target_dir` and `std_manifest_dir`
+parameters every time we can wrap them up inside some sort of `Compiler` struct.
+
+```rust
+// wasm-test/src/compile.rs
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Compiler {
+    std_manifest_dir: PathBuf,
+    target_dir: PathBuf,
+}
+```
+
+From here, instantiating a WASM program can be implemented as a method on
+`Compiler` which just calls `compile_to_wasm()` and `Program::load()`.
+
+```rust
+// wasm-test/src/compile.rs
+
+use wasm::Program;
+
+impl Compiler {
+    pub fn instantiate(&self, name: &str, src: &str) -> Result<Program, Error> {
+        let wasm = compile_to_wasm(
+            name,
+            src,
+            &self.target_dir,
+            &self.std_manifest_dir,
+        )
+        .unwrap();
+
+        Program::load(&wasm)
+            .map_err(|e| anyhow::format_err!("WASM loading failed: {}", e))
+    }
+}
+```
+
+Next, we need some sort of `TestCase` which can be loaded from disk. In this
+case `some-program.rs` will be the code being tested and `some-program.json`
+will contain a `Recipe` dictating the expected behaviour.
+
+We'll need to derive `Serialize` and `Deserialize` so the `Recipe` can be loaded
+from JSON.
+
+```rust
+// wasm-test/src/test_case.rs
+
+use serde_derive::{Deserialize, Serialize};
+use std::time::Duration;
+
+/// A single test case.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TestCase {
+    pub name: String,
+    pub src: String,
+    pub recipe: Recipe,
+}
+
+/// A series of snapshots containing inputs and expected outputs for the test
+/// program.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Recipe {
+    pub passes: Vec<Pass>,
+}
+
+/// The inputs and expected outputs for a single call to [`Program::poll()`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Pass {
+    #[serde(default = "default_delta_time")]
+    pub delta_time: Duration,
+    pub inputs: Vec<u8>,
+    pub expected_outputs: Vec<u8>,
+    #[serde(default)]
+    pub expected_log_messages: Vec<String>,
+}
+
+fn default_delta_time() -> Duration { Duration::from_millis(100) }
+```
+
+We'll also need constructors which can load a `TestCase` from a `*.rs` and
+`*.json` file on disk.
+
+```rust
+// wasm-test/src/test_case.rs
+
+use anyhow::{Context, Error};
+
+impl TestCase {
+    pub fn load<P, Q>(src_file: P, recipe_file: Q) -> Result<TestCase, Error>
+    where
+        P: AsRef<Path>,
+        Q: AsRef<Path>,
+    {
+        let src_file = src_file.as_ref();
+        let name =
+            src_file
+                .file_name()
+                .and_then(|n| n.to_str())
+                .ok_or_else(|| {
+                    anyhow::format_err!("Unable to determine the filename")
+                })?;
+
+        let src = fs::read_to_string(src_file)
+            .context("Couldn't read the source file")?;
+        let recipe = fs::read_to_string(recipe_file)
+            .context("Couldn't read the recipe file")?;
+
+        TestCase::parse(name, src, recipe)
+    }
+
+    pub fn parse<N, S, R>(name: N, src: S, recipe: R) -> Result<TestCase, Error>
+    where
+        N: Into<String>,
+        S: Into<String>,
+        R: AsRef<str>,
+    {
+        let name = name.into();
+        let src = src.into();
+        let recipe = serde_json::from_str(recipe.as_ref())
+            .context("Recipe parsing failed")?;
+
+        Ok(TestCase { name, src, recipe })
+    }
+}
+```
+
+We also need an implementation of `Environment` for testing purposes. This is
+the *"instrumenting"* part mentioned earlier.
+
+```rust
+// wasm-test/src/environment.rs
+
+use log::Level;
+use std::time::Duration;
+
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct TestEnvironment {
+    pub elapsed: Duration,
+    pub inputs: Vec<u8>,
+    pub outputs: Vec<u8>,
+    pub log_messages: Vec<(Level, String)>,
+    pub variables: HashMap<String, Value>,
+}
+```
+
+Implementing the `Environment` trait is more tedious than anything else.
+
+```rust
+// wasm-test/src/environment.rs
+
+use wasm::{Environment, Error as WasmError};
+
+impl wasm::Environment for TestEnvironment {
+    fn elapsed(&self) -> Result<Duration, WasmError> { Ok(self.elapsed) }
+
+    fn read_input(
+        &self,
+        address: usize,
+        buffer: &mut [u8],
+    ) -> Result<(), WasmError> {
+        let src = self
+            .inputs
+            .get(address..address + buffer.len())
+            .ok_or(WasmError::AddressOutOfBounds)?;
+        buffer.copy_from_slice(src);
+
+        Ok(())
+    }
+
+    fn write_output(
+        &mut self,
+        address: usize,
+        buffer: &[u8],
+    ) -> Result<(), WasmError> {
+        let dest = self
+            .inputs
+            .get_mut(address..address + buffer.len())
+            .ok_or(WasmError::AddressOutOfBounds)?;
+        dest.copy_from_slice(buffer);
+
+        Ok(())
+    }
+
+    fn log(&mut self, record: &Record<'_>) -> Result<(), WasmError> {
+        self.log_messages
+            .push((record.level(), record.args().to_string()));
+        Ok(())
+    }
+
+    fn get_variable(&self, name: &str) -> Result<Value, WasmError> {
+        self.variables
+            .get(name)
+            .copied()
+            .ok_or(WasmError::UnknownVariable)
+    }
+
+    fn set_variable(
+        &mut self,
+        name: &str,
+        value: Value,
+    ) -> Result<(), WasmError> {
+        use std::collections::hash_map::Entry;
+
+        match self.variables.entry(name.to_string()) {
+            Entry::Vacant(vacant) => {
+                vacant.insert(value);
+            },
+            Entry::Occupied(mut occupied) => {
+                if occupied.get().kind() == value.kind() {
+                    occupied.insert(value);
+                } else {
+                    return Err(WasmError::BadVariableType);
+                }
+            },
+        }
+
+        Ok(())
+    }
+}
+```
+
+We should also add some code for doing the setup and comparison steps when
+polling.
+
+```rust
+// wasm-test/src/environment.rs
+
+use crate::Pass;
+use anyhow::Error;
+
+impl TestEnvironment {
+    pub fn setup(&mut self, pass: &Pass) {
+        assert_ne!(pass.delta_time, Duration::new(0, 0));
+
+        self.elapsed += pass.delta_time;
+        self.load_inputs(&pass.inputs);
+        self.outputs = vec![0; pass.expected_outputs.len()];
+        self.log_messages.clear();
+    }
+
+    fn load_inputs(&mut self, inputs: &[u8]) {
+        self.inputs.clear();
+        self.inputs.extend(inputs);
+    }
+
+    pub fn compare(&self, pass: &Pass) -> Result<(), Error> {
+        if self.outputs != pass.expected_outputs {
+            anyhow::bail!("{:?} != {:?}", self.outputs, pass.expected_outputs);
+        }
+
+        for msg in &pass.expected_log_messages {
+            if !self.log_messages.iter().any(|(_, logged)| logged.contains(msg)) {
+                anyhow::bail!("Expected log message \"{}\"", msg);
+            }
+        }
+
+        Ok(())
+    }
+}
+```
+
+Our `wasm-test` crate can now compile a Rust program to WASM and link it to our
+standard library, instantiate the WASM module, load a pre-defined test recipe,
+and create a test `Environment`.
+
+Now we just need a way to execute a particular test case and the `wasm-test`
+crate will be complete.
+
+```rust
+// wasm-test/src/lib.rs
+
+mod compile;
+mod environment;
+mod test_case;
+
+pub use compile::Compiler;
+pub use environment::TestEnvironment;
+pub use test_case::{Pass, Recipe, TestCase};
+
+use anyhow::{Context, Error};
+
+pub fn run_test_case(
+    compiler: &Compiler,
+    test_case: &TestCase,
+) -> Result<(), Error> {
+    let mut wasm = compiler
+        .instantiate(&test_case.name, &test_case.src)
+        .context("Unable to load the WASM module")?;
+    let mut env = TestEnvironment::default();
+
+    for pass in &test_case.recipe.passes {
+        env.setup(pass);
+
+        wasm.poll(&mut env)
+            .map_err(|e| Error::msg(e.to_string()))
+            .context("Polling failed")?;
+
+        env.compare(pass).context("Output comparison failed")?;
+    }
+
+    Ok(())
+}
+```
+
+{{% notice tip %}}
+I've copied our `example-program.rs` from the last section into the
+`tests/data/` directory, but feel free to write your own code which uses
+functionality from the *Standard Library*.
+{{% /notice %}}
+
 
 
 
@@ -1579,3 +1874,5 @@ to incorporate a time element into the expected output.
 [interface-types]: https://github.com/WebAssembly/interface-types/blob/master/proposals/interface-types/Explainer.md
 [bg-issue]: https://github.com/rust-lang/rust-bindgen/issues/1583
 [ct]: https://rust-lang.github.io/rustc-guide/compiletest.html
+[empty-linkname.rs]: https://github.com/rust-lang/rust/blob/cf7e019b42cd523d91cb350ab49acbda1b11e571/src/test/ui/empty/empty-linkname.rs
+[empty-linkname.stderr]: https://github.com/rust-lang/rust/blob/master/src/test/ui/empty/empty-linkname.stderr
