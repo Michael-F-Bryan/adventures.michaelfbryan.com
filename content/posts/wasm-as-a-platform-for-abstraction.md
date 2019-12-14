@@ -1518,6 +1518,49 @@ I've copied our `example-program.rs` from the last section into the
 functionality from the *Standard Library*.
 {{% /notice %}}
 
+Now that we can successfully compile our test program and load it into memory we
+need to think about how it'll be tested. At this point it's worth taking a peek
+at `rustc`'s test suite to see how similar projects are tested.
+
+When testing the compiler's error message the compiler's test suite will contain
+a `*.rs` file containing code which annotates offending lines (e.g. using a
+comment like `//~ ERROR: ...`) and a `*.stderr` file containing the exact output
+from STDOUT.
+
+A simple example of this is [rust/src/test/ui/empty/empty-linkname.rs](https://github.com/rust-lang/rust/blob/cf7e019b42cd523d91cb350ab49acbda1b11e571/src/test/ui/empty/empty-linkname.rs).
+
+```rust
+#[link(name = "")] //~ ERROR: given with empty name
+extern {
+}
+
+fn main() {}
+```
+
+The contents of
+[empty-linkname.stderr](https://github.com/rust-lang/rust/blob/master/src/test/ui/empty/empty-linkname.stderr)
+looks like this:
+
+```
+error[E0454]: `#[link(name = "")]` given with empty name
+  --> $DIR/empty-linkname.rs:1:1
+   |
+LL | #[link(name = "")]
+   | ^^^^^^^^^^^^^^^^^^ empty name given
+
+error: aborting due to previous error
+
+For more information about this error, try `rustc --explain E0454`.
+```
+
+We can take a fairly similar approach when designing a test suite for the
+runtime. Tests will consist of two files, some source code (written in Rust) and
+a file containing some representation of the expected output.
+
+The main difference between our runtime's tests and `rustc`'s is that we'll need
+to incorporate a time element into the expected output.
+
+
 
 ## Writing Programs in Other Languages
 
