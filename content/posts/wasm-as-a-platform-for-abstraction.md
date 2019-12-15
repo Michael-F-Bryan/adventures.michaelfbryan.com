@@ -2098,6 +2098,18 @@ error: test failed, to rerun pass '--test behaviour_tests'
 
 ## Conclusion
 
+It's been a long road, but now we have a really good foundation for working with
+WASM programs!
+
+There's still a lot of room for improvement, and the host environment still looks
+quite bare, but this implementation does everything I need to unblock other
+parts of my project.
+
+## Useful Links
+
+- [Bringing WebAssembly outside the web with WASM](https://www.youtube.com/watch?v=fh9WXPu0hw8)
+- [The Wasmer Website](https://wasmer.io/)
+
 [plugins]: {{< ref "plugins-in-rust.md" >}}
 [wasmer]: https://github.com/wasmerio/wasmer
 [lucet]: https://github.com/bytecodealliance/lucet
