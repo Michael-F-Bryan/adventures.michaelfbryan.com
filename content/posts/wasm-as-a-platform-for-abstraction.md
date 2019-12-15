@@ -9,7 +9,7 @@ tags:
 
 In a project I've been playing around with recently, we've encountered the
 dilemma where you want to make it easy for users to write their own
-application logic using the system, but at the same time want to keep that logic
+application logic using the system but at the same time want to keep that logic
 decoupled from the implementation details of whatever platform the
 application is running on.
 
@@ -181,8 +181,7 @@ $ cargo run --example basic-runtime -- example_program.wasm
 ```
 
 Well that was... anticlimatic. The `poll()` function in `example-program.rs`
-doesn't actually do anything, so we've essentially created an expensive busy
-loop.
+doesn't actually do anything, so we just created an expensive busy loop.
 
 Let's give the WASM code a way to print messages to the screen.
 
@@ -292,12 +291,13 @@ That's pretty good!
 
 ## Declaring the Rest of the Platform Interface
 
-Okay, so we know how to expose functions to the WASM code so it can interact
+Okay, so we know how to expose functions to the WASM code to let it interact
 with the rest of the environment. Now the next task is look at the problem
-we're trying to solve, and provide functions which will help solve it. While
-this section will be fairly specific to my use case (creating some sort of
-programmable logic controller that people can upload code to), it should be
-fairly easy to adapt to suit your application.
+we're trying to solve, and provide functions which will help solve it.
+
+While this section will be fairly specific to my use case (creating some sort
+of programmable logic controller that people can upload code to), it should
+be fairly easy to adapt to suit your application.
 
 In our system, there are a handful of ways a program can interact with the
 outside world:
@@ -382,11 +382,13 @@ the filename and line number.
 #define LOG(level, message) wasm_log(level, __FILE__, strlen(__FILE__), __LINE__, message, strlen(message))
 ```
 
-Next we'll give users a way to read input and write output. The runtime will
-make sure inputs are copied to a section of memory before calling `poll()` and
-outputs will sit in another section of memory and be synchronised with the real
-world after `poll()` completes. This is somewhat similar to how [Memory-mapped
-IO][mmio] works in embedded systems, or the [Process Image][img] on a PLC.
+Next we'll give users a way to read input and write output.
+
+The runtime will make sure inputs are copied to a section of memory before
+calling `poll()` and outputs will sit in another section of memory and be
+synchronised with the real world after `poll()` completes. This is somewhat
+similar to how [Memory-mapped IO][mmio] works in embedded systems, or the
+[Process Image][img] on a PLC.
 
 It's not uncommon to have batches of 16 digital outputs or read from a 24-bit
 analogue sensor, so let's allow users to read/write in batches instead of one
@@ -813,7 +815,7 @@ It may not necessarily be a good thing to introduce macros which try to
 handle error cases and `unsafe` code automatically.
 
 The best `unsafe` code is boring because another programmer can easily skim
-through the function and check it for correctness, because everything does
+through the function and check it for correctness because everything does
 what it says on the tin. Burying error cases and `unsafe` by using macros or
 helper functions may just make it easy to obfuscate otherwise obvious bugs.
 
@@ -854,8 +856,8 @@ gt
     unsafe {
         try_with_env!(
             ctx,
-            // unfortunately constructing a log and using it needs to be in a
-            // single statement because lifetimes
+            // unfortunately constructing a log record and using it needs to be
+            // in a single statement because lifetimes
             // https://users.rust-lang.org/t/using-format-args-and-log-builder/22695
             log(&Record::builder()
                 .level(level)
@@ -1120,8 +1122,10 @@ $ cargo new --lib --name wasm_std std
      Created library `wasm_std` package
 ```
 
+{{% notice info %}}
 I've also moved `intrinsics.h` (declaring the host interface) to this
 `std` crate because it's a more appropriate place.
+{{% /notice %}}
 
 Before we can throw `intrinsics.h` at `bindgen` we need to create type
 definitions for the various integer types in `stdint.h`. Normally `bindgen`
@@ -1135,14 +1139,16 @@ either. See the [issue on GitHub][bg-issue] if you're interested.
 
 //! Re-exports of C types on a "normal" x86 computer. Normally you'd use
 //! `std::os::raw` or `libc`, but in our case that's not possible.
+//!
+//! Most of these definitions are copied straight from `libc`'s source code.
 
 #![allow(bad_style, dead_code)]
 
-// /src/libc/unix/linux_like/linux/gnu/b64/x86_64/mod.rs
+// src/libc/unix/linux_like/linux/gnu/b64/x86_64/mod.rs
 pub type c_char = i8;
 pub type wchar_t = i32;
 
-// /src/libc/unix/linux_like/linux/gnu/b64/x86_64/not_x32.rs
+// src/libc/unix/linux_like/linux/gnu/b64/x86_64/not_x32.rs
 pub type c_long = i64;
 pub type c_ulong = u64;
 
@@ -1168,6 +1174,9 @@ pub type ssize_t = isize;
 
 We can now generate declarations for `intrinsics.h`. This will
 be analogous to [`std::intrinsics`][std-intrinsics] in Rust's standard library.
+
+After a bit of trial and error, this incantation seemed to generate the output
+we want without trying to add declarations for half of `libc`.
 
 ```console
 $ cp ../intrinsics.h .
@@ -1208,9 +1217,11 @@ While it's still quite small at the moment, as we gain more experience using
 this system we'll be able to move commonly-used elements into the standard
 library to provide a more *batteries included* feel.
 
+{{% notice tip %}}
 Seeing as the end goal is for users to write programs for our controller in
 any language, not just Rust, this may eventually require tools like
 [*Interface Types*][interface-types].
+{{% /notice %}}
 
 Now we have a standard library we can rewrite our previous `example-program.rs`.
 
@@ -1248,9 +1259,9 @@ crate-type = ["cdylib"]
 wasm-std = { path = "../../../../std/" }
 ```
 
-We'll need to create a nice `println!()` macro instead of invoking the
-`wasm_log()` intrinsic directly, but for now here's the equivalent of our
-original program.
+At some point we'll want to create a nice `println!()` macro instead of
+invoking the `wasm_log()` intrinsic directly, but for now here's the
+equivalent of our original program.
 
 ```rust
 // examples/wasm-programs/example-program/src/lib.rs
@@ -1314,6 +1325,7 @@ use core::panic::PanicInfo;
 #[panic_handler]
 pub fn panic_handler(info: &PanicInfo) -> ! {
     core::arch::wasm32::unreachable()
+}
 ```
 
 Now we can successfully compile and run our program.
@@ -1331,7 +1343,7 @@ $ cargo run --example basic-runtime -- examples/wasm-programs/example-program/ta
 ^C
 ```
 
-Oh, we forgot to initialize `env_logger` in the `basic-runtime.rs` example.
+Oh, we forgot to add `env_logger` as a dev-dependency and initialize it in the `basic-runtime.rs` example.
 
 ```diff
 diff --git a/wasm/examples/basic-runtime.rs b/wasm/examples/basic-runtime.rs
@@ -1419,10 +1431,11 @@ output is also less tangible, `rustc`'s error messages are just text written to
 STDERR compared to the array of binary that our runtime uses for outputs.
 
 It's also easy for `rustc`'s test suite to compile a single `*.rs` file and
-inspect the output, it's something you could concievably implement using a bash
-script. On the other hand, our compilation process is non-trivial, and the
-requirement for inspecting changing outputs over time requires us to instrument
-the runtime and insert assertions after every call to `Program::poll()`.
+inspect the output, it's something you could concievably implement using a
+bash script. On the other hand, our compilation process is non-trivial, and
+the requirement for inspecting changing inputs over time requires us to
+instrument the runtime to insert checks for expected behaviour after every
+call to `Program::poll()`.
 
 Based on our previous experimentation, let's write down a simple testing
 procedure:
@@ -1476,7 +1489,7 @@ authors = ["Michael Bryan <michaelfbryan@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-rustmatic-iec-std = { path = "$STD_PATH" }
+wasm-std = { path = "$STD_PATH" }
 
 [lib]
 path = "lib.rs"
@@ -1612,15 +1625,13 @@ pub struct Recipe {
 /// The inputs and expected outputs for a single call to [`Program::poll()`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Pass {
-    #[serde(default = "default_delta_time")]
-    pub delta_time: Duration,
+    #[serde(with = "humantime_serde")]
+    pub elapsed: Duration,
     pub inputs: Vec<u8>,
     pub expected_outputs: Vec<u8>,
     #[serde(default)]
     pub expected_log_messages: Vec<String>,
 }
-
-fn default_delta_time() -> Duration { Duration::from_millis(100) }
 ```
 
 We'll also need constructors which can load a `TestCase` from a `*.rs` and
@@ -1719,7 +1730,7 @@ impl wasm::Environment for TestEnvironment {
         buffer: &[u8],
     ) -> Result<(), WasmError> {
         let dest = self
-            .inputs
+            .outputs
             .get_mut(address..address + buffer.len())
             .ok_or(WasmError::AddressOutOfBounds)?;
         dest.copy_from_slice(buffer);
@@ -1776,11 +1787,11 @@ use anyhow::Error;
 
 impl TestEnvironment {
     pub fn setup(&mut self, pass: &Pass) {
-        assert_ne!(pass.delta_time, Duration::new(0, 0));
-
-        self.elapsed += pass.delta_time;
+        self.elapsed = pass.elapsed;
         self.load_inputs(&pass.inputs);
-        self.outputs = vec![0; pass.expected_outputs.len()];
+        self.outputs.clear();
+        self.outputs
+            .extend(std::iter::repeat(0).take(pass.expected_outputs.len()));
         self.log_messages.clear();
     }
 
@@ -1794,10 +1805,30 @@ impl TestEnvironment {
             anyhow::bail!("{:?} != {:?}", self.outputs, pass.expected_outputs);
         }
 
+        // create a temporary set containing all log messages
+        let mut log_messages: Vec<_> = self
+            .log_messages
+            .iter()
+            .map(|(_, msg)| msg.clone())
+            .collect();
+
         for msg in &pass.expected_log_messages {
-            if !self.log_messages.iter().any(|(_, logged)| logged.contains(msg)) {
-                anyhow::bail!("Expected log message \"{}\"", msg);
+            match log_messages.iter().position(|logged| logged.contains(msg)) {
+                Some(position) => {
+                    // we've found the message, remove it from the list of
+                    // candidates and go to the next one.
+                    log_messages.remove(position);
+                },
+                None => anyhow::bail!(
+                    "Unable to find log message \"{}\" in {:?}",
+                    msg,
+                    self.log_messages
+                ),
             }
+        }
+
+        if !log_messages.is_empty() {
+            anyhow::bail!("Unexpected log messages: {:?}", log_messages);
         }
 
         Ok(())
@@ -1848,16 +1879,222 @@ pub fn run_test_case(
 }
 ```
 
-{{% notice tip %}}
-I've copied our `example-program.rs` from the last section into the
-`tests/data/` directory, but feel free to write your own code which uses
-functionality from the *Standard Library*.
-{{% /notice %}}
+Now the `wasm-test` crate is up and running we can go back to the `wasm` crate's
+integration tests.
+
+I've copied the `example-program.rs` from the last section into the
+`tests/data/` directory and written up a simple `example_program.json` file
+which will make sure it prints `"Polling"`.
+
+```json
+// tests/data/example_program.json
+
+{
+    "passes": [
+        {
+            "elapsed": "50ms",
+            "inputs": [],
+            "expected_outputs": [],
+            "expected_log_messages": [
+                "Polling"
+            ]
+        }
+    ]
+}
+```
+
+To make sure we've wired up the `wasm_write_output()` function correctly,
+there's also a `set_outputs.rs` test program.
+
+```rust
+// tests/data/set_outputs.rs
+
+#![no_std]
+
+use wasm_std::intrinsics::{
+    self, wasm_result_t_WASM_SUCCESS as WASM_SUCCESS,
+};
+
+const ADDRESS: u32 = 1;
+
+#[no_mangle]
+pub extern "C" fn poll() {
+    let payload = [1, 2, 3, 4, 5];
+
+    unsafe {
+        let ret = intrinsics::wasm_write_output(
+            ADDRESS,
+            payload.as_ptr(),
+            payload.len() as _,
+        );
+        assert_eq!(ret, WASM_SUCCESS);
+    }
+}
+```
+
+And its accompanying `*.json` file:
+
+```json
+// tests/data/set_outputs.json
+
+{
+    "passes": [
+        {
+            "elapsed": "50ms",
+            "inputs": [],
+            "expected_outputs": [0, 1, 2, 3, 4, 5, 0]
+        }
+    ]
+}
+```
+
+Now we just need to make sure the test programs get run and behave as expected.
+
+For this we'll create the aptly-named `behaviour_tests.rs` integration test
+under `tests/`.
+
+Thanks to the work we did earlier, loading and running an integration test
+becomes really easy.
+
+```rust
+// tests/behaviour_tests.rs
+
+use anyhow::Context;
+use wasm_test::{TestCase, Compiler};
+
+#[test]
+fn set_outputs() {
+    let _ = env_logger::try_init();
+
+    let src = include_str!("data/set_outputs.rs");
+    let recipe = include_str!("data/set_outputs.json");
+
+    let tc = TestCase::parse(set_outputs, src, recipe)
+        .context("Unable to load the test case").unwrap();
+    let compiler = Compiler::default();
+
+    wasm_test::run_test_case(&compiler, &tc).unwrap();
+}
+```
+
+If we want to make more tests, one way would be to copy the `set_outputs`
+function and replace every instance of `"set_outputs"` with the name of the
+tests.
+
+That sounds kinda annoying.
+
+Normally you would try to extract the testing logic out into another function,
+but that wouldn't let us run each test program as its own test. Luckily, macros
+exist for exactly this sort of thing!
+
+```rust
+// tests/behaviour_tests.rs
+
+use anyhow::Context;
+use wasm_test::{Compiler, TestCase};
+
+macro_rules! wasm_test {
+    ($filename:ident, $( $rest:ident ),*) => {
+        wasm_test!($filename);
+        wasm_test!($($rest),*);
+    };
+    ($filename:ident) => {
+        #[test]
+        fn $filename() {
+            let _ = env_logger::try_init();
+
+            let src = include_str!(concat!("data/", stringify!($filename), ".rs"));
+            let recipe = include_str!(concat!("data/", stringify!($filename), ".json"));
+
+            let tc = TestCase::parse(stringify!($filename), src, recipe)
+                .context("Unable to load the test case").unwrap();
+            let compiler = Compiler::default();
+
+            wasm_test::run_test_case(&compiler, &tc).unwrap();
+        }
+    };
+}
+
+wasm_test!(example_program, set_outputs);
+```
+
+We can check that these tests are actually working by inserting some deliberate
+bugs.
+
+```diff
+diff --git a/tests/data/example_program.json b/tests/data/example_program.json
+index 63d5ade..4df1806 100644
+--- a/tests/data/example_program.json
++++ b/tests/data/example_program.json
+@@ -1,10 +1,12 @@
+ {
+     "passes": [
+         {
+             "elapsed": "50ms",
+             "inputs": [],
+             "expected_outputs": [],
+             "expected_log_messages": [
+-                "Polling"
++                "Polling",
++                "Another log message"
+             ]
+         }
+     ]
+diff --git a/tests/data/set_outputs.rs b/tests/data/set_outputs.rs
+index b65ada6..aedf856 100644
+--- a/tests/data/set_outputs.rs
++++ b/tests/data/set_outputs.rs
+@@ -4,7 +4,7 @@ use wasm_std::intrinsics::{
+     self, wasm_result_t_WASM_SUCCESS as WASM_SUCCESS,
+ };
+
+-const ADDRESS: u32 = 1;
++const ADDRESS: u32 = 0;
+
+ #[no_mangle]
+ pub extern "C" fn poll() {
+```
+
+And if we execute the test suite again, we're shown a couple errors:
+
+```console
+$ cargo test
+Finished test [unoptimized + debuginfo] target(s) in 0.24s
+
+     Running /home/michael/Documents/wasm/target/debug/deps/behaviour_tests-321146c56a045437
+
+running 2 tests
+   Compiling set_outputs v0.1.0 (/tmp/.tmpYX6WZH)
+    Finished dev [unoptimized + debuginfo] target(s) in 0.24s
+   Compiling example_program v0.1.0 (/tmp/.tmpk3eAvE)
+    Finished dev [unoptimized + debuginfo] target(s) in 0.77s
+test example_program ... FAILED
+test set_outputs ... FAILED
+
+failures:
+
+---- example_program stdout ----
+thread 'example_program' panicked at 'called `Result::unwrap()` on an `Err` value: Output comparison failed
+
+Caused by:
+    Unable to find log message "Another log message" in [(Info, "Polling")]', src/libcore/result.rs:1189:5
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace.
+
+---- set_outputs stdout ----
+thread 'set_outputs' panicked at 'called `Result::unwrap()` on an `Err` value: Output comparison failed
+
+Caused by:
+    [1, 2, 3, 4, 5, 0, 0] != [0, 1, 2, 3, 4, 5, 0]', src/libcore/result.rs:1189:5
 
 
+failures:
+    example_program
+    set_outputs
 
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out
 
-## Writing Programs in Other Languages
+error: test failed, to rerun pass '--test behaviour_tests'
+```
 
 ## Conclusion
 
