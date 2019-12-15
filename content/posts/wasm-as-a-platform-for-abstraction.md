@@ -1,7 +1,6 @@
 ---
 title: "WASM as a Platform for Abstraction"
-date: "2019-12-07T17:25:07+08:00"
-draft: true
+date: "2019-12-15T11:55:00+08:00"
 tags:
 - rust
 - wasm
