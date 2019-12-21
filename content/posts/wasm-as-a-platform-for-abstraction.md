@@ -1,5 +1,5 @@
 ---
-title: "WASM as a Platform for Abstraction"
+title: "WebAssembly as a Platform for Abstraction"
 date: "2019-12-15T11:55:00+08:00"
 tags:
 - rust
@@ -42,7 +42,7 @@ to write code in any language and run it in the browser, but it can be used for
 so much more.
 
 There are already [several][wasmer] [general-purpose][lucet]
-[runtimes][wasmtime] available for running WASM in a Rust program. These
+[runtimes][wasmtime] available for running Wasm in a Rust program. These
 runtimes give you a virtual machine which can run arbitrary code, and the
 only way this code can interact with the outside world is via the functions you
 explicitly give it access to.
@@ -87,7 +87,7 @@ the `Cargo.toml` file. You can get this nifty little subcommand from the
 [ce]: https://crates.io/crates/cargo-edit
 {{% /notice %}}
 
-Let's start off by creating a wrapper around an instantiated WASM module.
+Let's start off by creating a wrapper around an instantiated Wasm module.
 
 ```rust
 // src/lib.rs
@@ -113,7 +113,7 @@ We just want to get things running, so for now we won't bother exposing any
 host functions to the user-provided program. Hence the empty `imports!()` call.
 
 Motion control systems typically work by rapidly polling each task in turn,
-so let's give `Program` a `poll()` method which will call the WASM module's
+so let's give `Program` a `poll()` method which will call the Wasm module's
 `poll()` function.
 
 
@@ -157,7 +157,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 ```
 
-We'll also need a dummy program that can be compiled to WASM and fed to our
+We'll also need a dummy program that can be compiled to Wasm and fed to our
 `basic-runtime` example.
 
 ```rust
@@ -167,7 +167,7 @@ We'll also need a dummy program that can be compiled to WASM and fed to our
 pub extern "C" fn poll() {}
 ```
 
-Now we should be able to compile the `example-program.rs` to WASM and run it.
+Now we should be able to compile the `example-program.rs` to Wasm and run it.
 
 ```console
 $ rustc example-program.rs --target wasm32-unknown-unknown --crate-type cdylib
@@ -182,17 +182,17 @@ $ cargo run --example basic-runtime -- example_program.wasm
 Well that was... anticlimatic. The `poll()` function in `example-program.rs`
 doesn't actually do anything, so we just created an expensive busy loop.
 
-Let's give the WASM code a way to print messages to the screen.
+Let's give the Wasm code a way to print messages to the screen.
 
 The way this is done is via that `imports!()` macro from earlier, basically
-any function defined inside `imports!()` is accessible to the WASM code.
+any function defined inside `imports!()` is accessible to the Wasm code.
 `wasmer` imposes some strict constraints on the functions which may be exposed
-to WASM, restricting arguments and return values to `i32`, `i64`, `f32`, `f64`,
+to Wasm, restricting arguments and return values to `i32`, `i64`, `f32`, `f64`,
 and pointers.
 
 Functions may optionally accept a `&mut wasmer_runtime::Ctx` as the first
 argument, this is useful for interacting with the runtime (e.g. to access
-WASM memory or call a function) or accessing contextual information attached
+Wasm memory or call a function) or accessing contextual information attached
 to the `Instance`.
 
 The code itself is rather straightforward:
@@ -290,7 +290,7 @@ That's pretty good!
 
 ## Declaring the Rest of the Platform Interface
 
-Okay, so we know how to expose functions to the WASM code to let it interact
+Okay, so we know how to expose functions to the Wasm code to let it interact
 with the rest of the environment. Now the next task is look at the problem
 we're trying to solve, and provide functions which will help solve it.
 
@@ -458,7 +458,7 @@ definition of the functionality exposed by the runtime.
 
 ## Dependency Injection
 
-We now have a fairly solid interface that can be used by WASM code, but it'd
+We now have a fairly solid interface that can be used by Wasm code, but it'd
 be really nice if we didn't hard-code the implementation for each function.
 Luckily the `Ctx` passed to our functions by wasmer allows you to attach a
 pointer to arbitrary data (`*mut c_void`) via [`Ctx::data`][ctx-data].
@@ -645,7 +645,7 @@ First up, let's implement `wasm_current_time()`. The general strategy is:
 1. Get a pointer to our `State`
 2. Call the corresponding method on the `&mut dyn Environment`
 3. Error out if something went wrong
-4. Copy the result into WASM memory
+4. Copy the result into Wasm memory
 
 ```rust
 // src/lib.rs
@@ -1239,7 +1239,7 @@ $ cargo add ../../../std
       Adding wasm-std (unknown version) to dependencies
 ```
 
-Because this crate is being compiled to WASM we'll need to make sure it is
+Because this crate is being compiled to Wasm we'll need to make sure it is
 compiled using the `cdylib` crate type.
 
 ```toml
@@ -1310,9 +1310,9 @@ To learn more, run the command again with --verbose.
 Oops! Looks like using `assert_eq!()` requires code for handling panics.
 
 To make sure normal users don't need to define a `#[panic_handler]` for every
-program, we'll implement it in our standard library. We can just use WASM's
+program, we'll implement it in our standard library. We can just use Wasm's
 `unreachable` command for now. This will trigger the corresponding "trap" on the
-WASM virtual machine and immediately stop execution.
+Wasm virtual machine and immediately stop execution.
 
 ```rust
 // std/src/sys.rs
@@ -1447,7 +1447,7 @@ procedure:
 5. Compile it
 6. Find the `*.wasm` file under
    `/tmp.123/target/wasm32-unknown-unknown/debug/` and read it into memory
-7. Use `Program::load()` to instantiate that WASM module
+7. Use `Program::load()` to instantiate that Wasm module
 8. Continually `poll()` the program setting up inputs according to some
    pre-defined *Recipe* and make sure outputs change as expected
 
@@ -1544,7 +1544,7 @@ fn compile_to_wasm(
 
     anyhow::ensure!(output.success(), "Compilation failed");
 
-    // look for the WASM file using a hard-coded path
+    // look for the Wasm file using a hard-coded path
     let blob = target_dir
         .join("wasm32-unknown-unknown")
         .join("debug")
@@ -1569,7 +1569,7 @@ pub struct Compiler {
 }
 ```
 
-From here, instantiating a WASM program can be implemented as a method on
+From here, instantiating a Wasm program can be implemented as a method on
 `Compiler` which just calls `compile_to_wasm()` and `Program::load()`.
 
 ```rust
@@ -1588,7 +1588,7 @@ impl Compiler {
         .unwrap();
 
         Program::load(&wasm)
-            .map_err(|e| anyhow::format_err!("WASM loading failed: {}", e))
+            .map_err(|e| anyhow::format_err!("Wasm loading failed: {}", e))
     }
 }
 ```
@@ -1835,8 +1835,8 @@ impl TestEnvironment {
 }
 ```
 
-Our `wasm-test` crate can now compile a Rust program to WASM and link it to our
-standard library, instantiate the WASM module, load a pre-defined test recipe,
+Our `wasm-test` crate can now compile a Rust program to Wasm and link it to our
+standard library, instantiate the Wasm module, load a pre-defined test recipe,
 and create a test `Environment`.
 
 Now we just need a way to execute a particular test case and the `wasm-test`
@@ -1861,7 +1861,7 @@ pub fn run_test_case(
 ) -> Result<(), Error> {
     let mut wasm = compiler
         .instantiate(&test_case.name, &test_case.src)
-        .context("Unable to load the WASM module")?;
+        .context("Unable to load the Wasm module")?;
     let mut env = TestEnvironment::default();
 
     for pass in &test_case.recipe.passes {
@@ -2098,7 +2098,7 @@ error: test failed, to rerun pass '--test behaviour_tests'
 ## Conclusion
 
 It's been a long road, but now we have a really good foundation for working with
-WASM programs!
+Wasm programs!
 
 There's still a lot of room for improvement, and the host environment still looks
 quite bare, but this implementation does everything I need to unblock other
