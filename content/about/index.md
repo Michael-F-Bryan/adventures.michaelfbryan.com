@@ -3,7 +3,7 @@ title: "About Me"
 ---
 
 I am a self-taught programmer and avid contributor to the open-source
-community. I originally started out studying Mechanical Engineering but after
+community. I originally started out studying Mechanical Engineering, but after
 3 years of a 4 year degree found it wasn't for me and took advantage of a
 Software Engineering job offer (gained thanks to my work in the software
 community and involvement in the [Curtin Motorsport Team][cmt]) to change
