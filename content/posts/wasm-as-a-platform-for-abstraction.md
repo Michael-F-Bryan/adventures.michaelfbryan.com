@@ -2106,7 +2106,7 @@ parts of my project.
 
 ## Useful Links
 
-- [Bringing WebAssembly outside the web with WASM](https://www.youtube.com/watch?v=fh9WXPu0hw8)
+- [Bringing WebAssembly outside the web with WASI](https://www.youtube.com/watch?v=fh9WXPu0hw8)
 - [The Wasmer Website](https://wasmer.io/)
 
 [plugins]: {{< ref "plugins-in-rust.md" >}}
