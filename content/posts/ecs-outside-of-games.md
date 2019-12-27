@@ -1,5 +1,5 @@
 ---
-title: "A Thought Experiment: Using an ECS Outside of Game Engines"
+title: "A Thought Experiment: Using the ECS Pattern Outside of Game Engines"
 date: "2019-12-28T00:00:00+08:00"
 tags:
 - rust
@@ -9,12 +9,11 @@ tags:
 
 It's been about 6 months since I watched Catherine West's excellent [Using
 Rust for Game Development][youtube] sent me down the *Entity-Component-System*
-(ECS) rabbit hole , and I thought I'd share some of my findings.
+(ECS) rabbit hole, and I thought I'd share some of my findings.
 
 I've been meaning to write about this for quite a while now but it took a
 while to put my thoughts into a cohesive article without throwing massive
 walls of code at you.
-
 
 {{% notice note %}}
 This article is mainly focused around the high-level decisions you make when
@@ -28,7 +27,6 @@ If you found this useful or spotted a bug, let me know on the blog's
 [repo]: https://github.com/Michael-F-Bryan/arcs
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
 {{% /notice %}}
-
 
 ## What Is An Entity-Component-System?
 
@@ -687,7 +685,7 @@ pub fn register_background_tasks<'a, 'b>(
 
 As far as I can tell, using an ECS for managing the data in a CAD library
 seems to work pretty well. I'm thinking of building an online editor for
-Ladder Logic programs (`specs` can be compiled to WebAssembly without a
+[Ladder Logic][ll] programs (`specs` can be compiled to WebAssembly without a
 problem), so I'll hopefully make another article later on telling you how
 things go.
 
@@ -723,3 +721,4 @@ See Also:
 [iec-attempt-1]: https://github.com/Michael-F-Bryan/iec
 [wasm-as-abstraction]: {{< ref "/posts/wasm-as-a-platform-for-abstraction.md" >}}
 [ccc]: https://en.wikipedia.org/wiki/Cross-cutting_concern
+[ll]: https://en.wikipedia.org/wiki/Ladder_logic
