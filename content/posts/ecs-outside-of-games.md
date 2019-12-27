@@ -1,7 +1,6 @@
 ---
 title: "A Thought Experiment: Using an ECS Outside of Game Engines"
-date: "2019-12-23T23:25:03+08:00"
-draft: true
+date: "2019-12-28T00:00:00+08:00"
 tags:
 - rust
 - ecs
