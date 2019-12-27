@@ -16,10 +16,20 @@ I've been meaning to write about this for quite a while now but it took a
 while to put my thoughts into a cohesive article without throwing massive
 walls of code at you.
 
+
+{{% notice note %}}
 This article is mainly focused around the high-level decisions you make when
-designing a project, so there won't be as much code as normal. As in, instead
-of [implementing an entire library][const-arrayvec] we may only write a third
-of one :sweat_smile:
+designing a project, so there won't be as much code as normal. That said, all
+code written in this article is available [on GitHub][repo]. Feel free to
+browse through and steal code or inspiration.
+
+If you found this useful or spotted a bug, let me know on the blog's
+[issue tracker][issue]!
+
+[repo]: https://github.com/Michael-F-Bryan/arcs
+[issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
+{{% /notice %}}
+
 
 ## What Is An Entity-Component-System?
 
@@ -49,6 +59,10 @@ gives a fairly decent summary of the topic:
 There are several high-quality ECS implementations, but [specs][specs] crate
 is widely accepted as one of the best ECS libraries in Rust.
 
+For me an ECS is an architectural pattern for data-heavy applications which
+enforces a clear distinction between behaviour and data, and embodies the
+*Composition over Inheritance* way of doing things.
+
 ## Inheritance isn't Always the Best Tool for the Job
 
 The inspiration for trying the ECS architecture outside of games comes from
@@ -56,11 +70,11 @@ one of my work projects.
 
 Without going into too much detail, the CAD/CAM program we've written at work
 is built on top of a 3rd party CAD engine. This CAD engine is a native library
-which exposes a heavily object-oriented interface, but there are a quite a few
+which exposes a heavily object-oriented interface, and there are a quite a few
 places where the inadequacies of structuring everything around inheritance show
 through.
 
-CAD libraries are composed of many cross-cutting concerns, you have:
+CAD libraries are composed of many [cross-cutting concerns][ccc], you have:
 
 - Graphical entities (e.g. `Point`, `Line`, `Spline`) which are rendered to the
   screen
@@ -70,7 +84,7 @@ CAD libraries are composed of many cross-cutting concerns, you have:
   `hidden` (made invisible)
 - Entities (both graphical and non-graphical) can be given a `name` so users
   associate them with a concept (e.g. you may put all dimension lines on the
-  `"dimensions"` layer), allowing easy lookup and letting theGUI differentiate
+  `"dimensions"` layer), allowing easy lookup and letting the UI differentiate
   between different entities of the same type
 - Different graphical entities need different information for how to be rendered
   (e.g. a `Line` might just have a `stroke_colour`, while a `Circle` may also
@@ -181,19 +195,23 @@ will a little extra bloat do?
 You can see where this is going. For every new property we could try to reuse
 code by introducing intermediate classes, but it won't be long before we
 code ourselves into a corner. Unfortunately, the real world doesn't fit into a
-tidy inheritance hierarchy. It's not long before your class hierarchy is ten
-levels deep, bloated with loads of unnecessary data and methods, and there are
-so many levels of "abstraction" it's hard to figure out what's going on.
+tidy inheritance hierarchy.
+
+It's not long before your class hierarchy is ten levels deep, bloated with
+loads of unnecessary data and methods, and there are so many levels of
+"abstraction" it's hard to figure out what's actually going on.
 
 Another problem is you'll frequently fall into the [Refused Bequest
-anti-pattern][rb], where a parent class exposes a method that doesn't
+anti-pattern][rb]. This is where a parent class exposes a method that doesn't
 actually make sense for some child classes so the child class overrides it to
 always throw a `throw new InvalidOperationException()`. Everything still
 compiles, but now every time you invoke the method on the parent class
 there'll be a niggling feeling in the back of your head that things may blow
 up at runtime.
 
-That's not a fun feeling.
+That's not a fun feeling. Especially when you're letting your project manager
+demo the application and he starts experimenting with combinations of operations
+you never anticipated or tested for... Don't ask me how I know this 😑
 
 As an aside, have you ever heard of the
 [Circle-Ellipse Problem][circle-ellipse]?
@@ -208,6 +226,13 @@ As an aside, have you ever heard of the
 > happens to represent a circle, we cannot ask it for its radius, because
 > `Ellipse` has no `radius()` method.
 
+Most object-oriented languages are designed so that an object's underlying type
+will be the same for its entire lifetime. This makes things interesting when
+users want to scale a `Circle` without maintaining aspect ratio. It means you
+can't just give the `GraphicalEntity` a `scale()` method which mutates the
+object in-place, you need to change the entire API so a `Circle` can return an
+`Ellipse` when the `x` and `y` scale factors aren't the same.
+
 If you've been programming for a while you will have probably come across the
 mantra, *"Composition over Inheritance"*. It's exactly these sorts of design
 problems composition is attempting to solve, and ECS is just one way to
@@ -220,9 +245,9 @@ I'm a big fan of the [`specs`][specs] crate, so that's what I used when trying
 to implement an ECS-based CAD library.
 
 I'm also really boring when it comes to naming things, so the project is
-simply called [*A Rust CAD System][arcs], or `arcs` for short. This is also a
+simply called [*A Rust CAD System*][arcs], or `arcs` for short. This is also a
 nice pun on the fact that one of the basic drawing primitives of any CAD library
-is the *Arc*.
+is the *Arc* 😁
 
 All graphical entities have a `DrawingObject` component which contains the data
 which is needed while rendering.
@@ -264,17 +289,19 @@ You'll see why change notifications are useful later on.
 
 ## Rendering
 
-I'm using the [`piet`][piet] crate as an abstraction over a drawing canvas.
+I'm using the [`piet` crate ][piet] as an abstraction over a drawing canvas.
 This is awesome because not only has all the hard work been implemented,
 including tricky things like fonts and gradients, but there are also backends
 for all the major platforms. Including the browser. This means we can create a
 an online demo later on by compiling to WebAssembly, which is a massive boon
-when trying to show other people your work.
+when trying to show other people your work... It's also just a well-written
+library and does exactly what I need.
 
-The `piet-web` backend introduces a minor complication because its
-`RenderContext` borrows JavaScript objects, though. That means every time we
-need to render we'll have to create a temporary `System` which holds a reference
-to a particular piet backend.
+The `piet-web` backend introduces a minor complication (in the form of mental
+overhead) because its `RenderContext` borrows JavaScript objects. That means
+every time we need to render we'll have to create a temporary `System` which
+holds a reference to a particular piet backend, instead of implementing
+`System` on the `Renderer` directly.
 
 ```rust
 // arcs/render/renderer.rs
@@ -333,9 +360,10 @@ struct RenderSystem<'renderer, B> {
 }
 ```
 
-Going through the full rendering system is out of scope for this article, but
-I'll walk you through how we use specs `Component`s to nicely manage things like
-the different styling information attached to the various graphical entities.
+Going through the entire rendering system is out of scope for this article,
+but I'll walk you through how we use specs `Component`s to nicely manage
+things like the different styling information attached to the various
+graphical entities.
 
 The `RenderSystem`'s `System` impl is surprisingly simple. We break the task
 up into calculating the draw order (the user can specify that certain objects
@@ -695,3 +723,4 @@ See Also:
 [aabb]: https://stackoverflow.com/questions/22512319/what-is-aabb-collision-detection
 [iec-attempt-1]: https://github.com/Michael-F-Bryan/iec
 [wasm-as-abstraction]: {{< ref "/posts/wasm-as-a-platform-for-abstraction.md" >}}
+[ccc]: https://en.wikipedia.org/wiki/Cross-cutting_concern
