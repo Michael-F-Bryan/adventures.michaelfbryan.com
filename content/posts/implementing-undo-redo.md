@@ -108,5 +108,103 @@ Undo/Redo mechanism and the basic environment they're used in.
 - Pressing *Redo* will do over the most recently undone operations
 - You can't *Redo* more operations than you've undone
 - (depending on the implementation) you can only *Undo* a finite number of times
+- If you've pressed *Undo* a couple times, executing an operation will change
+  the *Document* and forget any previously undone operations (meaning you can't
+  hit *Redo* to get back to before you started pressing *Undo*)
+
+## Taking Snapshots
+
+By far the easiest way to implement an Undo/Redo mechanism is by taking a
+snapshot of the *Document* after every operation and store them in a list.
+
+The implementation then looks something like this:
+
+```rust
+pub struct Document {
+    // pretend this contains lots of important business data
+}
+
+pub struct UndoRedoBuffer {
+    /// Snapshots of the last `n` document versions.
+    snapshots: Vec<Document>,
+    /// The index of the "current" snapshot to allow *Redo*-ing an operation,
+    /// where earlier snapshots will have a lower `cursor` value.
+    cursor: usize,
+}
+
+impl UndoRedoBuffer {
+    pub fn execute<F>(&mut self, mut document: Document, operation: F) -> Document
+        where F: FnOnce(&mut Document)
+    {
+        // remove all previously undone operations
+        let _ = self.snapshots.drain(self.cursor..);
+        // then quickly add a snapshot to the buffer
+        self.snapshots.push(document.clone());
+        // and update the document accordingly
+        operation(&mut document);
+
+        document
+    }
+
+    pub fn undo(&mut self) -> Option<Document> {
+        if self.cursor == 0 {
+            return None;
+        }
+
+        self.cursor -= 1;
+        self.snapshots.get(self.cursor).cloned()
+    }
+
+    pub fn redo(&mut self) -> Option<Document> {
+        if self.cursor == self.snapshots.len() {
+            return None;
+        }
+
+        self.cursor += 1;
+        self.snapshots.get(self.cursor).cloned()
+    }
+}
+```
+
+{{% notice note %}}
+I haven't run this code, so I'm not sure if the ordering of operations is 100%
+correct, or even that it compiles, but hopefully you'll get the gist...
+{{% /notice %}}
+
+This can be written in a variety of ways based on your language's preferred
+programming paradigm, but the basic idea is the same. **Every time something
+happens make a copy of the world so we can revert back later**.
+
+This approach has one massive benefit. It's really easy to implement.
+
+If you just need to get *something* up and running for a prototype, or need to
+retrofit an Undo/Redo mechanism to an existing application that doesn't have one
+(my sincerest condolences) then this is the approach I'd recommend.
+
+That said, there are a couple drawbacks...
+
+For starters, this isn't an overly *"elegant"* approach. If we're a text
+editor and the user adds one line to a 1000-line document, we'll need to
+store the original 1000 lines plus 1001 lines for the latest snapshot. That's
+1000 lines of duplicated content, and keeping redundant copies of data feels
+unnecessary. As software engineers we take pride in our work, and inelegant
+solutions have a way of getting under your skin.
+
+However, the more serious issue is to do with *Memory Usage*. Taking snapshots
+of the entire document means it'll consume a *lot* of memory. The central
+*document* your application is editing tends to take up a non-trivial amount of
+memory on it's own, so snapshotting the entire document when only part has
+changed tends to chew up a lot of memory.
+
+Imagine a contrived example where the user opens a 100 line document then
+adds another 100 lines to the end of a document, one line at a time. The
+application's memory usage would look something like this:
+
+{{< latex >}}
+    memory\_usage_0 = 100 * line\_cost \\
+    memory\_usage_{N+1} = memory\_usage_N + (memory\_usage_N + line\_cost) \\
+    \therefore memory\_usage(n) \propto O \large( n^2 \large) \\
+    where ~ n: \text{Depth of Undo/Redo buffer}
+{{< /latex >}}
 
 [vim-change-case]: https://vim.fandom.com/wiki/Switching_case_of_characters
