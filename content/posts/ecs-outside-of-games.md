@@ -707,6 +707,19 @@ See Also:
   if you're interested in this sort of thing. Which, considering you read all
   down to here, I assume you are 😜
 - [ECS design outside gaming systems?](https://www.reddit.com/r/rust/comments/9dw26w/ecs_design_outside_gaming_systems/?utm_source=share&utm_medium=web2x)
+- [`redox-os/orbtk`](https://github.com/redox-os/orbtk) - an ECS-based GUI
+  toolkit developed by the people behind the `redox` OS
+- [`redox-os/dces`](https://gitlab.redox-os.org/redox-os/dces-rust) - a
+  library that provides a variant of the Entity Component System
+- [ECS Back and Forth](https://skypjack.github.io/2019-02-14-ecs-baf-part-1/) -
+  a blog series exploring the ECS pattern
+- [`dakom/wasm-app-boilerplate`](https://github.com/dakom/wasm-app-boilerplate) -
+  a scaffold repository for creating high-performance web apps built using the
+  ECS pattern
+- [`dakom/todo-shipyard-lit`](https://github.com/dakom/todo-shipyard-lit) - a
+  basic to-do web app build using the `shipyard` ECS
+- [`almindor/texel`](https://github.com/almindor/texel) - an ASCII Art and
+  landscape editor built using the `specs` crate
 
 [youtube]: https://www.youtube.com/watch?v=aKLntZcp27M
 [wiki]: https://en.wikipedia.org/wiki/Entity_component_system#Characteristics
