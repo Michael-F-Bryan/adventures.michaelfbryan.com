@@ -5,7 +5,7 @@
         {{ if .IsNamedParams }}
         {{.Get "default" | default $expandMessage}}
         {{else}}
-        {{.Get 0 | default $expandMessage}}
+        {{.Get 0 | default $expandMessage | markdownify}}
         {{end}}
     </summary>
 
