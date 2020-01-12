@@ -3,7 +3,7 @@ div.notices {
     position: relative;
 }
 
-div.notices > * {
+div.notices>* {
     padding: 15px;
     display: block;
     margin-top: 0rem;
@@ -11,7 +11,7 @@ div.notices > * {
     color: #666;
 }
 
-div.notices > ul {
+div.notices>ul {
     padding-left: 40px;
 }
 
@@ -20,6 +20,7 @@ div.notices pre {
 }
 
 /* The notice "header" */
+
 div.notices p:first-child:before {
     position: absolute;
     top: 2px;
@@ -31,6 +32,7 @@ div.notices p:first-child:before {
 }
 
 /* Style the header text */
+
 div.notices p:first-child:after {
     position: absolute;
     top: 2px;
@@ -43,12 +45,15 @@ div.notices p:first-child:after {
 div.notices.info p:first-child:after {
     content: 'Info';
 }
+
 div.notices.warning p:first-child:after {
     content: 'Warning';
 }
+
 div.notices.note p:first-child:after {
     content: 'Note';
 }
+
 div.notices.tip p:first-child:after {
     content: 'Tip';
 }
@@ -58,12 +63,15 @@ div.notices.tip p:first-child:after {
 div.notices.warning p:first-child {
     border-top: 30px solid #d9534fcc;
 }
+
 div.notices.note p:first-child {
     border-top: 30px solid #6ab0de;
 }
+
 div.notices.tip p:first-child {
     border-top: 30px solid #5cb85ccc;
 }
+
 div.notices.info p:first-child {
     border-top: 30px solid #F0B37E;
 }
@@ -73,12 +81,15 @@ div.notices.info p:first-child {
 div.notices.warning {
     background: #FAE2E2;
 }
+
 div.notices.note {
     background: #E7F2FA;
 }
+
 div.notices.tip {
     background: #E6F9E6;
 }
+
 div.notices.info {
     background: #FFF2DB;
 }
@@ -105,4 +116,16 @@ div.notices.info {
 
 figure {
     text-align: center;
+}
+
+/* make quote attributions pretty */
+
+blockquote cite:before {
+    content: "\2014";
+    margin-right: 1em;
+}
+
+blockquote cite {
+    display: block;
+    text-align: right;
 }

@@ -295,7 +295,7 @@ impl UndoRedoBuffer {
 }
 ```
 
-{{% expand "A ~~Rant~~ Note on Performance and Optimisation" %}}
+{{% expand "A ~~Rant~~ Note on Performance, Optimisation, and Virtual Dispatch" %}}
 {{% notice info %}}
 You may have noticed that we're using boxed trait objects (dynamic dispatch)
 here instead of static dispatch, and it's common knowledge that dynamic
@@ -351,19 +351,99 @@ a handful of integers, namely the start and end indices for the selection, and
 an offset to indicate where the text moves to.
 
 When `Command`s only take up dozens of bytes, this approach becomes so cheap
-that allowing "infinite" undos becomes not only feasible, it just makes sense.
+that allowing "infinite" undos becomes not only feasible, it just makes
+sense. It also allows you to get better memory usage than the "theoretical"
+minimum of the sum of additions and removals because we're lazily
+reconstructing the change every time instead of storing a copy of it.
 
-However, like most engineering decisions switching from *Snapshots* to the
-*Command Pattern* comes with its own trade-offs. In this case we trade
+... However, like most engineering decisions switching from *Snapshots* to
+the *Command Pattern* comes with its own trade-offs. In this case we trade
 developer time for runtime performance.
 
 You see, every `Command` needs to have an `undo()` function. And because this
 algorithm's correctness depends upon being able to `do()` an action then
-`undo()` it to get back to where we started, you end up needing to write as
-many tests for a `Command`'s `undo()` as you do for its `do()`.
+`undo()` it to get back to *exactly* where we started, you end up needing to
+write as many tests for a `Command`'s `undo()` as you do for its `do()`.
 
 It may not sound like a big deal, but when you have 20 or 30 different
-`Command`s this starts to get pretty repetitive.
+`Command`s this starts to get pretty repetitive. It also makes it easy to be
+lazy and "accidentally" forget to write tests for `undo()` operation 🙄
+
+Another problem is that it's often *impossible* to reverse an operation by
+playing it backwards. For example, in a raster image editor like PhotoShop
+applying a *Blur* to an area of the canvas will throw away information about
+the pixels.
+
+For these sorts of "lossy" commands the only feasible way to implement `do()`
+and `undo()` is by taking a snapshot of the target area before and after a
+change and blindly copying the changed data across.
+
+## A Hybrid of Taking Snapshots and The Command Pattern
+
+Okay, so by now we've seen two separate algorithms for implementing an Undo/Redo
+mechanisms, both with their own strengths and tradeoffs.
+
+It'd be nice if there was a way to get the ease of development associated
+with taking snapshots, while also maintaining the memory usage
+characteristics of *The Command Pattern*.
+
+> We can solve any problem by introducing an extra level of
+> indirection (... except for the problem of too many levels of indirection)
+>
+> <cite>[David Wheeler][indirection]</cite>
+
+If you squint and tilt your head a bit, version control systems like `git`
+are actually quite similar to our Undo/Redo mechanism. You have the current
+state of the world, and a mechanism for applying and reverting changes to see
+the state of the world at a different point in time.
+
+This realisation presents a third Undo/Redo algorithm, we can execute a bunch of
+changes and add *"diffs"* to the `UndoRedoBuffer`.
+
+However, instead of making a copy of the world before and after a set of
+changes have occurred like `git` would (expensive!), we can go one better and
+record the changes as they are executed.
+
+Phrased as a Rust trait, our `Command`s would look like:
+
+```rust
+// arcs/src/commands/mod.rs
+
+pub trait Command {
+    fn execute<W: World>(&self, world: &mut W);
+}
+```
+
+The `World` trait is used to represent anything that looks like the world, as
+far as our `Command` is concerned.
+
+We'll be build on the [`arcs`][arcs] crate started in [Using the ECS Pattern
+Outside of Game Engines][ecs] so we mean `World` in [the ECS
+sense][specs::World] (i.e. a container with one or more `Entities` that can
+have associated data in the form of `Component`s).
+
+```rust
+// arcs/src/commands/mod.rs
+
+pub trait World {
+    type EntityBuilder: Builder;
+
+    fn create_entity(&mut self) -> Self::EntityBuilder;
+    fn delete_entity(&mut self, entity: Entity);
+    fn set_component<C: Component + Clone>(&mut self, entity: Entity, component: C);
+    fn get_component<C: Component>(&self, entity: Entity) -> Option<&C>;
+    fn delete_component<C: Component + Clone>(&mut self, entity: Entity);
+}
+```
+
+This can be trivially implemented for the `specs::World` type to let us execute
+`Command`s directly against a world (e.g. for setting up tests).
+
+The magic comes when we create a `ChangeRecorder`...
 
 [vim-change-case]: https://vim.fandom.com/wiki/Switching_case_of_characters
 [cmd]: https://sourcemaking.com/design_patterns/command
+[indirection]: https://en.wikipedia.org/wiki/Fundamental_theorem_of_software_engineering
+[ecs]: {{< ref "/posts/ecs-outside-of-games.md" >}}
+[arcs]: https://github.com/Michael-F-Bryan/arcs
+[specs::World]: https://docs.rs/specs/0.15.1/specs/struct.World.html
