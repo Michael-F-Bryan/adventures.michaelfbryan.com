@@ -206,6 +206,12 @@ source code. At this stage we just want to make sure everything works.
 
 The `cxx` library takes a slightly different approach to `bindgen`
 
+## Initial Bindings
+
+## A Peek Under The Hood...
+
+## Conclusions
+
 [announcement]: https://www.reddit.com/r/rust/comments/elvfyn/ffi_like_its_2020_announcing_safe_ffi_for_rust_c/
 [dtolnay]: https://github.com/dtolnay/
 [bg]: https://github.com/rust-lang/bindgen
