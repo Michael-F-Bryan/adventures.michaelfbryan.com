@@ -202,6 +202,10 @@ I cheated and found that `"1.0.8, 13-Jul-2019"` by looking through `bzip2`'s
 source code. At this stage we just want to make sure everything works.
 {{% /notice %}}
 
+## Declaring the Foreign Function Interface
+
+The `cxx` library takes a slightly different approach to `bindgen`
+
 [announcement]: https://www.reddit.com/r/rust/comments/elvfyn/ffi_like_its_2020_announcing_safe_ffi_for_rust_c/
 [dtolnay]: https://github.com/dtolnay/
 [bg]: https://github.com/rust-lang/bindgen
