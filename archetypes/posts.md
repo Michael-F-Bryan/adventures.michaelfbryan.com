@@ -13,4 +13,4 @@ If you found this useful or spotted a bug, let me know on the blog's
 
 [repo]: https://github.com/Michael-F-Bryan/💩🔥🦀
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
-{{% /notice %}
+{{% /notice %}}
