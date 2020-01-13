@@ -16,7 +16,7 @@ As a general rule, our frontend will have two communication regimes:
    the frontend will send a batch of messages to the backend and interpret the
    response
 2. The frontend will continually poll the backend's state in the background
-   (e.g. at 10Hz) 
+   (e.g. at 10Hz)
 
 As it is, the `Browser` in our WASM code already provides a method for
 sending data to the frontend ([`Browser::send_data()`][send-data]) and
@@ -28,7 +28,7 @@ As far as the frontend is concerned, when a user clicks a button we should:
 1. Construct a message to send to the backend
 2. fire off an `async` function to queue that message
 3. on the next `animate()` tick, the message will be encoded to bytes and we'll
-   start sending those bytes to the backend (max of about 256 bytes/tick) using 
+   start sending those bytes to the backend (max of about 256 bytes/tick) using
    `App::on_data_received()`
 4. After processing the message, the backend will invoke `Browser::send_data()`
    to notify us of a response
@@ -184,7 +184,7 @@ export default class CommsBus {
 ```
 
 Handling a message requires us to pop the next `Pending` request from front of
-the `pending` queue and parse the `Packet` into its corresponding `Response`. 
+the `pending` queue and parse the `Packet` into its corresponding `Response`.
 Depending on whether this parse succeeds we can either `resolve()` or `reject()`
 the pending request.
 
@@ -212,7 +212,7 @@ export default class CommsBus {
 ```
 
 Thanks to the `Packet`'s `id` field, and the fact that the only responses we can
-handle are empty `Ack` and `Nack` messages, parsing a `Packet` is almost as 
+handle are empty `Ack` and `Nack` messages, parsing a `Packet` is almost as
 trivial as encoding one.
 
 ```ts
@@ -256,7 +256,7 @@ export default class Controls extends Vue {
 }
 ```
 
-Next we'll wire up the *Home* section's submit handler and make it send a 
+Next we'll wire up the *Home* section's submit handler and make it send a
 `GoHome` message.
 
 ```vue
@@ -314,8 +314,8 @@ export default class App extends Vue {
 
   ...
 
-  public send(req: Request): Promise<Response> { 
-    return this.comms.send(req); 
+  public send(req: Request): Promise<Response> {
+    return this.comms.send(req);
   }
 }
 </script>
@@ -323,7 +323,7 @@ export default class App extends Vue {
 
 Back in [A Better Frontend][abf] we stubbed out the `send_data()` method (the
 callback invoked every time the backend wants to send the frontend some data)
-with a `TODO` comment and a `console.log()`. Well now we need to implement it 
+with a `TODO` comment and a `console.log()`. Well now we need to implement it
 for real.
 
 Due to the way we've structured the frontend, this is just a case of sending
@@ -368,7 +368,7 @@ export default class Controls extends Vue {
 </script>
 ```
 
-We can also hook into the send/receive process so the *Terminal* is able to 
+We can also hook into the send/receive process so the *Terminal* is able to
 visually display messages. This requires adding a `Messages[]` property which
 contains a message, timestamp it was sent/received, and its direction, and will
 be passed through to the `Terminal` control as a prop.
@@ -439,21 +439,21 @@ export default class App extends Vue {
 
 Pressing the *"Home"* button and pulling up the dev tools now shows the backend
 responded with a *NACK* (the default response when the backend doesn't know what
-to do with a message). 
+to do with a message).
 
 {{< figure src="console-log.png" title="Progress!" alt="Clicking Home" >}}
 
 ## The Next Step
 
 We're now at the point where the frontend can send messages to the backend, and
-the backend can send back a response. This unblocks quite a few features, so 
+the backend can send back a response. This unblocks quite a few features, so
 from here we can:
 
 - Start periodically polling the backend to check its status (e.g. axis
   positions, current [*control mode*][cm])
 - Read in a g-code program and send it chunk-by-chunk to the backend so it can
   go through the pipeline of `parse -> motion planning -> execute`
-- Continue fleshing out the `Controls` with a software-defined handset (e.g. 
+- Continue fleshing out the `Controls` with a software-defined handset (e.g.
   axis jogging)
 - Implement more of the communications monitor so we can manually send arbitrary
   messages
