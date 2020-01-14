@@ -12,9 +12,8 @@ tool for reducing the amount of boilerplate code when interoperating between
 Rust and C++.
 
 Considering FFI is an area of Rust (well, really, programming in general)
-that I'm quite familiar with, I thought I'd kick the tyres by wrapping the
-`bzip2` library. The [bindgen project][bg] already has [a tutorial][bg-tutorial]
-on this so it should be a nice comparison.
+that I'm quite familiar with, I thought I'd kick the tyres by wrapping part of
+[the `libtorrent` library][upstream].
 
 {{% notice note %}}
 The code written in this article is available [on GitHub][repo]. Feel free to
@@ -27,7 +26,7 @@ If you found this useful or spotted a bug, let me know on the blog's
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
 {{% /notice %}}
 
-## Building the `bzip2` Library
+## Building the `libtorrent` Library
 
 First we'll need to create a new project and enable travis. There's
 [a template][template] I use alongside [cargo-generate][cg] to avoid needing to
@@ -46,20 +45,20 @@ triggering sync: ... done
 Michael-F-Bryan/cxx-experiment: enabled :)
 ```
 
-Before we can do anything else we'll need to get a copy of the `bzip2`
+Before we can do anything else we'll need to get a copy of the `libtorrent`
 library. I've elected to add it as a git submodule and compile from source
 instead of relying on the user already having it installed.
 
 ```console
 $ git submodule init
-$ git submodule add git://sourceware.org/git/bzip2.git vendor/bzip2
-Cloning into '/home/michael/Documents/cxx-experiment/vendor/bzip2'...
-remote: Enumerating objects: 467, done.
-remote: Counting objects: 100% (467/467), done.
-remote: Compressing objects: 100% (241/241), done.
-remote: Total 467 (delta 340), reused 304 (delta 225)0 KiB/s
-Receiving objects: 100% (467/467), 593.74 KiB | 289.00 KiB/s, done.
-Resolving deltas: 100% (340/340), done.
+$ git submodule add https://github.com/arvidn/libtorrent vendor/libtorrent
+Cloning into '/home/michael/Documents/cxx-experiment/vendor/libtorrent'...
+remote: Enumerating objects: 149, done.
+remote: Counting objects: 100% (149/149), done.
+remote: Compressing objects: 100% (83/83), done.
+remote: Total 120217 (delta 82), reused 86 (delta 59), pack-reused 120068
+Receiving objects: 100% (120217/120217), 72.43 MiB | 1.09 MiB/s, done.
+Resolving deltas: 100% (93988/93988), done.
 ```
 
 Now we've got the source code, let's see if we can compile it locally. It's
@@ -68,68 +67,154 @@ spending hours trying to figure out why your `build.rs` script isn't
 compiling things properly only to realise the project never compiled in the
 first place... Don't ask me how I know...
 
-```console
-$ cd vendor/bzip2
-$ make libbz2.a
-gcc -Wall -Winline -O2 -g -D_FILE_OFFSET_BITS=64 -c blocksort.c
-gcc -Wall -Winline -O2 -g -D_FILE_OFFSET_BITS=64 -c huffman.c
-gcc -Wall -Winline -O2 -g -D_FILE_OFFSET_BITS=64 -c crctable.c
-gcc -Wall -Winline -O2 -g -D_FILE_OFFSET_BITS=64 -c randtable.c
-gcc -Wall -Winline -O2 -g -D_FILE_OFFSET_BITS=64 -c compress.c
-gcc -Wall -Winline -O2 -g -D_FILE_OFFSET_BITS=64 -c decompress.c
-gcc -Wall -Winline -O2 -g -D_FILE_OFFSET_BITS=64 -c bzlib.c
-rm -f libbz2.a
-ar cq libbz2.a blocksort.o huffman.o crctable.o randtable.o compress.o decompress.o bzlib.o
-ranlib libbz2.a
-```
-
-Seems simple enough, there are half a dozen C files which get compiled and
-linked together to generate the final `libbz2.a`. There aren't any 3rd party
-dependencies or complicated steps to worry about, so it's the ideal candidate
-for the [cc][cc] crate.
-
-First, let's add `cc` as a build dependency using [cargo-edit][ce].
+First we'll `cd` into the `libtorrent` directory and have a look around. Maybe
+there'll be instructions on how to compile everything.
 
 ```console
-$ cargo add --build cc
-    Updating 'https://github.com/rust-lang/crates.io-index' index
-      Adding cc v1.0.50 to build-dependencies
+$ cd vendor/libtorrent
+$ git rev-parse HEAD
+ab07eceead59da9a85d60d406f1a99ad86dbb2d5
+$ ls
+appveyor.yml    configure.ac      libtorrent-rasterbar.pc.in          src
+AUTHORS         CONTRIBUTING.rst  LibtorrentRasterbarConfig.cmake.in  test
+autotool.sh     COPYING           LICENSE                             tools
+bindings        docs              m4
+bootstrap.sh    ed25519           Makefile.am
+build_dist.sh   examples          NEWS
+ChangeLog       fuzzers           README.rst
+clang_tidy.jam  include           setup.py
+cmake           Jamfile           simulation
+CMakeLists.txt  Jamroot.jam       sonar-project.properties
 ```
 
-Then we can create a `build.rs` file which invokes `cc` and tells it to compile
-our `bzip2` code.
+Well this is interesting, it seems like there's half a dozen different build
+systems at work here. I'm guessing instead of choosing a single build system and
+making everyone use it, as new developers have come along they've brought their
+favourite build system with them...
 
-```rust
-// build.rs
+{{% notice info %}}
+I can spot at least 3 build systems at work here...
 
-use cc::Build;
-use std::{env, path::PathBuf};
+The `CMakeLists.txt` file and `cmake` directory mark this as the root of a
+`cmake` project.
 
-fn main() {
-    let project_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    let bzip2_dir = project_dir.join("vendor").join("bzip2");
+Things like `configure.ac`, the various `*.in` files, and the `m4/` directory
+stick out like a sore thumb. They indicate you can use [autotools][autotools]
+to build `libtorrent`.
 
-    Build::new()
-        .file(bzip2_dir.join("blocksort.c"))
-        .file(bzip2_dir.join("huffman.c"))
-        .file(bzip2_dir.join("crctable.c"))
-        .file(bzip2_dir.join("randtable.c"))
-        .file(bzip2_dir.join("compress.c"))
-        .file(bzip2_dir.join("decompress.c"))
-        .file(bzip2_dir.join("bzlib.c"))
-        .define("_FILE_OFFSET_BITS", Some("64"))
-        .warnings(false)
-        .include(&bzip2_dir)
-        .compile("bz2");
-}
+The `Jamfile` and `Jamroot.jam` belong to [boost-build][b2]. I can't say I've
+ever used it before.
+
+[autotools]: https://en.wikipedia.org/wiki/GNU_Autotools
+[b2]: https://boostorg.github.io/build/
+{{% /notice %}}
+
+We want to make sure users of our crate don't have to mess around with
+dependencies or compiling code themselves, so it's important to write
+[a build script][build-script] to this for them. Having a robust and
+cross-platform way of building the project is a really important part of this.
+
+It looks like `cmake` will be our best option. The `autotools` suite isn't
+really used much outside of GNU projects on Linux, and it's especially painful
+to use on Windows. Boost-build seems a bit more obscure, so it's probably not
+going to be as well-supported or easy to install.
+
+Something else to remember is someone's already published [a cmake
+crate][cmake-crate], which will make our lives easier.
+
+Before we rush into writing our `build.rs` script we should see if everything
+builds normally.
+
+```console
+$ mkdir build
+$ cd build
+$ cmake ..
+-- The C compiler identification is GNU 9.2.1
+-- The CXX compiler identification is GNU 9.2.1
+-- Check for working C compiler: /usr/bin/cc
+-- Check for working C compiler: /usr/bin/cc -- works
+...
+CMake Error at /usr/share/cmake-3.13/Modules/FindBoost.cmake:2100 (message):
+  Unable to find the requested Boost libraries.
+
+  Boost version: 1.67.0
+
+  Boost include path: /usr/include
+
+  Could not find the following Boost libraries:
+
+          boost_system
+
+  No Boost libraries were found.  You may need to set BOOST_LIBRARYDIR to the
+  directory containing Boost libraries or BOOST_ROOT to the location of
+  Boost.
+...
+-- The following REQUIRED packages have not been found:
+
+ * Boost
+
+-- Configuring incomplete, errors occurred!
 ```
 
-If you squint you'll notice that this is actually quite similar to the `gcc`
-commands emitted by `make` earlier, just written more verbosely.
+Hmm... Looks like we need to install the full boost library.
+
+```console
+$ sudo apt install libboost-all-dev
+[sudo] password for michael:
+Reading package lists... Done
+Building dependency tree
+Reading state information... Done
+The following additional packages will be installed:
+  libboost-chrono1.67-dev libboost-chrono1.67.0 libboost-container-dev libboost-container1.67-dev libboost-container1.67.0
+  libboost-context-dev libboost-context1.67-dev libboost-context1.67.0 libboost-coroutine-dev libboost-coroutine1.67-dev
+  libboost-coroutine1.67.0 libboost-date-time-dev libboost-date-time1.67-dev libboost-exception-dev libboost-exception1.67-dev
+  ...
+  mpi-default-dev ocl-icd-libopencl1 openmpi-bin openmpi-common
+0 to upgrade, 118 to newly install, 0 to remove and 1 not to upgrade.
+Need to get 34.5 MB of archives.
+After this operation, 238 MB of additional disk space will be used.
+Do you want to continue? [Y/n] y
+Get:1 http://au.archive.ubuntu.com/ubuntu eoan/main amd64 libgfortran-9-dev amd64 9.2.1-9ubuntu2 [684 kB]
+...
+```
+
+After installing half the internet let's give it another shot.
+
+```console
+$ cmake ..
+-- Compiler default is C++14
+-- Building in C++14 mode
+-- Boost version: 1.67.0
+...
+
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/michael/Documents/cxx-experiment/vendor/libtorrent/build
+$ ls
+bindings  cmake_install.cmake  CMakeCache.txt  CMakeFiles  LibtorrentRasterbar
+Makefile  torrent-rasterbar-pkgconfig
+$ make
+```
+
+`cmake` isn't normally known for its concise output, but at least everything
+builds!
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 I normally have [cargo-watch][cw] running in the background so it'll
 automatically recompile my code, run the tests, and generate API docs
-whenever anything changes. Jumping over to the console shows the build script
+whenever anything changes. Jumping over to the console shows our build script
 seems to have run without any errors.
 
 ```console
@@ -159,52 +244,24 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 Before going any further I'd like write a small smoke test to check everything
 linked properly... Linker errors are the worst 😒
 
-Conveniently, the library defines a `BZ2_bzlibVersion()` function for getting
-the library version as a C string.
-
-```c
-// vendor/bzip2/bzlib.h
-
-BZ_EXTERN const char * BZ_API(BZ2_bzlibVersion) (
-      void
-   );
-```
-
-The smoke test can sit at the bottom of `lib.rs` for now.
-
-```rust
-// src/lib.rs
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::{ffi::CStr, os::raw::c_char};
-
-    extern "C" {
-        fn BZ2_bzlibVersion() -> *const c_char;
-    }
-
-    #[test]
-    fn smoke_test() {
-        unsafe {
-            let got = BZ2_bzlibVersion();
-
-            assert!(!got.is_null());
-            let version_number = CStr::from_ptr(got).to_str().unwrap();
-            assert_eq!(version_number, "1.0.8, 13-Jul-2019");
-        }
-    }
-}
-```
-
-{{% notice note %}}
-I cheated and found that `"1.0.8, 13-Jul-2019"` by looking through `bzip2`'s
-source code. At this stage we just want to make sure everything works.
+{{% notice warning %}}
+TODO: Write a simple smoke test
 {{% /notice %}}
 
-## Declaring the Foreign Function Interface
 
-The `cxx` library takes a slightly different approach to `bindgen`
+
+
+
+
+
+
+
+
+
+
+
+
+## Declaring the Foreign Function Interface
 
 ## Initial Bindings
 
@@ -214,6 +271,7 @@ The `cxx` library takes a slightly different approach to `bindgen`
 
 [announcement]: https://www.reddit.com/r/rust/comments/elvfyn/ffi_like_its_2020_announcing_safe_ffi_for_rust_c/
 [dtolnay]: https://github.com/dtolnay/
+[upstream]: https://github.com/arvidn/libtorrent
 [bg]: https://github.com/rust-lang/bindgen
 [bg-tutorial]: https://rust-lang.github.io/rust-bindgen/tutorial-0.html
 [template]: https://github.com/Michael-F-Bryan/github-template
@@ -221,3 +279,5 @@ The `cxx` library takes a slightly different approach to `bindgen`
 [cc]: https://crates.io/crates/cc
 [ce]: https://crates.io/crates/cargo-edit
 [cw]: https://crates.io/crates/cargo-watch
+[build-script]: https://doc.rust-lang.org/cargo/reference/build-scripts.html
+[cmake-crate]: https://crates.io/crates/cmake
