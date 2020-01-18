@@ -112,7 +112,7 @@ ever used it before.
 We want to make sure users of our crate don't have to mess around with
 dependencies or compiling code themselves, so it's important to write
 [a build script][build-script] to this for them. Having a robust and
-cross-platform way of building the project is a really important part of this.
+cross-platform way of building the project is a really important part of this!
 
 It looks like `cmake` will be our best option. The `autotools` suite isn't
 really used much outside of GNU projects on Linux, and it's especially painful
@@ -193,13 +193,21 @@ $ cmake ..
 $ ls
 bindings  cmake_install.cmake  CMakeCache.txt  CMakeFiles  LibtorrentRasterbar
 Makefile  torrent-rasterbar-pkgconfig
-$ make
+$ make -j8
 ```
 
 `cmake` isn't normally known for its concise output, but at least everything
 builds!
 
+{{% notice tip %}}
+Something to keep in mind is how long it takes to compile `libtorrent`. On my
+laptop (8 cores, 12GB RAM) a full build with 1 core (the default when running
+`make`) took so long (28 minutes!) I ended up leaving it running overnight.
 
+In comparison, building with all 8 cores (`make -j8`) only took about 5 minutes.
+Hopefully the `cmake` crate is smart enough to enable parallelism where
+possible, otherwise our users aren't going to be happy...
+{{% /notice %}}
 
 
 
