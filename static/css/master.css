@@ -129,3 +129,16 @@ blockquote cite {
     display: block;
     text-align: right;
 }
+
+/* We don't want permalinks to be coloured differently */
+
+h2 a {
+    text-decoration: none;
+    color: inherit !important;
+}
+
+/* We want to visually distinguish when some <code> is also a link */
+
+a code {
+    color: inherit;
+}
