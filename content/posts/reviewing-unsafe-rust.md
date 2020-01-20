@@ -221,6 +221,8 @@ trait StdError: Debug + Display {
 
 Next comes the declaration for `Error` itself.
 
+<a name="error-decl"></a>
+
 ```rust
 // lib.rs
 
@@ -314,6 +316,244 @@ It looks like `error.rs` contains the majority of this crate's functionality.
 Weighing in at a whopping 794 lines with 30 uses of the `unsafe` keyword, this
 may take a while...
 
+So while you were reading through the previous section I decided to be sneaky
+and skip ahead to get a brief overview of how `Error` is implemented.
+
+Before we go any further it's worth knowing the `ErrorImpl` type's definition
+because we'll be doing some `unsafe` shenanigans which rely on its layout in
+subtle ways.
+
+```rust
+// src/error.rs line 670
+
+// repr C to ensure that E remains in the final position.
+#[repr(C)]
+pub(crate) struct ErrorImpl<E> {
+    vtable: &'static ErrorVTable,
+    backtrace: Option<Backtrace>,
+    // NOTE: Don't use directly. Use only through vtable. Erased type may have
+    // different alignment.
+    _object: E,
+}
+```
+
+The `#[repr(C)]` attribute is a dead giveaway that the order of fields is
+important. From the comments we can assume that `unsafe` code will be relying
+on the fact that the first two fields are a vtable and a backtrace.
+
+The leading `_` in `_object` indicates it's even more private than a normal
+non-`pub` field. Trying to access it without the right checks will probably
+lead to a bad time.
+
+The first chunk of code in `error.rs` lets us create an `Error` from a
+`std::error::Error`.
+
+```rust
+// src/lib.rs line 20
+
+impl Error {
+    #[cfg(feature = "std")]
+    pub fn new<E>(error: E) -> Self
+    where
+        E: StdError + Send + Sync + 'static,
+    {
+        let backtrace = backtrace_if_absent!(error);
+        Error::from_std(error, backtrace)
+    }
+
+    ...
+}
+```
+
+At first I was confused about the `#[cfg(feature = "std")]`. If `StdError` is
+just an alias for `std::error::Error` then this is just equivalent to
+`where E: std::error::Error`, isn't it?
+
+Well... not exactly. While `StdError` is an alias to `std::error::Error` when
+compiled against the standard library, in `#[no_std]` environments it's a
+private adapter trait called `StdError`. If we dropped the conditional
+compilation then we'd have a private type in a public interface, which, is
+likely to confuse developers and leak implementation details (most people would
+look through the source code to find the definition of `StdError`).
+
+The `backtrace_if_absent!()` macro will crate a backtrace if the `backtrace`
+feature flag (which unlocks the nightly-only `std::backtrace::Backtrace` type)
+is provided.
+
+```rust
+// src/backtrace.rs
+
+#[cfg(backtrace)]
+macro_rules! backtrace_if_absent {
+    ($err:expr) => {
+        match $err.backtrace() {
+            Some(_) => None,
+            None => Some(Backtrace::capture()),
+        }
+    };
+}
+
+#[cfg(all(feature = "std", not(backtrace)))]
+macro_rules! backtrace_if_absent {
+    ($err:expr) => {
+        None
+    };
+}
+```
+
+Next we have
+
+```rust
+// src/error.rs line 67
+
+impl Error {
+    pub fn msg<M>(message: M) -> Self
+    where
+        M: Display + Debug + Send + Sync + 'static,
+    {
+        Error::from_adhoc(message, backtrace!())
+    }
+}
+```
+
+Nothing to see here... Next up is `Error::from_std()`.
+
+```rust
+// src/error.rs line 74
+
+impl Error {
+    #[cfg(feature = "std")]
+    pub(crate) fn from_std<E>(error: E, backtrace: Option<Backtrace>) -> Self
+    where
+        E: StdError + Send + Sync + 'static,
+    {
+        let vtable = &ErrorVTable {
+            object_drop: object_drop::<E>,
+            object_ref: object_ref::<E>,
+            #[cfg(feature = "std")]
+            object_mut: object_mut::<E>,
+            object_boxed: object_boxed::<E>,
+            object_downcast: object_downcast::<E>,
+            object_drop_rest: object_drop_front::<E>,
+        };
+
+        // Safety: passing vtable that operates on the right type E.
+        unsafe { Error::construct(error, vtable, backtrace) }
+    }
+}
+```
+
+Well that got complicated fast!
+
+Remember that `vtable` we mentioned earlier? It looks like this code creates a
+vtable for working with our `E` type.
+
+Before we delve deeper into what the code is doing, let's have a look at the
+`ErrorVTable` struct.
+
+```rust
+// src/error.rs line 509
+
+struct ErrorVTable {
+    object_drop: unsafe fn(Box<ErrorImpl<()>>),
+    object_ref: unsafe fn(&ErrorImpl<()>) -> &(dyn StdError + Send + Sync + 'static),
+    #[cfg(feature = "std")]
+    object_mut: unsafe fn(&mut ErrorImpl<()>) -> &mut (dyn StdError + Send + Sync + 'static),
+    object_boxed: unsafe fn(Box<ErrorImpl<()>>) -> Box<dyn StdError + Send + Sync + 'static>,
+    object_downcast: unsafe fn(&ErrorImpl<()>, TypeId) -> Option<NonNull<()>>,
+    object_drop_rest: unsafe fn(Box<ErrorImpl<()>>, TypeId),
+}
+```
+
+This type contains a bunch of function pointers for working with an
+`ErrorImpl<()>`. Note that this **isn't** a `ErrorImpl<E>`.
+
+If you look back [at the definition for `Error`](#error-decl), the `Error`
+contains a `ManuallyDrop<Box<ErrorImpl<()>>>`. From this we can see the author
+is effectively rolling their own trait object system, except instead of using
+fat pointers like Rust normally would, we've got a thin pointer to something
+with a vtable followed by some common data and then the concrete type... Which
+is almost identical to how C++ implements dynamic dispatch.
+
+{{% notice tip %}}
+If you want to explore this in more detail you'll probably find [C++ vtables
+- Part 1 - Basics][article] interesting. It explores how clang has implemented
+classes with virtual methods, even running code under a debugger and inspecting
+the layout in memory at runtime.
+
+[article]: https://shaharmike.com/cpp/vtable-part1/
+{{% /notice %}}
+
+Populating the `ErrorVTable` is done by "instantiating" some generic functions
+to get versions which will work for our `E` type (e.g. `object_drop::<E>`).
+
+{{% notice info %}}
+Let me know if you've got a better ELI5 explanation for the phrase
+*"instantiation"*, as used here. Preferably without using type theory jargon.
+
+You can think of the name for a generic function (e.g. `fn foo<F>()`) as
+something which, when given a type argument using turbofish (`::<F>`) will give
+you a copy of `foo` which is tailored precisely for `F`. *"Instantiating"* is
+the technical term for this.
+{{% /notice %}}
+
+The vtable functions themselves are mostly quite benign. For the most part
+they're just shims to help with downcasting or implementing the drop glue
+that `rustc` might otherwise provide.
+
+We'll get back to `object_drop_rest()` later.
+
+The `Safety:` note before `Error::from_std()`'s `unsafe` block is important
+here. It communicates to readers what they've done to ensure the use of
+`unsafe` is sound, mentioning how particular invariants have been upheld (in
+this case, that the vtable can be used with `E`).
+
+```rust
+// src/error.rs line 93
+
+impl Error {
+    ...
+
+    pub(crate) fn from_adhoc<M>(message: M, backtrace: Option<Backtrace>) -> Self
+    where
+        M: Display + Debug + Send + Sync + 'static,
+    {
+        use crate::wrapper::MessageError;
+        let error: MessageError<M> = MessageError(message);
+        let vtable = &ErrorVTable {
+            object_drop: object_drop::<MessageError<M>>,
+            object_ref: object_ref::<MessageError<M>>,
+            #[cfg(feature = "std")]
+            object_mut: object_mut::<MessageError<M>>,
+            object_boxed: object_boxed::<MessageError<M>>,
+            object_downcast: object_downcast::<M>,
+            object_drop_rest: object_drop_front::<M>,
+        };
+
+        // Safety: MessageError is repr(transparent) so it is okay for the
+        // vtable to allow casting the MessageError<M> to M.
+        unsafe { Error::construct(error, vtable, backtrace) }
+    }
+
+    ...
+}
+```
+
+The `Error::from_adhoc()` is mostly identical except for the `MessageError`
+bit.
+
+If you're paying attention, you may have noticed that we use
+`MessageError<M>` for things like `object_drop::<MessageError<M>>`, but `M`
+in `object_downcast::<M>`. That seems a little odd... Let's have a peek at
+`MessageError`'s definition.
+
+```rust
+// src/wrapper.rs
+
+#[repr(transparent)]
+pub struct MessageError<M>(pub M);
+```
+
 ## Time Taken
 
 ## Conclusions
@@ -325,3 +565,4 @@ may take a while...
 [thiserror]: https://github.com/dtolnay/thiserror
 [dtolnay]: https://github.com/dtolnay
 [sealed]: https://rust-lang.github.io/api-guidelines/future-proofing.html#sealed-traits-protect-against-downstream-implementations-c-sealed
+[unsize]: https://doc.rust-lang.org/std/marker/trait.Unsize.html
