@@ -544,7 +544,7 @@ bit.
 
 If you're paying attention, you may have noticed that we use
 `MessageError<M>` for things like `object_drop::<MessageError<M>>`, but `M`
-in `object_downcast::<M>`. That seems a little odd... Let's have a peek at
+in `object_downcast::<M>`. That seems a little... odd... Let's have a peek at
 `MessageError`'s definition.
 
 ```rust
@@ -553,6 +553,29 @@ in `object_downcast::<M>`. That seems a little odd... Let's have a peek at
 #[repr(transparent)]
 pub struct MessageError<M>(pub M);
 ```
+
+The `#[repr(transparent)]` attribute's raison d'être as mentioned [in the
+Nomicon][repr-transparent] is to ensure `M` and `MessageError<M>` are identical
+in memory and are interchangeable without breaking things at the ABI level.
+
+> This can only be used on structs with a single non-zero-sized field (there
+> may be additional zero-sized fields). The effect is that the layout and ABI
+> of the whole struct is guaranteed to be the same as that one field.
+>
+> The goal is to make it possible to transmute between the single field and the
+> struct. An example of that is `UnsafeCell`, which can be transmuted into the
+> type it wraps.
+>
+> Also, passing the struct through FFI where the inner field type is expected
+> on the other side is guaranteed to work. In particular, this is necessary for
+> struct `Foo(f32)` to always have the same ABI as `f32`.
+
+The `MessageError` type doesn't seem to add any extra invariants or
+assumptions on our `E` type so using `object_downcast::<M>` instead of
+`object_downcast::<MessageError<M>>` should be perfectly fine. That said, I
+think I'll make [a PR][anyhow-61] anyway because it's an odd inconsistency,
+and I fact that I needed to spend 10 minutes double-checking the code to make
+sure it's actually safe means it's worth fixing.
 
 ## Time Taken
 
@@ -566,3 +589,5 @@ pub struct MessageError<M>(pub M);
 [dtolnay]: https://github.com/dtolnay
 [sealed]: https://rust-lang.github.io/api-guidelines/future-proofing.html#sealed-traits-protect-against-downstream-implementations-c-sealed
 [unsize]: https://doc.rust-lang.org/std/marker/trait.Unsize.html
+[repr-transparent]: https://doc.rust-lang.org/nomicon/other-reprs.html#reprtransparent
+[anyhow-61]: https://github.com/dtolnay/anyhow/pull/61
