@@ -932,6 +932,46 @@ return Some(e_ref);
 
 LGTM 👍
 
+## Giving Error a Destructor
+
+All these shenanigans with vtables and unsized types mean we need to make sure
+`Error`'s `inner` field (`ManuallyDrop<ErrorImpl<()>>`) is destroyed properly
+when `Error` is dropped.
+
+```rust
+// src/error.rs line 497
+
+impl Drop for Error {
+    fn drop(&mut self) {
+        unsafe {
+            // Read Box<ErrorImpl<()>> from self.
+            let inner = ptr::read(&self.inner);
+            let erased = ManuallyDrop::into_inner(inner);
+
+            // Invoke the vtable's drop behavior.
+            (erased.vtable.object_drop)(erased);
+        }
+    }
+}
+```
+
+Compared to what we needed to do while downcasting, implementing `Drop` seems
+rather simple.
+
+The `inner` field is a `ManuallyDrop` type so we need to extract the underlying
+`ErrorImpl<()>`. The problem is you can't use normal destructuring
+(`let Error { inner } = self`) because that would move `inner` and call
+`Error`'s destructor, so we fall back to raw pointer operations.
+
+Once we've extracted the erased `ErrorImpl<()>` we can use a vtable method we
+prepared earlier to do the appropriate cleanup.
+
+{{% notice info %}}
+As a bit of trivia, you may have noticed that `ErrorImpl<()>` variables tend
+to be called `erased`. This is because the underlying error type has been
+"erased" at compile time (and is only known at runtime).
+{{% /notice %}}
+
 ## Time Taken
 
 ## Conclusions
