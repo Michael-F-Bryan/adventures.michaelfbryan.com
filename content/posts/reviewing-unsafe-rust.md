@@ -39,7 +39,7 @@ If you found this useful or spotted a bug, let me know on the blog's
 ## Introducing the `anyhow` Crate
 
 Over the past couple months the [`anyhow`][anyhow] and [`thiserror`][thiserror]
-crates from [@dtolnay][dtolnay] have helped simplify error handling in Rust a
+crates from [*@dtolnay*][dtolnay] have helped simplify error handling in Rust a
 lot.
 
 The `thiserror` crate is a procedural macro for automating the implementation of
@@ -198,9 +198,17 @@ Now the code itself is quite boring, but the fact that it exists says a lot
 about this crate. Namely that they're going to great lengths to ensure `anyhow`
 is usable without the standard library.
 
-This `alloc` module allows code to use `crate::alloc::Box` when boxing things
+~~This `alloc` module allows code to use `crate::alloc::Box` when boxing things
 instead of relying on the `Box` added to the prelude by `std` (which isn't in
-the prelude for `#[no_std]` crates).
+the prelude for `#[no_std]` crates).~~
+
+**EDIT: *@dtolnay* has [pointed out][comment] the previous interpretation of the
+`alloc` module is incorrect:**
+
+> FYI this isn't the main reason. We could do `extern crate alloc`
+> unconditionally and use `alloc::boxed::Box` even in std mode, and get the
+> same effect. But that only works on 1.36+. The more verbose setup is
+> necessary in order for `anyhow` in std mode to support back to 1.34+.
 
 You can also see they're providing a polyfill for `std::error::Error` when
 compiled without the standard library.
@@ -345,6 +353,8 @@ The leading `_` in `_object` indicates it's even more private than a normal
 non-`pub` field. Trying to access it without the right checks will probably
 lead to a bad time.
 
+## Constructing an `Error`
+
 The first chunk of code in `error.rs` lets us create an `Error` from a
 `std::error::Error`.
 
@@ -401,7 +411,7 @@ macro_rules! backtrace_if_absent {
 }
 ```
 
-Next we have
+Next we have a way to create an `Error` using something `Display`-able.
 
 ```rust
 // src/error.rs line 67
@@ -572,10 +582,355 @@ in memory and are interchangeable without breaking things at the ABI level.
 
 The `MessageError` type doesn't seem to add any extra invariants or
 assumptions on our `E` type so using `object_downcast::<M>` instead of
-`object_downcast::<MessageError<M>>` should be perfectly fine. That said, I
-think I'll make [a PR][anyhow-61] anyway because it's an odd inconsistency,
-and I fact that I needed to spend 10 minutes double-checking the code to make
-sure it's actually safe means it's worth fixing.
+`object_downcast::<MessageError<M>>` for downcasting should be perfectly fine.
+
+{{% notice note %}}
+I originally created [a pull request][anyhow-61] to add extra comments around
+this and update `object_drop_front` to use
+`object_drop_front::<MessageError<M>>` instead of `object_drop_front::<M>`,
+the reasoning being that we're technically dropping the front fields in a
+`ErrorImpl<MessageError<M>>>` and not `ErrorImpl<M>>`. Even if the `_object` (a
+`MessageError<M>` never gets touched).
+
+That PR was eventually closed because, as *@dtolnay* pointed out, the current
+code is still sound and the various `object_drop_front` methods are a sort of
+downcast (you can [check out the PR][anyhow-61] for more).
+
+I'd also like to draw attention to an aspect of the open-source community
+many people take for granted, or just never notice... Even though my PR was
+eventually rejected, the maintainer still took the time to make a review and
+explain their reasoning behind the decision in a courteous manner.
+
+[anyhow-61]: https://github.com/dtolnay/anyhow/issues/61
+{{% /notice %}}
+
+We can skim past the `Error::from_display()`, `Error::from_context()`, and
+`Error::from_boxed()` constructors because their implementations are almost
+identical, although use different wrapper types (like `MessageError`) so we
+can accept different inputs.
+
+Finally we reach the `Error::construct()` method...
+
+```rust
+// src/error.rs line 185
+
+impl Error {
+    ...
+
+    unsafe fn construct<E>(
+        error: E,
+        vtable: &'static ErrorVTable,
+        backtrace: Option<Backtrace>,
+    ) -> Self
+    where
+        E: StdError + Send + Sync + 'static,
+    {
+        let inner = Box::new(ErrorImpl {
+            vtable,
+            backtrace,
+            _object: error,
+        });
+        // Erase the concrete type of E from the compile-time type system. This
+        // is equivalent to the safe unsize coersion from Box<ErrorImpl<E>> to
+        // Box<ErrorImpl<dyn StdError + Send + Sync + 'static>> except that the
+        // result is a thin pointer. The necessary behavior for manipulating the
+        // underlying ErrorImpl<E> is preserved in the vtable provided by the
+        // caller rather than a builtin fat pointer vtable.
+        let erased = mem::transmute::<Box<ErrorImpl<E>>, Box<ErrorImpl<()>>>(inner);
+        let inner = ManuallyDrop::new(erased);
+        Error { inner }
+    }
+
+    ...
+}
+```
+
+This is the main constructor for our `Error` type. Its main purpose is to
+allocate the vtable, a backtrace, and our error object on the heap and "unsize"
+it.
+
+Normally whenever I see people using `mem::transmute()` being used my
+knee-jerk reaction is that they're trying to side-step the type system
+([obligatory rust koan reference][obstacles]) and, to be fair, that's exactly
+what this code is trying to do.
+
+However the difference between `anyhow` and a newbie trying to trick the
+borrow checker is we've deliberately chosen to take on the responsibility for
+maintaining correctness and designed `Error`'s API and `ErrorImpl` so all
+operations are done using vtables for the correct underlying type (who's
+construction we have full control over).
+
+Next we come to the `Error::context()` method. It's a decorator method for
+wrapping an `Error` with additional contextual information, and almost identical
+to `Error::from_adhoc()` and friends.
+
+```rust
+// src/error.rs line 263
+
+impl Error {
+    ...
+
+    pub fn context<C>(self, context: C) -> Self
+    where
+        C: Display + Send + Sync + 'static,
+    {
+        let error: ContextError<C, Error> = ContextError {
+            context,
+            error: self,
+        };
+
+        let vtable = &ErrorVTable {
+            object_drop: object_drop::<ContextError<C, Error>>,
+            object_ref: object_ref::<ContextError<C, Error>>,
+            #[cfg(feature = "std")]
+            object_mut: object_mut::<ContextError<C, Error>>,
+            object_boxed: object_boxed::<ContextError<C, Error>>,
+            object_downcast: context_chain_downcast::<C>,
+            object_drop_rest: context_chain_drop_rest::<C>,
+        };
+
+        // As the cause is anyhow::Error, we already have a backtrace for it.
+        let backtrace = None;
+
+        // Safety: passing vtable that operates on the right type.
+        unsafe { Error::construct(error, vtable, backtrace) }
+    }
+
+    ...
+}
+```
+
+The main difference is we use custom `context_chain_downcast()` and
+`context_chain_drop_rest()` functions. Presumably that's to allow callers to
+access the `context` argument when downcasting, but we can investigate in
+more depth when we get to those functions.
+
+The next three methods seem to be fairly unremarkable. `Error::backtrace()` and
+`Error::chain()` delegate to their respective methods on `inner` (which we'll
+see soon enough) and `Error::root_cause()` is effectively trying to find the
+last node in a linked list.
+
+```rust
+// src/error.rs line 300
+
+impl Error {
+    ...
+
+    #[cfg(backtrace)]
+    pub fn backtrace(&self) -> &Backtrace {
+        self.inner.backtrace()
+    }
+
+    #[cfg(feature = "std")]
+    pub fn chain(&self) -> Chain {
+        self.inner.chain()
+    }
+
+    #[cfg(feature = "std")]
+    pub fn root_cause(&self) -> &(dyn StdError + 'static) {
+        let mut chain = self.chain();
+        let mut root_cause = chain.next().unwrap();
+        for cause in chain {
+            root_cause = cause;
+        }
+        root_cause
+    }
+
+    ...
+}
+```
+
+## Downcasting
+
+Finally we've reached the code related to downcasting. While this feature is
+one of the most useful tools `anyhow` provides it also has a lot of potential
+for unsoundness and security issues because we're giving the caller a way to
+reinterpret the data inside our `Error` as something else.
+
+```rust
+// src/error.rs line 354
+
+impl Error {
+    ...
+
+    pub fn is<E>(&self) -> bool
+    where
+        E: Display + Debug + Send + Sync + 'static,
+    {
+        self.downcast_ref::<E>().is_some()
+    }
+
+    pub fn downcast<E>(self) -> Result<E, Self>
+    where
+        E: Display + Debug + Send + Sync + 'static,
+    {
+        let target = TypeId::of::<E>();
+        unsafe {
+            // Use vtable to find NonNull<()> which points to a value of type E
+            // somewhere inside the data structure.
+            let addr = match (self.inner.vtable.object_downcast)(&self.inner, target) {
+                Some(addr) => addr,
+                None => return Err(self),
+            };
+
+            // Prepare to read E out of the data structure. We'll drop the rest
+            // of the data structure separately so that E is not dropped.
+            let outer = ManuallyDrop::new(self);
+
+            // Read E from where the vtable found it.
+            let error = ptr::read(addr.cast::<E>().as_ptr());
+
+            // Read Box<ErrorImpl<()>> from self. Can't move it out because
+            // Error has a Drop impl which we want to not run.
+            let inner = ptr::read(&outer.inner);
+            let erased = ManuallyDrop::into_inner(inner);
+
+            // Drop rest of the data structure outside of E.
+            (erased.vtable.object_drop_rest)(erased, target);
+
+            Ok(error)
+        }
+    }
+
+    ...
+}
+```
+
+Something I really like is how the author took the time to explain each step
+of the downcasting code, as well as the assumptions they're making.
+
+The purpose of downcasting is to extract the underlying error if it is an
+instance of `E`, dropping the other metadata that `ErrorImpl` adds. If the type
+check fails then the original `Error` is returned.
+
+The first step is to get a pointer to our `E`, if it's the correct type.
+
+```rust
+// Use vtable to find NonNull<()> which points to a value of type E
+// somewhere inside the data structure.
+let addr = match (self.inner.vtable.object_downcast)(&self.inner, target) {
+    Some(addr) => addr,
+    None => return Err(self),
+};
+```
+
+The `object_downcast` method will return a `NonNull<()>` pointer if `_object`
+has the same `TypeId` as `target`, allowing us to do the type checking and
+retrieve a pointer to the inner data in one step.
+
+Keep in mind `addr` is still a pointer to *something* (`NonNull<()>`, or
+`void *` in C parlance).
+
+Next we put `self` inside a `ManuallyDrop` because it's about to be manually
+*destructured*. This also helps to ensure that `Error`'s destructor will never
+be run... After all, if you're extracting bits and pieces from a type and the
+destructor would normally free those bits and pieces, if the destructor runs
+you're gonna have a bad time.
+
+```rust
+// Prepare to read E out of the data structure. We'll drop the rest
+// of the data structure separately so that E is not dropped.
+let outer = ManuallyDrop::new(self);
+```
+
+We now get to the actual destructuring of the `Error`'s inner field into a
+`E` and `ManuallyDrop<Box<ErrorImpl<()>>>`. As already mentioned, this needs
+to be done using raw pointer operations.
+
+```rust
+// Read E from where the vtable found it.
+let error = ptr::read(addr.cast::<E>().as_ptr());
+
+// Read Box<ErrorImpl<()>> from self. Can't move it out because
+// Error has a Drop impl which we want to not run.
+let inner = ptr::read(&outer.inner);
+let erased = ManuallyDrop::into_inner(inner);
+```
+
+If you remember the `ErrorImpl` type's definition there were three fields;
+`vtable`, `backtrace`, and `_object`. We've already extracted `_object` and will
+be returning that to the caller so there's nothing more we need to do about it,
+however the `vtable` and `backtrace` fields will need to be destroyed somehow.
+
+We can't just call the destructor for `ErrorImpl` because that would also
+destroy our `_object` (which would be bad), instead we need to use the special
+`object_drop_rest()` function from the `vtable`.
+
+```rust
+// Drop rest of the data structure outside of E.
+(erased.vtable.object_drop_rest)(erased, target);
+```
+
+And finally we've cleaned everything up and can return the downcasted `error`.
+
+```rust
+    ...
+    Ok(error)
+}
+```
+
+Phew 😓
+
+Compared to `Error::downcast()` which needed to manage memory and manually
+implement destructuring, `Error::downcast_ref()` and `Error::downcast_mut()`
+*"just"* need to do a type check and return a pointer to the underlying
+*`_object`.
+
+```rust
+// src/error.rs line 430
+
+impl Error {
+    ...
+
+    pub fn downcast_ref<E>(&self) -> Option<&E>
+    where
+        E: Display + Debug + Send + Sync + 'static,
+    {
+        let target = TypeId::of::<E>();
+        unsafe {
+            // Use vtable to find NonNull<()> which points to a value of type E
+            // somewhere inside the data structure.
+            let addr = (self.inner.vtable.object_downcast)(&self.inner, target)?;
+            Some(&*addr.cast::<E>().as_ptr())
+        }
+    }
+
+    pub fn downcast_mut<E>(&mut self) -> Option<&mut E>
+    where
+        E: Display + Debug + Send + Sync + 'static,
+    {
+        let target = TypeId::of::<E>();
+        unsafe {
+            // Use vtable to find NonNull<()> which points to a value of type E
+            // somewhere inside the data structure.
+            let addr = (self.inner.vtable.object_downcast)(&self.inner, target)?;
+            Some(&mut *addr.cast::<E>().as_ptr())
+        }
+    }
+}
+```
+
+The first thing to note is our vtable's `object_downcast()` function is in
+charge of the type checking. It looks like this is implemented to allow
+extracting the context object passed to `Error::context()` and other wrapper
+functions, as well as the underlying error type.
+
+When you think about it, this is pretty clever. It means you can ask for
+*something* of the desired and if the underlying error has a field with that
+type, you'll get a pointer to it.
+
+There's a lot of pointer casting going on at the end, so I'll spread it out
+over multiple lines for demonstration purposes.
+
+```rust
+let addr: NonNull<()> = /* get a pointer to some E field or bail if None */;
+let e_addr: NonNull<E> = addr.cast();
+let e_ptr: *mut E = e_addr.as_ptr();
+let e_ref: &E = &*e_ptr;
+return Some(e_ref);
+```
+
+LGTM 👍
 
 ## Time Taken
 
@@ -590,4 +945,5 @@ sure it's actually safe means it's worth fixing.
 [sealed]: https://rust-lang.github.io/api-guidelines/future-proofing.html#sealed-traits-protect-against-downstream-implementations-c-sealed
 [unsize]: https://doc.rust-lang.org/std/marker/trait.Unsize.html
 [repr-transparent]: https://doc.rust-lang.org/nomicon/other-reprs.html#reprtransparent
-[anyhow-61]: https://github.com/dtolnay/anyhow/pull/61
+[obstacles]: https://users.rust-lang.org/t/rust-koans/2408
+[comment]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/pull/8#pullrequestreview-345588595
