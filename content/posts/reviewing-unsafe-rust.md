@@ -1250,6 +1250,83 @@ While it's nothing we don't already know after having read through most of
 the `error.rs` file in great detail, it's really useful to reiterate your
 assumptions for someone who doesn't have that background knowledge.
 
+Something that jumped out at me was this line:
+
+```rust
+let unerased = e as *const ErrorImpl<()> as *const ErrorImpl<E>;
+let addr = &(*unerased)._object as *const E as *mut ();
+```
+
+We're starting off with an immutable reference (`&ErrorImpl<E>`) then borrowing
+the `_object` field (immutably) and using pointer casts to get rid of the
+`const`.
+
+This sort of behaviour tends to raise the eyebrow of most seasoned
+rustaceans, after all turning an `&T` into a `&mut T` is pure
+*Undefined Behaviour* in Rust. [The Nomicon][nomicon-transmute] puts this
+*really
+well:
+
+> - Transmuting an `&` to `&mut` is UB
+>   - Transmuting an `&` to `&mut` is *always* UB
+>   - No you can't do it
+>   - No you're not special
+
+However if you look carefully, we aren't actually turning a `&T` into a
+`&mut T`, we're "only" turning it into a `*mut ()` and then the caller
+(`Error::downcast()`) reads from the pointer. At no point do we turn the pointer
+into a reference, and as [this StackOverflow question][so-question] points out,
+the compiler makes absolutely no assumptions about a `*mut` pointer. Meaning
+this use of pointer casting is perfectly fine **as long as we never convert the
+`*mut T` to a `&mut T`**.
+
+{{% notice note %}}
+This pattern of retrieving a `*mut ()` pointer from a `&T` is fairly common
+when `ErrorImpl<()>` is concerned, and we can employ the same reasoning at each
+cast site.
+{{% /notice %}}
+
+{{% notice warning %}}
+I was going to apply the same logic to `Error::downcast_mut()`, reasoning
+that even though we return a `&mut E` it's still sound because we started off
+with `self: &mut Error`. But `Error::downcast_mut()` passes a `&self.inner`
+to the `object_downcast` method. The overall result is like taking an `&mut
+Error` and getting a `&mut` reference to one of its fields, but we access the
+field via `&self.inner`.
+
+If you look at it in isolation and ignore the fact that `self` is borrowed
+mutably, it looks like `Error::downcast_mut()` is passing an immutable
+reference to `&self.inner` to the `object_downcast` function then casting the
+returned pointer to `&mut E`... Is that sound?
+{{% /notice %}}
+
+To analyse the `context_downcast()` function we'll want to remind ourselves of
+the definition for `ContextError`.
+
+```rust
+// src/error.rs line 681
+
+// repr C to ensure that ContextError<C, E> has the same layout as
+// ContextError<ManuallyDrop<C>, E> and ContextError<C, ManuallyDrop<E>>.
+#[repr(C)]
+pub(crate) struct ContextError<C, E> {
+    pub context: C,
+    pub error: E,
+}
+```
+
+We can see that a `ContextError` contains both a `context` and an `error`,
+so when downcasting there are actually two types we can access.
+
+If you think about it for a bit, this makes sense. Most users of `anyhow`
+I've seen will use a `&'static str` or a `String` for the context, but it
+seems quite reasonable to use something more complex. For example, imagine a
+service attaching a summary of the request so developers can see what input
+caused a particular error.
+
+To that end, `context_downcast()` needs to do two type checks and return
+a pointer to the appropriate field.
+
 ## Time Taken
 
 ## Conclusions
@@ -1266,3 +1343,5 @@ assumptions for someone who doesn't have that background knowledge.
 [obstacles]: https://users.rust-lang.org/t/rust-koans/2408
 [comment]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/pull/8#pullrequestreview-345588595
 [error-type-id]: https://blog.rust-lang.org/2019/05/13/Security-advisory.html
+[nomicon-transmute]: https://doc.rust-lang.org/nomicon/transmutes.html
+[so-question]: https://stackoverflow.com/questions/57364654/do-aliasing-mutable-raw-pointers-mut-t-cause-undefined-behaviour
