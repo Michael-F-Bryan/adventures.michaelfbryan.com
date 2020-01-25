@@ -972,6 +972,284 @@ to be called `erased`. This is because the underlying error type has been
 "erased" at compile time (and is only known at runtime).
 {{% /notice %}}
 
+## Deconstructing the vtable
+
+The largest source of `unsafe` code in `anyhow` is related to `ErrorImpl<E>`,
+with the library heavily relying on a correctly implemented `ErrorVTable` to be
+sound.
+
+```rust
+// src/error.rs line 510
+
+struct ErrorVTable {
+    object_drop: unsafe fn(Box<ErrorImpl<()>>),
+    object_ref: unsafe fn(&ErrorImpl<()>) -> &(dyn StdError + Send + Sync + 'static),
+    #[cfg(feature = "std")]
+    object_mut: unsafe fn(&mut ErrorImpl<()>) -> &mut (dyn StdError + Send + Sync + 'static),
+    object_boxed: unsafe fn(Box<ErrorImpl<()>>) -> Box<dyn StdError + Send + Sync + 'static>,
+    object_downcast: unsafe fn(&ErrorImpl<()>, TypeId) -> Option<NonNull<()>>,
+    object_drop_rest: unsafe fn(Box<ErrorImpl<()>>, TypeId),
+}
+```
+
+The `ErrorVTable` type contains function pointers for each operation that
+involves the `ErrorImpl`'s `_object` field.
+
+As we've seen from the various comments the author made when calling
+`Error::construct()`, these functions are all `unsafe` because they rely on
+being passed some sort of pointer to `ErrorImpl<E>` masquerading as a
+`ErrorImpl<()>`.
+
+To change things up a bit, instead of scrolling through the file from top to
+bottom I'll review the next several `unsafe` functions grouped by the vtable
+method they belong to.
+
+```rust
+// src/error.rs
+
+struct ErrorVTable {
+    object_drop: unsafe fn(Box<ErrorImpl<()>>),
+    ...
+}
+
+// (line 520)
+// Safety: requires layout of *e to match ErrorImpl<E>.
+unsafe fn object_drop<E>(e: Box<ErrorImpl<()>>) {
+    // Cast back to ErrorImpl<E> so that the allocator receives the correct
+    // Layout to deallocate the Box's memory.
+    let unerased = mem::transmute::<Box<ErrorImpl<()>>, Box<ErrorImpl<E>>>(e);
+    drop(unerased);
+}
+```
+
+There is only one function used for `ErrorVTable::object_drop`, unsurprisingly
+called `object_drop()`. This just transmutes the `Box<ErrorImpl<()>>` back to
+its actual type (reversing the original *"unsizing"* operation) and explicitly
+destroys the value.
+
+The method relies on our `e` parameter actually pointing to a `ErrorImpl<E>`,
+but that invariant should be upheld by whoever is constructing the vtable.
+
+```rust
+// src/error.rs
+
+struct ErrorVTable {
+    ...
+    object_ref: unsafe fn(&ErrorImpl<()>) -> &(dyn StdError + Send + Sync + 'static),
+    ...
+}
+
+// (line 538)
+// Safety: requires layout of *e to match ErrorImpl<E>.
+unsafe fn object_ref<E>(e: &ErrorImpl<()>) -> &(dyn StdError + Send + Sync + 'static)
+where
+    E: StdError + Send + Sync + 'static,
+{
+    // Attach E's native StdError vtable onto a pointer to self._object.
+    &(*(e as *const ErrorImpl<()> as *const ErrorImpl<E>))._object
+}
+```
+
+The `ErrorVTable::object_ref` method is in charge of converting a
+`&ErrorImpl<()>` to a `&ErrorImpl<E>`, and then accessing the `_object` as a
+`&dyn StdError` trait object.
+
+Again, assuming the `e` actually points to a `&ErrorImpl<E>` and `E` implements
+`StdError` (which it does), this is perfectly safe.
+
+```rust
+// src/error.rs
+
+struct ErrorVTable {
+    ...
+    #[cfg(feature = "std")]
+    object_mut: unsafe fn(&mut ErrorImpl<()>) -> &mut (dyn StdError + Send + Sync + 'static),
+    ...
+}
+
+// (line 547)
+// Safety: requires layout of *e to match ErrorImpl<E>.
+#[cfg(feature = "std")]
+unsafe fn object_mut<E>(e: &mut ErrorImpl<()>) -> &mut (dyn StdError + Send + Sync + 'static)
+where
+    E: StdError + Send + Sync + 'static,
+{
+    // Attach E's native StdError vtable onto a pointer to self._object.
+    &mut (*(e as *mut ErrorImpl<()> as *mut ErrorImpl<E>))._object
+}
+```
+
+The `object_mut` method is the same as `object_ref`, except returning a mutable
+reference.
+
+I'm not 100% sure why this method needs a `#[cfg(feature = "std")]` feature
+gate, possible reasons are:
+
+- The `StdError` polyfill on `#[no_std]` platforms doesn't support downcasting
+  but the `std::error::Error` version does
+- To prevent exposing the `StdError` polyfill as part of the public API for
+  `#[no_std]` users (the `StdError` trait is actually a private type)
+
+I'd be keen to hear from someone who knows the reasoning behind this design
+decision.
+
+```rust
+// src/error.rs
+
+struct ErrorVTable {
+    ...
+    object_boxed: unsafe fn(Box<ErrorImpl<()>>) -> Box<dyn StdError + Send + Sync + 'static>,
+    ...
+}
+
+// (line 557)
+// Safety: requires layout of *e to match ErrorImpl<E>.
+unsafe fn object_boxed<E>(e: Box<ErrorImpl<()>>) -> Box<dyn StdError + Send + Sync + 'static>
+where
+    E: StdError + Send + Sync + 'static,
+{
+    // Attach ErrorImpl<E>'s native StdError vtable. The StdError impl is below.
+    mem::transmute::<Box<ErrorImpl<()>>, Box<ErrorImpl<E>>>(e)
+}
+```
+
+The `ErrorVtable::object_boxed` method is pretty subtle. Unlike `object_ref` and
+`object_mut` which were just extracting references to the `_object` field as
+trait methods, `object_boxed` involves ownership and misusing it could result
+in memory leaks or double-frees (as well as the usual problems related to
+`unsafe` casting).
+
+To review this properly we'll need to see how it's used.
+
+As far as I can tell, `object_boxed` exists purely so we can convert a `Error`
+into a `Box<dyn std::error::Error>` (e.g. for use with `?`).
+
+```rust
+// src/error.rs line 760
+
+impl From<Error> for Box<dyn StdError + Send + Sync + 'static> {
+    fn from(error: Error) -> Self {
+        let outer = ManuallyDrop::new(error);
+        unsafe {
+            // Read Box<ErrorImpl<()>> from error. Can't move it out because
+            // Error has a Drop impl which we want to not run.
+            let inner = ptr::read(&outer.inner);
+            let erased = ManuallyDrop::into_inner(inner);
+
+            // Use vtable to attach ErrorImpl<E>'s native StdError vtable for
+            // the right original type E.
+            (erased.vtable.object_boxed)(erased)
+        }
+    }
+}
+```
+
+We've seen code like this before. It's manually destructuring an `Error` to
+retrieve the `inner` field, making sure not to drop the original `Error` (which
+would destroy `inner`).
+
+From there, it looks like `object_boxed` takes the `Box<ErrorImpl<()>>` and casts
+it back to a `Box<ErrorImpl<E>>`, then if `ErrorImpl<E>` implements `StdError`
+(spoiler: it does) the compiler will automatically cast our `Box<ErrorImpl<E>>`
+to the `Box<dyn StdError>` trait object.
+
+There's a lot of casting going on, but by looking at the implementation of
+`object_boxed` and how it gets used we're able to confirm there's nothing fishy
+going on... Well there's a lot of clever `unsafe` shenanigans going on, but to
+the best of my knowledge it all seems correct.
+
+Finally we're getting to the pointy end of `ErrorVTable`. This crate's
+downcasting support deserves a bit of extra scrutiny because it lets callers
+reinterpret `_object` as an arbitrary type, with `anyhow` taking on the burden
+of type checking.
+
+Sure you could use `object_ref` and the `downcast()` methods on
+`std::error::Error` for downcasting, but that was implemented by the folks
+behind the Rust standard library (with a much higher standard for reviews and
+code quality!), and even that [took a couple tries][error-type-id] to get
+right...
+
+```rust
+// src/error.rs
+
+struct ErrorVTable {
+    ...
+    object_downcast: unsafe fn(&ErrorImpl<()>, TypeId) -> Option<NonNull<()>>,
+    ...
+}
+
+// (line 566)
+// Safety: requires layout of *e to match ErrorImpl<E>.
+unsafe fn object_downcast<E>(e: &ErrorImpl<()>, target: TypeId) -> Option<NonNull<()>>
+where
+    E: 'static,
+{
+    if TypeId::of::<E>() == target {
+        // Caller is looking for an E pointer and e is ErrorImpl<E>, take a
+        // pointer to its E field.
+        let unerased = e as *const ErrorImpl<()> as *const ErrorImpl<E>;
+        let addr = &(*unerased)._object as *const E as *mut ();
+        Some(NonNull::new_unchecked(addr))
+    } else {
+        None
+    }
+}
+
+// (line 582)
+// Safety: requires layout of *e to match ErrorImpl<ContextError<C, E>>.
+#[cfg(feature = "std")]
+unsafe fn context_downcast<C, E>(e: &ErrorImpl<()>, target: TypeId) -> Option<NonNull<()>>
+where
+    C: 'static,
+    E: 'static,
+{
+    if TypeId::of::<C>() == target {
+        let unerased = e as *const ErrorImpl<()> as *const ErrorImpl<ContextError<C, E>>;
+        let addr = &(*unerased)._object.context as *const C as *mut ();
+        Some(NonNull::new_unchecked(addr))
+    } else if TypeId::of::<E>() == target {
+        let unerased = e as *const ErrorImpl<()> as *const ErrorImpl<ContextError<C, E>>;
+        let addr = &(*unerased)._object.error as *const E as *mut ();
+        Some(NonNull::new_unchecked(addr))
+    } else {
+        None
+    }
+}
+
+// (line 626)
+// Safety: requires layout of *e to match ErrorImpl<ContextError<C, Error>>.
+unsafe fn context_chain_downcast<C>(e: &ErrorImpl<()>, target: TypeId) -> Option<NonNull<()>>
+where
+    C: 'static,
+{
+    if TypeId::of::<C>() == target {
+        let unerased = e as *const ErrorImpl<()> as *const ErrorImpl<ContextError<C, Error>>;
+        let addr = &(*unerased)._object.context as *const C as *mut ();
+        Some(NonNull::new_unchecked(addr))
+    } else {
+        // Recurse down the context chain per the inner error's vtable.
+        let unerased = e as *const ErrorImpl<()> as *const ErrorImpl<ContextError<C, Error>>;
+        let source = &(*unerased)._object.error;
+        (source.inner.vtable.object_downcast)(&source.inner, target)
+    }
+}
+```
+
+The basic `object_downcast()` function seems fairly reasonable, if the type
+we're trying to downcast to (`target`) matches the type this vtable was created
+for (`E`), the type check passes and we can return a pointer to `_object`.
+
+I also really appreciate this comment:
+
+> ```rust
+> // Caller is looking for an E pointer and e is ErrorImpl<E>, take a
+> // pointer to its E field.
+> ```
+
+While it's nothing we don't already know after having read through most of
+the `error.rs` file in great detail, it's really useful to reiterate your
+assumptions for someone who doesn't have that background knowledge.
+
 ## Time Taken
 
 ## Conclusions
@@ -987,3 +1265,4 @@ to be called `erased`. This is because the underlying error type has been
 [repr-transparent]: https://doc.rust-lang.org/nomicon/other-reprs.html#reprtransparent
 [obstacles]: https://users.rust-lang.org/t/rust-koans/2408
 [comment]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/pull/8#pullrequestreview-345588595
+[error-type-id]: https://blog.rust-lang.org/2019/05/13/Security-advisory.html
