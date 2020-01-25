@@ -1294,6 +1294,25 @@ to the `object_downcast` method. The overall result is like taking an `&mut
 Error` and getting a `&mut` reference to one of its fields, but we access the
 field via `&self.inner`.
 
+(here's the original code for reference)
+
+```rust
+impl Error {
+    pub fn downcast_mut<E>(&mut self) -> Option<&mut E>
+    where
+        E: Display + Debug + Send + Sync + 'static,
+    {
+        let target = TypeId::of::<E>();
+        unsafe {
+            // Use vtable to find NonNull<()> which points to a value of type E
+            // somewhere inside the data structure.
+            let addr = (self.inner.vtable.object_downcast)(&self.inner, target)?;
+            Some(&mut *addr.cast::<E>().as_ptr())
+        }
+    }
+}
+```
+
 If you look at it in isolation and ignore the fact that `self` is borrowed
 mutably, it looks like `Error::downcast_mut()` is passing an immutable
 reference to `&self.inner` to the `object_downcast` function then casting the
