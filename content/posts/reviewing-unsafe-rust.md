@@ -43,7 +43,8 @@ crates from [*@dtolnay*][dtolnay] have helped simplify error handling in Rust a
 lot.
 
 The `thiserror` crate is a procedural macro for automating the implementation of
-`std::error::Error` and isn't overly interesting for our purposes.
+`std::error::Error` and isn't overly interesting for our purposes (it's still
+really cool, just doesn't contain tricky `unsafe` code).
 
 On the other hand, the `anyhow` crate presents a custom `Error` type and uses a
 `unsafe` code under the hood to implement nice things like downcasting and
