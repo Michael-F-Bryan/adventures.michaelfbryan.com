@@ -1298,6 +1298,50 @@ If you look at it in isolation and ignore the fact that `self` is borrowed
 mutably, it looks like `Error::downcast_mut()` is passing an immutable
 reference to `&self.inner` to the `object_downcast` function then casting the
 returned pointer to `&mut E`... Is that sound?
+
+I've created [a bug ticket][anyhow-62] for now and hopefully *@dtolnay* will
+be able to shine more light on the situation. I also tried to create a
+minimal reproducible example [on the playground][repro] but running it under
+`miri` fails with an execution error:
+
+```
+   Compiling playground v0.0.1 (/playground)
+error: Miri evaluation error: trying to reborrow for Unique, but parent tag <untagged> does not have an appropriate item in the borrow stack
+  --> src/main.rs:15:13
+   |
+15 |             &mut *ptr.cast().as_ptr()
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^ trying to reborrow for Unique, but parent tag <untagged> does not have an appropriate item in the borrow stack
+   |
+note: inside call to `TopLevel::get_field` at src/main.rs:32:20
+  --> src/main.rs:32:20
+   |
+32 |     println!("{}", top_level.get_field());
+   |                    ^^^^^^^^^^^^^^^^^^^^^
+   = note: inside call to `main` at /playground/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/src/libstd/rt.rs:67:34
+   = note: inside call to closure at /playground/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/src/libstd/rt.rs:52:73
+   = note: inside call to closure at /playground/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/src/libstd/sys_common/backtrace.rs:129:5
+   = note: inside call to `std::sys_common::backtrace::__rust_begin_short_backtrace::<[closure@DefId(1:6019 ~ std[8be3]::rt[0]::lang_start_internal[0]::{{closure}}[0]::{{closure}}[0]) 0:&dyn std::ops::Fn() -> i32 + std::marker::Sync + std::panic::RefUnwindSafe], i32>` at /playground/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/src/libstd/rt.rs:52:13
+   = note: inside call to closure at /playground/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/src/libstd/panicking.rs:305:40
+   = note: inside call to `std::panicking::r#try::do_call::<[closure@DefId(1:6018 ~ std[8be3]::rt[0]::lang_start_internal[0]::{{closure}}[0]) 0:&&dyn std::ops::Fn() -> i32 + std::marker::Sync + std::panic::RefUnwindSafe], i32>` at /playground/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/src/libstd/panicking.rs:281:13
+   = note: inside call to `std::panicking::r#try::<i32, [closure@DefId(1:6018 ~ std[8be3]::rt[0]::lang_start_internal[0]::{{closure}}[0]) 0:&&dyn std::ops::Fn() -> i32 + std::marker::Sync + std::panic::RefUnwindSafe]>` at /playground/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/src/libstd/panic.rs:394:14
+   = note: inside call to `std::panic::catch_unwind::<[closure@DefId(1:6018 ~ std[8be3]::rt[0]::lang_start_internal[0]::{{closure}}[0]) 0:&&dyn std::ops::Fn() -> i32 + std::marker::Sync + std::panic::RefUnwindSafe], i32>` at /playground/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/src/libstd/rt.rs:51:25
+   = note: inside call to `std::rt::lang_start_internal` at /playground/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/src/libstd/rt.rs:67:5
+   = note: inside call to `std::rt::lang_start::<()>`
+
+error: aborting due to previous error
+
+error: could not compile `playground`.
+
+To learn more, run the command again with --verbose.
+```
+
+The error message isn't the most intuitive, but I *think* this is saying we're
+trying to borrow something mutably when we aren't allowed to? I don't know
+enough about `miri` to say whether it's detected *Undefined Behaviour* or if
+I've encountered a bug in `miri`'s evaluator.
+
+[anyhow-62]: https://github.com/dtolnay/anyhow/issues/62
+[repro]: https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=e328faa721f7a1ed3f9820712f2e7097
 {{% /notice %}}
 
 To analyse the `context_downcast()` function we'll want to remind ourselves of
