@@ -224,7 +224,7 @@ graph TD;
 {{< /mermaid >}}
 
 A programmer would immediately recognise this "map" for what it is, a *State
-Machine Diagram*. Unbenounced to them, I had just explained a fundamental
+Machine Diagram*. Unbeknownst to them, I had just explained a fundamental
 technique in computer science and how this radio's UI was coded under the
 hood.
 
@@ -248,10 +248,75 @@ particular name.
 
 ## I Made *$FEATURE* 10x Faster
 
-## It's Okay to Say *"I Don't Know"*
+## It's Okay to Say *"I Don't Know"*...
+
+... but you should follow it up with something like *"but if you give me 5
+minutes I'll be able to tell you"*.
+
+This is something I see a lot. People are afraid to show their ignorance so
+they'd rather struggle in silence or make something up.
+
+For example, if your manager came to you saying *"a customer has asked for
+feature X, is it possible? and if so, how long will it take to implement?"*.
+
+9 times out of 10 the honest answer is *"I don't know"*, but that doesn't
+really help the manager decide when to implement the feature. They've come to
+you because you are the expert in the relevant area and the best equipped to
+provide an answer.
+
+Some people will prefer to guess or mislead (e.g. by saying *"yeah we can do
+in 2 or 3 weeks"*), but that doesn't normally work out in the long run. At best
+your time estimate may be off and the task overruns by a couple weeks, at worst
+you could sink months into implementing the feature only to find it's impossible
+to do with the current application architecture.
+
+That's a great way to lose people's respect.
+
+If you were to reply with something like *"I'm not sure, but let me get back
+to you in 5-10 minutes and I'll have an answer"* this shows a couple things:
+
+- You are willing to admit not knowing everything (i.e. not egotistical)
+- You take pride in your word and don't want to give an inaccurate answer
+- You respect the person enough to spend some of your time helping answer their
+  question
+- You're a nice guy 🙂
+
+It also buys you enough time to figure things out for yourself without being
+put on the spot.
+
+This reminds me of [an old parable][parable],
+
+> Other people don't (usually) expect you to know everything about your field,
+> instead they expect you to have the tools to research the question and
+> translate the answer into terms they'll be able to understand.
+>
+> The Graybeard engineer retired and a few weeks later the Big Machine broke
+> down, which was essential to the company’s revenue. The Manager couldn’t get
+> the machine to work again so the company called in Graybeard as an
+> independent consultant.
+>
+> Graybeard agrees. He walks into the factory, takes a look at the Big Machine,
+> grabs a sledge hammer, and whacks the machine once whereupon the machine
+> starts right up. Graybeard leaves and the company is making money again.
+>
+> The next day Manager receives a bill from Graybeard for $5,000. Manager is
+> furious at the price and refuses to pay. Graybeard assures him that it’s a
+> fair price. Manager retorts that if it’s a fair price Graybeard won’t mind
+> itemizing the bill. Graybeard agrees that this is a fair request and
+> complies.
+>
+> The new, itemized bill reads….
+>
+> Hammer:  $5
+>
+> Knowing where to hit the machine with hammer: $4995
+
+Anyone is able to type questions into Google, the difference is a Software
+Engineer knows which keywords to use and how to interpret the results.
 
 ## Conclusions
 
 [navmesh]: https://en.wikipedia.org/wiki/Navigation_mesh
 [a-star]: https://en.wikipedia.org/wiki/A*_search_algorithm
 [kerf]: https://www.esabna.com/us/en/education/blog/what-is-cutting-kerf.cfm
+[parable]: https://www.buzzmaven.com/old-engineer-hammer-2/
