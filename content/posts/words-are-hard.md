@@ -9,15 +9,14 @@ which I think this is my favourite variant,
 
 {{< tweet 7269997868 >}}
 
-I've been doing this long enough to be burned by all three at some point, but
-as someone working in a small business who represents the software side of
-our product and is constantly rubbing shoulders with non-programmers, I
-believe the ability to correctly communicate an idea or concept in a way that
-others can understand (i.e. to name things) is by far the most important.
+I've been writing software long enough to be burned by all three at some
+point, but as someone working in a small business who represents the software
+side of our product and is constantly rubbing shoulders with non-programmers,
+I believe the ability to correctly communicate an idea or concept in a way
+that others can understand (i.e. to name things) is by far the most
+important.
 
-While I'm not always the best at this, I'd like to think I'm pretty good at
-working with people from other fields and would like to share a couple things
-I've picked up along the way.
+It's also really hard.
 
 ## Techno-Babble
 
@@ -244,8 +243,6 @@ you are talking with someone helps make sure everyone is on the same page
 (pun intended) and that you are both meaning the same thing when you use a
 particular name.
 
-## "Done" and "Fixed"
-
 ## I Made *$FEATURE* 10x Faster
 
 Say you've made some performance tweaks and now a particular piece of code is
@@ -326,8 +323,8 @@ to you in 5-10 minutes and I'll have an answer"* this shows a couple things:
   question
 - You're a nice guy 🙂
 
-It also buys you enough time to figure things out for yourself without being
-put on the spot.
+(It also buys you enough time to figure things out for yourself without being
+put on the spot)
 
 This reminds me of [an old parable][parable],
 
@@ -360,6 +357,21 @@ Anyone is able to type questions into Google, the difference is a Software
 Engineer knows which keywords to use and how to interpret the results.
 
 ## Conclusions
+
+This was a different take to my usual code-heavy articles, but sometimes it's
+useful to remember there's more to this world than just writing code.
+
+Programmers are (not without reason) stereotyped as having poor communication
+and social skills. A big part of our job requires effectively communicating
+with others, and hopefully you can gain something from my experiences.
+
+Some people may think of the topics I've mentioned as office politics and
+manipulating other people's view of you, and my response to that is,
+
+> well... yeah. But isn't that the case with most inter-person interactions?
+>
+> I'm just using psychology to make it easier for coders and non-coders to talk
+> a common language and work together for the betterment of a common goal.
 
 [navmesh]: https://en.wikipedia.org/wiki/Navigation_mesh
 [a-star]: https://en.wikipedia.org/wiki/A*_search_algorithm
