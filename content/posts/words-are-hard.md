@@ -27,7 +27,7 @@ the concise communication of a concept to others.
 This jargon is important. If a co-worker and I are trying to choose between
 two different algorithms to solve a particular problem we might say that
 *"option A is `O(n^2)` with minimal up-front overhead, while option B is
-ammortized to `O(n log n)` with a large setup cost"*.
+amortised to `O(n log n)` with a large setup cost"*.
 
 This single sentence says a lot about which scenarios an algorithm should be
 used for and how they are implemented under the hood,
@@ -37,7 +37,7 @@ used for and how they are implemented under the hood,
   setup cost will be compensated for by more efficient runtime
 - If you're going to be using this algorithm in a loop, you should prefer option
   A to avoid the expensive setup code
-- We may be able to ammortise option B's setup cost with caching
+- We may be able to amortise option B's setup cost with caching
 - Option A probably compares each input with every other input (e.g. `for x
   in inputs { for y in inputs { if some_condition(x, y) { ... }}}`)
 - Option B probably constructs a tree at the start then does a linear search
@@ -63,18 +63,22 @@ almost no value to the conversation.
 
 This is what I'm referring to as techno-babble.
 
-A lot of the time you've got to remember that these details just aren't relevant
-to people from other fields.
+I'm going to be brutal here, a lot of the time these details just aren't
+relevant to people from other fields and they really don't care.
 
 For example, say you're explaining an awesome new feature which will find the
-shortest path from A to B by generating a [navmesh][nav] and applying the [A*
-pathfinding algorithm][a-star].
+shortest path from A to B by generating a [navmesh][navmesh] and applying the
+[A* pathfinding algorithm][a-star].
 
 Don't describing it like I did in the last sentence, say something like *"we
 figure out a bunch of possible paths then use clever algorithms from game
-development to find the best overall route"*. It doesn't matter that A\* is used
-for more than telling an NPC how to move around the game world, the other person
-will have played games in the past and know what you're talking about.
+development to find the best overall route"*.
+
+It doesn't matter that we're using A\* here (as opposed to Dijkstra or a
+breadth-first search), or that A\* is used for more than telling an NPC how
+to move around the game world. The other person just cares that you can find
+a good path from A to B and that we're using reliable tools already in use in
+other areas.
 
 {{< figure
     src="/img/navmesh-and-a-star.png"
@@ -91,6 +95,9 @@ just enough to be dangerous will say *"that's really complex, why can't you
 just do X?"* and you *do* need to let them know that you are the expert here
 and they don't really know what they're talking about... But there's still a
 right way and a wrong way of going about that.
+
+Don't try to use techno-babble to satisfy your ego, it ostracises people and
+gives us a bad name.
 
 ## Be Respectful
 
@@ -123,10 +130,10 @@ board, kinda like a human rubber ducky. If you're trying to come up with a
 solution to something, explain the rough problem to them and how you'd like
 to solve it, then ask if they can think of a better way of doing things.
 
-Our company works in the CNC industry and for things that have some root in
-the real world (e.g. say you're trying to implement [cut width
-compensation][kerf]) mechanical engineers are really good at reasoning about
-things visually.
+Our company works in the CNC industry and for things that have some
+connection to the real world (e.g. say you're trying to implement [cut width
+compensation][kerf]) engineers are really good at analysing problems based in
+physics or geometry.
 
 ## Personify, Exaggerate, and Use Analogies
 
@@ -145,9 +152,9 @@ they can answer customer questions better. I might say something like this:
 > can gloss over *how* a cart and checkout work).
 >
 > From there, Charlie's computer sends the order to Sam (the web server) who
-> checks with Debbie (the database) to make sure there's enough stock to fulfill
+> checks with Debbie (the database) to make sure there's enough stock to fulfil
 > the order. Once Debbie gives the okay, Sam lets Charlie know the purchase was
-> successful and gives him a reciept (possibly also sending an invoice via
+> successful and gives him a receipt (possibly also sending an invoice via
 > email).
 >
 > There's also a guy out the back (let's call him Fred) who's constantly
@@ -166,12 +173,76 @@ network diagram and using opaque words like "web server", "Event-Driven
 Architecture", or "Apache Kafka" (see the section on
 [techno-babble](#techno-babble)).
 
-If you're trying to describe how a pathfinding algorithm works to a
-layperson, you don't say *"lines we've already visited are weighted higher"*,
-you say *"the algorithm really doesn't want to go over lines it's already
-visited"*. It's subtle, but personifying the pathfinding algorithm by saying
-it really wants to do X and will try really hard to avoid Y means people will
-often just *Get It*.
+As another example, if you're trying to describe how a pathfinding algorithm
+works to a layperson, you don't say *"lines we've already visited are
+weighted higher"*, you say *"the algorithm really doesn't want to go over
+lines it's already visited"*.
+
+It's subtle, but personifying the pathfinding algorithm by saying it *"really
+wants to do X"* and will *"try really hard to avoid Y"* often helps people to
+just *Get It*.
+
+Anecdotes (when relevant) are helpful too. You've probably already noticed
+that this article is chock full of examples, and instead of talking about
+things in the abstract I've provided a concrete story which helps explain my
+point. This is no accident.
+
+## Draw Pretty Pictures
+
+It sounds cliché, but sometimes a picture really does paint a thousand words.
+
+A couple months back I was doing a radio course and a lady next to me was
+having trouble remembering which buttons to press to navigate around the menus
+on this little 16x2 LCD display.
+
+I asked if she'd like me to draw a map.
+
+She thought I was being a smart ass and making fun of her.
+
+I wasn't.
+
+Instead, I found a bit of scrap paper and together we drew up something like
+this:
+
+{{< mermaid >}}
+graph TD;
+
+    Idle;
+    advanced[Advanced Menu];
+    dual_receive[Single/Dual Receive];
+    main[Main Menu];
+    select_channel[Select Channel Using Keypad];
+
+    Idle-- A -->dual_receive -->Idle;
+    Idle-- left eyebrow -->main;
+    main-- cancel -->Idle;
+    main-- "advanced" -->advanced;
+    advanced-- cancel -->Idle;
+    Idle-- select -->select_channel;
+    select_channel-- number keys -->select_channel;
+    select_channel-- enter -->Idle;
+{{< /mermaid >}}
+
+A programmer would immediately recognise this "map" for what it is, a *State
+Machine Diagram*. Unbenounced to them, I had just explained a fundamental
+technique in computer science and how this radio's UI was coded under the
+hood.
+
+But the lady (and the rest of the group by this stage) didn't care. This was a
+map that they could use to navigate the UI.
+
+There's something oddly satisfying about finding a way to make a tricky concept
+approachable to someone from another field. Especially when they're able to
+identify that the map actually has a bug in it and you need to press and hold
+*cancel* to get back to the *Idle* state, because pressing *cancel* normally
+takes you back to the *Main Menu*.
+
+On my desk I have a book of un-lined paper. Normally it's used for my weekly
+to-do list or scratch paper when I'm trying to work something out, but it
+frequently doubles as an explanation aid. Being able to sketch things out as
+you are talking with someone helps make sure everyone is on the same page
+(pun intended) and that you are both meaning the same thing when you use a
+particular name.
 
 ## "Done" and "Fixed"
 
