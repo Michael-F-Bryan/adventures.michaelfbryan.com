@@ -248,6 +248,51 @@ particular name.
 
 ## I Made *$FEATURE* 10x Faster
 
+Say you've made some performance tweaks and now a particular piece of code is
+a lot faster. How do you express this to someone who isn't a coder or can't see
+the source code?
+
+On one hand, if someone asks what you've been up to over the last week you
+could tell them the truth and say *"I added caching to `lookup_something()`
+to speed up common lookups and switched the algorithm in `detect_collisions()`
+from `O(n^2)` to `O(n log n)`"* but there's a good chance that'll mean
+absolutely nothing to them (see [techno-babble](#techno-babble)).
+
+You could also say *"miscellaneous performance tweaks"*, but that sounds like
+a [cop out][co] and your manager will start questioning why they bother
+employing you.
+
+Something I've heard a lot is people saying *"I've made *$FEATURE* 10x
+faster"* (or some other arbitrary number) and leave it at that. This usually
+evokes a large amount of congratulation from non-coders, however it tends to
+be a bit... misleading.
+
+A lot of the time what's actually happened is you improved the performance of
+a couple functions, but unless those functions were legitimate bottlenecks
+there's a good chance users won't see any difference.
+
+{{% notice note %}}
+If you're familiar with [Amdahl's Law][amdahl], improving the performance of
+something that isn't a bottleneck is kinda like throwing more cores at a
+problem that is inherently serial.
+
+[amdahl]: https://en.wikipedia.org/wiki/Amdahl%27s_law
+{{% /notice %}}
+
+It also begs the question, what did you do to improve performance by a factor
+of **10**? That's an oddly specific number, did your original code do the
+same thing multiple times? Or maybe your original code was actually polling
+(say we're reading from hardware or some 3rd party site) 10x slower than it
+should have? Even that makes me question your abilities because you either
+guessed (poorly) the original poll rate or you're still leaving performance on
+the table by using polling instead of a more efficient event-based system.
+
+Instead, I think we should be trying to find a middle ground between accuracy
+and understandability. If you make a change which improves the algorithmic
+complexity of a bit of code (e.g. `detect_collisions()` goes from `O(n^2)` to
+`(O(n log n)`) you can say *"feature X should now scale to larger inputs
+without run times blowing out like it used to"*.
+
 ## It's Okay to Say *"I Don't Know"*...
 
 ... but you should follow it up with something like *"but if you give me 5
@@ -320,3 +365,4 @@ Engineer knows which keywords to use and how to interpret the results.
 [a-star]: https://en.wikipedia.org/wiki/A*_search_algorithm
 [kerf]: https://www.esabna.com/us/en/education/blog/what-is-cutting-kerf.cfm
 [parable]: https://www.buzzmaven.com/old-engineer-hammer-2/
+[co]: https://www.urbandictionary.com/define.php?term=cop%20out
