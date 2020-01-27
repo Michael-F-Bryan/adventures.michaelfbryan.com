@@ -142,3 +142,14 @@ h2 a {
 a code {
     color: inherit;
 }
+
+/*
+ * Make sure SVG images don't make the page wider than the viewport on mobile
+ * devices.
+ *
+ * Fixes https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues/10
+ */
+
+svg {
+    max-width: 100%;
+}
