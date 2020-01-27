@@ -71,8 +71,8 @@ shortest path from A to B by generating a [navmesh][navmesh] and applying the
 [A* pathfinding algorithm][a-star].
 
 Don't describing it like I did in the last sentence, say something like *"we
-figure out a bunch of possible paths then use clever algorithms from game
-development to find the best overall route"*.
+figure out a bunch of possible paths then use clever algorithms employed in
+the games industry to find the best overall route"*.
 
 It doesn't matter that we're using A\* here (as opposed to Dijkstra or a
 breadth-first search), or that A\* is used for more than telling an NPC how
