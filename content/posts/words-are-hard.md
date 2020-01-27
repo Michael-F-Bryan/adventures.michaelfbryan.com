@@ -1,7 +1,8 @@
 ---
 title: "Words Are Hard - An Essay on Communicating With Non-Programmers"
-date: "2020-01-26T17:48:24+08:00"
-draft: true
+date: "2020-01-27T10:20:00+08:00"
+tags:
+- people-skills
 ---
 
 There's a well-known saying about the hard problems in computer science, of
