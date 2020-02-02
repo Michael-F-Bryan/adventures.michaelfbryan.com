@@ -214,33 +214,30 @@ when the user is in the *"Arc Mode"* you just need to consider the states and
 transitions related to the arc mode's sub-states.
 
 {{< mermaid >}}
-graph TD;
-    Idle;
-    arc[Arc Mode];
-    point[Point Mode];
+stateDiagram
+    state "Idle" as idle
+    state "Arc Mode" as arc
+    state "Point Mode" as point
 
-    arc_idle[Arc Mode Idle State];
-    arc_selected_centre[Selected Centre];
-    arc_selected_start[Selected Start Point];
-    arc_selected_e[Selected End Point];
+    [*] --> idle
+    idle --> arc
+    idle --> point
 
-    arc --> arc_idle;
+    state arc {
+        state "Arc Mode Idle State" as arc_idle
+        state "Selected Centre" as arc_selected_centre
+        state "Selected Start Point" as arc_selected_start
+        state "Selected End Point" as arc_selected_e
 
-    subgraph Top-Level;
-        arc --> Idle;
-        point --> Idle;
-        Idle --> arc;
-        Idle --> point;
-    end;
+        arc_idle --> arc_selected_centre
+        arc_selected_centre --> arc_selected_start
+        arc_selected_centre --> arc_idle: Cancel
+        arc_selected_start --> arc_selected_e
+        arc_selected_start --> arc_idle: Cancel
+        arc_selected_e --> arc_idle: Arc added to drawing
+    }
 
-    subgraph Arc Mode;
-        arc_idle --> arc_selected_centre;
-        arc_selected_centre --> arc_selected_start;
-        arc_selected_centre -- Cancel --> arc_idle;
-        arc_selected_start --> arc_selected_e;
-        arc_selected_start -- Cancel --> arc_idle;
-        arc_selected_e -- Arc added to drawing --> arc_idle;
-    end;
+    state point { }
 {{< /mermaid >}}
 
 There are a couple ways you can implement nesting, both with their pros and
@@ -264,6 +261,20 @@ will "return" to the original state by popping itself from the stack.
 This reusability means you can avoid a lot of code duplication but because
 your states need to be more generic, by their very nature you aren't able to
 make as many assumptions about what is going on in the big picture.
+
+{{% notice tip %}}
+Something else to consider is whether it's possible to trigger a transition
+from outside the state machine.
+
+A typical example of this is when the user clicks a toolbar button to start
+using a different tool. In this case if a transition is triggered you need a
+way to tell the current mode it has been cancelled and it needs to clean up
+after itself, otherwise you risk leaving temporary artifacts around which the
+user can't interact.
+
+The way this is implemented will change depending on whether you're using
+nested state machines or a pushdown automata.
+{{% /notice %}}
 
 Like a lot of things where the real world is involved there are trade-offs,
 and it's the Software Engineer's job to figure out which alternative would be
@@ -302,12 +313,17 @@ For now we only care about four events,
 - The mouse has moved
 - A button was pressed on the keyboard
 
-This gives us a nice starting point for the `State` trait.
+Combining this with an `on_cancelled()` method, this gives us a nice starting
+point for the `State` trait.
 
 ```rust
 // demo/src/modes/mod.rs
 
 pub trait State {
+    /// The [`State`] has been cancelled and needs to clean up any temporary
+    /// objects it created.
+    fn on_cancelled(&mut self, _drawing: &mut dyn Drawing) {}
+
     /// The left mouse button was pressed.
     fn on_mouse_down(
         &mut self,
@@ -365,7 +381,8 @@ occurred.
 
 use arcs::{CanvasSpace, DrawingSpace};
 use euclid::Point2D;
-
+            If the user releases the mouse without having moved,
+            don't add a
 #[derive(Debug, Clone, PartialEq)]
 pub struct MouseEventArgs {
     /// The mouse's location on the drawing.
@@ -445,6 +462,365 @@ pub trait State: Debug {
 
 ## Idle Mode
 
+We usually refer to the base `State` for an application as *Idle*. This is where
+the user isn't in the middle of an interaction and the computer is waiting to
+do something.
+
+{{% notice note %}}
+As a convention I'll refer to top-level `State`s as *Modes* (i.e. `IdleMode`,
+`AddArcMode`, `AddPointMode`, etc.), with any sub-states being referred to as
+just states.
+
+This is just something I've noticed when watching people train new users. The
+top-level `State` that a user has conscious control over (e.g. by clicking
+buttons on the toolbar) normally gets referred to as a *Mode*, and
+intermediate `State`s created while performing an action inside a mode aren't
+normally significant enough (to an end user) to get a proper name.
+{{% /notice %}}
+
+First we need to create a type representig the `Idle` state and implement
+`State` for it.
+
+```rust
+// demo/src/modes/idle.rs
+
+use crate::modes::State;
+
+#[derive(Debug)]
+pub struct Idle;
+
+impl State for Idle {}
+```
+
+We'll also need to tell Rust that `idle.rs` is part of the `modes` module and
+we want the `Idle` mode publicly accessible.
+
+```rust
+// demo/src/modes/mod.rs
+
+mod idle;
+
+pub use idle::Idle;
+```
+
+Next we need to figure out what we want our `Idle` mode to do. Some normal
+responsibilities for an `Idle` mode are,
+
+- Clicking on one or more objects to select them
+- Triggering a "drag" action when the user clicks and drags on an object
+- Clearing the current selection when the user clicks in the middle of nowhere
+
+In addition to this we can hard-code a couple keyboard shortcuts.
+
+This is mainly because I'm lazy and don't want to mess around with giving the
+`arcs` demo a toolbar for changing modes just yet, but not having to worry
+about external transitions right away should also make it easier for the
+reader to follow.
+
+- `P` - transitions to `PointMode` for drawing points
+- `L` - transitions to `LineMode` for drawing lines
+- `A` - transitions to `ArcMode` for drawing arcs
+
+I'm envisioning something like this for our `Idle` mode.
+
+{{< mermaid >}}
+stateDiagram
+
+    state arc: Arc Mode
+    state line: Line Mode
+    state point: Point Mode
+
+    [*] --> Idle
+    Idle --> arc: A
+    Idle --> line: L
+    Idle --> point: P
+    line --> Idle: Cancel
+    arc --> Idle: Cancel
+    point --> Idle: Cancel
+
+    state Idle {
+        idle --> dragging: Mouse Down
+        dragging --> dragging: Mouse Move
+        dragging --> idle: Mouse Up
+
+        note right of dragging
+            If the user cancels the move (e.g. by pressing &lt;esc;&gt;) the
+            selected objects move back to their original location.
+        end note
+    }
+{{< /mermaid >}}
+
+The keyboard shortcuts for changing to `AddArcMode` and friends is easy enough
+to implement. We just need to handle the `on_key_pressed()` event and `match`
+on the key that was pressed, returning a `Transition::ChangeState` if it's
+a button we support.
+
+```rust
+// demo/src/modes/idle.rs
+
+impl State for Idle {
+    fn on_key_pressed(
+        &mut self,
+        _drawing: &mut dyn Drawing,
+        event_args: &KeyboardEventArgs,
+    ) -> Transition {
+        match event_args.key {
+            Some(VirtualKeyCode::A) => {
+                Transition::ChangeState(Box::new(AddArcMode::default()))
+            },
+            Some(VirtualKeyCode::P) => {
+                Transition::ChangeState(Box::new(AddPointMode::default()))
+            },
+            Some(VirtualKeyCode::L) => {
+                Transition::ChangeState(Box::new(AddLineMode::default()))
+            },
+            _ => Transition::DoNothing,
+        }
+    }
+}
+```
+
+We haven't actually created `AddArcMode`, `AddPointMode`, and `AddLineMode` yet,
+so let's stub out some code for them.
+
+```rust
+// demo/src/modes/add_point_mode.rs
+
+use crate::modes::State;
+
+#[derive(Debug, Default)]
+pub struct AddPointMode;
+
+impl State for AddPointMode {}
+
+
+// demo/src/modes/add_line_mode.rs
+
+use crate::modes::State;
+
+#[derive(Debug, Default)]
+pub struct AddLineMode;
+
+impl State for AddLineMode {}
+
+
+// demo/src/modes/add_arc_mode.rs
+
+use crate::modes::State;
+
+#[derive(Debug, Default)]
+pub struct AddArcMode;
+
+impl State for AddArcMode {}
+
+
+// demo/src/modes/mod.rs
+
+mod add_arc_mode;
+mod add_line_mode;
+mod add_point_mode;
+
+pub use add_arc_mode::AddArcMode;
+pub use add_line_mode::AddLineMode;
+pub use add_point_mode::AddPointMode;
+```
+
+This code isn't overly interesting. I've just created a couple new types and
+done the bare minimum so they can be used as `State`s.
+
+I've also given them default constructors because it makes switching to that
+mode easier, this works when there isn't any setup that needs to be done to
+enter a state (e.g. no need to create temporary objects).
+
+To make sure we are actually changing state we can write a test.
+
+```rust
+// demo/src/modes/idle.rs
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug, Default)]
+    struct DummyDrawing;
+
+    impl Drawing for DummyDrawing { }
+
+    #[test]
+    fn change_to_arc_mode() {
+        let mut idle = Idle::default();
+        let mut drawing = DummyDrawing;
+        let args = KeyboardEventArgs::pressing(VirtualKeyCode::A);
+
+        let got = idle.on_key_pressed(&mut drawing, &args);
+
+        match got {
+            Transition::ChangeState(new_state) => ...,
+            Transition::DoNothing => panic!("We expected a state change"),
+        }
+    }
+}
+```
+
+(I also decided to pull creating the `KeyboardEventArgs` with
+`VirtualKeyCode::A` into its own constructor)
+
+```rust
+// demo/src/modes/mod.rs
+
+impl KeyboardEventArgs {
+    /// Create a new [`KeyboardEventArgs`] which just presses a key.
+    pub fn pressing(key: VirtualKeyCode) -> Self {
+        KeyboardEventArgs {
+            key: Some(key),
+            ..Default::default()
+        }
+    }
+}
+```
+
+The tricky bit is figuring out how to ensure we actually got the state we
+expected (that `...` on the `Transition::ChangeState` branch). Every `State`
+must implement `Debug` so in theory we could get the debug representation and
+do some sort of `repr.contains("AddArcMode")`, but that's a bit *too* ~~hacky~~
+brittle for my liking.
+
+Another option is to use the [`std::any::Any` trait][any] as an escape hatch
+intended for testing purposes. This is a bit like the `Object` in Java where
+you can have a pointer to *something* and then try to downcast it to a more
+specific type.
+
+The best way to implement this is by saying anything implementing `State` needs
+to have an `as_any(&self) -> &dyn Any` method. To avoid needing to manually
+write this it can be pulled out into a trait which is automatically implemented
+by any type that is `Any`.
+
+```rust
+// demo/src/modes/mod.rs
+
+use std::any::Any;
+
+/// A helper trait for casting `self` to [`Any`].
+pub trait AsAny {
+    fn as_any(&self) -> &dyn Any;
+}
+
+impl<A: Any> AsAny for A {
+    fn as_any(&self) -> &dyn Any { self }
+}
+```
+
+And then we can add `AsAny` as a pre-requisite for the `State` trait.
+
+```rust
+// demo/src/modes/mod.rs
+
+pub trait State: Debug + AsAny {
+    ...
+}
+```
+
+To make the testing code easier I'll also add a method to `Transition` which lets
+us check whether it will change to a particular `State`.
+
+```rust
+// demo/src/modes/mod.rs
+
+impl Transition {
+    /// Checks whether the transition will change to a particular [`State`].
+    pub fn changes_to<S>(&self) -> bool
+    where S: State + 'static
+    {
+        match self {
+            Transition::ChangeState(new_state) => (**new_state).as_any().is::<S>(),
+            _ => false,
+        }
+    }
+}
+```
+
+Now we can write tests for our three keyboard shortcuts. Thanks to the helper
+functions we made along the way our tests are actually pretty readable.
+
+```rust
+// demo/src/modes/idle.rs
+
+#[cfg(test)]
+mod tests {
+    ...
+
+    #[test]
+    fn change_to_arc_mode() {
+        let mut idle = Idle::default();
+        let mut drawing = DummyDrawing::default();
+        let args = KeyboardEventArgs::pressing(VirtualKeyCode::A);
+
+        let got = idle.on_key_pressed(&mut drawing, &args);
+
+        assert!(got.changes_to::<AddArcMode>());
+    }
+
+    #[test]
+    fn change_to_line_mode() {
+        let mut idle = Idle::default();
+        let mut drawing = DummyDrawing::default();
+        let args = KeyboardEventArgs::pressing(VirtualKeyCode::L);
+
+        let got = idle.on_key_pressed(&mut drawing, &args);
+
+        assert!(got.changes_to::<AddLineMode>());
+    }
+
+    #[test]
+    fn change_to_point_mode() {
+        let mut idle = Idle::default();
+        let mut drawing = DummyDrawing::default();
+        let args = KeyboardEventArgs::pressing(VirtualKeyCode::P);
+
+        let got = idle.on_key_pressed(&mut drawing, &args);
+
+        assert!(got.changes_to::<AddPointMode>());
+    }
+}
+```
+
+We should also add a test to make sure pressing other keys does nothing.
+
+```rust
+// demo/src/modes/idle.rs
+
+#[cfg(test)]
+mod tests {
+    ...
+
+    #[test]
+    fn pressing_any_other_key_does_nothing() {
+        let mut idle = Idle::default();
+        let mut drawing = DummyDrawing;
+        let args = KeyboardEventArgs::pressing(VirtualKeyCode::Q);
+
+        let got = idle.on_key_pressed(&mut drawing, &args);
+
+        assert!(got.does_nothing());
+    }
+}
+
+
+// demo/src/modes/mod.rs
+
+impl Transition {
+    ...
+
+    /// Is this a no-op [`Transition`]?
+    pub fn does_nothing(&self) -> bool {
+        match self {
+            Transition::DoNothing => true,
+            _ => false,
+        }
+    }
+}
+```
+
 ## Wiring it Up to the UI
 
 ## Add Point Mode
@@ -454,3 +830,4 @@ pub trait State: Debug {
 [shotgun]: https://refactoring.guru/smells/shotgun-surgery
 [state]: https://refactoring.guru/design-patterns/state
 [pda]: https://en.wikipedia.org/wiki/Pushdown_automaton
+[any]: https://doc.rust-lang.org/std/any/trait.Any.html
