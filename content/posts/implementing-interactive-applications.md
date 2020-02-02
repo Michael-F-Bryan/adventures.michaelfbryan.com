@@ -282,6 +282,13 @@ the least bad in the long term.
 
 ## A Note On Optimising and Dynamic Dispatch
 
+{{% notice warning %}}
+TODO: Write a rant about how sometimes dynamic dispatch is better than static
+dispatch because there's less line noise or cognitive overhead. We also use
+dynamic dispatch for high-level operations and use static dispatch where
+performance really matters.
+{{% /notice %}}
+
 ## The Infrastructure
 
 The first step in making our application interactive is to create the
@@ -1101,9 +1108,29 @@ impl State for DraggingSelection {
 }
 ```
 
-Like I said, the implementation is deliberately simple for now. We aren't even
-handling debounce.
+Like I said, the implementation is deliberately simple for now. We aren't
+even handling debounce or cancellation, but you might see how you would go
+about implementing them.
 
+## A Brief Intermission For Refactoring
+
+I don't know about you, but we've only written a couple states so far and I'm
+already feeling like that `Drawing` trait will turn into a massive interface
+pretty quickly.
+
+The way I see it, our `Drawing` (the interface a `State` can use to interact
+with the outside world) is something which gives us access to the ECS's
+[`specs::World`][specs-world], has a `Viewport` representing which part of
+the drawing is being displayed, the `UndoRedoBuffer`, and maybe some knobs
+and levers for communicating with the UI (e.g. to request that the canvas
+gets redrawn).
+
+Using this interpretation, the current `Drawing` trait seems a little...
+confused.
+
+Even its name isn't quite correct. We aren't necessarily giving each `State` a
+reference to the drawing, they're getting contextual information relevant to
+the drawing and application as a whole. Hmm... How about `ApplicationContext`?
 
 ## Wiring it Up to the UI
 
@@ -1116,3 +1143,4 @@ handling debounce.
 [pda]: https://en.wikipedia.org/wiki/Pushdown_automaton
 [any]: https://doc.rust-lang.org/std/any/trait.Any.html
 [drawing-object]: https://michael-f-bryan.github.io/arcs/crate_docs/arcs/components/struct.DrawingObject.html
+[specs-world]: https://docs.rs/specs/0.15.1/specs/struct.World.html
