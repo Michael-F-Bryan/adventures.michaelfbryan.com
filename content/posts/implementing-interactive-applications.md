@@ -292,6 +292,17 @@ machine route instead of using pushdown automata. In this case we're
 preferring to make the app easier to reason about at the cost of writing
 duplicate code when modes have behaviour in common.
 
+{{% notice info %}}
+A lot of the content from now on will be focused around [the `arcs` CAD
+library][arcs]. In [a previous article][prev] I've gone into a fair amount of
+detail regarding its design, in particular the use of an *Entity Component
+System* architecture, so you may want to have a skim through that if you
+start feeling lost.
+
+[arcs]: https://github.com/Michael-F-Bryan/arcs
+[prev]: {{< ref "ecs-outside-of-games.md" >}}
+{{% /notice %}}
+
 We don't want our `State`s to be coupled to any particular implementation of
 the `Drawing`, instead it just needs to know what can be done with a drawing.
 This makes testing a lot easier because we can insert mocks if necessary.
@@ -895,7 +906,7 @@ impl State for WaitingToSelect {}
 ```
 
 We also need to update `Idle` to have a `nested` field and give it a default
-constructor that sets `nested` to `WaitingToSelect`.
+constructor that sets `nested` to the `WaitingToSelect` state.
 
 ```rust
 // demo/src/modes/idle.rs
@@ -914,6 +925,186 @@ impl Default for Idle {
 }
 ```
 
+To implement `WaitingToSelect` we'll need to handle the `on_mouse_down()`
+event and ask the `Drawing` for a list of items under the cursor.
+
+That requires `Drawing` to have an `entities_under_point()` method.
+
+```rust
+// demo/src/modes/mod.rs
+
+use arcs::{Point, components::DrawingObject};
+use specs::Entity;
+
+pub trait Drawing {
+    /// Get a list of all the entities which lie "under" a point, for some
+    /// definition of "under".
+    ///
+    /// Typically this will be implemented by the drawing canvas having some
+    /// sort of "pick box" where anything within, say, 3 pixels of something is
+    /// considered to be "under" it.
+    fn entities_under_point(
+        &self,
+        location: Point,
+    ) -> Box<dyn Iterator<Item = (Entity, &DrawingObject)>>;
+
+    ...
+}
+```
+
+This function signature is non-trivial, so let's take a moment to deconstruct
+it.
+
+A caller asks the `Drawing` an iterator over the entities underneath some
+`location` on the drawing. We've decided to use an iterator here instead of
+greedily storing the results in a `Vec` because the number of items under the
+cursor can be potentially massive (imagine zooming all the way out and clicking,
+the *entire* drawing would be "under" the cursor). Additionally a lot of code
+will just care about the first object found under the cursor, so we can avoid
+unnecessary work by being lazy.
+
+The iterator itself yields tuples of `Entity` and `&DrawingObject`. Under the
+hood the `arcs` library uses an *Entity Component System* architecture, and
+`Entity` is just an identifier used to refer to an object. The
+[`DrawingObject`][drawing-object] is a component containing geometric
+information about the object (e.g. if it's a `Point` or `Arc`, and the
+`Layer` the item is attached to) and we need to yield references because this
+information is owned by the ECS. `DrawingObject`s can also be quite large
+(imagine a `Spline` with hundreds of points), so we want to avoid returning
+copies.
+
+Unfortunately the iterator itself needs to use dynamic dispatch so we can make
+`Drawing` object safe, but this shouldn't be too bad?
+
+Now we can stub out the body for `on_mouse_down()`.
+
+```rust
+// demo/src/modes/idle.rs
+
+use crate::modes::{Drawing, MouseEventArgs, Transition};
+
+impl State for WaitingToSelect {
+    fn on_mouse_down(
+        &mut self,
+        drawing: &mut dyn Drawing,
+        args: &MouseEventArgs,
+    ) -> Transition {
+        let mut items_under_cursor = drawing.entities_under_point(args.location);
+
+        match items_under_cursor.next() {
+            Some((entity, _)) => unimplemented!(),
+            _ => unimplemented!(),
+        }
+    }
+}
+```
+
+Looking back at the intended behaviour, it seems like we'll need to update
+`Drawing` with a way to select a specific object and unselect everything.
+
+```rust
+// demo/src/modes/mod.rs
+
+pub trait Drawing {
+    ...
+
+    /// Mark an object as being selected.
+    fn select(&mut self, target: Entity);
+
+    /// Clear the selection.
+    fn unselect_all(&mut self);
+}
+```
+
+This gives us enough to complete the `on_mouse_down()` method.
+
+```rust
+// demo/src/modes/idle.rs
+
+impl State for WaitingToSelect {
+    fn on_mouse_down(
+        &mut self,
+        drawing: &mut dyn Drawing,
+        args: &MouseEventArgs,
+    ) -> Transition {
+        let first_item_under_cursor =
+            drawing.entities_under_point(args.location).next();
+
+        match first_item_under_cursor {
+            Some((entity, _)) => {
+                drawing.select(entity);
+                Transition::ChangeState(Box::new(DraggingSelection::default()))
+            },
+            _ => {
+                drawing.unselect_all();
+                Transition::DoNothing
+            }
+        }
+    }
+}
+
+/// The left mouse button is currently pressed and the user is dragging items
+/// around.
+#[derive(Debug, Default)]
+struct DraggingSelection;
+
+impl State for DraggingSelection {}
+```
+
+Now we need to implement `DraggingSelection`, the actual dragging action. The
+code for this is pretty simple, when `on_mouse_move()` gets called we ned to
+calculate how much the cursor has been moved and translate all selected
+entities accordingly.
+
+We aren't worrying about Undo/Redo at this point, so when the mouse button is
+released (`on_mouse_up()`) we just switch back to the `WaitingToSelect` state.
+
+```rust
+// demo/src/modes/mod.rs
+
+use arcs::Vector;
+
+pub trait Drawing {
+    ...
+
+    /// Translate all selected objects by a specific amount.
+    fn translate_selection(&mut self, displacement: Vector);
+}
+
+
+// demo/src/modes/idle.rs
+
+#[derive(Debug)]
+struct DraggingSelection {
+    previous_location: Point,
+}
+
+impl State for DraggingSelection {
+    fn on_mouse_move(
+        &mut self,
+        drawing: &mut dyn Drawing,
+        args: &MouseEventArgs,
+    ) -> Transition {
+        drawing.translate_selection(args.location - self.previous_location);
+        self.previous_location = args.location;
+
+        Transition::DoNothing
+    }
+
+    fn on_mouse_up(
+        &mut self,
+        drawing: &mut dyn Drawing,
+        args: &MouseEventArgs,
+    ) -> Transition {
+        Transition::ChangeState(Box::new(WaitingToSelect::default()))
+    }
+}
+```
+
+Like I said, the implementation is deliberately simple for now. We aren't even
+handling debounce.
+
+
 ## Wiring it Up to the UI
 
 ## Add Point Mode
@@ -924,3 +1115,4 @@ impl Default for Idle {
 [state]: https://refactoring.guru/design-patterns/state
 [pda]: https://en.wikipedia.org/wiki/Pushdown_automaton
 [any]: https://doc.rust-lang.org/std/any/trait.Any.html
+[drawing-object]: https://michael-f-bryan.github.io/arcs/crate_docs/arcs/components/struct.DrawingObject.html
