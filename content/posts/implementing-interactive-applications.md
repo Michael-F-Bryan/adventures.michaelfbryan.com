@@ -550,6 +550,8 @@ stateDiagram
     }
 {{< /mermaid >}}
 
+### Idle Mode Keyboard Shortcuts
+
 The keyboard shortcuts for changing to `AddArcMode` and friends is easy enough
 to implement. We just need to handle the `on_key_pressed()` event and `match`
 on the key that was pressed, returning a `Transition::ChangeState` if it's
@@ -784,6 +786,22 @@ mod tests {
 }
 ```
 
+{{% notice note %}}
+Some would argue the use of `std::any::Any` in Rust to do downcasting or
+dynamic type checking is a bit of a code smell for a strongly typed language,
+and I would be inclined to agree with them.
+
+In normal production code, changing logic based on something's type at
+runtime can result in brittleness and invisible coupling. It also hints that
+maybe there's actually some deeper abstraction trying to get out, and the
+need to have dynamic checks is your code's way of telling you this.
+
+That said, we're not trying to change the main program's behaviour using
+dynamic typing. This is mainly for testing purposes, and *maybe* also a tool of
+last resort if we realise we've engineered ourselves into a corner with this
+architecture six months down the track.
+{{% /notice %}}
+
 We should also add a test to make sure pressing other keys does nothing.
 
 ```rust
@@ -816,6 +834,81 @@ impl Transition {
         match self {
             Transition::DoNothing => true,
             _ => false,
+        }
+    }
+}
+```
+
+### Dragging
+
+Dragging is one of those things which are just intuitive for a human. Because
+we're used to picking things up and moving them in the real world without much
+mental exertion, people don't stop to think how complex your simple "drag"
+interaction can be.
+
+The *"Happy Path"* looks something like this... When in idle mode, if the
+user presses the left mouse button we'll mark whatever is under the cursor as
+"selected". Then if we receive "mouse moved" events, all selected items get
+translated by the amount the mouse has moved. When the mouse button is
+released, we stop dragging and "commit" the changes to some sort of
+`UndoRedoBuffer` so the user can undo or redo the drag.
+
+We also need to consider a bunch of edge cases,
+
+- What do you do if the user clicks in the middle of nowhere?
+- How can a user cancel dragging midway through (e.g. if the drag was accidental)
+  and what happens to the objects being dragged?
+- How do we handle *debouncing*? Often, when a user tries to click something
+  the mouse will move by a couple pixels between the "mouse down" and "mouse
+  up" events. If we naively interpreted this as a drag then you'll get lots of
+  complaints saying *"things jump a bit whenever I try to select them"*
+
+{{% notice note %}}
+Interactivity almost always needs to be paired with some sort of Undo/Redo
+mechanism. This lets users undo accidental changes or look back in time to see
+what the world looked like several changes ago.
+
+I'm not going to talk about Undo/Redo mechanisms too much here (I'm still
+trying to think of a nice way to implement it in `arcs`), other than to
+mention that having a robust way to apply and revert changes to the world is
+important... And like a lot of things, they can be tricky to implement in a
+way that will scale and allow you to maintain some semblance of sanity in the
+long term.
+{{% /notice %}}
+
+At this point we'll need to give `Idle` its own nested state machine.
+
+I'll call the initial state `WaitingToSelect` seeing as that's what it does,
+and `Idle` is already taken.
+
+```rust
+// demo/src/modes/idle.rs
+
+/// [`Idle`]'s base sub-state.
+///
+/// We are waiting for the user to click so we can change the selection or start
+/// dragging.
+#[derive(Debug, Default)]
+struct WaitingToSelect;
+
+impl State for WaitingToSelect {}
+```
+
+We also need to update `Idle` to have a `nested` field and give it a default
+constructor that sets `nested` to `WaitingToSelect`.
+
+```rust
+// demo/src/modes/idle.rs
+
+#[derive(Debug)]
+pub struct Idle {
+    nested: Box<dyn State>,
+}
+
+impl Default for Idle {
+    fn default() -> Idle {
+        Idle {
+            nested: Box::new(WaitingToSelect::default()),
         }
     }
 }
