@@ -1132,6 +1132,113 @@ Even its name isn't quite correct. We aren't necessarily giving each `State` a
 reference to the drawing, they're getting contextual information relevant to
 the drawing and application as a whole. Hmm... How about `ApplicationContext`?
 
+```rust
+// demo/src/modes/mod.rs
+
+/// Contextual information passed to each [`State`] when it handles events.
+pub trait ApplicationContext {
+    fn world(&self) -> &World;
+    fn world_mut(&mut self) -> &mut World;
+    fn viewport(&self) -> Entity;
+
+    /// An optimisation hint that the canvas doesn't need to be redrawn after
+    /// this event handler returns.
+    fn suppress_redraw(&mut self) {}
+}
+
+pub trait State: Debug + AsAny {
+    /// The left mouse button was pressed.
+    fn on_mouse_down(
+        &mut self,
+        _ctx: &mut dyn ApplicationContext,
+        _event_args: &MouseEventArgs,
+    ) -> Transition {
+        Transition::DoNothing
+    }
+
+    ...
+```
+
+Now we have a way to access the `World`, the methods that were previously
+required for `Drawing` (i.e. `ApplicationContext`) can be implemented as
+provided methods.
+
+But first we need to give `arcs` a way to mark things as *Selected*.
+
+See, I kinda lied to you earlier when we implemented `WaitingToSelect`. At
+the time I only ever ran the code under test using a mock `Drawing`, but now
+is as good a time as any seeing as we need to give `ApplicationContext` a set
+of `select()` and `unselect_all()` methods.
+
+```rust
+// arcs/src/components/selected.rs
+
+use specs::prelude::*;
+use specs_derive::Component;
+
+/// An empty [`Component`] used to mark an [`Entity`] as selected.
+#[derive(Debug, Copy, Clone, Default, PartialEq, Component)]
+#[storage(NullStorage)]
+pub struct Selected;
+
+
+// arcs/src/components/mod.rs
+
+mod selected;
+
+pub use selected::Selected;
+```
+
+From here we can add `selected()` and `unselect_all()` to `ApplicationContext`.
+
+```rust
+// demo/src/modes/mod.rs
+
+pub trait ApplicationContext {
+    ...
+
+    /// Mark an object as being selected.
+    fn select(&mut self, target: Entity) {
+        self.world()
+            .write_storage()
+            .insert(target, Selected)
+            .unwrap();
+    }
+
+    /// Clear the selection.
+    fn unselect_all(&mut self) {
+        self.world().write_storage::<Selected>().clear();
+    }
+}
+```
+
+The [`arcs::algorithms::Translate`][translate] algorithm can be used to make
+`translate_selection()` almost trivial.
+
+```rust
+// demo/src/modes/mod.rs
+
+pub trait ApplicationContext {
+    ...
+
+    /// Translate all selected objects by a specific amount.
+    fn translate_selection(&mut self, displacement: Vector) {
+        let world = self.world();
+        let (entities, selected, mut drawing_objects): (
+            Entities,
+            ReadStorage<Selected>,
+            WriteStorage<DrawingObject>,
+        ) = world.system_data();
+
+        for (_, _, drawing_object) in
+            (&entities, &selected, &mut drawing_objects).join()
+        {
+            drawing_object.geometry.translate(displacement);
+        }
+    }
+}
+
+
 ## Wiring it Up to the UI
 
 ## Add Point Mode
