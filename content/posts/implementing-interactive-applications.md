@@ -1237,6 +1237,7 @@ pub trait ApplicationContext {
         }
     }
 }
+```
 
 
 ## Wiring it Up to the UI
@@ -1249,5 +1250,6 @@ pub trait ApplicationContext {
 [state]: https://refactoring.guru/design-patterns/state
 [pda]: https://en.wikipedia.org/wiki/Pushdown_automaton
 [any]: https://doc.rust-lang.org/std/any/trait.Any.html
-[drawing-object]: https://michael-f-bryan.github.io/arcs/crate_docs/arcs/components/struct.DrawingObject.html
+[drawing-object]: https://docs.rs/arcs/0.2.0/arcs/components/struct.DrawingObject.html
 [specs-world]: https://docs.rs/specs/0.15.1/specs/struct.World.html
+[translate]: https://docs.rs/arcs/0.2.0/arcs/algorithms/trait.Approximate.html
