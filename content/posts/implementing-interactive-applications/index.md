@@ -1529,9 +1529,40 @@ even change to `AddArcMode` when `VirtualKeyCode::A` is pressed!
 <video controls src="keyboard-events.webm" type="video/webm" style="width:100%"></video>
 
 The crazy part is I spent longer troubleshooting the `<canvas>` keyboard event
-browser quirk than I did re-working the UI to use proper modes.
+browser quirk than I did re-working the UI to use proper modes. Sure, it doesn't
+actually do anything at the moment, but that's just because there's no mode for
+adding points to the drawing.
 
 ## Add Point Mode
+
+I didn't want to finish off without at least showing you a dot that we can drag
+around the screen... Let's implement `AddPointMode`.
+
+...
+
+{{% notice note %}}
+It's annoying that we need to implement this sort of dragging a second time
+instead of just reusing the code from our `Idle` mode, but that's the trade-off
+we made back when thinking up a design.
+
+If we were using a pushdown automata, dragging the current selection around
+would be a simple case of pushing the `DraggingSelection` state onto the stack,
+then when the mouse is released it would be popped and return control back to
+`AddPointMode`.
+
+It's all about trade-offs. In this case, dragging is simple enough I'm okay with
+writing it twice because it means we know exactly what's going on when
+`DraggingSelection` runs. If we were using a pushdown automata
+`DraggingSelection` would have no way of knowing which assumptions are being
+made by states higher in the stack so it might be easier to introduce bugs, or
+at least some form of *"spooky action at a distance"*.
+{{% /notice %}}
+
+...
+
+Something I'd also like to draw your attention to is how little code that
+required. Sure we needed to duplicate some of the dragging logic, but overall
+it was pretty simple to plug new functionality into our app.
 
 ## Conclusions
 
