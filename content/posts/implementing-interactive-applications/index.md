@@ -1239,8 +1239,297 @@ pub trait ApplicationContext {
 }
 ```
 
-
 ## Wiring it Up to the UI
+
+We now have a system for letting users interact with the application in a
+structured way, let's wire it up to the UI and make sure it actually works!
+
+The browser demo for `arcs` is written using a framework called [seed][seed].
+
+The framework itself is fairly lightweight, with the idea being you provide a
+`update()` function which takes some "message" and uses it to update your
+`Model`, and a a `view()` method which will create a representation of your
+UI ("virtual DOM") and wire up functions to turn a JavaScript event into a
+message to be sent to `update()`.
+
+At the moment the UI already kinda handles click events. I was previously using
+it to test my math for coordinate transforms (converting from pixel locations
+on a canvas to the corresponding point on the drawing) were correct by clicking
+on the canvas and making sure it rendered a dot under my cursor.
+
+It's not overly high-tech, pretty much the graphical equivalent of debugging
+with print statements, but it's a good feeling when you can click on the
+canvas and know that under the hood you've implemented all the machinery for
+a zoomable, pannable viewport, plus enough rendering to start drawing coloured
+dots.
+
+First we need to update the code handling the `Msg::Clicked` message to call
+`on_mouse_down()` on our `Model` (we'll implement it in a bit).
+
+```diff
+ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
+     log::debug!("Handling {:?}", msg);
+
+     match msg {
+         Msg::Rendered => { ... },
+-        Msg::Clicked(location) => {
+-            let clicked = {
+-                let viewports = model.world.read_storage();
+-                let viewport = model.window.viewport(&viewports);
+-                arcs::window::to_drawing_coordinates(
+-                    location,
+-                    viewport,
+-                    model.canvas_size,
+-                )
+-            };
+-            log::debug!("Resolved {:?} => {:?}", location, clicked);
+-
+-            model
+-                .world
+-                .create_entity()
+-                .with(DrawingObject {
+-                    geometry: Geometry::Point(clicked),
+-                    layer: model.default_layer,
+-                })
+-                .build();
++        Msg::Clicked(cursor) => {
++            let location = {
++                let viewports = model.world.read_storage();
++                let viewport = model.window.viewport(&viewports);
++                arcs::window::to_drawing_coordinates(
++                    cursor,
++                    viewport,
++                    model.canvas_size,
++                )
++            };
++            model.on_mouse_down(location, cursor);
+         },
+         Msg::WindowResized => { ... }
+     }
+ }
+```
+
+We also need to give `Model` a `current_state` field.
+
+```diff
+ pub struct Model {
+     world: World,
+     window: Window,
+     default_layer: Entity,
+     canvas_size: Size2D<f64, CanvasSpace>,
++    current_state: Box<dyn State>,
+ }
+
+ impl Default for Model {
+     fn default() -> Model {
+         ...
+
+         Model {
+             world,
+             window,
+             default_layer,
+             canvas_size: Size2D::new(300.0, 150.0),
++            current_state: Box::new(Idle::default()),
+         }
+     }
+ }
+```
+
+We also need something to act as our `State`'s `ApplicationContext`. I've
+decided to pull this out into a "view" struct which borrows some of our
+`Model`'s fields. We can't use `Model` as the `ApplicationContext` because it
+owns our `current_state`, and passing `&mut self` to `self.current_state` is
+no bueno.
+
+```rust
+// demo/src/lib.rs
+
+/// A temporary struct which presents a "view" of [`Model`] which can be used
+/// as a [`ApplicationContext`].
+struct Context<'model> {
+    world: &'model mut World,
+    window: &'model mut Window,
+}
+
+impl<'model> ApplicationContext for Context<'model> {
+    fn world(&self) -> &World { &self.world }
+
+    fn world_mut(&mut self) -> &mut World { &mut self.world }
+
+    fn viewport(&self) -> Entity { self.window.0 }
+}
+```
+
+Now we can finally write our `Model::on_mouse_down()` method. All it does is
+construct a couple arguments then calls `self.current_state.on_mouse_down()`.
+
+For convenience, I've pulled `Transition` handling into its own function.
+
+```rust
+// demo/src/lib.rs
+
+impl Model {
+    fn on_mouse_down(
+        &mut self,
+        location: Point2D<f64, DrawingSpace>,
+        cursor: Point2D<f64, CanvasSpace>,
+    ) {
+        let args = modes::MouseEventArgs {
+            location,
+            cursor,
+            button_state: modes::MouseButtons::LEFT_BUTTON,
+        };
+
+        let mut ctx = Context {
+            world: &mut self.world,
+            window: &mut self.window,
+        };
+        let trans = self.current_state.on_mouse_down(&mut ctx, &args);
+        self.handle_transition(trans);
+    }
+
+    fn handle_transition(&mut self, transition: Transition) {
+        match transition {
+            Transition::ChangeState(new_state) => {
+                self.current_state = new_state
+            },
+            Transition::DoNothing => {},
+        }
+    }
+}
+```
+
+Okay, let's spin up the dev server and give it a test run...
+
+<video controls src="it-doesnt-work.webm" type="video/webm" style="width:100%"></video>
+
+Hmm... I clicked around and nothing seems to happen. Are we even calling
+`on_mouse_down()`?
+
+```diff
+ impl Model {
+     fn on_mouse_down(
+         &mut self,
+         location: Point2D<f64, DrawingSpace>,
+         cursor: Point2D<f64, CanvasSpace>,
+     ) {
+         ...
+
++        log::debug!("[ON_MOUSE_DOWN] {:?}, {:?}", args, self.current_state);
++
+         let trans = self.current_state.on_mouse_down(&mut ctx, &args);
+         self.handle_transition(trans);
+     }
+ }
+```
+
+<video controls src="it-kinda-works.webm" type="video/webm" style="width:100%"></video>
+
+Soo... looks like everything is working as intended. The problem is that our
+`Idle` mode is in the `WaitingToSelect` state, but there's nothing on our canvas
+to select.
+
+While we're at it, let's wire up keyboard presses.
+
+First we need to add a `KeyPressed` variant to `Msg`.
+
+```diff
+ #[derive(Debug, Copy, Clone, PartialEq)]
+ pub enum Msg {
+     Rendered,
+     Clicked(Point2D<f64, CanvasSpace>),
+     WindowResized,
++    KeyPressed(KeyboardEventArgs),
+ }
+```
+
+Next we need to register for the key pressed event and make sure it gets turned
+into a `Msg::KeyPressed` message.
+
+```diff
+ fn view(model: &Model) -> impl View<Msg> {
+     div![div![
+         attrs![ At::Class => "canvas-container" ],
+         style! {
+             St::Width => "100%",
+             St::Height => "100%",
+             St::OverflowY => "hidden",
+             St::OverflowX => "hidden",
+         },
+         canvas![
+             attrs![
+                 At::Id => CANVAS_ID,
+                 At::Width => model.canvas_size.width,
+                 At::Height => model.canvas_size.height,
+             ],
+-            mouse_ev(Ev::MouseDown, Msg::from_click_event)
++            mouse_ev(Ev::MouseDown, Msg::from_click_event),
++            keyboard_ev(Ev::KeyDown, Msg::from_key_press)
+         ],
+     ]]
+ }
+
+ impl Msg {
+     pub fn from_click_event(ev: MouseEvent) -> Self {
+         let x = ev.offset_x().into();
+         let y = ev.offset_y().into();
+
+         Msg::Clicked(Point2D::new(x, y))
+     }
++
++    pub fn from_key_press(ev: KeyboardEvent) -> Self {
++        Msg::KeyPressed(KeyboardEventArgs {
++            shift_pressed: ev.shift_key(),
++            control_pressed: ev.ctrl_key(),
++            key: ev.key().parse().ok(),
++        })
++    }
+ }
+```
+
+We can now implement the `Msg::KeyPressed` handler like we did with
+`Msg::Clicked`.
+
+```diff
+ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
+     log::debug!("Handling {:?}", msg);
+
+     match msg {
+         Msg::Rendered => { ... },
+         Msg::Clicked(cursor) => { ... },
++        Msg::KeyPressed(args) => model.on_key_pressed(args),
+         Msg::WindowResized => { ... },
+     }
+
+     ...
+ }
+
+
+ impl Model {
+     ...
+
++    fn on_key_pressed(&mut self, args: KeyboardEventArgs) {
++        let mut ctx = Context {
++            world: &mut self.world,
++            window: &mut self.window,
++        };
++
++        let trans = self.current_state.on_key_pressed(&mut ctx, &args);
++        self.handle_transition(trans);
++    }
+
+     ...
+ }
+```
+
+I ended up needing to use [this hack][so] because `<canvas>` elements don't
+actually support key up/down events, but now we can receive keyboard events and
+even change to `AddArcMode` when `VirtualKeyCode::A` is pressed!
+
+<video controls src="keyboard-events.webm" type="video/webm" style="width:100%"></video>
+
+The crazy part is I spent longer troubleshooting the `<canvas>` keyboard event
+browser quirk than I did re-working the UI to use proper modes.
 
 ## Add Point Mode
 
@@ -1253,3 +1542,5 @@ pub trait ApplicationContext {
 [drawing-object]: https://docs.rs/arcs/0.2.0/arcs/components/struct.DrawingObject.html
 [specs-world]: https://docs.rs/specs/0.15.1/specs/struct.World.html
 [translate]: https://docs.rs/arcs/0.2.0/arcs/algorithms/trait.Approximate.html
+[seed]: https://seed-rs.org/
+[so]: https://stackoverflow.com/a/16492878/7149940
