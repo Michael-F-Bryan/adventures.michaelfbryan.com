@@ -560,12 +560,8 @@ stateDiagram
         idle --> dragging: Mouse Down
         dragging --> dragging: Mouse Move
         dragging --> idle: Mouse Up
-
-        note right of dragging
-            If the user cancels the move (e.g. by pressing &lt;esc;&gt;) the
-            selected objects move back to their original location.
-        end note
     }
+
 {{< /mermaid >}}
 
 ### Idle Mode Keyboard Shortcuts
@@ -1538,17 +1534,359 @@ adding points to the drawing.
 I didn't want to finish off without at least showing you a dot that we can drag
 around the screen... Let's implement `AddPointMode`.
 
-...
+The first thing we need to do is define how `AddPointMode` will react to actions
+from the user. Normally I'll use a whiteboard for this and bounce ideas off
+coworkers, but you've got to make do with what you've got.
+
+Our `AddPointMode` won't be as simple as *"place a point wherever the user
+clicks"*. If you watch how users interact with a CAD program you'll notice they
+tend to hold the mouse button down and fine-tune where they want the point to go
+before releasing the button and "committing" the change.
+
+Sometimes they'll realise midway through that they didn't want to place a point,
+so you need to give the user a way to cancel the interaction. In the wild, I've
+seen roughly two ways people try to do this, one is to hit `<ctrl-Z>` ("I want
+to undo the point I've started creating") and the other is to press `<esc>`
+("I want to **escape** this interaction").
+
+As someone who seeks out the vim keybindings for pretty much every editor or
+IDE they use, pressing `<esc>` seems the more natural. That said, I've already
+admitted I'm biased and not an "ordinary" user, so it's always good to get
+another person's opinion.
+
+The state machine diagram for this is almost trivial.
+
+{{< mermaid >}}
+stateDiagram
+    state "Add Point Mode" as point
+
+    state point {
+        state "Waiting To Place" as idle
+        state "Placing Point" as placing
+
+        idle --> placing: Mouse Down
+        placing --> idle: Mouse Up/Cancel
+    }
+{{< /mermaid >}}
+
+The simplicity of our state machine diagram hides a fair amount of detail
+though...
+
+First, let's create a `WaitingToPlace` state to act as `AddPointMode`'s base
+state.
+
+```rust
+// arcs/demo/src/modes/add_point_mode.rs
+
+/// The base sub-state for [`AddPointMode`]. We're waiting for the user to click
+/// so we can start adding a point to the canvas.
+#[derive(Debug, Default)]
+struct WaitingToPlace;
+```
+
+It only responds to a single event, `on_mouse_down()`.
+
+```rust
+// arcs/demo/src/modes/add_point_mode.rs
+
+impl State for WaitingToPlace {
+    fn on_mouse_down(
+        &mut self,
+        ctx: &mut dyn ApplicationContext,
+        args: &MouseEventArgs,
+    ) -> Transition {
+        // make sure nothing else is selected
+        ctx.unselect_all();
+
+        let layer = ctx.default_layer();
+
+        // create a point and automatically mark it as selected
+        let temp_point = ctx
+            .world_mut()
+            .create_entity()
+            .with(DrawingObject {
+                geometry: Geometry::Point(args.location),
+                layer,
+            })
+            .with(Selected)
+            .build();
+
+        Transition::ChangeState(Box::new(PlacingPoint::new(temp_point)))
+    }
+}
+```
+
+Next we need a `PlacingPoint` state which will keep track of our temporary point
+and let us drag it around the screen.
+
+```rust
+// demo/src/modes/add_point_mode.rs
+
+#[derive(Debug)]
+struct PlacingPoint {
+    temp_point: Entity,
+}
+
+impl PlacingPoint {
+    fn new(temp_point: Entity) -> Self { PlacingPoint { temp_point } }
+}
+```
+
+Next we need to implement the relevant event handlers. For `PlacingPoint` we'll
+need to
+
+- Transition back to `WaitingToPlace` when the mouse is released
+- Delete the `temp_point` if we get an `on_cancelled()` event
+- Move the `temp_point` if the mouse moves
+
+```rust
+// demo/src/modes/add_point_mode.rs
+
+impl State for PlacingPoint {
+    fn on_mouse_up(
+        &mut self,
+        _ctx: &mut dyn ApplicationContext,
+        _args: &MouseEventArgs,
+    ) -> Transition {
+        // We "commit" the change by leaving the temporary point where it is
+        Transition::ChangeState(Box::new(WaitingToPlace::default()))
+    }
+
+    fn on_mouse_move(
+        &mut self,
+        ctx: &mut dyn ApplicationContext,
+        args: &MouseEventArgs,
+    ) -> Transition {
+        let world = ctx.world();
+        let mut drawing_objects: WriteStorage<DrawingObject> =
+            world.write_storage();
+
+        let drawing_object = drawing_objects.get_mut(self.temp_point).unwrap();
+
+        // we *know* this is a point. Instead of pattern matching or translating
+        // the drawing object, we can just overwrite it with its new position.
+        drawing_object.geometry = Geometry::Point(args.location);
+
+        Transition::DoNothing
+    }
+
+    fn on_cancelled(&mut self, ctx: &mut dyn ApplicationContext) {
+        // make sure we clean up the temporary point.
+        let _ = ctx.world_mut().delete_entity(self.temp_point);
+    }
+}
+```
+
+So we've defined the state machine for `AddPointMode`, but if we want anything
+to happen we'll need to make sure `AddPointMode` propagates `on_mouse_up()`,
+`on_mouse_down()`, and `on_mouse_move()` to them.
+
+```rust
+// demo/src/modes/add_point_mode.rs
+
+impl AddPointMode {
+    fn handle_transition(&mut self, transition: Transition) {
+        match transition {
+            Transition::ChangeState(new_state) => {
+                log::debug!(
+                    "Changing state {:?} -> {:?}",
+                    self.nested,
+                    new_state
+                );
+                self.nested = new_state;
+            },
+            Transition::DoNothing => {},
+        }
+    }
+}
+
+impl State for AddPointMode {
+    fn on_mouse_down(
+        &mut self,
+        ctx: &mut dyn ApplicationContext,
+        args: &MouseEventArgs,
+    ) -> Transition {
+        let trans = self.nested.on_mouse_down(ctx, args);
+        self.handle_transition(trans);
+        Transition::DoNothing
+    }
+
+    fn on_mouse_up(
+        &mut self,
+        ctx: &mut dyn ApplicationContext,
+        args: &MouseEventArgs,
+    ) -> Transition {
+        let trans = self.nested.on_mouse_up(ctx, args);
+        self.handle_transition(trans);
+        Transition::DoNothing
+    }
+
+    fn on_mouse_move(
+        &mut self,
+        ctx: &mut dyn ApplicationContext,
+        args: &MouseEventArgs,
+    ) -> Transition {
+        let trans = self.nested.on_mouse_move(ctx, args);
+        self.handle_transition(trans);
+        Transition::DoNothing
+    }
+}
+```
+
+
+
+While we're at it, we should make sure pressing the escape key cancels the
+current mode and switches back to the `Idle` state.
+
+```rust
+// demo/src/modes/add_point_mode.rs
+
+impl State for AddPointMode {
+    ...
+
+    fn on_key_pressed(
+        &mut self,
+        ctx: &mut dyn ApplicationContext,
+        args: &KeyboardEventArgs,
+    ) -> Transition {
+        if args.key == Some(VirtualKeyCode::Escape) {
+            // pressing escape should take us back to idle
+            self.nested.on_cancelled(ctx);
+            return Transition::ChangeState(Box::new(Idle::default()));
+        }
+
+        let trans = self.nested.on_key_pressed(ctx, args);
+        self.handle_transition(trans);
+        Transition::DoNothing
+    }
+
+
+    fn on_cancelled(&mut self, ctx: &mut dyn ApplicationContext) {
+        self.nested.on_cancelled(ctx);
+        self.nested = Box::new(WaitingToPlace::default());
+    }
+}
+```
+
+The top-level application is also only handling mouse down events so we'll need
+to add event handlers and `Msg` variants for `MouseUp` and `MouseMove`.
+
+```diff
+
+ #[derive(Debug, Copy, Clone, PartialEq)]
+ pub enum Msg {
+     Rendered,
+-    Clicked(Point2D<f64, CanvasSpace>),
++    MouseDown(Point2D<f64, CanvasSpace>),
++    MouseUp(Point2D<f64, CanvasSpace>),
++    MouseMove(Point2D<f64, CanvasSpace>),
+     KeyPressed(KeyboardEventArgs),
+     WindowResized,
+ }
+
+ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
+     log::trace!("Handling {:?}", msg);
+
+     match msg {
+         Msg::Rendered => { ... },
+-        Msg::Clicked(cursor) => {
+-            let location = {
+-                let viewports = model.world.read_storage();
+-                let viewport = model.window.viewport(&viewports);
+-                arcs::window::to_drawing_coordinates(
+-                    cursor,
+-                    viewport,
+-                    model.canvas_size,
+-                )
+-            };
+-            model.on_mouse_down(location, cursor);
+-        },
++        Msg::MouseDown(cursor) => model.on_mouse_down(cursor),
++        Msg::MouseUp(cursor) => model.on_mouse_up(cursor),
++        Msg::MouseMove(cursor) => model.on_mouse_move(cursor),
+         Msg::KeyPressed(args) => model.on_key_pressed(args),
+         Msg::WindowResized => { ... },
+     }
+
+     ...
+ }
+
+ impl Model {
+-    fn on_mouse_down(
+-        &mut self,
+-        location: Point2D<f64, DrawingSpace>,
+-        cursor: Point2D<f64, CanvasSpace>,
+-    ) {
+-        let args = modes::MouseEventArgs {
+-            location,
+-            cursor,
+-            button_state: modes::MouseButtons::LEFT_BUTTON,
+-        };
+-        log::debug!("[ON_MOUSE_DOWN] {:?}, {:?}", args, self.current_state);
+-
+-
+-        let mut ctx = Context {
+-            world: &mut self.world,
+-            window: &mut self.window,
+-        };
+-        let trans = self.current_state.on_mouse_down(&mut ctx, &args);
+-        self.handle_transition(trans);
+-    }
++    fn on_mouse_down(&mut self, cursor: Point2D<f64, CanvasSpace>) -> bool {
++        let args = self.mouse_event_args(cursor);
++        log::debug!("[ON_MOUSE_DOWN] {:?}, {:?}", args, self.current_state);
++        self.handle_event(|state, ctx| state.on_mouse_down(ctx, &args))
++    }
++
++    fn on_mouse_up(&mut self, cursor: Point2D<f64, CanvasSpace>) -> bool {
++        let args = self.mouse_event_args(cursor);
++        log::debug!("[ON_MOUSE_UP] {:?}, {:?}", args, self.current_state);
++        self.handle_event(|state, ctx| state.on_mouse_up(ctx, &args))
++    }
++
++    fn on_mouse_move(&mut self, cursor: Point2D<f64, CanvasSpace>) -> bool {
++        let args = self.mouse_event_args(cursor);
++        self.handle_event(|state, ctx| state.on_mouse_move(ctx, &args))
++    }
++
++    fn handle_event<F>(&mut self, handler: F) -> bool
++    where
++        F: FnOnce(&mut dyn State, &mut Context<'_>) -> Transition,
++    {
++        let mut suppress_redraw = false;
++        let transition = handler(
++            &mut *self.current_state,
++            &mut Context {
++                world: &mut self.world,
++                window: &mut self.window,
++                default_layer: self.default_layer,
++                suppress_redraw: &mut suppress_redraw,
++            },
++        );
++        self.handle_transition(transition);
++        if suppress_redraw {
++            log::debug!("Redraw suppressed");
++        }
++        !suppress_redraw
++    }
+
+     ...
+ }
+```
 
 {{% notice note %}}
 It's annoying that we need to implement this sort of dragging a second time
-instead of just reusing the code from our `Idle` mode, but that's the trade-off
-we made back when thinking up a design.
+instead of just reusing the code from our `Idle` mode, but that's the
+trade-off we made back when thinking up a design. I'm also feeling funny
+about needing to constantly propagate events down to nested state machines.
 
 If we were using a pushdown automata, dragging the current selection around
 would be a simple case of pushing the `DraggingSelection` state onto the stack,
 then when the mouse is released it would be popped and return control back to
 `AddPointMode`.
+
+Likewise, events would be sent directly to the innermost `State` so there'd be
+no need to explicitly propagate them down.
 
 It's all about trade-offs. In this case, dragging is simple enough I'm okay with
 writing it twice because it means we know exactly what's going on when
@@ -1556,15 +1894,85 @@ writing it twice because it means we know exactly what's going on when
 `DraggingSelection` would have no way of knowing which assumptions are being
 made by states higher in the stack so it might be easier to introduce bugs, or
 at least some form of *"spooky action at a distance"*.
-{{% /notice %}}
 
-...
+You could even combine pushdown automata with some sort of bubbling mechanism
+where a state will explicitly say whether the event is "handled", allowing
+events to be sent to the innermost state first and continually bubbled up
+until someone handles the event or we reach the top of the stack. This is how
+a lot of GUIs do things (e.g. `preventDefault()` in the browser) to allow
+components to be composable, but I feel like that'd just make our already
+complex mode system even harder to reason about...
+{{% /notice %}}
 
 Something I'd also like to draw your attention to is how little code that
 required. Sure we needed to duplicate some of the dragging logic, but overall
 it was pretty simple to plug new functionality into our app.
 
 ## Conclusions
+
+Looking back, I'm not 100% sure we should have gone the *Nested State Machine*
+route instead of using a *Pushdown Automata*.
+
+Having to constantly propagate events down to inner state machines is a bit
+annoying to do in Rust, and the various tricks we could have employed to make
+the process easier would end up making the code less readable. The large
+projects I've needed to implement interactivity for in the past have all had
+some form of inheritance, and using inheritance this delegation could be solved
+quite elegantly.
+
+{{% expand "Example of event delegation in C#" %}}
+```cs
+abstract class State
+{
+    public virtual void OnMouseDown(ApplicationContext ctx, MouseEventArgs args) {}
+
+    ...
+}
+
+/// <summary>
+/// A State which contains a nested state machine.
+/// </summary>
+abstract class StateWithNestedStateMachine: State // name subject to much bikeshedding
+{
+    /// <summary>
+    /// The current state in a nested state machine.
+    /// </summary>
+    protected State Inner { get; set; }
+
+    public virtual void OnMouseDown(ApplicationContext ctx, MouseEventArgs args)
+    {
+        // by default we just want to propagate the event down and handle any
+        // resulting transitions
+        var transition = Inner.OnMouseDown(ctx, args);
+        HandleTransition(transition);
+    }
+
+    ...
+
+    protected void HandleTransition(Transition trans)
+    {
+        if (trans is ChangeStateTransition change)
+        {
+            Inner = change.NewState;
+        }
+    }
+}
+```
+{{% /expand %}}
+
+That said, even if it required a bit more code having everything written out
+explicitly means our mode system is pretty easy to understand at a glance.
+When troubleshooting there's no need for contextual knowledge (i.e. knowing that
+a particular branch can only be hit when something a couple levels higher in the
+pushdown automata stack is in a particular state) and you can just follow the
+code.
+
+I've found that to tackle these sorts of problems outside of toy projects, you
+*really* need to make sure your implementation is backed by a formal model or
+pattern. Implementing interactivity by attaching intermediate variables to your
+top-level `Window` (or `Model` in our case) and throwing more switch-case
+statements at the problem is a great way to create a code monster and make your
+successors/coworkers/future self hate you.
 
 [shotgun]: https://refactoring.guru/smells/shotgun-surgery
 [state]: https://refactoring.guru/design-patterns/state
