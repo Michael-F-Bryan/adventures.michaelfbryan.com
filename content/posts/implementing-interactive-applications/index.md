@@ -280,15 +280,6 @@ Like a lot of things where the real world is involved there are trade-offs,
 and it's the Software Engineer's job to figure out which alternative would be
 the least bad in the long term.
 
-## A Note On Optimising and Dynamic Dispatch
-
-{{% notice warning %}}
-TODO: Write a rant about how sometimes dynamic dispatch is better than static
-dispatch because there's less line noise or cognitive overhead. We also use
-dynamic dispatch for high-level operations and use static dispatch where
-performance really matters.
-{{% /notice %}}
-
 ## The Infrastructure
 
 The first step in making our application interactive is to create the
@@ -1973,6 +1964,12 @@ pattern. Implementing interactivity by attaching intermediate variables to your
 top-level `Window` (or `Model` in our case) and throwing more switch-case
 statements at the problem is a great way to create a code monster and make your
 successors/coworkers/future self hate you.
+
+And yes, if you are curious, we can indeed now draw points on the canvas 🎉
+
+<video controls src="adding-points.webm" type="video/webm" style="width:100%"></video>
+
+(please excuse the poor frame rate from OBS)
 
 [shotgun]: https://refactoring.guru/smells/shotgun-surgery
 [state]: https://refactoring.guru/design-patterns/state
