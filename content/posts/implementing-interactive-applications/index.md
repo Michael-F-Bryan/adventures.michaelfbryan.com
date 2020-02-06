@@ -1,7 +1,6 @@
 ---
 title: "Creating Interactive Applications While Maintaining Your Sanity"
-date: "2020-01-31T22:22:11+08:00"
-draft: true
+date: "2020-02-06T23:43:00+08:00"
 tags:
 - rust
 - architecture
