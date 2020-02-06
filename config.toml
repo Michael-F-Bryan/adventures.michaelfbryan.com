@@ -27,6 +27,9 @@ custom_css = ["css/master.css"]
 custom_js = ["js/mermaid.min.js", "js/index.js"]
 commit = "https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree"
 
+[markup.goldmark.renderer]
+unsafe= true
+
 [[params.social]]
 name = "Github"
 icon = "fab fa-github fa-2x"

@@ -130,9 +130,9 @@ blockquote cite {
     text-align: right;
 }
 
-/* We don't want permalinks to be coloured differently */
+/* We don't want headers with permalinks to be coloured differently */
 
-h2 a {
+h2 a, h3 a, h4 a {
     text-decoration: none;
     color: inherit !important;
 }
