@@ -301,6 +301,76 @@ fn match_everything_inside_a_header() {
 }
 ```
 
+### Matching a Falling Edge
+
+Remember that we want to select items between two headings, that means we'll
+need to a falling edge signal from the `Heading`s matcher.
+
+This can be done generically using some `FallingEdge` matcher which wraps
+another matcher.
+
+```rust
+// src/matchers/falling_edge.rs
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FallingEdge<M> {
+    inner: M,
+    previous_was_matched: bool,
+}
+
+impl<M> FallingEdge<M> {
+    pub const fn new(inner: M) -> Self {
+        FallingEdge {
+            inner,
+            previous_was_matched: false,
+        }
+    }
+}
+```
+
+From here, detecting a falling edge pretty straightforward.
+
+```rust
+// src/matchers/falling_edge.rs
+
+impl<M: Matcher> Matcher for FallingEdge<M> {
+    fn process_next(&mut self, event: &Event<'_>) -> bool {
+        let current_is_matched = self.inner.process_next(event);
+        let is_falling_edge = self.previous_was_matched && !current_is_matched;
+        self.previous_was_matched = current_is_matched;
+        is_falling_edge
+    }
+}
+```
+
+For convenience we can add a combinator method to the `Matcher` trait. This will
+allow users to compose matchers using method syntax instead of needing to write
+the more verbose `FallingEdge::new(...)`.
+
+```rust
+// src/matchers/mod.rs
+
+pub trait Matcher {
+    ...
+
+    /// Get a [`Matcher`] which returns `true` when `self` goes from `true` to
+    /// `false`.
+    fn falling_edge(self) -> FallingEdge<Self>
+    where
+        Self: Sized,
+    {
+        FallingEdge::new(self)
+    }
+}
+```
+
+By combining the `Heading` and `FallingEdge` matchers we now have all the tools
+necessary to find the items between two headings in a markdown document.
+
+Once you reach this point it's easy to get carried away making more and more
+elaborate `Matcher` primitives (i.e. `text()` and `Heading`) and combinators
+(i.e. `FallingEdge`), so let's discuss document manipulation.
+
 ## Rewrite Rules
 
 ## Possible Uses
