@@ -373,6 +373,200 @@ elaborate `Matcher` primitives (i.e. `text()` and `Heading`) and combinators
 
 ## Rewrite Rules
 
+It took a bit of thinking to come up with an API flexible enough to allow
+updating items in-place (imagine auto-correcting text), removing items, and
+adding items, all without reading the full document into memory or seeking back
+and forth.
+
+This is the API I eventually came up with:
+
+```rust
+// src/rewriters/mod.rs
+
+/// Something which can rewrite events.
+pub trait Rewriter<'src> {
+    /// Process a single [`Event`].
+    ///
+    /// This may mean ignoring it, mutating it, or adding new events to the
+    /// [`Writer`]'s buffer.
+    ///
+    /// The [`Writer`] is used as a temporary buffer that will then be streamed
+    /// to the user via [`rewrite()`].
+    fn rewrite_event(&mut self, event: Event<'src>, writer: &mut Writer<'src>);
+}
+```
+
+Again, seeing as this trait only has a single method it's an ideal candidate for
+allowing people to use concise closures instead of needing to create a full
+type.
+
+```rust
+// src/rewriters/mod.rs
+
+impl<'src, F> Rewriter<'src> for F
+where
+    F: FnMut(Event<'src>, &mut Writer<'src>),
+{
+    fn rewrite_event(&mut self, event: Event<'src>, writer: &mut Writer<'src>) {
+        self(event, writer);
+    }
+}
+```
+
+You may be wondering what this `Writer` is for, well that's where a lot of the
+rewriting magic comes in.
+
+```rust
+// src/rewriters/writer.rs
+
+use pulldown_cmark::Event;
+use std::collections::VecDeque;
+
+/// The output buffer given to [`Rewriter::rewrite_event()`].
+#[derive(Debug)]
+pub struct Writer<'a> {
+    pub(crate) buffer: VecDeque<Event<'a>>,
+}
+
+impl<'a> Writer<'a> {
+    pub(crate) fn new() -> Writer<'a> {
+        Writer {
+            buffer: VecDeque::new(),
+        }
+    }
+
+    /// Queue an [`Event`] to be emitted.
+    pub fn push(&mut self, event: Event<'a>) { self.buffer.push_back(event); }
+}
+
+impl<'a> Extend<Event<'a>> for Writer<'a> {
+    fn extend<I: IntoIterator<Item = Event<'a>>>(&mut self, iter: I) {
+        self.buffer.extend(iter);
+    }
+}
+```
+
+This innoculous `Writer` struct serves as a temporary holding place for events
+that needed to be spliced into the resulting stream of `Event`s. We can combine
+the `Writer` and our `Rewrite` trait to create a `Rewritten` stream of `Event`s.
+
+```rust
+// src/rewriters/rewritten.rs
+
+/// A stream of [`Event`]s that have been modified by a [`Rewriter`].
+pub struct Rewritten<'src, E, R>
+where
+    E: Iterator<Item = Event<'src>>,
+{
+    events: E,
+    rewriter: R,
+    writer: Writer<'src>,
+}
+
+impl<'src, E, R> Iterator for Rewritten<'src, E, R>
+where
+    E: Iterator<Item = Event<'src>>,
+    R: Rewriter<'src>,
+{
+    type Item = Event<'src>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // we're still working through items buffered by the rewriter
+        if let Some(ev) = self.writer.buffer.pop_front() {
+            return Some(ev);
+        }
+
+        // we need to pop another event and process it
+        let event = self.events.next()?;
+        self.rewriter.rewrite_event(event, &mut self.writer);
+
+        self.writer.buffer.pop_front()
+    }
+}
+```
+
+The idea is to keep popping `Event`s from the `Writer` buffer until there are no
+more, then fetch the next `Event` from the underlying stream and ask our
+`Rewriter` to process it, updating the buffer in the process. Repeat until the
+inner stream runs out.
+
+### Making A Rewriter
+
+Probably the easiest `Rewriter` to implement is something that will splice new
+events into the event stream before every match.
+
+This lets us use something like the `Heading::any_level().falling_edge()`
+matcher to insert something immediately after a heading.
+
+```rust
+// src/rewriters/mod.rs
+
+/// Splice some events into the resulting event stream before every match.
+pub fn insert_before<'src, M>(
+    to_insert: Vec<Event<'src>>,
+    mut matcher: M,
+) -> impl Rewriter<'src> + 'src
+where
+    M: Matcher + 'src,
+{
+    move |ev: Event<'src>, writer: &mut Writer<'src>| {
+        if matcher.process_next(&ev) {
+            writer.extend(to_insert.iter().cloned());
+        }
+        writer.push(ev);
+    }
+}
+```
+
+While the function signature looks a tad complicated (because we're trying to
+make the library as flexible as possible) the body is almost trivial. Whenever
+we get another event check whether our matcher matches it, and add a copy of
+the desired events to the stream. We want the matched event to also be
+outputted so we always need to add it to the `Writer` buffer.
+
+Let's also create an `insert_markdown_before()` function which
+takes a string of markdown text. Most users won't want to be generating a list
+of `Event`s manually, so this allows us to present a more user-friendly
+interface.
+
+```rust
+// src/rewriters/mod.rs
+
+/// Inserts some markdown text before whatever is matched by the [`Matcher`].
+///
+/// # Examples
+///
+/// ```rust
+/// use markedit::Matcher;
+/// let src = "# Heading\nsome text\n";
+///
+/// let first_line_after_heading = markedit::exact_text("Heading")
+///     .falling_edge();
+/// let rewriter = markedit::insert_markdown_before(
+///     "## Second Heading",
+///     first_line_after_heading,
+/// );
+///
+/// let events = markedit::parse(src);
+/// let rewritten: Vec<_> = markedit::rewrite(events, rewriter).collect();
+///
+/// // if everything went to plan, the output should contain "Second Heading"
+/// assert!(markedit::exact_text("Second Heading").is_in(&rewritten));
+/// ```
+pub fn insert_markdown_before<'src, M, S>(
+    markdown_text: S,
+    matcher: M,
+) -> impl Rewriter<'src> + 'src
+where
+    M: Matcher + 'src,
+    S: AsRef<str> + 'src,
+{
+    let events = crate::parse(markdown_text.as_ref())
+        .collect();
+    insert_before(events, matcher)
+}
+```
+
 ## Possible Uses
 
 ## Benchmarking
