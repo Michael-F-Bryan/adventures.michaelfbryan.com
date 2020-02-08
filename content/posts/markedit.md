@@ -43,7 +43,10 @@ when trying to track down regressions or get an overview of what code changed
 between releases.
 
 It's only a couple find-and-replace operations, but needing to spend an extra
-60 seconds manually editing files before a release acts as a speed bump.
+60 seconds manually editing files before a release acts as a speed bump and
+means you can't just hit the *"Release"* button and grab a coffee. There's
+also a real chance that we could forget to update the change log before
+cutting a release, and that'd be embarrassing.
 
 {{% notice note %}}
 The code written in this article is available [on GitHub][repo] and
@@ -69,14 +72,15 @@ This is just an iterator over things like `Event::Start(Tag::Heading(1))`,
 `Event::Text("some text")`, and `Event::End(Tag::Link(...))`.
 
 Reusing the `Iterator` interface from the standard library already makes
-`pulldown-cmark` quite easy to use but when you're trying to look for a
+`pulldown-cmark` quite easy to use, but when you're trying to look for a
 specific pattern (e.g. *"the first line after a level 1 heading"*) the code
 starts to get pretty gnarly.
 
 For example, [the logic in `mdbook`][parse-summary] for parsing a
 `SUMMARY.md` and discovering the book's structure is particularly hard to
 understand, and the fact it's barely been touched in two years is a good
-indicator of that. I feel a bit guilty for writing such a code monster 😔
+indicator of that... I'd be lying if I said I didn't feel a bit guilty for
+writing such a code monster 😔
 
 To ease this problem of matching sequences of events we introduce the concept
 of a *Matcher*, something which can be fed `Event`s and will tell you when it
@@ -108,7 +112,7 @@ At its core the `Matcher` trait is quite trivial.
 // src/matchers/mod.rs
 
 pub trait Matcher {
-    fn process_next(&mut self, event: &Event<'_>) -> bool;
+    fn matches_event(&mut self, event: &Event<'_>) -> bool;
 }
 ```
 
@@ -122,7 +126,7 @@ impl<F> Matcher for F
 where
     F: FnMut(&Event<'_>) -> bool,
 {
-    fn process_next(&mut self, event: &Event<'_>) -> bool { self(event) }
+    fn matches_event(&mut self, event: &Event<'_>) -> bool { self(event) }
 }
 ```
 
@@ -215,7 +219,7 @@ the desired level, keep returning `true` until we see the end tag.
 // src/matchers/heading.rs
 
 impl Matcher for Heading {
-    fn process_next(&mut self, event: &Event<'_>) -> bool {
+    fn matches_event(&mut self, event: &Event<'_>) -> bool {
         match event {
             Event::Start(Tag::Heading(level)) if self.matches_level(*level) => {
                 self.inside_heading = true;
@@ -272,30 +276,16 @@ fn match_everything_inside_a_header() {
         (Event::End(Tag::Emphasis), true),
         (Event::End(Tag::Heading(2)), true),
         (Event::Start(Tag::Paragraph), false),
-        (
-            Event::Start(Tag::Link(
-                LinkType::Inline,
-                "https://example.com".into(),
-                "".into(),
-            )),
-            false,
-        ),
+        (Event::Start(Tag::Link(LinkType::Inline, "https://example.com".into(), "".into())), false),
         (Event::Text("And a link".into()), false),
-        (
-            Event::End(Tag::Link(
-                LinkType::Inline,
-                "https://example.com".into(),
-                "".into(),
-            )),
-            false,
-        ),
+        (Event::End(Tag::Link(LinkType::Inline, "https://example.com".into(), "".into())), false),
         (Event::End(Tag::Paragraph), false),
     ];
 
     let mut matcher = Heading::any_level();
 
     for (tag, should_be) in inputs {
-        let got = matcher.process_next(&tag);
+        let got = matcher.matches_event(&tag);
         assert_eq!(got, should_be, "{:?}", tag);
     }
 }
@@ -334,8 +324,8 @@ From here, detecting a falling edge pretty straightforward.
 // src/matchers/falling_edge.rs
 
 impl<M: Matcher> Matcher for FallingEdge<M> {
-    fn process_next(&mut self, event: &Event<'_>) -> bool {
-        let current_is_matched = self.inner.process_next(event);
+    fn matches_event(&mut self, event: &Event<'_>) -> bool {
+        let current_is_matched = self.inner.matches_event(event);
         let is_falling_edge = self.previous_was_matched && !current_is_matched;
         self.previous_was_matched = current_is_matched;
         is_falling_edge
@@ -496,7 +486,8 @@ Probably the easiest `Rewriter` to implement is something that will splice new
 events into the event stream before every match.
 
 This lets us use something like the `Heading::any_level().falling_edge()`
-matcher to insert something immediately after a heading.
+matcher to insert something immediately after a heading (we match the first
+item after the heading's close tag).
 
 ```rust
 // src/rewriters/mod.rs
@@ -510,7 +501,7 @@ where
     M: Matcher + 'src,
 {
     move |ev: Event<'src>, writer: &mut Writer<'src>| {
-        if matcher.process_next(&ev) {
+        if matcher.matches_event(&ev) {
             writer.extend(to_insert.iter().cloned());
         }
         writer.push(ev);
@@ -518,16 +509,15 @@ where
 }
 ```
 
-While the function signature looks a tad complicated (because we're trying to
-make the library as flexible as possible) the body is almost trivial. Whenever
-we get another event check whether our matcher matches it, and add a copy of
-the desired events to the stream. We want the matched event to also be
-outputted so we always need to add it to the `Writer` buffer.
+Once you get past the various `'src` lifetime annotations, `impl Trait`, and
+closure syntax, this function is pretty simple. Whenever we get another event
+check whether our matcher matches it, and add a copy of the desired events to
+the stream. We want the matched event to also be outputted so we always need
+to add it to the `Writer` buffer.
 
-Let's also create an `insert_markdown_before()` function which
-takes a string of markdown text. Most users won't want to be generating a list
-of `Event`s manually, so this allows us to present a more user-friendly
-interface.
+Let's also create an `insert_markdown_before()` function which takes a string
+of markdown text. Most users won't want to be generating a list of `Event`s
+manually, so this allows us to present a more user-friendly interface.
 
 ```rust
 // src/rewriters/mod.rs
@@ -581,9 +571,7 @@ assumptions about the `Event` stream coming from the parser. Instead we rely
 on conventions (a project README might have a level 1 header with the title,
 then a paragraph or two of description, then a level 2 header with getting
 started instructions, etc.) and need a concise, flexible mechanism for
-extracting data.
-
-That mechanism is the `Matcher`.
+extracting data. That mechanism is the `Matcher`.
 
 In the same way that you can build up an [XPath][xpath] query for searching
 an XML document or chain of `sed`, `grep`, and `awk` commands for searching
