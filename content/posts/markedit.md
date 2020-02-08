@@ -7,9 +7,9 @@ tags:
 - "I made a thing"
 ---
 
-A couple days ago I released [markedit][crates-io], a small crate for
-manipulating unstructured markdown documents. This is a useful enough library
-that I thought I'd explain the main ideas behind it and potential use cases.
+A couple days ago I released [markedit][crates-io], a small crate for editing
+unstructured markdown documents. This is a useful enough library that I
+thought I'd explain the main ideas behind it and potential use cases.
 
 This originally came about when I was at work, preparing our application's
 change log before a release for the umpteenth time (we've found the [keep a
@@ -567,11 +567,67 @@ where
 }
 ```
 
-## Possible Uses
+## Possible Applications
 
-## Benchmarking
+Now you've got a better understanding of the abstractions provided by the
+`markedit` crate, you should have a better idea of where they can be applied.
+
+The `Matcher` idea is especially powerful when you want to extract information
+from a markdown document.
+
+Unlike structured data formats like protobufs, the items in a markdown
+document don't have a well defined order and you can't make any sweeping
+assumptions about the `Event` stream coming from the parser. Instead we rely
+on conventions (a project README might have a level 1 header with the title,
+then a paragraph or two of description, then a level 2 header with getting
+started instructions, etc.) and need a concise, flexible mechanism for
+extracting data.
+
+That mechanism is the `Matcher`.
+
+In the same way that you can build up an [XPath][xpath] query for searching
+an XML document or chain of `sed`, `grep`, and `awk` commands for searching
+plain text, the various `Matcher` combinators let you build up a markdown
+query.
+
+The `Rewriter` mechanism lets you (surprise, surprise) rewrite part of a
+document. You can think of it as a markdown-aware `sed`, and as such can be used
+for a lot of the same operations.
+
+After rewriting part of an `Event` you'll need a way to turn it back into
+markdown text. The `markedit` crate doesn't (yet!) have a pretty-printer,
+however you can leverage existing solutions like [pulldown-cmark-to-cmark][pc2c]
+for the same effect.
+
+Some places you might want to use the `markedit` crate instead of working with
+raw events from `pulldown-cmark` are,
+
+- extracting structured information from Rust docstrings (e.g.
+  [killercup/rust-docstrings](https://github.com/killercup/rust-docstrings))
+- [`mdbook` preprocessors](https://rust-lang.github.io/mdBook/for_developers/preprocessors.html)
+- extracting links from markdown documents to verify they are still valid
+  ([mdbook-linkcheck](https://github.com/Michael-F-Bryan/mdbook-linkcheck))
+- automatically correcting spelling mistakes
+- Merging several markdown documents and updating inter-doc links so they point
+  to their new location ([mdcollate](https://github.com/cetra3/mdcollate)),
+  and of course
+- Rewriting part of your `CHANGELOG.md` file in preparation for a release
 
 ## Conclusions
+
+This was a fun project to make and I'm pretty happy with the resulting
+abstractions. Preparing this write-up was also a great way to formalise the
+main concepts in my head and identify bugs or better ways of formulating the
+crate's API.
+
+If you're working on a new project I'd definitely recommend writing up a blog
+post explaining how it works. A blog post also doubles as good high-level
+documentation.
+
+I'm already using it in a couple places, but it needs a lot more use in the
+real world before it's ready for `1.0`. I'd really like to know if you use it
+in your own projects and find places it can be improved, especially in areas
+like ergonomics or documentation.
 
 [crates-io]: https://crates.io/crates/markedit
 [kac]: https://keepachangelog.com/en/1.0.0/
@@ -580,3 +636,6 @@ where
 [pc]: https://crates.io/crates/pulldown-cmark
 [parse-summary]: https://github.com/rust-lang/mdBook/blob/d5999849d9fa4b40986e53fe6c4001bb48cbd73f/src/book/summary.rs#L293-L357
 [pc]: https://en.wikipedia.org/wiki/Parser_combinator
+[xpath]: https://en.wikipedia.org/wiki/XPath
+[krd]: https://github.com/killercup/rust-docstrings
+[pc2c]: https://crates.io/crates/pulldown-cmark-to-cmark
