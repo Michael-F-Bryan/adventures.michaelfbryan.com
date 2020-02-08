@@ -94,21 +94,218 @@ My primary reasons for this were:
 
 - Memory usage - a document contains *a lot* of `Event`s, and by not reading
   everything into memory we can avoid large amounts of memory (memory overhead
-  with iterators is `O(1)` instead of `O(n)`)
-- Performance - there's no need for unnecessary copies and buffering
-- Flexibility - the core algorithms don't care if the events are already in a
-  buffer, streamed from the network, or the caller has already done some
-  pre-processing of the events via the various iterator combinators
-- Because I can - I just curious to see how far I can push the language and my
-  own skills
+  with iterators is ammortised `O(1)` instead of `O(n)`)
+- Flexibility - the core algorithms shouldn't need to care if the events are
+  already in a buffer, streamed from the network, or the caller has already
+  done some pre-processing of the events via the various iterator combinators
+- Because I can - I mean, why else do we do half the things we do?
 
 ## Matchers
+
+At its core the `Matcher` trait is quite trivial.
+
+```rust
+// src/matchers/mod.rs
+
+pub trait Matcher {
+    fn process_next(&mut self, event: &Event<'_>) -> bool;
+}
+```
+
+However if combined with closures and ideas from functional programming we
+can build something reminiscent of [Parser Combinators][pc].
+
+```rust
+// src/matchers/mod.rs
+
+impl<F> Matcher for F
+where
+    F: FnMut(&Event<'_>) -> bool,
+{
+    fn process_next(&mut self, event: &Event<'_>) -> bool { self(event) }
+}
+```
+
+For example, here is the definition for the `text()` function for getting a
+`Matcher` which applies a predicate to every `Event::Text` node.
+
+```rust
+// src/matchers/mod.rs
+
+/// Match a [`Event::Text`] node using an arbitrary predicate.
+pub fn text<P>(mut predicate: P) -> impl Matcher
+where
+    P: FnMut(&str) -> bool,
+{
+    move |ev: &Event<'_>| match ev {
+        Event::Text(text) => predicate(text.as_ref()),
+        _ => false,
+    }
+}
+```
+
+This lets us build a `Matcher` which will return `true` when it encounters an
+exact string, or a piece of text containing our desired string.
+
+```rust
+// src/matchers/mod.rs
+
+pub fn exact_text<S: AsRef<str>>(needle: S) -> impl Matcher {
+    text(move |text| AsRef::<str>::as_ref(text) == needle.as_ref())
+}
+
+pub fn text_containing<S: AsRef<str>>(needle: S) -> impl Matcher {
+    text(move |text| text.contains(needle.as_ref()))
+}
+```
+
+{{% notice tip %}}
+You'll notice that we're using the `impl Trait` pattern all over the place.
+This lets us create complex types while preserving the ability to change our
+underlying implementation (e.g. imagine we decide to use an explicit type
+instead of a closure) while maintaining backwards compatibility.
+
+As an added bonus, because `impl Trait` uses static dispatch the optimiser
+should hopefully be able to generate machine code as good as what a human
+could write manually.
+{{% /notice %}}
+
+### Matching Headings
+
+When I'm moving items from the `[Unreleased]` section to their own named release
+I'll select everything between the end of the `[Unreleased]` section header and
+the start of the next header.
+
+To create a `Matcher` which will match those items I'll first need to detect
+when we're inside a heading. This is a little more complicated than a simple
+yes/no predicate, so for readability I've decided to implement this using a
+struct instead of a closure.
+
+```rust
+// src/matchers/heading.rs
+
+/// Matches the items inside a heading tag, including the start and end tags.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Heading {
+    inside_heading: bool,
+    level: Option<u32>,
+}
+
+impl Heading {
+    /// Create a new [`Heading`].
+    const fn new(level: Option<u32>) -> Self {
+        Heading {
+            level,
+            inside_heading: false,
+        }
+    }
+
+    /// Matches any heading.
+    pub const fn any_level() -> Self { Heading::new(None) }
+
+    /// Matches only headings with the desired level.
+    pub const fn with_level(level: u32) -> Self { Heading::new(Some(level)) }
+}
+```
+
+The implementation is also pretty simple. When we see the start of a header with
+the desired level, keep returning `true` until we see the end tag.
+
+```rust
+// src/matchers/heading.rs
+
+impl Matcher for Heading {
+    fn process_next(&mut self, event: &Event<'_>) -> bool {
+        match event {
+            Event::Start(Tag::Heading(level)) if self.matches_level(*level) => {
+                self.inside_heading = true;
+            },
+            Event::End(Tag::Heading(level)) if self.matches_level(*level) => {
+                self.inside_heading = false;
+                // make sure the end tag is also matched
+                return true;
+            },
+            _ => {},
+        }
+
+        self.inside_heading
+    }
+}
+
+impl Heading {
+    ...
+
+    fn matches_level(&self, level: u32) -> bool {
+        match self.level {
+            Some(expected) => level == expected,
+            None => true,
+        }
+    }
+}
+```
+
+While we're at it, we should probably write a test to make sure we match a
+all the items inside a header. I just printed the `Event`s generated by a string
+of text then manually marked each event as `true` or `false` depending on what
+I'd expect.
+
+```rust
+// src/matchers/heading.rs
+
+#[test]
+fn match_everything_inside_a_header() {
+    // The original text for these events was:
+    //
+    // This is some text.
+    //
+    // ## Then a *header*
+    //
+    // [And a link](https://example.com)
+    let inputs = vec![
+        (Event::Start(Tag::Paragraph), false),
+        (Event::Text("This is some text.".into()), false),
+        (Event::End(Tag::Paragraph), false),
+        (Event::Start(Tag::Heading(2)), true),
+        (Event::Text("Then a ".into()), true),
+        (Event::Start(Tag::Emphasis), true),
+        (Event::Text("header".into()), true),
+        (Event::End(Tag::Emphasis), true),
+        (Event::End(Tag::Heading(2)), true),
+        (Event::Start(Tag::Paragraph), false),
+        (
+            Event::Start(Tag::Link(
+                LinkType::Inline,
+                "https://example.com".into(),
+                "".into(),
+            )),
+            false,
+        ),
+        (Event::Text("And a link".into()), false),
+        (
+            Event::End(Tag::Link(
+                LinkType::Inline,
+                "https://example.com".into(),
+                "".into(),
+            )),
+            false,
+        ),
+        (Event::End(Tag::Paragraph), false),
+    ];
+
+    let mut matcher = Heading::any_level();
+
+    for (tag, should_be) in inputs {
+        let got = matcher.process_next(&tag);
+        assert_eq!(got, should_be, "{:?}", tag);
+    }
+}
+```
 
 ## Rewrite Rules
 
 ## Possible Uses
 
-## Performance
+## Benchmarking
 
 ## Conclusions
 
@@ -118,3 +315,4 @@ My primary reasons for this were:
 [event]: https://docs.rs/pulldown-cmark/0.6.1/pulldown_cmark/enum.Event.html
 [pc]: https://crates.io/crates/pulldown-cmark
 [parse-summary]: https://github.com/rust-lang/mdBook/blob/d5999849d9fa4b40986e53fe6c4001bb48cbd73f/src/book/summary.rs#L293-L357
+[pc]: https://en.wikipedia.org/wiki/Parser_combinator
