@@ -20,10 +20,10 @@ allocator, so the number of moves will be determined at compile time. I *could*
 pluck a number out of thin air and say *"she'll be right"*, but there's also
 this neat feature on *nightly* at the moment called [*"Const Generics"*][cg]...
 
-{{< figure 
-    src="https://imgs.xkcd.com/comics/nerd_sniping.png" 
-    link="https://xkcd.com/356/" 
-    caption="(obligatory XKCD reference)" 
+{{< figure
+    src="https://imgs.xkcd.com/comics/nerd_sniping.png"
+    link="https://xkcd.com/356/"
+    caption="(obligatory XKCD reference)"
     alt="Nerd Sniping" 
 >}}
 
@@ -32,12 +32,12 @@ The code written in this article is available [on GitHub][repo]. Feel free to
 browse through and steal code or inspiration. It's also been published as a
 crate [on crates.io][crate].
 
-I'd also like to give a shout out to the original `arrayvec` author, 
+I'd also like to give a shout out to the original `arrayvec` author,
 [@bluss][bluss]. This project takes a **lot** of ideas and inspiration from
 `arrayvec`, and it would have made things a lot harder (and more error-prone)
 if there wasn't prior art to refer to.
 
-If you found this useful or spotted a bug, let me know on the blog's 
+If you found this useful or spotted a bug, let me know on the blog's
 [issue tracker][issue]. I *especially* want to hear from you if you feel a piece
 of `unsafe` code is unsound!
 
@@ -49,7 +49,7 @@ of `unsafe` code is unsound!
 
 ## Getting Started
 
-Okay, so the first thing we'll need to do is create a crate and enable this 
+Okay, so the first thing we'll need to do is create a crate and enable this
 `const_generics` feature.
 
 When creating a new project I like to use [`cargo generate`][cargo-generate]
@@ -78,10 +78,10 @@ It's around this time that I'll start a second terminal and use [`cargo watch`][
 to run `cargo build`, `cargo test`, and `cargo doc` in the background.
 
 ```console
-$ cargo watch --clear 
-    -x "check --all" 
-    -x "test --all" 
-    -x "doc --document-private-items --all" 
+$ cargo watch --clear
+    -x "check --all"
+    -x "test --all"
+    -x "doc --document-private-items --all"
     -x "build --release --all"
 warning: the feature `const_generics` is incomplete and may cause the compiler to crash
  --> src/lib.rs:2:12
@@ -94,7 +94,7 @@ warning: the feature `const_generics` is incomplete and may cause the compiler t
     Finished dev [unoptimized + debuginfo] target(s) in 0.02s
 ```
 
-Well that's encouraging. You know a feature *must* be unstable when even 
+Well that's encouraging. You know a feature *must* be unstable when even
 *nightly* warns you it may crash the compiler...
 
 {{% notice tip %}}
@@ -139,7 +139,7 @@ impl<T, const N: usize> ArrayVec<T, { N }> {
 }
 ```
 
-... But unfortunately it doesn't seem to be implemented yet (see 
+... But unfortunately it doesn't seem to be implemented yet (see
 [this u.rl.o post][forum]).
 
 ```
@@ -223,7 +223,7 @@ About the most basic operation for a `Vec`-like container to support is adding
 and removing items, so that's what we'll be implementing next.
 
 As you may have guessed, this crate will do a lot of work with possibly
-initialized memory so there'll be a decent chunk of `unsafe` code. 
+initialized memory so there'll be a decent chunk of `unsafe` code.
 
 ```rust
 // src/lib.rs
@@ -232,12 +232,12 @@ impl<T, const N: usize> ArrayVec<T, { N }> {
     ...
 
     /// Add an item to the end of the array without checking the capacity.
-    /// 
+    ///
     /// # Safety
-    /// 
-    /// It is up to the caller to ensure the vector's capacity is suitably 
+    ///
+    /// It is up to the caller to ensure the vector's capacity is suitably
     /// large.
-    /// 
+    ///
     /// This method uses *debug assertions* to detect overflows in debug builds.
     pub unsafe fn push_unchecked(&mut self, item: T) {
         debug_assert!(!self.is_full());
@@ -252,9 +252,9 @@ impl<T, const N: usize> ArrayVec<T, { N }> {
     }
 
     /// Set the vector's length without dropping or moving out elements.
-    /// 
+    ///
     /// # Safety
-    /// 
+    ///
     /// This method is `unsafe` because it changes the number of "valid"
     /// elements the vector thinks it contains, without adding or removing any
     /// elements. Use with care.
@@ -266,12 +266,12 @@ impl<T, const N: usize> ArrayVec<T, { N }> {
 ```
 
 The `push_unchecked()` and `set_len()` methods should be fairly descriptive,
-so I'll just let you read the code. Something to note 
+so I'll just let you read the code. Something to note
 
 {{% notice note %}}
 You would have noticed that the `unsafe` functions have a `# Safety` section in
 their doc-comments specifying various assumptions and invariants that must be
-upheld. 
+upheld.
 
 This is quite common when writing `unsafe` code, and is actually
 [part of the Rust API guidelines][guidelines]. I would recommend giving that
@@ -292,9 +292,9 @@ impl<T, const N: usize> ArrayVec<T, { N }> {
     ...
 
     /// Add an item to the end of the vector.
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// The vector must have enough room for the new item.
     ///
     /// # Examples
@@ -398,7 +398,7 @@ impl<T, const N: usize> ArrayVec<T, { N }> {
 }
 ```
 
-Some more relatively straightforward methods are `clear()` and `truncate()` for 
+Some more relatively straightforward methods are `clear()` and `truncate()` for
 shortening the vector and dropping any items after the new end.
 
 ```rust
@@ -437,7 +437,7 @@ every item in the `tail` and leave them in a logically uninitialized state.
 
 Next comes one of the trickier methods for our collection, `try_insert()`. When
 inserting, after doing a couple bounds checks we'll need to move everything
-after the insertion point over one space. Because the memory we're copying 
+after the insertion point over one space. Because the memory we're copying
 *from* overlaps with the memory we're copying *to*, we need to use the less
 performant `core::ptr::copy()` (the Rust version of C's `memmove()`) instead of
 `core::ptr::copy_non_overlapping()` (equivalent of C's `memcpy()`).
@@ -573,8 +573,8 @@ impl<T, const N: usize> AsMut<[T]> for ArrayVec<T, { N }> {
 ```
 
 You may have noticed that we didn't use any custom derives when declaring
-`ArrayVec`. Now we can use `as_slice()` it's easy enough to defer the 
-implementation of traits you'd normally `#[derive]` to their `&[T]` 
+`ArrayVec`. Now we can use `as_slice()` it's easy enough to defer the
+implementation of traits you'd normally `#[derive]` to their `&[T]`
 implementation.
 
 The traits we're going to implement manually:
@@ -662,7 +662,7 @@ optimisation anyway.
 [spec]: https://github.com/rust-lang/rust/issues/31844
 {{% /notice %}}
 
-That's a pretty big wall of code, but you may have noticed instead of 
+That's a pretty big wall of code, but you may have noticed instead of
 implementing `PartialEq`, we instead implemented `PartialEq<ArrayVec<T, { M }>>`
 for `ArrayVec<T, { N }>`. This makes things more flexible by allowing vectors
 of different sizes can be compared for equality.
@@ -709,8 +709,8 @@ use core::ptr;
 impl<T, const N: usize> ArrayVec<T, { N }> {
     ...
 
-    pub const fn remaining_capacity(&self) -> usize { 
-        self.capacity() - self.len() 
+    pub const fn remaining_capacity(&self) -> usize {
+        self.capacity() - self.len()
     }
 
     pub fn try_extend_from_slice(
@@ -740,7 +740,7 @@ impl<T, const N: usize> ArrayVec<T, { N }> {
 ```
 
 It's also useful to add a `From` to allow construction of a vector from an
-array. 
+array.
 
 This is can be tricky to do correctly because you can't iterate over the items
 (`T`, not `&T`) in an array `[T; N]` due to the lack of an `IntoIterator` impl
@@ -780,16 +780,16 @@ impl<T, const N: usize> From<[T; N]> for ArrayVec<T, { N }> {
 
 ## Implementing Drain
 
-Most collections have a so-called *Draining Iterator* that removes a specified 
+Most collections have a so-called *Draining Iterator* that removes a specified
 range from the vector and yields the removed items.
 
 Implementing this pattern *correctly* can be a non-trivial task however, as
-Alexis Beingessner's insightful [Pre-Pooping Your Pants With Rust][ppyp] 
+Alexis Beingessner's insightful [Pre-Pooping Your Pants With Rust][ppyp]
 demonstrates.
 
 The way a `Drain` type usually works is:
 
-- Take a `&mut` reference to the parent collection and keep track of the 
+- Take a `&mut` reference to the parent collection and keep track of the
   requested range.
 - The `Iterator::next()` method should yield the item at the front of the range,
   and increment the range's lower bound. This leaves the item's original
@@ -820,7 +820,7 @@ pub struct Drain<'a, T, const N: usize> {
 
 There are a couple invariants that must be upheld for `Drain` to be valid:
 
-1. The `head` pointer must point within `inner`'s backing array 
+1. The `head` pointer must point within `inner`'s backing array
 2. The `head` pointer must be before the `tail` pointer
 3. The `tail` pointer must be greater than or equal to `head`, and the furthest
    it can go is one item after the end of the buffer
@@ -956,7 +956,7 @@ impl<'a, T, const N: usize> ExactSizeIterator for Drain<'a, T, { N }> {
 {{% notice note %}}
 One of the contracts that `ExactSizeIterator` specifies in [its
 documentation][docs] is that the `Iterator::size_hint()` method *must* return
-the exact size of the iterator. 
+the exact size of the iterator.
 
 > When implementing an ExactSizeIterator, you must also implement Iterator.
 When doing so, the implementation of size_hint must return the exact size of
@@ -977,7 +977,7 @@ use core::iter::FusedIterator;
 impl<'a, T, const N: usize> FusedIterator for Drain<'a, T, { N }> {}
 ```
 
-Most importantly, we'll need to implement the `Drop` trait to make sure the 
+Most importantly, we'll need to implement the `Drop` trait to make sure the
 remaining items within the drained range are destroyed and the other items
 shuffled forwards to fill in the space.
 
@@ -1032,13 +1032,13 @@ struct World {
     broken: bool,
 }
 
-/// A RAII guard which should be held 
+/// A RAII guard which should be held
 struct CleanupWorld<'a>(&'a mut World);
 
 impl<'a> Drop for CleanupWorld<'a> {
-    fn drop(&mut self) { 
+    fn drop(&mut self) {
         // We're done updating. Make sure the world is no longer broken.
-        self.0.broken = false; 
+        self.0.broken = false;
     }
 }
 
@@ -1089,14 +1089,14 @@ This can be accomplished by adding a single line to `Drain`'s constructor.
          vector: &'a mut ArrayVec<T, { N }>,
          range: Range<usize>,
      ) -> Self {
- 
+
          unsafe {
              ...
- 
+
 +            // prevent a leaked Drain from letting users read from
 +            // uninitialized memory
 +            vector.set_len(range.start);
- 
+
              Drain { ... }
          }
      }
@@ -1111,10 +1111,10 @@ letting users access uninitialized memory or trigger a double-free.
 While `ArrayVec` isn't quite polished, it's definitely at a place where people
 can begin to use it to build cool things.
 
-As a bonus, I didn't run into a single ICE while writing `const-arrayvec`! 
+As a bonus, I didn't run into a single ICE while writing `const-arrayvec`!
 
 Most of the times I'd like to use *Const Generics* are when working on
-`#[no_std]` applications where I'd prefer to let the caller specify a buffer 
+`#[no_std]` applications where I'd prefer to let the caller specify a buffer
 size at compile time, so I'm definitely going to try and use it more from now
 on.
 
