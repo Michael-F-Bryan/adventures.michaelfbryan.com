@@ -74,10 +74,12 @@ If you found this useful or spotted a bug, let me know on the blog's
 It would be a bit overwhelming to show you the full code, so I've prepared a
 rough example we can play around with.
 
-Another important point to emphasize is this 3rd party library is native code
-(I think it's written in C++?). The reason this is important is because it
-uses pointers and a bug doesn't just mean an exception gets thrown, we could
-segfault and tear down the entire process.
+Another important point to emphasize is the 3rd party library which initially
+inspired this experiment is native code (I think it's written in C++?). The
+reason this is important is because it uses pointers and a bug doesn't just
+mean an exception gets thrown, we could segfault and tear down the entire
+process. My decision to write use it from Rust also means we'll need to write
+some `unsafe` code when crossing the language boundary.
 
 It's actually pretty painful to write code in Rust which relies on global
 mutable state (it's almost like the code is trying to tell us something 🤔)
@@ -261,8 +263,7 @@ code doesn't let us provide some sort of `void *` pointer to user-provided data.
 That means the only way our callbacks will be able to pass information to the
 caller is by itself using global variables.
 
-Finally, we get a couple functions for inspecting the output. Something to
-keep in mind is they can only be called from inside our `result_cb` callback.
+Finally, we get a couple functions for inspecting the output.
 
 ```c
 // Try to get the number of outputs in the result.
@@ -271,7 +272,340 @@ int stateful_get_num_outputs(int *value);
 int stateful_get_output_by_index(int index, int *value);
 ```
 
+Something to keep in mind is they can only be called from inside our
+`result_cb` callback. Other than that, the functions are pretty ordinary.
+
+{{% notice info %}}
+I'm going to be deliberately vague about what `stateful_execute()` actually
+does. For our purposes the computation isn't actually relevant, we're mainly
+concerned about *how* you can make use of such a "stateful" library while
+maintaining nice things like,
+
+- thread-safety
+- memory-safety
+- using a strong type system to statically ensure it is impossible to do
+  things out of order
+
+If it helps, think of `stateful_execute()` as something like this:
+
+```rust
+fn stateful_execute(
+    parameters: &HashMap<String, Value>,
+    items: Vec<Input>,
+) -> Vec<c_int> {
+    // magic
+}
+```
+{{% /notice %}}
+
 ## Our High-Level Approach
+
+We have two main goals for this exercise,
+
+- Create a safe wrapper which lets us use this library while maintaining memory
+  and thread-safety
+- Use the type system to *make illegal states unrepresentable*
+
+The first goal can be fulfilled fairly easily, because this library can only be
+used by one bit of code at a time (`static` variables aren't thread-safe) we
+can make a type which represents a "handle" to the library.
+
+We can then write our code in such a way that calling a function from our
+`stateful` library *needs* you to have a valid handle.
+
+```rust
+// src/lib.rs
+
+use std::marker::PhantomData;
+
+/// A handle to the `stateful` library.
+pub struct Library {
+    _not_send: PhantomData<*const ()>,
+}
+```
+
+Something to note is the use of `PhantomData<*const ()>` here. This makes sure
+`Library` is `!Send` and `!Sync` (i.e. it can't be used from another thread).
+
+We can double-check that `Library` can't be used from other threads by adding
+the [`static_assertions` crate][static-assert] as a dev-dependency...
+
+```console
+$ cargo add --dev static_assertions
+    Updating 'https://github.com/rust-lang/crates.io-index' index
+      Adding static_assertions v1.1.0 to dev-dependencies
+```
+
+... And then writing a new test.
+
+```rust
+// src/lib.rs
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    static_assertions::assert_not_impl_any!(Library: Send, Sync);
+}
+```
+
+If this test failed we would get a build failure from `cargo test`.
+
+```diff
+ /// A handle to the `stateful` library.
+ pub struct Library {
+     _not_send: PhantomData<*const ()>,
+ }
+
++unsafe impl Send for Library {}
+```
+
+The error message leaves a lot to be desired, but this is what you'd see if
+`Library` were `Send`.
+
+```console
+$ cargo test
+   Compiling stateful-native-library v0.1.0 (/home/michael/Documents/stateful-native-library)
+error[E0282]: type annotations needed for `fn() {<Library as tests::_::{{closure}}#0::AmbiguousIfImpl<_>>::some_item}`
+  --> src/lib.rs:14:5
+   |
+14 |     static_assertions::assert_not_impl_any!(Library: Send, Sync);
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |     |
+   |     consider giving this pattern the explicit type `fn() {<Library as tests::_::{{closure}}#0::AmbiguousIfImpl<_>>::some_item}`, with the type parameters specified
+   |     cannot infer type
+   |
+   = note: this error originates in a macro outside of the current crate (in Nightly builds, run with -Z external-macro-backtrace for more info)
+
+error: aborting due to previous error
+```
+
+Now we have a thread-safe `Library` type, we also need to make sure it's not
+possible to create more than one `Library` at a time. This can be done easily
+enough using a flag (`AtomicBool`) which is set to `true` when `Library` is
+created and `false` when it is destroyed.
+
+```rust
+// src/lib.rs
+
+use sync::atomic::{AtomicBool, Ordering};
+
+static LIBRARY_IN_USE: AtomicBool = AtomicBool::new(false);
+
+impl Library {
+    pub fn new() -> Result<Library, AlreadyInUse> {
+        if LIBRARY_IN_USE.compare_and_swap(false, true, Ordering::SeqCst)
+            == false
+        {
+            Ok(Library {
+                _not_send: PhantomData,
+            })
+        } else {
+            Err(AlreadyInUse)
+        }
+    }
+}
+
+impl Drop for Library {
+    fn drop(&mut self) { LIBRARY_IN_USE.store(false, Ordering::SeqCst); }
+}
+
+/// An error indicating the `Library` can't be accessed again until the existing
+/// session is over.
+#[derive(Debug, Copy, Clone, PartialEq, thiserror::Error)]
+#[error("The library is already in use")]
+pub struct AlreadyInUse;
+```
+
+yes, I know the irony in using a `static` variable to workaround another
+library's zealous use of `static` variables. Sometimes you've got to break a
+couple eggs to make an omelette 🤷‍♂
+
+To make sure we've implemented this correctly, let's write a test which
+deliberately tries to create multiple `Library` handles at the same time.
+
+```rust
+// lib/src.rs
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    ...
+
+    #[test]
+    fn cant_create_multiple_library_handles_at_the_same_time() {
+        let first_library = Library::new().unwrap();
+
+        // make sure the flag is set
+        assert!(LIBRARY_IN_USE.load(Ordering::SeqCst));
+
+        // then try to create another handle
+        assert!(Library::new().is_err());
+
+        // explicitly drop the first library so we know it clears the flag
+        drop(first_library);
+
+        assert!(!LIBRARY_IN_USE.load(Ordering::SeqCst));
+
+        // now the old handle is destroyed, we can create another
+        let _another = Library::new().unwrap();
+    }
+}
+```
+
+Next, to ensure functions aren't called out of order we can create some sort of
+type-level state machine. This idea was originally taken from [a thread on the
+Rust users forum][u.rl.o]. You'll notice the approach we're taking is uncannily
+similar to the solution proposed by [@Yandros][yandros],
+
+> I would wrap the library using a type-level state machine to make misusage
+> simply not compile; If necessary, you can even use the singleton pattern to
+> enforce no concurrency problems (which would be the only part checked at
+> runtime).
+
+When setting parameters it should be impossible to use any non-parameter-setting
+functionality.
+
+This is where lifetimes really show their power, using a `&mut Library` reference
+the compiler can statically ensure some `SettingParameters` type (which we're
+about to create) has unique access to our `Library`.
+
+```rust
+// src/lib.rs
+
+impl Library {
+    ...
+
+    pub fn set_parameters(&mut self) -> SettingParameters<'_> {
+        SettingParameters { _library: self }
+    }
+}
+
+pub struct SettingParameters<'lib> {
+    _library: &'lib mut Library,
+}
+
+impl<'lib> SettingParameters<'lib> {
+    pub fn boolean(&mut self, _name: &str, _value: bool) -> &mut Self {
+        unimplemented!()
+    }
+
+    pub fn integer(&mut self, _name: &str, _value: i32) -> &mut Self {
+        unimplemented!()
+    }
+}
+```
+
+You'll notice I'm deliberately leaving the body for `boolean()` and
+`integer()` as `unimplemented!()`. We're just setting up the infrastructure
+for this "type-level state machine" for now and will execute the actual FFI
+calls in a bit.
+
+Once we've set the various parameters we need to start constructing our inputs.
+This can be done using some sort of `RecipeBuilder` which leverages the
+`&mut Library` trick from `SettingParameters`.
+
+```rust
+// src/lib.rs
+
+impl Library {
+    ...
+
+    pub fn create_recipe(&mut self) -> RecipeBuilder<'_> {
+        RecipeBuilder { _library: self }
+    }
+}
+
+pub struct RecipeBuilder<'lib> {
+    _library: &'lib mut Library,
+}
+
+impl<'lib> RecipeBuilder<'lib> {
+    pub fn add_item(&mut self, _name: &str, _value: i32) -> &mut Self {
+        unimplemented!()
+    }
+}
+```
+
+Now we've got a problem, how can you add a group of items to the "recipe" (the
+term I'm using for our set of inputs)? We need to make sure it's not possible
+to call `RecipeBuilder::add_item()` while in the middle of constructing a group.
+
+If you think for a moment, that's the same problem we had with `Library` when
+we wanted to make sure you can *either* be creating a recipe using the
+`RecipeBuilder`, or setting parameters with `SettingParameters`. We just need to
+add another layer of `&mut`s!
+
+```rust
+// src/lib.rs
+
+impl<'lib> RecipeBuilder<'lib> {
+    ...
+
+    pub fn add_group<'r>(&'r mut self, _name: &str) -> GroupBuilder<'r, 'lib> {
+        GroupBuilder {
+            _recipe_builder: self,
+        }
+    }
+}
+
+pub struct GroupBuilder<'r, 'lib> {
+    _recipe_builder: &'r mut RecipeBuilder<'lib>,
+}
+
+impl<'r, 'lib> GroupBuilder<'r, 'lib> {
+    pub fn add_item(&mut self, _name: &str, _value: i32) -> &mut Self { unimplemented!() }
+
+    pub fn finish(self) -> &'r mut RecipeBuilder<'lib> { self._recipe_builder }
+}
+```
+
+Next, I'm going to continue with this builder pattern theme and give
+`RecipeBuilder` a `build()` method which returns a `Recipe`. A `Recipe` will
+just be an empty type indicating we've fully assembled the inputs. Signifying
+the transition to the *"inputs assembled and ready for use"* state.
+
+```rust
+// src/lib.rs
+
+impl<'lib> RecipeBuilder<'lib> {
+    ...
+
+    pub fn build(self) -> Recipe<'lib> {
+        Recipe {
+            _library: self._library,
+        }
+    }
+}
+
+pub struct Recipe<'lib> {
+    _library: &'lib mut Library,
+}
+```
+
+If you've been keeping up, we're now at the point where everything is
+initialized and we're ready to consume this `Recipe` and get the output.
+
+It seems odd for a `Recipe` to know how to execute itself, so we'll create
+some sort of top-level `execute()` function instead.
+
+```rust
+// src/lib.rs
+
+pub fn execute<P>(_recipe: Recipe<'_>, _progress: P) -> Result<Output, Error>
+where
+    P: FnMut(i32),
+{
+    unimplemented!()
+}
+
+pub enum Error {}
+
+pub struct Output {
+    pub items: Vec<i32>,
+}
+```
 
 ## The Bottom Layer
 
@@ -280,3 +614,6 @@ int stateful_get_output_by_index(int index, int *value);
 ## Conclusions
 
 [data-race]: https://doc.rust-lang.org/nomicon/races.html
+[static-assert]: https://crates.io/crates/static_assertions
+[u.rl.o]: https://users.rust-lang.org/t/common-strategies-for-wrapping-a-library-that-uses-globals-everywhere/37944
+[yandros]: https://users.rust-lang.org/u/yandros/summary
