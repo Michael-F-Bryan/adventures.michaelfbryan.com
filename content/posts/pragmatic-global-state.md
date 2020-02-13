@@ -650,7 +650,9 @@ is a lot more invasive. We needed to restructure our entire API using complex
 concepts like lifetimes and RAII to encode the logical equivalent of a
 type-level state machine.
 
-## The Bottom Layer
+## Creating FFI Bindings
+
+## Writing a Safe Interface to LibStateful
 
 ## Conclusions
 
