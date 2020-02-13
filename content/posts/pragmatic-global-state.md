@@ -150,6 +150,127 @@ int stateful_get_output_by_index(int index, int *value);
 #endif // STATEFUL_H
 ```
 
+{{% notice note %}}
+The difficulty with trying to explain complex architecture is to find the
+sweet spot between simplifying so much that people miss the point or the
+example feels contrived, and providing so much detail that the reader loses
+track of what's going on amongst the various moving parts.
+
+Hopefully I'm somewhere near that sweet spot.
+{{% /notice %}}
+
+There's quite a lot going on here, so let's unpack it a bit.
+
+Fortunately, this library does a pretty decent job of handling errors and most
+of the time functions will give you some sort of return code.
+
+```c
+// The various possible return codes.
+enum
+{
+    // The function completed successfully.
+    RESULT_OK,
+    // A function was called out of order.
+    RESULT_BAD_STATE,
+    // One of the provided arguments is invalid.
+    RESULT_INVALID_ARGUMENT,
+};
+```
+
+In reality there are going to be a lot more error cases, but you get the gist.
+
+The library needs to initialize some global state before first use and do
+cleanup at the end, so our `stateful` library has `open()` and `close()`
+functions.
+
+```c
+// Initialize the library. MUST be run before any other function.
+int stateful_open();
+
+// Clean up any state associated with this library.
+int stateful_close();
+```
+
+(I don't know about you, but usually when I this sort of pattern the first
+thing I think of is RAII)
+
+After initializing the library we need to set some global parameters. These are
+various knobs and levers that are used to alter how the input is processed.
+
+```c
+// Begin setting parameters. MUST be run before any parameters can be set.
+int stateful_start_setting_parameters();
+int stateful_set_bool_var(const char *name, bool value);
+int stateful_set_int_var(const char *name, int value);
+// Finish setting parameters.
+int stateful_end_setting_parameters();
+```
+
+You can see that we need to explicitly start and stop setting parameters. The
+functions themselves take no arguments, which is a big give-away that the code
+mutates global variables under the hood.
+
+Next we've got functions for setting up the input.
+
+```c
+// Start adding input items.
+int stateful_start_adding_items();
+// Add a single item as an input.
+int stateful_add_item(const char *name, int value);
+// Start adding a group of items.
+int stateful_start_adding_group(const char *name);
+// Add an item to the current group. stateful_start_adding_group MUST be called
+// beforehand.
+int stateful_add_group_item(const char *name, int value);
+// Finish adding items to the current group, adding the overall group to the
+// list of inputs.
+int stateful_end_adding_group();
+// Finish setting up the list of inputs.
+int stateful_end_adding_items();
+```
+
+If you squint, you'll see that the input is a list of individual named items
+or groups of items. The `Input` that we're building procedurally might look
+something like this (if written in Rust):
+
+```rust
+enum Item {
+  Single(i32),
+  Group(HashMap<String, i32>),
+}
+
+type Input = HashMap<String, Item>;
+```
+
+Now we've set the algorithm's parameters and created our input, we can execute
+the code.
+
+```c
+// A callback used to notify the caller when progress is made.
+typedef int (*progress_cb)(int percent);
+// A callback used to let the user retrieve results.
+typedef int (*result_cb)(int number_of_results);
+
+// Run the code.
+int stateful_execute(progress_cb progress, result_cb result);
+```
+
+You'll notice this uses callback functions to notify the caller of progress and
+when the results are ready. This wouldn't normally be a problem, except the
+code doesn't let us provide some sort of `void *` pointer to user-provided data.
+That means the only way our callbacks will be able to pass information to the
+caller is by itself using global variables.
+
+Finally, we get a couple functions for inspecting the output. Something to
+keep in mind is they can only be called from inside our `result_cb` callback.
+
+```c
+// Try to get the number of outputs in the result.
+int stateful_get_num_outputs(int *value);
+// Tries to retrieve a particular output.
+int stateful_get_output_by_index(int index, int *value);
+```
+
 ## Our High-Level Approach
 
 ## The Bottom Layer
