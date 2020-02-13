@@ -417,9 +417,9 @@ impl Drop for Library {
 pub struct AlreadyInUse;
 ```
 
-yes, I know the irony in using a `static` variable to workaround another
+Yes, I know the irony in using a `static` variable to workaround another
 library's zealous use of `static` variables. Sometimes you've got to break a
-couple eggs to make an omelette 🤷‍♂
+couple eggs to make an omelette 🤷‍
 
 To make sure we've implemented this correctly, let's write a test which
 deliberately tries to create multiple `Library` handles at the same time.
@@ -607,9 +607,50 @@ pub struct Output {
 }
 ```
 
-## The Bottom Layer
+To make sure the code we've written prevents invalid uses of `Library`, let's
+use Rustdoc's `compile_fail` feature to document our functions with examples
+we expect `rustc` to reject.
 
-## Idiomatic Rust
+```rust
+// src/lib.rs
+
+impl Library {
+    ...
+
+    /// Start creating the inputs for [`execute()`].
+    ///
+    /// The [`RecipeBuilder`] uses lifetimes to make sure you can't do anything
+    /// else while creating a [`Recipe`].
+    ///
+    /// ```rust,compile_fail
+    /// # use stateful_native_library::Library;
+    /// let mut library = Library::new().unwrap();
+    ///
+    /// // start creating the recipe
+    /// let mut recipe_builder = library.create_recipe();
+    ///
+    /// // trying to set parameters while recipe_builder is alive is an error
+    /// library.set_parameters();
+    ///
+    /// // recipe_builder is still alive until here
+    /// drop(recipe_builder);
+    /// ```
+    pub fn create_recipe(&mut self) -> RecipeBuilder<'_> {
+        ...
+    }
+}
+```
+
+You can see that fulfilling the `!Send` and `!Sync` goal was quite easy to
+do. By making sure `Library: !Send`, anything referencing `Library` is also
+`!Send`.
+
+On the other hand, ensuring functions can only be called in the correct order
+is a lot more invasive. We needed to restructure our entire API using complex
+concepts like lifetimes and RAII to encode the logical equivalent of a
+type-level state machine.
+
+## The Bottom Layer
 
 ## Conclusions
 
