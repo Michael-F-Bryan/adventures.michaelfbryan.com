@@ -403,7 +403,7 @@ use sync::atomic::{AtomicBool, Ordering};
 static LIBRARY_IN_USE: AtomicBool = AtomicBool::new(false);
 
 impl Library {
-    pub fn new() -> Result<Library, AlreadyInUse> {
+    pub fn new() -> Result<Library, Error> {
         if LIBRARY_IN_USE.compare_and_swap(false, true, Ordering::SeqCst)
             == false
         {
@@ -411,7 +411,7 @@ impl Library {
                 _not_send: PhantomData,
             })
         } else {
-            Err(AlreadyInUse)
+            Err(Error::AlreadyInUse)
         }
     }
 }
@@ -420,11 +420,12 @@ impl Drop for Library {
     fn drop(&mut self) { LIBRARY_IN_USE.store(false, Ordering::SeqCst); }
 }
 
-/// An error indicating the `Library` can't be accessed again until the existing
-/// session is over.
+/// The various error cases that may be encountered while using this library.
 #[derive(Debug, Copy, Clone, PartialEq, thiserror::Error)]
-#[error("The library is already in use")]
-pub struct AlreadyInUse;
+pub enum Error {
+    #[error("The library is already in use")]
+    AlreadyInUse,
+}
 ```
 
 Yes, I know the irony in using a `static` variable to workaround another
@@ -598,7 +599,7 @@ If you've been keeping up, we're now at the point where everything is
 initialized and we're ready to consume this `Recipe` and get the output.
 
 It seems odd for a `Recipe` to know how to execute itself, so we'll create
-some sort of top-level `execute()` function instead.
+some sort of top-level `execute()` function instead of adding it as a method.
 
 ```rust
 // src/lib.rs
@@ -609,8 +610,6 @@ where
 {
     unimplemented!()
 }
-
-pub enum Error {}
 
 pub struct Output {
     pub items: Vec<i32>,
@@ -1078,6 +1077,117 @@ noticed the mangled names and figured out what was going on.
 {{% /notice %}}
 
 ## Writing a Safe Interface to libstateful
+
+We're now ready to go from declaring our type-level state machine to giving it
+some behaviour to execute when transitioning from state to state.
+
+To make things easier we're going to define a helper trait for converting from
+a return code to a `Result<(), Error>`.
+
+```rust
+// src/lib.rs
+
+trait IntoResult {
+    fn into_result(self) -> Result<(), Error>;
+}
+```
+
+By itself this trait isn't overly interesting, but we can leverage it to enable
+`?` for error handling.
+
+```rust
+// src/lib.rs
+
+use std::convert::TryFrom;
+
+impl IntoResult for c_int {
+    fn into_result(self) -> Result<(), Error> {
+        let code = u32::try_from(self).map_err(|_| Error::Other(self))?;
+
+        match code {
+            bindings::RESULT_OK => Ok(()),
+            bindings::RESULT_BAD_STATE => Err(Error::InvalidState),
+            bindings::RESULT_INVALID_ARGUMENT => Err(Error::InvalidArgument),
+            _ => Err(Error::Other(self)),
+        }
+    }
+}
+```
+
+This also gives us a chance to flesh out the `Error` enum.
+
+```rust
+// src/lib.rs
+
+#[derive(Debug, Copy, Clone, PartialEq, thiserror::Error)]
+pub enum Error {
+    #[error("The library is already in use")]
+    AlreadyInUse,
+    #[error("The underlying library is in an invalid state")]
+    InvalidState,
+    #[error("An argument was invalid")]
+    InvalidArgument,
+    #[error("Unknown error code: {}", _0)]
+    Other(c_int),
+}
+```
+
+Now that's out of the way, the first part to address is our `Library` type.
+At the moment we're just setting a flag to `true` and returning a `Library`
+handle, but we aren't actually initializing the underlying library.
+
+```diff
+ // src/lib.rs
+
+ impl Library {
+     pub fn new() -> Result<Library, Error> {
+         if LIBRARY_IN_USE.compare_and_swap(false, true, Ordering::SeqCst)
+             == false
+         {
++            unsafe {
++                bindings::stateful_open().into_result()?;
++            }
++
+             Ok(Library {
+                 _not_send: PhantomData,
+             })
+         } else {
+             Err(Error::AlreadyInUse)
+         }
+     }
+```
+
+You can also see how that `IntoResult` trait helps to remove the visual noise
+associated with constant error checks.
+
+When the `Library` gets destroyed we need to make sure everything gets cleaned
+up.
+
+```diff
+ // src/lib.rs
+
+ impl Drop for Library {
+-    fn drop(&mut self) { LIBRARY_IN_USE.store(false, Ordering::SeqCst); }
++    fn drop(&mut self) {
++        unsafe {
++            let _ = bindings::stateful_close();
++        }
++        LIBRARY_IN_USE.store(false, Ordering::SeqCst);
++    }
+ }
+```
+
+{{% notice note %}}
+The ordering of operations is important here. We want to make sure the
+`LIBRARY_IN_USE` flag is set to `true` for the entire time we're interacting
+with the underlying code.
+{{% /notice %}}
+
+Our `SettingParameters` and `RecipeBuilder` types use RAII to represent when
+the library is in a certain state. We'll need to call the corresponding
+`*_start_*` and `*_end_*` functions when constructing and destroying them to
+make sure their lifetimes align with the state of the native library.
+
 
 ## Conclusions
 
