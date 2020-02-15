@@ -204,7 +204,7 @@ int stateful_close();
 ```
 
 (I don't know about you, but usually when I this sort of pattern the first
-thing I think of is RAII)
+thing I think of is [RAII][raii])
 
 After initializing the library we need to set some global parameters. These are
 various knobs and levers that are used to alter how the input is processed.
@@ -658,6 +658,94 @@ On the other hand, ensuring functions can only be called in the correct order
 is a lot more invasive. We needed to restructure our entire API using complex
 concepts like lifetimes and RAII to encode the logical equivalent of a
 type-level state machine.
+
+Here's a more detailed example showing the error messages a user would get if
+they tried to do things in the wrong order.
+
+```rust
+#[test]
+fn this_should_not_compile() {
+    let mut library = Library::new().unwrap();
+
+    {
+        let _sp = library.set_parameters();
+        library.create_recipe(); // ERROR
+    }
+
+    let recipe = {
+        let mut recipe_builder = library.create_recipe();
+        let group_builder = recipe_builder.add_group("Group");
+
+        // try to add an item to the recipe while building a group
+        recipe_builder.add_item("asdf", 123); // ERROR
+
+        // finish building the group
+        group_builder.finish();
+
+        // we can now add items
+        recipe_builder.add_item("asdf", 123);
+
+        // you can't set parameters while building the recipe
+        library.set_parameters(); // ERROR
+
+        recipe_builder.build()
+    };
+
+    let got = execute(recipe, |percent| println!("Progress: {}%", percent));
+
+    assert!(got.is_ok());
+}
+```
+
+And this is the error message from `rustc`:
+
+```console
+$ cargo test
+   Compiling stateful-native-library v0.1.0 (/home/michael/Documents/stateful-native-library)
+error[E0499]: cannot borrow `library` as mutable more than once at a time
+   --> src/lib.rs:284:13
+    |
+283 |             let _sp = library.set_parameters();
+    |                       ------- first mutable borrow occurs here
+284 |             library.create_recipe(); // ERROR
+    |             ^^^^^^^ second mutable borrow occurs here
+285 |         }
+    |         - first borrow might be used here, when `_sp` is dropped and runs the `Drop` code for type `SettingParameters`
+
+error[E0499]: cannot borrow `recipe_builder` as mutable more than once at a time
+   --> src/lib.rs:292:13
+    |
+289 |             let group_builder = recipe_builder.add_group("Group");
+    |                                 -------------- first mutable borrow occurs here
+...
+292 |             recipe_builder.add_item("asdf", 123); // ERROR
+    |             ^^^^^^^^^^^^^^ second mutable borrow occurs here
+...
+295 |             group_builder.finish();
+    |             ------------- first borrow later used here
+
+error[E0499]: cannot borrow `library` as mutable more than once at a time
+   --> src/lib.rs:301:13
+    |
+288 |             let mut recipe_builder = library.create_recipe();
+    |                                      ------- first mutable borrow occurs here
+...
+301 |             library.set_parameters(); // ERROR
+    |             ^^^^^^^ second mutable borrow occurs here
+302 |
+303 |             recipe_builder.build()
+    |             -------------- first borrow later used here
+
+error: aborting due to 3 previous errors
+
+For more information about this error, try `rustc --explain E0499`.
+error: could not compile `stateful-native-library`.
+
+To learn more, run the command again with --verbose.
+```
+
+It's moments like these that make you appreciate just how useful the concept of
+lifetimes can be, and how readable `rustc`'s error messages are 🙂
 
 ## Creating FFI Bindings
 
@@ -1132,6 +1220,8 @@ pub enum Error {
 }
 ```
 
+### Proper RAII
+
 Now that's out of the way, the first part to address is our `Library` type.
 At the moment we're just setting a flag to `true` and returning a `Library`
 handle, but we aren't actually initializing the underlying library.
@@ -1188,6 +1278,362 @@ the library is in a certain state. We'll need to call the corresponding
 `*_start_*` and `*_end_*` functions when constructing and destroying them to
 make sure their lifetimes align with the state of the native library.
 
+```diff
+ // src/lib.rs
+
+ impl Library {
+     ...
+
+     pub fn set_parameters(&mut self) -> SettingParameters<'_> {
++        cant_fail!(unsafe { bindings::stateful_start_setting_parameters() });
+         SettingParameters { _library: self }
+     }
+
+     pub fn create_recipe(&mut self) -> RecipeBuilder<'_> {
++        cant_fail!(unsafe { bindings::stateful_start_adding_items() });
+         RecipeBuilder {
+             _library: ManuallyDrop::new(self),
+         }
+     }
+ }
+
+ ...
+
++impl<'lib> Drop for SettingParameters<'lib> {
++    fn drop(&mut self) {
++        unsafe {
++            let _ = bindings::stateful_end_setting_parameters().into_result();
++        }
++    }
++}
+
+ ...
+
++impl<'lib> Drop for RecipeBuilder<'lib> {
++    fn drop(&mut self) {
++        unsafe {
++            let _ = bindings::stateful_end_adding_items().into_result();
++        }
++    }
++}
+```
+
+You'll notice that I've introduced a `cant_fail!()` macro here. Because we're
+using the type system to statically guarantee code can't be executed out of
+order and that the arguments we provide are always valid I've introduced an
+assertion which will blow up loudly if that assumption isn't valid.
+
+```rust
+// src/lib.rs
+
+/// A macro you can use when you *know* a function has been statically proven to
+/// not fail.
+macro_rules! cant_fail {
+    ($return_code:expr) => {
+        if let Err(e) = $return_code.into_result() {
+            unreachable!(
+                "The type system should ensure this function can't fail: {}",
+                e
+            );
+        }
+    };
+}
+```
+
+We need to do a bit more work when adding calls to
+`stateful_start_adding_group()` and `stateful_end_adding_group()` for our
+`GroupBuilder` because it is the first proper function that we need to
+provide arguments for.
+
+To help convert between a Rust `&str` and `const char *` we can use the
+[`std::ffi::CString`][cstring] type. The constructor can fail with a `NulError`
+if a string contains an internal `null` byte, but considering most "proper"
+strings in Rust won't ever contain `null` it seems fair to simplify the API by
+panicking instead of propagating the error.
+
+```rust
+// src/lib.rs
+
+impl<'lib> RecipeBuilder<'lib> {
+    ...
+
+    pub fn add_group<'r>(&'r mut self, name: &str) -> GroupBuilder<'r, 'lib> {
+        let name = CString::new(name)
+            .expect("valid names shouldn't contain null characters");
+        cant_fail!(unsafe {
+            bindings::stateful_start_adding_group(name.as_ptr())
+        });
+        GroupBuilder {
+            _recipe_builder: ManuallyDrop::new(self),
+        }
+    }
+}
+
+impl<'r, 'lib> Drop for GroupBuilder<'r, 'lib> {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = bindings::stateful_end_adding_group().into_result();
+        }
+    }
+}
+```
+
+### Finishing It Off
+
+At this point it's just a case of grepping for functions containing
+`unimplemented!()` and translating the arguments so they can be passed to the
+corresponding functions in our `stateful` library.
+
+First up are the methods on `SettingParameters`.
+
+```rust
+// src/lib.rs
+
+impl<'lib> SettingParameters<'lib> {
+    pub fn boolean(&mut self, name: &str, value: bool) -> &mut Self {
+        let name = CString::new(name).expect(NUL_MSG);
+
+        unsafe {
+            cant_fail!(bindings::stateful_set_bool_var(name.as_ptr(), value));
+        }
+
+        self
+    }
+
+    pub fn integer(&mut self, name: &str, value: i32) -> &mut Self {
+        let name = CString::new(name).expect(NUL_MSG);
+
+        unsafe {
+            cant_fail!(bindings::stateful_set_int_var(name.as_ptr(), value));
+        }
+
+        self
+    }
+}
+```
+
+Then `RecipeBuilder`.
+
+```rust
+// src/lib.rs
+
+impl<'lib> RecipeBuilder<'lib> {
+    pub fn add_item(&mut self, name: &str, value: i32) -> &mut Self {
+        let name = CString::new(name).expect(NUL_MSG);
+        cant_fail!(unsafe {
+            bindings::stateful_add_item(name.as_ptr(), value)
+        });
+
+        self
+    }
+
+    ...
+}
+```
+
+Our `GroupBuilder` also has an `unimplemented!()` method that needs
+implementing.
+
+```rust
+// src/lib.rs
+
+impl<'r, 'lib> GroupBuilder<'r, 'lib> {
+    pub fn add_item(&mut self, name: &str, value: i32) -> &mut Self {
+        let name = CString::new(name).expect(NUL_MSG);
+        cant_fail!(unsafe {
+            bindings::stateful_add_group_item(name.as_ptr(), value)
+        });
+
+        self
+    }
+
+    ...
+}
+```
+
+The only remaining `unimplemented!()` is in our `execute()` function.
+
+This one is a little tricky because we somehow need to pass results from the
+"finished" callback back to our `execute()` function so they can be returned to
+the caller.
+
+Unfortunately, we don't have the option of passing a pointer to some state
+we can put the result in, so we'll need to stash it in a temporary `static`
+variable.
+
+{{% notice tip %}}
+If you are ever designing a C API, the *correct* way to implement non-trivial
+callbacks is by accepting a `void *` user data pointer.
+
+I would highly recommend checking out [this question on StackOverflow][so] for
+more!
+
+[so]: https://stackoverflow.com/questions/50874154/what-is-the-use-of-userdata-in-callback-register-function-in-c
+{{% /notice %}}
+
+Because this function is pretty long, I'm going to break it up into a couple
+chunks.
+
+First we have our temporary variables. This is a place to store our temporary
+result and a pointer to the data attached to the `progress` closure.
+
+```rust
+// src/lib.rs
+
+pub fn execute<P>(_recipe: Recipe<'_>, mut progress: P) -> Result<Output, Error>
+where
+    P: FnMut(i32),
+{
+    // Safety: Accepting a `Recipe` means we prove at compile time that setting
+    // these variables can't result in any data races.
+    static mut ON_PROGRESS_USER_DATA: *mut c_void = ptr::null_mut();
+    static mut TEMPORARY_RESULT: Option<Output> = None;
+
+    ...
+}
+```
+
+Next we've got a definition for the actual `on_progress()` function we'll be
+passing to `stateful_execute()`. This uses a trick where you instantiate the
+generic `on_progress<F>()` function with a particular type, turning it into a
+non-generic function which is specialised for the closure type passed to
+`execute()`.
+
+```rust
+// src/lib.rs
+
+pub fn execute<P>(_recipe: Recipe<'_>, mut progress: P) -> Result<Output, Error>
+where
+    P: FnMut(i32),
+{
+    ...
+
+    unsafe extern "C" fn on_progress<F>(percent: c_int) -> c_int
+    where
+        F: FnMut(i32),
+    {
+        // Safety: This requires us to store a pointer to `progress` when
+        // `execute()` is called and make sure the `F` type variable
+        // `on_progress()` is instantiated with is the same as `execute()`'s `P`
+        let actual_progress_callback = &mut *(ON_PROGRESS_USER_DATA as *mut F);
+
+        actual_progress_callback(percent);
+        bindings::RESULT_OK as c_int
+    }
+
+    ...
+}
+```
+
+If that explanation makes your head hurt a little, just hang in there, it should
+get a bit clearer once we see how it gets used.
+
+Next we define an `on_finished()` function to pass to `stateful_execute()`. This
+keeps reading outputs until there are no more, and saves them to the
+`TEMPORARY_RESULT` static variable.
+
+```rust
+// src/lib.rs
+
+pub fn execute<P>(_recipe: Recipe<'_>, mut progress: P) -> Result<Output, Error>
+where
+    P: FnMut(i32),
+{
+    ...
+
+    unsafe extern "C" fn on_finished(_num_items: c_int) -> c_int {
+        let mut output = Output::default();
+
+        let mut item = 0;
+
+        while bindings::stateful_get_output_by_index(
+            output.items.len() as c_int,
+            &mut item,
+        ) == bindings::RESULT_OK as c_int
+        {
+            output.items.push(item);
+        }
+
+        // Safety: Accepting a `Recipe` means this can only be set by one thread
+        // at a time
+        TEMPORARY_RESULT = Some(output);
+
+        bindings::RESULT_OK as c_int
+    }
+
+    ...
+}
+```
+
+Finally we can actually call `stateful_execute()` and process the results.
+
+```rust
+// src/lib.rs
+
+pub fn execute<P>(_recipe: Recipe<'_>, mut progress: P) -> Result<Output, Error>
+where
+    P: FnMut(i32),
+{
+    ...
+
+    unsafe {
+        ON_PROGRESS_USER_DATA = &mut progress as *mut P as *mut c_void;
+
+        let ret = bindings::stateful_execute(
+            Some(on_progress::<P>),
+            Some(on_finished),
+        )
+        .into_result();
+
+        // We need to take the temporary result before handling
+        // stateful_execute()'s return code so we don't leak an `Output`.
+        let output = TEMPORARY_RESULT.take();
+
+        // just bail if something went wrong
+        if let Err(e) = ret {
+            return Err(e);
+        }
+
+        // We need to make sure we actually set the temporary result. The only
+        // way this could possibly happen is if `stateful_execute()` ran to
+        // completion and said it finished successfully without actually
+        // invoking our `on_finished` callback... If so, that's a programming
+        // error in the underlying library and nothing the caller can reasonably
+        // be expected to handle
+
+        match output {
+            Some(output) => Ok(output),
+            None => panic!("The stateful_execute function said it returned
+            successfully without calling our on_finished callback. This is a
+            bug.")
+        }
+    }
+}
+```
+
+I'm not going to explain this in much detail because it should hopefully be
+fairly readable and well commented, and reading the code is always a more
+accurate explanation of what is going on than several paragraphs of English.
+
+The most important thing to note is the liberal sprinkling of comments
+starting with `// Safety`. These are hints to other developers (or myself 6
+months from now) about the various invariants which need to be upheld, and the
+reason I believe this `unsafe` code is sound.
+
+{{% notice note %}}
+This `execute()` function contains about 80 lines of `unsafe` code. If you
+see something that looks a bit funny, please let me know either in the
+[`stateful-native-library` repository][repo] or [this blog's issue
+tracker][issue].
+
+Writing correct code (especially when it's used to instruct others!) is very
+important to me.
+
+[repo]: https://github.com/Michael-F-Bryan/stateful-native-library
+[issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
+{{% /notice %}}
+
+## Making Sure It Works
 
 ## Conclusions
 
@@ -1199,3 +1645,5 @@ make sure their lifetimes align with the state of the native library.
 [cc]: https://crates.io/crates/cc
 [build-script]: https://doc.rust-lang.org/cargo/reference/build-scripts.html
 [bg]: https://github.com/rust-lang/rust-bindgen
+[cstring]: https://doc.rust-lang.org/std/ffi/struct.CString.html
+[raii]: https://en.wikipedia.org/wiki/Resource_acquisition_is_initialization
