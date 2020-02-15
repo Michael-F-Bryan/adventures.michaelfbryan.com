@@ -1635,7 +1635,124 @@ important to me.
 
 ## Making Sure It Works
 
+Now we've gone to all the effort of binding to our `stateful` native library,
+let's write a small program which uses it.
+
+To that end, I've created the following contrived example,
+
+```rust
+// examples/basic-usage.rs
+
+//! A contrived example showing how you can use the `stateful_native_library`
+//! bindings.
+
+use stateful_native_library::{Error, Library};
+
+fn main() -> Result<(), Error> {
+    let mut library = Library::new()?;
+
+    library
+        .set_parameters()
+        .boolean("foo", false)
+        .integer("some-number", 42);
+
+    let mut recipe_builder = library.create_recipe();
+    recipe_builder.add_item("first", 1).add_item("second", 2);
+
+    for i in 0..5 {
+        let name = format!("group_{}", i);
+        let mut group_builder = recipe_builder.add_group(&name);
+
+        for j in 0..i {
+            let name = format!("group_{}_item_{}", i, j);
+            group_builder.add_item(&name, i + j);
+        }
+
+        group_builder.finish();
+    }
+
+    let mut another_group_builder = recipe_builder.add_group("another group");
+    another_group_builder
+        .add_item("another nested item", 5)
+        .add_item("MOAR items", 6);
+    another_group_builder.finish();
+
+    let recipe = recipe_builder.build();
+
+    let outcome = stateful_native_library::execute(recipe, |percent| {
+        println!("{}%", percent)
+    })?;
+
+    println!("Got {:?}", outcome);
+
+    Ok(())
+}
+```
+
+And this is what you get when you run it:
+
+```console
+$ cargo run --example basic-usage
+   Compiling stateful-native-library v0.1.0 (/home/michael/Documents/stateful-native-library)
+    Finished dev [unoptimized + debuginfo] target(s) in 4.72s
+     Running `target/debug/examples/basic-usage`
+0%
+12%
+25%
+37%
+50%
+62%
+75%
+87%
+100%
+Got Output { items: [6, 4, 7, 5, 5, 3, 4, 2, 6, 5, 1, 1, 3, 2] }
+```
+
+Running the `basic-usage` example compiled with optimisations (which I would
+expect to be more likely to show UB) under `valgrind` seems to show no problems.
+
+```console
+$ valgrind target/release/examples/basic-usage
+==9668== Memcheck, a memory error detector
+==9668== Copyright (C) 2002-2017, and GNU GPL'd, by Julian Seward et al.
+==9668== Using Valgrind-3.15.0 and LibVEX; rerun with -h for copyright info
+==9668== Command: target/release/examples/basic-usage
+==9668==
+0%
+12%
+25%
+37%
+50%
+62%
+75%
+87%
+100%
+Got Output { items: [6, 4, 7, 5, 5, 3, 4, 2, 6, 5, 1, 1, 3, 2] }
+==9668==
+==9668== HEAP SUMMARY:
+==9668==     in use at exit: 0 bytes in 0 blocks
+==9668==   total heap usage: 160 allocs, 160 frees, 81,197 bytes allocated
+==9668==
+==9668== All heap blocks were freed -- no leaks are possible
+==9668==
+==9668== For lists of detected and suppressed errors, rerun with: -s
+==9668== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+```
+
 ## Conclusions
+
+In an ideal world all code would be perfect and we'd never need to worry about
+data races or accidentally putting a system in an invalid state.
+
+Unfortunately, this *isn't* an ideal world so we need to develop techniques
+that allow us to keep working under less than ideal conditions while limiting
+the negative effects they can have on the rest of a codebase.
+
+As it turns out, Rust's type system and its concept of lifetimes are really
+powerful tools for taking errors that other languages could only detect at
+runtime and promoting them to compilation failures. That's one of the things
+I really like about the language, more often than not *if it compiles, it
+works*.
 
 [data-race]: https://doc.rust-lang.org/nomicon/races.html
 [static-assert]: https://crates.io/crates/static_assertions
