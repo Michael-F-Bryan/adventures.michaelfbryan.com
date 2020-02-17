@@ -25,7 +25,7 @@ jobs:
       run: hugo --minify
 
     - uses: jakejarvis/s3-sync-action@master
-      if: ${{ github.ref }} == "master"
+      if: github.ref == "master"
       with:
         args: --acl public-read --follow-symlinks --delete
       env:
