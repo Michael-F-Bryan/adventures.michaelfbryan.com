@@ -1,6 +1,6 @@
 ---
 title: "A Pragmatic Approach To Global State"
-date: "2020-02-17T23:22:47+08:00"
+date: "2020-02-17T22:22:47+08:00"
 tags:
 - rust
 - architecture
