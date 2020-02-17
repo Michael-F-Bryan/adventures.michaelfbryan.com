@@ -1208,18 +1208,11 @@ a return code to a `Result<(), Error>`.
 ```rust
 // src/lib.rs
 
+use std::convert::TryFrom;
+
 trait IntoResult {
     fn into_result(self) -> Result<(), Error>;
 }
-```
-
-By itself this trait isn't overly interesting, but we can leverage it to enable
-`?` for error handling.
-
-```rust
-// src/lib.rs
-
-use std::convert::TryFrom;
 
 impl IntoResult for c_int {
     fn into_result(self) -> Result<(), Error> {
@@ -1234,6 +1227,9 @@ impl IntoResult for c_int {
     }
 }
 ```
+
+By itself this trait isn't overly interesting, but we can leverage it to enable
+`?` for error handling.
 
 This also gives us a chance to flesh out the `Error` enum.
 
@@ -1271,9 +1267,7 @@ handle, but we aren't actually initializing the underlying library.
 +                bindings::stateful_open().into_result()?;
 +            }
 +
-             Ok(Library {
-                 _not_send: PhantomData,
-             })
+             Ok(Library { _not_send: PhantomData })
          } else {
              Err(Error::AlreadyInUse)
          }
@@ -1293,7 +1287,7 @@ up.
 -    fn drop(&mut self) { LIBRARY_IN_USE.store(false, Ordering::SeqCst); }
 +    fn drop(&mut self) {
 +        unsafe {
-+            let _ = bindings::stateful_close();
++            let _ = bindings::stateful_close().into_result();
 +        }
 +        LIBRARY_IN_USE.store(false, Ordering::SeqCst);
 +    }
@@ -1351,10 +1345,12 @@ make sure their lifetimes align with the state of the native library.
 +}
 ```
 
-You'll notice that I've introduced a `cant_fail!()` macro here. Because we're
-using the type system to statically guarantee code can't be executed out of
-order and that the arguments we provide are always valid I've introduced an
-assertion which will blow up loudly if that assumption isn't valid.
+You'll notice that I've introduced a `cant_fail!()` macro here. I've
+introduced an assertion which will blow up loudly if that assumption isn't
+valid. Because we're using the type system to statically guarantee code can't
+be executed out of order and that the arguments we provide are always valid,
+these otherwise infallible functions should fail quickly and loudly to
+indicate a possible programming error.
 
 ```rust
 // src/lib.rs
@@ -1387,18 +1383,17 @@ panicking instead of propagating the error.
 ```rust
 // src/lib.rs
 
+const NUL_MSG: &str = "a valid Rust string shouldn't contain null characters";
+
 impl<'lib> RecipeBuilder<'lib> {
     ...
 
     pub fn add_group<'r>(&'r mut self, name: &str) -> GroupBuilder<'r, 'lib> {
-        let name = CString::new(name)
-            .expect("valid names shouldn't contain null characters");
+        let name = CString::new(name).expect(NUL_MSG);
         cant_fail!(unsafe {
             bindings::stateful_start_adding_group(name.as_ptr())
         });
-        GroupBuilder {
-            _recipe_builder: ManuallyDrop::new(self),
-        }
+        GroupBuilder { _recipe_builder: ManuallyDrop::new(self) }
     }
 }
 
@@ -1413,9 +1408,9 @@ impl<'r, 'lib> Drop for GroupBuilder<'r, 'lib> {
 
 ### Finishing It Off
 
-At this point it's just a case of grepping for functions containing
-`unimplemented!()` and translating the arguments so they can be passed to the
-corresponding functions in our `stateful` library.
+At this point it's just a case of grepping for any remaining functions
+containing `unimplemented!()` and translating the arguments so they can be
+passed to the corresponding functions in our `stateful` library.
 
 First up are the methods on `SettingParameters`.
 
@@ -1645,8 +1640,9 @@ where
 ```
 
 I'm not going to explain this in much detail because it should hopefully be
-fairly readable and well commented, and reading the code is always a more
-accurate explanation of what is going on than several paragraphs of English.
+fairly readable and well commented. Plus, reading the source code is always a
+more accurate explanation of what is going on than several paragraphs of
+English.
 
 The most important thing to note is the liberal sprinkling of comments
 starting with `// Safety`. These are hints to other developers (or myself 6
@@ -1659,8 +1655,8 @@ see something that looks a bit funny, please let me know either in the
 [`stateful-native-library` repository][repo] or [this blog's issue
 tracker][issue].
 
-Writing correct code (especially when it's used to instruct others!) is very
-important to me.
+Writing correct code is very important to me, especially when it is being
+read or used by others!
 
 [repo]: https://github.com/Michael-F-Bryan/stateful-native-library
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
@@ -1684,14 +1680,17 @@ use stateful_native_library::{Error, Library};
 fn main() -> Result<(), Error> {
     let mut library = Library::new()?;
 
+    // set some parameters
     library
         .set_parameters()
         .boolean("foo", false)
         .integer("some-number", 42);
 
+    // start building the recipe
     let mut recipe_builder = library.create_recipe();
     recipe_builder.add_item("first", 1).add_item("second", 2);
 
+    // we can add several groups using a loop
     for i in 0..5 {
         let name = format!("group_{}", i);
         let mut group_builder = recipe_builder.add_group(&name);
@@ -1704,14 +1703,16 @@ fn main() -> Result<(), Error> {
         group_builder.finish();
     }
 
-    let mut another_group_builder = recipe_builder.add_group("another group");
-    another_group_builder
+    // or use normal builder methods
+    recipe_builder
+        .add_group("another group")
         .add_item("another nested item", 5)
         .add_item("MOAR items", 6);
-    another_group_builder.finish();
 
+    // finish building the recipe
     let recipe = recipe_builder.build();
 
+    // then get the outcome, periodically printing out progress messages
     let outcome = stateful_native_library::execute(recipe, |percent| {
         println!("{}%", percent)
     })?;
@@ -1742,7 +1743,8 @@ Got Output { items: [6, 4, 7, 5, 5, 3, 4, 2, 6, 5, 1, 1, 3, 2] }
 ```
 
 Running the `basic-usage` example compiled with optimisations (which I would
-expect to be more likely to show UB) under `valgrind` seems to show no problems.
+expect to be more likely to show UB) under `valgrind` seems to show no obvious
+problems.
 
 ```console
 $ valgrind target/release/examples/basic-usage
