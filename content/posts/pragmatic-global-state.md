@@ -9,9 +9,9 @@ tags:
 
 One of the first things I learned when programming professionally is that
 *global variables are bad*. We all take it for granted that it's bad practice
-to write code that relies heavily on global state (especially global mutable
-state) but the other day I was working with a 3rd party native library, and
-it reminded *why* these best practices come about.
+to write code that relies heavily on global state but the other day I was
+working with a 3rd party native library, and it reminded *why* these best
+practices come about.
 
 There are a couple factors which made this particular library's use of global
 mutable state rather ugly to work with,
@@ -28,14 +28,14 @@ mutable state rather ugly to work with,
   inject mocks (e.g. to `assert!()` specific conditions) or make sure
   individual chunks of functionality work. You are often reduced to writing
   one or two high-level integration tests which execute the "happy path", and
-  when an error occurs you have no way of knowing how to fix it
+  when an error occurs it's hard to narrow it down to just one function
 
 {{% notice info %}}
 To be clear, when I refer to *"global state"* I am referring to variables in
 a program (typically declared with the keyword `static` in languages like C#,
-Java, and Rust) which lives for the lifetime of the program, only ever has
-one instance, and all uses of the variable are hard-coded to use that
-instance.
+Java, and Rust) which live for the lifetime of the program, only ever have
+one instance, and where all uses of the variable are hard-coded to use that
+instance (i.e. code refers to the variable by name instead of via a reference).
 
 These variables don't necessarily need to be publicly accessible. All of
 these problems occur when using [static local variables][slv] inside a
@@ -48,15 +48,16 @@ code directly referencing the variable are still there.
 For my use case it's not really viable to use a different library because the
 alternatives don't necessarily have the features we need. We also can't
 rewrite the code to not use global mutable state because it's closed-source,
-and even then would require tens of man-years of effort.
+and even then would require tens of developer-years of effort. Which is tens of
+developer-years more than I have to spare.
 
-This necessitates a more pragmatic solution. We needed to find a way to use
-this 3rd party library without it polluting the rest of the application too
-much.
+This necessitates a more pragmatic solution. In short, we needed to find a
+way to use this 3rd party library without it polluting the rest of the
+application too much.
 
 I'll be implementing this in Rust primarily because it's quite good at
 enforcing guarantees via the type system, but the general ideas aren't really
-language-specific.
+language-specific. It may just require more runtime checks.
 
 {{% notice note %}}
 The code written in this article is available [on GitHub][repo]. Feel free to
@@ -75,19 +76,18 @@ It would be a bit overwhelming to show you the full code, so I've prepared a
 rough example we can play around with.
 
 Another important point to emphasize is the 3rd party library which initially
-inspired this experiment is native code (I think it's written in C++?). The
-reason this is important is because it uses pointers and a bug doesn't just
-mean an exception gets thrown, we could segfault and tear down the entire
-process. My decision to write use it from Rust also means we'll need to write
-some `unsafe` code when crossing the language boundary.
+inspired this experiment is native code (I think it's written in C++). The
+reason this is important is because it works touches memory directly and a
+bug doesn't just mean an exception gets thrown, we could segfault and tear
+down the entire process.
 
-It's actually pretty painful to write code in Rust which relies on global
-mutable state (it's almost like the code is trying to tell us something 🤔)
-so our example will be written in C. Plus, in the real world all we have
-access to is a compiled DLL and corresponding header file, so it seems
-fitting for our Rust code to only see the library as a black box.
+My decision to write use it from Rust also means we'll need to write some
+`unsafe` code when crossing the language boundary and enforcing invariants.
+This is actually *a good thing*! It gives us several easy-to-find places to
+start from when troubleshooting a crash.
 
-Without further ado, here's a header file:
+Without further ado, here's a header file defining the high-level interface of
+the library we'll be working with.
 
 ```c
 // native/stateful.h
@@ -168,7 +168,8 @@ sweet spot between simplifying so much that people miss the point or the
 example feels contrived, and providing so much detail that the reader loses
 track of what's going on amongst the various moving parts.
 
-Hopefully I'm somewhere near that sweet spot.
+Unfortunately, that means our `stateful.h` needs to be more than a couple
+functions long to do this topic justice.
 {{% /notice %}}
 
 There's quite a lot going on here, so let's unpack it a bit.
@@ -203,8 +204,8 @@ int stateful_open();
 int stateful_close();
 ```
 
-(I don't know about you, but usually when I this sort of pattern the first
-thing I think of is [RAII][raii])
+(I don't know about you, but usually when I see this sort of code I'll start
+thinking of using [RAII][raii])
 
 After initializing the library we need to set some global parameters. These are
 various knobs and levers that are used to alter how the input is processed.
@@ -220,7 +221,7 @@ int stateful_end_setting_parameters();
 
 You can see that we need to explicitly start and stop setting parameters. The
 functions themselves take no arguments, which is a big give-away that the code
-mutates global variables under the hood.
+mutates global state under the hood.
 
 Next we've got functions for setting up the input.
 
@@ -246,12 +247,21 @@ or groups of items. The `Input` that we're building procedurally might look
 something like this (if written in Rust):
 
 ```rust
-enum Item {
+enum ItemValue {
   Single(i32),
   Group(HashMap<String, i32>),
 }
 
-type Input = HashMap<String, Item>;
+struct Item {
+    name: String,
+    value: ItemValue,
+}
+
+type Inputs = Vec<Item>;
+
+/// The global we're initializing between `stateful_start_adding_items()` and
+/// `stateful_send_adding_items()`.
+static mut TEMP_INPUTS: Inputs = ...;
 ```
 
 Now we've set the algorithm's parameters and created our input, we can execute
@@ -271,7 +281,7 @@ You'll notice this uses callback functions to notify the caller of progress and
 when the results are ready. This wouldn't normally be a problem, except the
 code doesn't let us provide some sort of `void *` pointer to user-provided data.
 That means the only way our callbacks will be able to pass information to the
-caller is by itself using global variables.
+caller is by itself using static variables.
 
 Finally, we get a couple functions for inspecting the output.
 
@@ -293,8 +303,9 @@ maintaining nice things like,
 
 - thread-safety
 - memory-safety
-- using a strong type system to statically ensure it is impossible to do
-  things out of order
+- statically ensuring at compile time that it is impossible to do things out
+  of order
+{{% /notice %}}
 
 If it helps, think of `stateful_execute()` as something like this:
 
@@ -302,11 +313,13 @@ If it helps, think of `stateful_execute()` as something like this:
 fn stateful_execute(
     parameters: &HashMap<String, Value>,
     items: Vec<Input>,
-) -> Vec<c_int> {
+    on_progress: impl FnMut(percent: i32),
+) -> Vec<i32> {
     // magic
 }
 ```
-{{% /notice %}}
+
+We take a set of parameters and list of inputs and return a list of integers.
 
 ## Our High-Level Approach
 
@@ -407,9 +420,7 @@ impl Library {
         if LIBRARY_IN_USE.compare_and_swap(false, true, Ordering::SeqCst)
             == false
         {
-            Ok(Library {
-                _not_send: PhantomData,
-            })
+            Ok(Library { _not_send: PhantomData })
         } else {
             Err(Error::AlreadyInUse)
         }
@@ -428,9 +439,9 @@ pub enum Error {
 }
 ```
 
-Yes, I know the irony in using a `static` variable to workaround another
-library's zealous use of `static` variables. Sometimes you've got to break a
-couple eggs to make an omelette 🤷‍
+Yes I know the irony in using a `static` variable to workaround another
+library's zealous use of `static` variables, but sometimes you've got to
+break a couple eggs to make an omelette 🤷‍
 
 To make sure we've implemented this correctly, let's write a test which
 deliberately tries to create multiple `Library` handles at the same time.
@@ -465,22 +476,24 @@ mod tests {
 }
 ```
 
-Next, to ensure functions aren't called out of order we can create some sort of
-type-level state machine. This idea was originally taken from [a thread on the
-Rust users forum][u.rl.o]. You'll notice the approach we're taking is uncannily
-similar to the solution proposed by [@Yandros][yandros],
+Next, to ensure functions aren't called out of order we can create some sort
+of type-level state machine.
+
+This idea was originally taken from [a thread on the Rust users
+forum][u.rl.o]. You'll notice the approach we're taking is uncannily similar
+to the solution proposed by [@Yandros][yandros],
 
 > I would wrap the library using a type-level state machine to make misusage
 > simply not compile; If necessary, you can even use the singleton pattern to
 > enforce no concurrency problems (which would be the only part checked at
 > runtime).
 
-When setting parameters it should be impossible to use any non-parameter-setting
-functionality.
+One of the invariants we'd like to maintain is that when setting parameters
+it should be impossible to use any non-parameter-setting functionality.
 
-This is where lifetimes really show their power, using a `&mut Library` reference
-the compiler can statically ensure some `SettingParameters` type (which we're
-about to create) has unique access to our `Library`.
+This is where lifetimes really show their power. Using a `&mut Library`
+reference, the compiler can statically ensure some `SettingParameters` type
+(which we're about to create) has unique access to our `Library`.
 
 ```rust
 // src/lib.rs
@@ -539,9 +552,21 @@ impl<'lib> RecipeBuilder<'lib> {
 }
 ```
 
-Now we've got a problem, how can you add a group of items to the "recipe" (the
-term I'm using for our set of inputs)? We need to make sure it's not possible
-to call `RecipeBuilder::add_item()` while in the middle of constructing a group.
+Now we've got a problem, how can you add a group of items to the "recipe"? We
+need to make sure it's not possible to call `RecipeBuilder::add_item()` while
+in the middle of constructing a group because it could mess up the library's
+internals.
+
+{{% notice tip %}}
+This may seem a bit extreme, but it's quite possible that adding a new item
+triggers a resize in our `TEMP_INPUTS` vector which invalidates any references
+that may have been used when constructing the group.
+
+I *really* don't want something like this to happen because it's one of those
+bugs that will be almost impossible to pinpoint in the wild. It's better to
+take the conservative approach here and just outlaw things like
+`RecipeBuilder::add_item()` when building a group.
+{{% /notice %}}
 
 If you think for a moment, that's the same problem we had with `Library` when
 we wanted to make sure you can *either* be creating a recipe using the
@@ -573,9 +598,12 @@ impl<'r, 'lib> GroupBuilder<'r, 'lib> {
 ```
 
 Next, I'm going to continue with this builder pattern theme and give
-`RecipeBuilder` a `build()` method which returns a `Recipe`. A `Recipe` will
-just be an empty type indicating we've fully assembled the inputs. Signifying
-the transition to the *"inputs assembled and ready for use"* state.
+`RecipeBuilder` a `build()` method which returns a `Recipe`. Here our
+`Recipe` will just be an empty type indicating we've fully assembled the
+inputs.
+
+It acts as a "token" indicating all inputs are constructed and we're ready to
+call `stateful_execute()`.
 
 ```rust
 // src/lib.rs
@@ -596,7 +624,7 @@ pub struct Recipe<'lib> {
 ```
 
 If you've been keeping up, we're now at the point where everything is
-initialized and we're ready to consume this `Recipe` and get the output.
+initialized and we're ready to consume this `Recipe` to get the output.
 
 It seems odd for a `Recipe` to know how to execute itself, so we'll create
 some sort of top-level `execute()` function instead of adding it as a method.
@@ -650,9 +678,9 @@ impl Library {
 }
 ```
 
-You can see that fulfilling the `!Send` and `!Sync` goal was quite easy to
-do. By making sure `Library: !Send`, anything referencing `Library` is also
-`!Send`.
+Looking back, you can see that fulfilling the `!Send` and `!Sync` goal was
+quite easy to do. By making sure `Library: !Send + !Sync`, anything
+referencing `Library` is also `!Send + !Sync`.
 
 On the other hand, ensuring functions can only be called in the correct order
 is a lot more invasive. We needed to restructure our entire API using complex
@@ -697,7 +725,7 @@ fn this_should_not_compile() {
 }
 ```
 
-And this is the error message from `rustc`:
+And this is what `rustc` will emit:
 
 ```console
 $ cargo test
@@ -744,8 +772,8 @@ error: could not compile `stateful-native-library`.
 To learn more, run the command again with --verbose.
 ```
 
-It's moments like these that make you appreciate just how useful the concept of
-lifetimes can be, and how readable `rustc`'s error messages are 🙂
+It's moments like these that make you appreciate how useful the concept of
+lifetimes can be, and just how readable `rustc`'s error messages are 🙂
 
 ## Creating FFI Bindings
 
@@ -753,7 +781,8 @@ While you were reading through that previous section I took the liberty of
 preparing some C++ code which satisfies the `stateful.h` interface.
 
 The code isn't entirely relevant, but it's all [on GitHub][native] if you're
-curious.
+curious. I don't write C++ full time, so let me know if you spot any bugs or
+code which could have been written better.
 
 {{% expand "a big wall of code" %}}
 ```cpp
@@ -1130,7 +1159,7 @@ mod bindings;
 
 Before going any further I'd like to double-check the `stateful` native library
 is linked with our Rust code properly. The easiest way to do that is with a
-simple test.
+simple [smoke test][smoke-test].
 
 ```rust
 // src/lib.rs
@@ -1153,11 +1182,15 @@ mod tests {
 ```
 
 {{% notice tip %}}
-It's a good idea to always do these sorts of sanity checks. For one, you've
-added a test that verifies you can always link with the native library, and it
-also lets you identify build problems early on.
+It's always a good idea to do these sorts of sanity checks. For one, you've
+added a test that verifies you can always link with the native library, plus it
+also lets you identify other build problems early on.
 
-I originally forgot to add a `#ifdef __cplusplus extern "C" {` line to
+Ironically, while writing that smoke test and saying how important it is to
+have them, I kept having compilation errors because the linker wasn't able to
+find `stateful_open()` and `stateful_close()`.
+
+It turns out I forgot to add a `#ifdef __cplusplus extern "C" {` line to
 `stateful.h` to prevent the compiler from mangling the symbols for our
 `stateful_*`. It took a couple minutes of staring at linker errors, but after
 compiling `stateful.cpp` manually and using `nm stateful.o | grep ' T '` I
@@ -1764,3 +1797,4 @@ works*.
 [bg]: https://github.com/rust-lang/rust-bindgen
 [cstring]: https://doc.rust-lang.org/std/ffi/struct.CString.html
 [raii]: https://en.wikipedia.org/wiki/Resource_acquisition_is_initialization
+[smoke-test]: https://en.wikipedia.org/wiki/Smoke_testing_(software)
