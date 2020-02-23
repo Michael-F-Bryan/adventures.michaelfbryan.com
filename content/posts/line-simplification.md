@@ -1,5 +1,5 @@
 ---
-title: "Line Simplification"
+title: "Line Simplification with Ramer–Douglas–Peucker"
 date: "2020-02-23T17:31:35+08:00"
 draft: true
 tags:
@@ -285,7 +285,7 @@ Also, because `rest` gets smaller and smaller every time we recurse we're
 constantly dividing the problem into smaller and smaller pieces.
 {{% /notice %}}
 
-## Tests
+## Writing Tests
 
 At this point we know our code compiles, but is it actually correct?
 
@@ -437,9 +437,23 @@ mod tests {
 
 ## Conclusions
 
+This was definitely a lot shorter than my [usual][1] [deep][2] [dives][3]
+into programming (I think the average read time for articles on my blog is
+around 25 minutes?), but hopefully it'll be useful if you ever need to
+implement line simplification.
+
+In the meantime I think I'll keep adding bits and pieces to [arcs][arcs] and
+[experimenting with motion control][rustmatic] when I have time. Let me know
+if either of those topics interest you and I'll do some more write-ups as
+various things get implemented.
+
 [nesting]: https://en.wikipedia.org/wiki/Nesting_(process)
 [wiki]: https://en.wikipedia.org/wiki/Ramer%E2%80%93Douglas%E2%80%93Peucker_algorithm
 [arcs]: https://github.com/Michael-F-Bryan/arcs
 [edge-detection]: https://en.wikipedia.org/wiki/Edge_detection
 [slice-patterns]: https://doc.rust-lang.org/edition-guide/rust-2018/slice-patterns.html
 [max-by-key]: https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.max_by_key
+[1]: {{< ref "posts/pragmatic-global-state.md" >}}
+[2]: {{< ref "posts/ecs-outside-of-games.md" >}}
+[3]: {{< ref "posts/wasm-as-a-platform-for-abstraction.md" >}}
+[rustmatic]: https://github.com/Michael-F-Bryan/rustmatic
