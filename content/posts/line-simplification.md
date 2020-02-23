@@ -462,7 +462,7 @@ various things get implemented.
 [edge-detection]: https://en.wikipedia.org/wiki/Edge_detection
 [slice-patterns]: https://doc.rust-lang.org/edition-guide/rust-2018/slice-patterns.html
 [max-by-key]: https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.max_by_key
-[1]: {{< ref "posts/pragmatic-global-state.md" >}}
-[2]: {{< ref "posts/ecs-outside-of-games.md" >}}
-[3]: {{< ref "posts/wasm-as-a-platform-for-abstraction.md" >}}
+[1]: {{< ref "/posts/pragmatic-global-state.md" >}}
+[2]: {{< ref "/posts/ecs-outside-of-games.md" >}}
+[3]: {{< ref "/posts/wasm-as-a-platform-for-abstraction.md" >}}
 [rustmatic]: https://github.com/Michael-F-Bryan/rustmatic

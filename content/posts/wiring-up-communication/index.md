@@ -461,9 +461,9 @@ from here we can:
 
 Let me know which one you'd like to see tackled next.
 
-[next-step]: {{< relref "../a-better-frontend/index.md#the-next-step" >}}
+[next-step]: {{< ref "/posts/a-better-frontend/index.md#the-next-step" >}}
 [send-data]: https://michael-f-bryan.github.io/adventures-in-motion-control/aimc_sim/struct.Browser.html#method.send_data
 [recv-data]: https://michael-f-bryan.github.io/adventures-in-motion-control/aimc_sim/struct.App.html#method.on_data_received
 [anpp-ts]: https://www.npmjs.com/package/anpp
-[abf]: {{< relref "../a-better-frontend/index.md#wiring-aimc-sim-up-to-the-frontend-again" >}}
-[cm]: {{< relref "../initial-motion-system.md" >}}
+[abf]: {{< ref "/posts/a-better-frontend/index.md#wiring-aimc-sim-up-to-the-frontend-again" >}}
+[cm]: {{< ref "/posts/initial-motion-system.md" >}}
