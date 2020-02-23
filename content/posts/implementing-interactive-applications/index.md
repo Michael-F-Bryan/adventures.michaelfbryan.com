@@ -312,7 +312,7 @@ feeling lost.
 
 [arcs]: https://github.com/Michael-F-Bryan/arcs
 [df]: https://en.wikipedia.org/wiki/Eating_your_own_dog_food
-[prev]: {{< ref "ecs-outside-of-games.md" >}}
+[prev]: {{< ref "/posts/ecs-outside-of-games.md" >}}
 {{% /notice %}}
 
 We don't want our `State`s to be coupled to any particular implementation of

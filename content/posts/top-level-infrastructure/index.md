@@ -1,4 +1,4 @@
---- 
+---
 title: "Top-Level Infrastructure"
 date: "2019-09-02T21:22:30+08:00"
 tags:
@@ -35,7 +35,7 @@ To deal with this embedded systems use [interrupts][interrupt], callbacks which
 will preempt the normal flow of execution to handle an event. These callbacks,
 referred to as *Interrupt Service Routines*, will then do the bare minimum
 required to handle the event so execution can be resumed as quickly as
-possible. 
+possible.
 
 For example, this may happen by saving the event to memory (e.g.
 *"received `0x0A` over serial"*) so it can be handled by the appropriate
@@ -44,7 +44,7 @@ system when it is polled next.
 ## Inter-System Communication
 
 Now we know that systems will do work by being polled frequently, lets think
-about how they'll interact with the rest of the application. 
+about how they'll interact with the rest of the application.
 
 In general a system works by reading state, evaluating some logic using that
 state, then propagate the results of that logic by sending messages to the
@@ -88,7 +88,7 @@ across threads. Hence the `&self` in `elapsed()` and the `Sync` bound.
 {{% /notice %}}
 
 {{% notice tip %}}
-Extracting the concept of time into its own trait is especially handy during 
+Extracting the concept of time into its own trait is especially handy during
 testing. It can also be used to make time run faster than the usual 1 second
 per second (e.g. fast-forward).
 {{% /notice %}}
@@ -102,7 +102,7 @@ At the very bottom is our *Hardware Abstraction Layer* (HAL). This defines
 the various platform-agnostic interfaces used by the application.
 
 Next we have the various drivers (e.g. stepper motor control) and systems (e.g.
-communication and motion planning). These are built on top of the HAL and 
+communication and motion planning). These are built on top of the HAL and
 are where most of the application is implemented.
 
 At the very top is the application itself, an in-browser simulator in our case.
@@ -136,7 +136,7 @@ graph BT;
 Now we've got a better idea of how the application might be structured it's
 time to stub out enough of the frontend to see things run.
 
-I won't explain each step in setting up a Rust WASM project (the 
+I won't explain each step in setting up a Rust WASM project (the
 [Rust and WebAssembly][wasm-book] book already does a great job at that!), but
 here's the gist of it:
 
@@ -165,10 +165,10 @@ $ yarn run start
  Time: 467ms
  Built at: 09/02/2019 7:24:22 PM
                             Asset       Size  Chunks             Chunk Names
-                   0.bootstrap.js    3.4 KiB       0  [emitted]  
- 8e8fa9289c240ac706a1.module.wasm  872 bytes       0  [emitted]  
+                   0.bootstrap.js    3.4 KiB       0  [emitted]
+ 8e8fa9289c240ac706a1.module.wasm  872 bytes       0  [emitted]
                      bootstrap.js    367 KiB    main  [emitted]  main
-                       index.html  297 bytes          [emitted]  
+                       index.html  297 bytes          [emitted]
  Entrypoint main = bootstrap.js
 ```
 
@@ -198,7 +198,7 @@ test suite whenever a change is made, but doing the same with `wasm-pack` and
 
 ```console
 $ watchexec \
-    # Clear the screen every time 
+    # Clear the screen every time
     --clear \
     # The webpack dev server will still be running, make sure it is restarted
     --restart \
@@ -218,7 +218,7 @@ That means we need to manually run `yarn add ../sim/pkg` every time the WASM
 code changes.
 {{% /notice %}}
 
-Lets stub out an `App` type. This will contain the world's state, with a 
+Lets stub out an `App` type. This will contain the world's state, with a
 reference being passed to the JavaScript frontend so it can be periodically
 polled.
 
@@ -247,7 +247,7 @@ The `Input` and `Browser` types are what hooks our `App` up to the rest of the
 world. They'll implement the various HAL traits so our systems are able run.
 {{% /notice %}}
 
-For now, the `Input` just contains a `Clock` based on JavaScript's 
+For now, the `Input` just contains a `Clock` based on JavaScript's
 `performance.now()` function.
 
 ```rust
@@ -366,10 +366,10 @@ Now the `sim` crate is exposing `setup_world()` and `poll()`, we can wire it
 up to the browser.
 
 Something to note about JavaScript running in a browser is that an infinite loop
-will prevent anything else from executing, locking the entire window up. This 
-isn't great. 
+will prevent anything else from executing, locking the entire window up. This
+isn't great.
 
-The trick to implementing an infinite "loop" in JavaScript is to use 
+The trick to implementing an infinite "loop" in JavaScript is to use
 [`window.requestAnimationFrame()`][raf] to schedule some `animate()` function
 to be called, then make sure `animate()` calls `requestAnimationFrame(animate)`
 so it'll be called again.
@@ -418,14 +418,14 @@ needed to:
 ## The Next Step
 
 Now the main application is wired up and we can run code in the browser the next
-step is to add some systems to our application. 
+step is to add some systems to our application.
 
 A relatively easy, yet important, component is some sort of FPS counter. Ideally
 there'll be a bit of text in the corner showing the number of `poll()`s per
 second and the average duration. That way we can get a better feel for our
 simulator's performance characteristics.
 
-[next-step]: {{< ref "announcing-adventures-in-motion-control.md#the-next-step" >}}
+[next-step]: {{< ref "/posts/announcing-adventures-in-motion-control.md#the-next-step" >}}
 [interrupt]: https://en.wikipedia.org/wiki/Interrupt
 [workspaces]: https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html
 [wasm-book]: https://rustwasm.github.io/book/game-of-life/setup.html
