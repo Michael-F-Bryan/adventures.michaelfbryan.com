@@ -14,7 +14,7 @@ roughly the same shape plus or minus some `tolerance` factor.
 My actual use case was in sending linear movements to a CNC machine. Drawings
 are defined using floating point numbers and can be "accurate" to about 7-15
 decimal places (depending on if you use floats or doubles) but when you take
-the machine's mechanical tolerances and material effects into account, the
+the machine's mechanical tolerances and material effects into account the
 final cut is only really accurate to about 1 decimal place (0.1 mm). If I
 were to simplify the path with a tolerance of, say, 0.05 mm I could massively
 reduce the number of points sent to the machine (which reduces the amount of
@@ -56,8 +56,8 @@ The algorithm itself uses a remarkably simple recursive algorithm,
 4. Otherwise, mark `p` as kept and repeat steps 1-4 using the points between
    `first` and `p` and between `p` and `last` (the call to recursion)
 
-For the visually minded among you, the animation from the Wikipedia article may
-be more approachable.
+This animation from [the Wikipedia article][wiki] can help wrap your head
+around how it works.
 
 {{< figure
     src="https://upload.wikimedia.org/wikipedia/commons/3/30/Douglas-Peucker_animated.gif"
@@ -66,9 +66,18 @@ be more approachable.
     alt="Visualisation of the Ramer-Douglas-Peucker algorithm"
 >}}
 
+like most divide-and-conquer algorithms, in the ideal case this completes in
+`O(n log n)` time. However, if you hit an edge case where the "furthest"
+point is right next to the endpoints this can blow out to `O(n^2)`.
+
+I don't normally worry about computational complexity too often (computers
+are fast), but because it's quite common for my application to work with
+drawings containing hundreds of thousands of points it's something to keep an
+eye on.
+
 ## The Implementation
 
-To start with, let's give `arcs::algorithms` a `line_simplification` module.
+To start with, let's add `line_simplification` module to `arcs::algorithms`.
 
 ```diff
  // arcs/src/algorithms/mod.rs
@@ -128,9 +137,8 @@ Climate Orbiter][mco].
 [mco]: https://en.wikipedia.org/wiki/Mars_Climate_Orbiter#Cause_of_failure
 {{% /notice %}}
 
-Unlike the Wikipedia definition which "marks" points as kept I'm going to
-procedurally build up a new `Vec` of points. That means our `simplify()`
-function needs to be adjusted to look like this:
+To implement this I'm going to procedurally build up a new `Vec` of points,
+passing a `&mut Vec<_>` to the function doing the actual recursion.
 
 ```rust
 // arcs/src/algorithms/line_simplification.rs
@@ -156,13 +164,11 @@ pub fn simplify<Space>(
 }
 ```
 
-I've pulled the actual recursion out into its own `simplify_points()` function.
-This takes a range of points and a tolerance and will recursively add "kept"
-points to our `buffer`.
+Next we need to implement this `simplify_points()` function.
 
-First we'll use `if let` and a [slice pattern][slice-patterns] (stabilised in
-Rust 1.42) to extract the `first`, `last`, and `rest`. We can then create a
-`Line` from `first` and `last`.
+We can use `if let` and the really handy [slice pattern][slice-patterns]
+feature (stabilised in Rust 1.42) to extract the `first`, `last`, and `rest`.
+This gives us everything we need to create a `Line` from `first` and `last`.
 
 ```rust
 // arcs/src/algorithms/line_simplification.rs
@@ -437,10 +443,14 @@ mod tests {
 
 ## Conclusions
 
-This was definitely a lot shorter than my [usual][1] [deep][2] [dives][3]
-into programming (I think the average read time for articles on my blog is
+This was a lot shorter than my [usual][1] [deep][2] [dives][3] into complex
+programming topics (I think the average read time for articles on my blog is
 around 25 minutes?), but hopefully it'll be useful if you ever need to
 implement line simplification.
+
+Even if you aren't going to implement line simplification any time soon the
+algorithm itself is also quite elegant, so you might appreciate it for its
+aesthetic qualities.
 
 In the meantime I think I'll keep adding bits and pieces to [arcs][arcs] and
 [experimenting with motion control][rustmatic] when I have time. Let me know
