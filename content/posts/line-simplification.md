@@ -1,7 +1,6 @@
 ---
 title: "Line Simplification with Ramer–Douglas–Peucker"
-date: "2020-02-23T17:31:35+08:00"
-draft: true
+date: "2020-02-23T21:56:00+08:00"
 tags:
 - rust
 - algorithms
