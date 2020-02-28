@@ -20,7 +20,7 @@ reduce the number of points sent to the machine (which reduces the amount of
 data sent, buffer sizes, communications overhead, etc.) with minimal effect
 on the accuracy.
 
-Other places where this operation can be useful are,
+Other places where this operation can be useful are:
 
 - Cleaning up paths from from "noisy" data sources (imagine getting pixel
   locations from an [edge detection][edge-detection] algorithm)
@@ -65,7 +65,7 @@ around how it works.
     alt="Visualisation of the Ramer-Douglas-Peucker algorithm"
 >}}
 
-like most divide-and-conquer algorithms, in the ideal case this completes in
+Like most divide-and-conquer algorithms, in the ideal case this completes in
 `O(n log n)` time. However, if you hit an edge case where the "furthest"
 point is right next to the endpoints this can blow out to `O(n^2)`.
 
@@ -76,7 +76,7 @@ eye on.
 
 ## The Implementation
 
-To start with, let's add `line_simplification` module to `arcs::algorithms`.
+To start, let's add a `line_simplification` module to `arcs::algorithms`.
 
 ```diff
  // arcs/src/algorithms/mod.rs
@@ -124,11 +124,11 @@ ability to "tag" a type with the coordinate space it can be used with, and
 because this algorithm isn't specific to any one coordinate space we're
 making it generic over *all* coordinate spaces.
 
-You can think of this *"Coordinate Space"* ideas as the graphical version of
+You can think of this *"Coordinate Space"* idea as the graphical version of
 units. It's really annoying to accidentally mix up locations on a screen
 (*Canvas Space*, with the origin at the top-left) with locations in a drawing
-(*Drawing Space*, cartesian coordinates which can go to infinity), so
-tagging points and lengths with the space they're intended for lets us
+(*Drawing Space*, Cartesian coordinates which can go to infinity), so
+tagging points and lengths with their intended space lets us
 statically prevent the types of conversion problems that destroyed the [Mars
 Climate Orbiter][mco].
 
@@ -185,7 +185,7 @@ fn simplify_points<Space>(
 }
 ```
 
-Next we can try to find the point who's perpendicular distance is furthest from
+Next we can try to find the point whose perpendicular distance is furthest from
 `line_segment`.
 
 Ideally I'd like to use the [`Iterator::max_by_key()`][max-by-key] method to
@@ -444,7 +444,7 @@ mod tests {
 
 This was a lot shorter than my [usual][1] [deep][2] [dives][3] into complex
 programming topics (I think the average read time for articles on my blog is
-around 25 minutes?), but hopefully it'll be useful if you ever need to
+around 25 minutes?), but I hope it'll be useful if you ever need to
 implement line simplification.
 
 Even if you aren't going to implement line simplification any time soon the
