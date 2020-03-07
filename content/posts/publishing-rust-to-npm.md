@@ -42,7 +42,7 @@ Our first step in making the `gcode` crate (the Rust term for a library or
 package) available on NPM is to create the library skeleton and set up our
 build.
 
-{% notice note %}
+{{% notice note %}}
 I *could* take the easy path here and just tell you to use the 
 [rust-webpack-template][template], but then we'd be copying someone else's 
 solution and wouldn't actually understand how Rust code can be bundled into a
@@ -52,7 +52,7 @@ I also don't do much in the JavaScript world and would like to peel away the
 layers of magic to see what `rust-webpack-template` is doing for me.
 
 [template]: https://github.com/rustwasm/rust-webpack-template/
-{% /notice %}
+{{% /notice %}}
 
 I'll start by `cd`-ing into a checkout of the [`gcode`][gcode-rs] repository and
 create a new project.
@@ -65,15 +65,15 @@ yarn init v1.22.1
 question name (wasm): @michael-f-bryan/gcode
 question version (1.0.0):
 question description: An interface to the Rust gcode parser library
-question entry point (index.js): js/index.ts
+question entry point (index.js): ts/index.ts
 question repository url: https://github.com/Michael-F-Bryan/gcode-rs
 question author: Michael-F-Bryan <michaelfbryan@gmail.com>
 question license (MIT): MIT OR Apache-2.0
 question private:
 success Saved package.json
 Done in 77.44s.
-$ mkdir js
-$ touch js/index.ts
+$ mkdir ts
+$ touch ts/index.ts
 ```
 
 I'm a pretty big fan of using the type system to prevent errors and make APIs
@@ -185,7 +185,7 @@ First I'll copy the webpack config file from [the TypeScript docs][ts-webpack].
 const path = require('path');
 
 module.exports = {
-    entry: './js/index.ts',
+    entry: './ts/index.ts',
     devtool: 'inline-source-map',
     module: {
         rules: [
@@ -224,7 +224,7 @@ Update the webpack config to use the new packages.
 +const WasmPackPlugin = require("@wasm-tool/wasm-pack-plugin");
 
  module.exports = {
-     entry: './js/index.ts',
+     entry: './ts/index.ts',
 @@ -16,7 +17,12 @@ module.exports = {
          extensions: ['.tsx', '.ts', '.js'],
      },
@@ -279,13 +279,13 @@ Built at: 03/08/2020 3:50:09 AM
   Asset      Size  Chunks             Chunk Names
 main.js  86.7 KiB    main  [emitted]  main
 Entrypoint main = main.js
-[./js/index.ts] 12 bytes {main} [built]
+[./ts/index.ts] 12 bytes {main} [built]
 ```
 
 Awesome!
 
 Next, let's try to make sure things are working by writing a dummy function in
-Rust and calling it from `js/index.ts`.
+Rust and calling it from `ts/index.ts`.
 
 ```rust
 // wasm/rust/lib.rs
@@ -311,10 +311,10 @@ than I can, so I'd recommend having a skim through them if you're curious.
 {{% /notice %}}
 
 
-We'll also add a `greet()` call to the top of `js/index.ts`.
+We'll also add a `greet()` call to the top of `ts/index.ts`.
 
 ```ts
-// wasm/js/index.ts
+// wasm/ts/index.ts
 
 import * as wasm from "../pkg/index";
 
@@ -333,7 +333,7 @@ Built at: 03/08/2020 4:15:41 AM
   Asset      Size  Chunks             Chunk Names
 main.js  86.7 KiB    main  [emitted]  main
 Entrypoint main = main.js
-[./js/index.ts] 59 bytes {main} [built]
+[./ts/index.ts] 59 bytes {main} [built]
 [./pkg/index.js] 3.03 KiB {main} [built]
 [./pkg/index_bg.wasm] 49.4 KiB {main} [built]
     + 4 hidden modules
@@ -342,7 +342,7 @@ ERROR in ./pkg/index_bg.wasm
 WebAssembly module is included in initial chunk.
 This is not allowed, because WebAssembly download and compilation must happen asynchronous.
 Add an async splitpoint (i. e. import()) somewhere between your entrypoint and the WebAssembly module:
-* ./js/index.ts --> ./pkg/index.js --> ./pkg/index_bg.wasm
+* ./ts/index.ts --> ./pkg/index.js --> ./pkg/index_bg.wasm
 * ... --> ./pkg/index.js --> ./pkg/index_bg.wasm --> ./pkg/index.js --> ./pkg/index_bg.wasm
 ```
 
@@ -352,7 +352,7 @@ It took a little digging, but it seems like [I'm not the first][wbg-700] Rust
 user to run into this when using webpack.
 
 What's going on here is that WebAssembly modules must be loaded and compiled
-asynchronously. Because we're compiling `wasm/js/index.ts` (and the
+asynchronously. Because we're compiling `wasm/ts/index.ts` (and the
 WebAssembly code it uses) into one big bundle, webpack doesn't have a "seam"
 it can use to import the WebAssembly asynchronously.
 
@@ -364,7 +364,7 @@ rest of the code, and tell webpack that *that* is our entrypoint.
 // wasm/bootstrap.js
 
 // We need a seam so the WebAssembly can be imported asynchronously
-import("./js/index.ts").catch(console.error);
+import("./ts/index.ts").catch(console.error);
 ```
 
 We'll also need to update the webpack config appropriately.
@@ -375,7 +375,7 @@ We'll also need to update the webpack config appropriately.
  const WasmPackPlugin = require("@wasm-tool/wasm-pack-plugin");
 
  module.exports = {
--    entry: './js/index.ts',
+-    entry: './ts/index.ts',
 +    entry: './bootstrap.js',
      devtool: 'inline-source-map',
      module: {
@@ -400,7 +400,7 @@ Built at: 03/08/2020 4:25:12 AM
                          main.js  25.2 KiB    main  [emitted]              main
 Entrypoint main = main.js
 [./bootstrap.js] 113 bytes {main} [built]
-[./js/index.ts] 59 bytes {1} [built]
+[./ts/index.ts] 59 bytes {1} [built]
 [./pkg/index.js] 3.03 KiB {1} [built]
 [./pkg/index_bg.wasm] 49.4 KiB {1} [built]
     + 4 hidden modules
