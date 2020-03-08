@@ -349,16 +349,19 @@ Add an async splitpoint (i. e. import()) somewhere between your entrypoint and t
 Well that's interesting!
 
 It took a little digging, but it seems like [I'm not the first][wbg-700] Rust
-user to run into this when using webpack.
+user to run into this error when using webpack.
 
-What's going on here is that WebAssembly modules must be loaded and compiled
-asynchronously. Because we're compiling `wasm/ts/index.ts` (and the
-WebAssembly code it uses) into one big bundle, webpack doesn't have a "seam"
-it can use to import the WebAssembly asynchronously.
+I *think* this is because WebAssembly can't really be stuffed into a single
+`bundle.js` file, instead we can use webpack's code splitting functionality
+so that anything which needs to call WebAssembly will download and compile it
+separately. This requires adding some sort of "seam" so we can `await` the
+WebAssembly download and compilation before we get access to the exported
+functions.
 
 After looking at [rustwasm/wasm-bindgen#700][wbg-700] it seems like the best
-solution is to create a `bootstrap.js` who's sole purpose is to `import()` the
-rest of the code, and tell webpack that *that* is our entrypoint.
+solution is to create a `bootstrap.js` who's sole purpose is to `import()`
+(an asynchronous operation) the rest of the code, and tell webpack that
+*that* is our entrypoint.
 
 ```js
 // wasm/bootstrap.js
@@ -404,6 +407,50 @@ Entrypoint main = main.js
 [./pkg/index.js] 3.03 KiB {1} [built]
 [./pkg/index_bg.wasm] 49.4 KiB {1} [built]
     + 4 hidden modules
+```
+
+ The code isn't overly readable because it is computer-generated and they are
+ trying to handle varying levels of browser support, but if you skim through
+ the generated bundle you can see the asynchronous WebAssembly downloading
+ and compiling using things like `fetch()` and
+ `WebAssembly.instantiateStreaming()`.
+
+```js
+// wasm/dist/main.js
+
+/******/ 		// Fetch + compile chunk loading for webassembly
+/******/
+/******/ 		var wasmModules = {"1":["./pkg/index_bg.wasm"]}[chunkId] || [];
+/******/
+/******/ 		wasmModules.forEach(function(wasmModuleId) {
+/******/ 			var installedWasmModuleData = installedWasmModules[wasmModuleId];
+/******/
+/******/ 			// a Promise means "currently loading" or "already loaded".
+/******/ 			if(installedWasmModuleData)
+/******/ 				promises.push(installedWasmModuleData);
+/******/ 			else {
+/******/ 				var importObject = wasmImportObjects[wasmModuleId]();
+/******/ 				var req = fetch(__webpack_require__.p + "" + {"./pkg/index_bg.wasm":"2baf8b587bc538554c03"}[wasmModuleId] + ".module.wasm");
+/******/ 				var promise;
+/******/ 				if(importObject instanceof Promise && typeof WebAssembly.compileStreaming === 'function') {
+/******/ 					promise = Promise.all([WebAssembly.compileStreaming(req), importObject]).then(function(items) {
+/******/ 						return WebAssembly.instantiate(items[0], items[1]);
+/******/ 					});
+/******/ 				} else if(typeof WebAssembly.instantiateStreaming === 'function') {
+/******/ 					promise = WebAssembly.instantiateStreaming(req, importObject);
+/******/ 				} else {
+/******/ 					var bytesPromise = req.then(function(x) { return x.arrayBuffer(); });
+/******/ 					promise = bytesPromise.then(function(bytes) {
+/******/ 						return WebAssembly.instantiate(bytes, importObject);
+/******/ 					});
+/******/ 				}
+/******/ 				promises.push(installedWasmModules[wasmModuleId] = promise.then(function(res) {
+/******/ 					return __webpack_require__.w[wasmModuleId] = (res.instance || res).exports;
+/******/ 				}));
+/******/ 			}
+/******/ 		});
+/******/ 		return Promise.all(promises);
+/******/ 	};
 ```
 
 ## Exposing the GCode Crate with WebAssembly
