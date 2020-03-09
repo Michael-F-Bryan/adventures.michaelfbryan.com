@@ -768,7 +768,21 @@ impl Drop for Parser {
 ```
 
 Again, you can see we're taking the effort to explain what is going on and
-when objects are being destroyed.
+when objects are being destroyed. 
+
+{{% notice info %}}
+A big contributor in being able write really fast, safe code in Rust is the
+ability to rely on the safe abstractions built over `unsafe` things (e.g.
+interacting with the OS). 
+
+Documenting safety like this is important when creating safe abstractions (like
+the wrapper we're exposing to WebAssembly) and being able to write sound code
+is a point of pride for a lot of rustaceans.
+{{% /notice %}}
+
+### Exposing Parser Methods
+
+
 
 ## Creating Idiomatic TypeScript Bindings
 
