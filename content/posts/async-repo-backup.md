@@ -89,6 +89,34 @@ we need to:
 - fetch recent changes and fast-forward the local copy to the most recent 
   version
 
+### Design Goals
+
+Something to keep in mind is that I'm doing this in my own time, and because
+I want to. That means I'm not working towards a deadline and can afford to do
+things *The Right Way*, even if it might take a bit longer than the hackier
+path which still fullfills the requirements.
+
+I also like to take pride in my work 🙂
+
+A big quality-of-life feature is meaningful diagnostics and graceful error
+handling. Sometimes something can go wrong when running `git pull` (e.g.
+there were changes in the directory and git doesn't want to overwrite them)
+or somewhere along the line something unexpected happens (like a project not
+having a `master` branch) and the application needs to handle that correctly.
+Leaving a repository in a broken state or forcing the user to manually
+troubleshoot is bad for user experience.
+
+I als want to be able to do other things while the backup is going on in the
+background. That means Youtube shouldn't start lagging because we're
+saturating my laptop's WiFi with `git clone`s, and it shouldn't pin all CPUs
+at 100%.
+
+- Well-written code
+- Robust error handling
+- Good quality user feedback
+- Use asynchronous programming to maximise parallelism
+- Don't overdo it and starve the rest of the system of resources
+
 [repo]: https://github.com/Michael-F-Bryan/repo-backup
 [arcs]: https://github.com/Michael-F-Bryan/arcs
 [gh]: https://github.com/
