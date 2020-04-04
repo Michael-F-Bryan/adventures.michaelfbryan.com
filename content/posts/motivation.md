@@ -17,21 +17,19 @@ However, if I'm working on something which is less personally interesting
 (e.g. tracking down GUI bugs or creating yet another CRUD app) I'll tend to
 drag my feet and not work as hard.
 
-This revelation isn't overly profound, most people's productivity will ebb
-and flow with their motivation levels, after all. It's just that the amount
-of variation will change from person to person, with society typically
-labelling the flatter, more consistent people as being more "disciplined",
-while those with more volatile productivity levels being considered "lazy
-geniuses".
+This revelation isn't overly profound. After all, the amount of variation may
+change from person to person, but most people's productivity will ebb and
+flow with their motivation levels. With society typically labelling the
+flatter, more consistent people as being "disciplined", while those with
+more volatile productivity levels are considered "lazy geniuses".
 
 With most people working remotely due to the recent pandemic, I've had an
 opportunity to do some introspection and realised that for the last month or
-so (late February 2020 onwards) I've been in one of those low motivation
-periods.
+so I've been in one of those low motivation periods.
 
 The engineer in me wants to find out why.
 
-{{% notice info %}}
+{{% notice note %}}
 While I'm using the term *"productivity"*, this doesn't necessarily mean the
 amount of work done at my day job.
 
@@ -72,7 +70,59 @@ within my company/industry.
 
 ## The Learning Curve
 
-## Passion
+The *Learning Curve* is a model of how a person's skill/competence in a
+particular topic increases with practice.
+
+When displayed visually, it looks roughly like this:
+
+{{< figure
+    src="/img/the-learning-curve.png"
+    caption="My interpretation of the learning curve"
+    alt="The Learning Curve"
+>}}
+
+There are 3 phases you'll pass through as you practice a skill,
+
+1. *Initial Learning* - this is where you learn the basics (how to declare a
+   variable, what is a loop, etc.)
+2. *Rapid Growth* - in this phase you've got a grasp of the basics and go through
+   a big growth spurt as you realise all the cool things you can do with this
+   new-found knowledge
+3. *Experience* - this is where you start applying the knowledge you've learned
+   and can begin practising it professionally
+
+Each phase has a different effect on the psyche and a person's motivation
+levels.
+
+For example, as a newbie everything will be unfamiliar and confusing, and
+there's a strong temptation to give up, or you may feel that it's not for
+you. This is one of the reasons you tend to get a large number of drop-outs
+in the first year of a university degree.
+
+Once you've grasped the basics you know enough to be dangerous. I'm sure
+we've all met someone who's at this point, they are able to understand the
+domain-specific jargon or concepts and in their enthusiasm they feel like
+they're an expert on the topic, wanting to share all the new knowledge they've
+gained.
+
+This phase tends to be really fun, you start to get a deeper understanding of
+the topic and its full potential.
+
+Finally, you are competent enough to start applying your knowledge in a
+productive way and start gaining the experience that differentiates masters from
+the rest.
+
+In this phase you may only gain a small amount of competence, but each piece
+of knowledge is hard-won and tends to be incredibly advanced or
+domain-specific. You've also reached the point where the *Rapid Growth* phase's
+enthusiasm is started to wear off as things which were previously novel and
+mind-boggling become commonplace.
+
+Not many get this far.
+
+In terms of my own development, I'd say I've passed the *Actually Useful*
+point and am starting to plateau out, at least in the areas of C#, Rust, and
+the creation of CAD applications.
 
 ## Obligations
 
@@ -101,19 +151,32 @@ However, when you inflict that 💩 on me that can really impact my motivation
 levels (e.g. I inherit your codebase and it's the second month of debugging
 in production trying to track down a spurious, mission-critical bug which is
 actively costing customers money because you designed a communication
-protocol without knowing how to design a communication protocol).
+protocol without knowing how to design a communication protocol). And the
+thing about motivation is that once lost, it tends to take a really long time
+to come back. Even after the original problem has gone away and things have
+returned to normal.
 
-And the thing about motivation is that once lost, it doesn't tend to come
-back. Not even when the original problem goes away.
-
-It's also quite humbling in a way.
+This trend of the vast majority of things being crap can also be quite
+humbling in a way.
 
 When I look at the list of repositories I've created on [GitHub][gh-repos] or
 [GitLab][gl-repos] I see a large number of half-baked ideas and failed
 projects. Although I've learned a lot from each of them and enjoyed the creation
-process, I'm sure quite a lot of it *is* crap. I'd like to think it's not as
-much as 90% (maybe only 50%?) but that can probably be attributed to the
-[Dunning–Kruger effect][dk] 😜
+process, I'm sure quite a lot of it *is* crap.
+
+It also really makes you respect the people who build good quality things.
+
+For example, the [serde](https://crates.io/crates/serde) serialization
+framework is easily one of the most expressive and user-friendly
+serialization mechanisms I've used so far.
+
+Another project I'm a big fan of is [uom](https://crates.io/crates/uom/), a
+crate for working with systems of units in a type-safe manner. When you're
+modelling mechanical devices it's amazing how useful it is to have the compiler
+yell at you when you accidentally try to add a speed to an acceleration.
+
+For me, seeing high quality projects like `serde` and `uom` is an inspiration
+to also go out and make nice things.
 
 ## Conclusions
 
