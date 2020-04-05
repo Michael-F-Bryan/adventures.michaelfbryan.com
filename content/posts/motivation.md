@@ -1,7 +1,6 @@
 ---
-title: "A Reflection on What Motivates a Person"
-date: "2020-04-04T16:34:44+08:00"
-draft: true
+title: "Reflections on What Motivates a Person"
+date: "2020-04-05T19:15:00+08:00"
 tags:
 - People Skills
 ---
@@ -17,17 +16,17 @@ However, if I'm working on something which is less personally interesting
 (e.g. tracking down GUI bugs or creating yet another CRUD app) I'll tend to
 drag my feet and not work as hard.
 
-This revelation isn't overly profound. After all, the amount of variation may
-change from person to person, but most people's productivity will ebb and
-flow with their motivation levels. With society typically labelling the
-flatter, more consistent people as being "disciplined", while those with
-more volatile productivity levels are considered "lazy geniuses".
+I'm sure this revelation isn't overly profound. Although the amount of
+variation may change from person to person, most people's productivity will
+ebb and flow with their motivation levels. Society typically labels the
+flatter, more consistent people as being "disciplined", while those with more
+volatile productivity levels are considered "lazy geniuses".
 
 With most people working remotely due to the recent pandemic, I've had an
 opportunity to do some introspection and realised that for the last month or
 so I've been in one of those low motivation periods.
 
-The engineer in me wants to find out why.
+The engineer in me wants to find out why, and what I can do to fix it.
 
 {{% notice note %}}
 While I'm using the term *"productivity"*, this doesn't necessarily mean the
