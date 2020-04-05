@@ -73,15 +73,16 @@ within my company/industry.
 The *Learning Curve* is a model of how a person's skill/competence in a
 particular topic increases with practice.
 
-When displayed visually, it looks roughly like this:
+When displayed visually, it looks something like this:
 
 {{< figure
     src="/img/the-learning-curve.png"
-    caption="My interpretation of the learning curve"
+    caption="Visual representation of the learning curve"
     alt="The Learning Curve"
 >}}
 
-There are 3 phases you'll pass through as you practice a skill,
+As you can see from my highly scientific diagram, there are 3 phases you'll
+pass through as you practice a skill,
 
 1. *Initial Learning* - this is where you learn the basics (how to declare a
    variable, what is a loop, etc.)
@@ -126,6 +127,32 @@ the creation of CAD applications.
 
 ## Obligations
 
+Something I've found is that when someone starts to pay you to do something
+you enjoy, it stops being fun and turns into work. I think the reason this
+impacts motivation is two-fold.
+
+For one, when you are being paid to do an activity you once did for fun, you
+change from intrinsic motivation (doing it for the sheer enjoyment) to
+extrinsic motivation (doing it for the money). As someone who doesn't respond
+well to extrinsic motivators (e.g. I did well at school because I enjoyed the
+content, not because I wanted the marks) being given money isn't a big
+motivator.
+
+Another aspect to this is you now have commitments and obligations to other
+people. If I *don't* complete a task I'm being paid for on time, there are
+repercussions. For example, the product timeline may blow out, or my
+coworkers might be forced to pick up the slack. On the other hand, when you
+are doing a project for your own enjoyment, nobody cares if it gets forgotten
+after a month or goes nowhere.
+
+I've always been quite conscious of this, so although I'm employed as a
+full-time software engineer I try to make sure the languages and frameworks I
+use in my personal time are completely unrelated to what we use at work.
+
+This feels like a good compromise. I get to maintain a strict distinction
+between work and play, while also being able to use the skills I develop at
+home to solve problems at work.
+
 ## Sturgeon's Law
 
 [Sturgeon's Law][sturgeon] is an observation about the world, often paraphrased
@@ -147,7 +174,7 @@ I normally wouldn't care less if your code is a pile of 💩 under the hood,
 you're doing something you enjoy and trying to create a product which will
 give others value so more power to you.
 
-However, when you inflict that 💩 on me that can really impact my motivation
+However, when you inflict that 💩 on me, it can really impact my motivation
 levels (e.g. I inherit your codebase and it's the second month of debugging
 in production trying to track down a spurious, mission-critical bug which is
 actively costing customers money because you designed a communication
@@ -180,6 +207,20 @@ to also go out and make nice things.
 
 ## Conclusions
 
+I don't think there's any one factor which affects a person's motivation.
+Like a lot of things in the real world, *it's complicated*, and despite what
+the self-help industry would like you to think, there is no *5 step recipe to
+increase your motivation levels*.
+
+That said, this was still an interesting little exercise. Normally I'll find a
+highly technical topic to do a deep investigation into, so it's nice to have a
+change of pace every now and then. Also, the whole idea of thinking about
+thinking is meta enough to be appropriate for this blog.
+
+Something else I neglected to look into is [burnout][bo]. I've been burnt out
+before so am fairly confident the recent low motivation isn't caused by
+burnout, but who knows?
+
 [markedit]: {{< ref "markedit.md" >}}
 [line-simplification]: {{< ref "line-simplification.md" >}}
 [sturgeon]: https://en.wikipedia.org/wiki/Sturgeon%27s_law
@@ -188,3 +229,4 @@ to also go out and make nice things.
 [gl-repos]: https://gitlab.com/users/Michael-F-Bryan/projects
 [dk]: https://en.wikipedia.org/wiki/Dunning%E2%80%93Kruger_effect
 [posts]: {{< ref "." >}}
+[bo]: https://www.verywellmind.com/stress-and-burnout-symptoms-and-causes-3144516
