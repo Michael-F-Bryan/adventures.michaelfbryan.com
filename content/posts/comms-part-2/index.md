@@ -3,7 +3,7 @@ title: "The Communications System: Part 2"
 date: "2019-09-08T01:20:00+08:00"
 tags:
 - adventures-in-motion-control
-- rust
+- Rust
 ---
 
 Now we have a mechanism for transferring bytes from the frontend to the
@@ -38,7 +38,7 @@ fn parse_packet<'a>(pkt: &'a Packet) -> Result<Message<'a>, UnknownMessageError>
 }
 ```
 
-The top-level `App` can handle messages by routing them to the appropriate 
+The top-level `App` can handle messages by routing them to the appropriate
 system and invoking a message handler.
 
 ## Message Routing
@@ -48,7 +48,7 @@ A `Router` contains references to the various other systems, implementing
 system.
 
 This design makes use of references to avoid the need for `Rc` and friends,
-while taking advantage of lifetimes and the ability to pass out `&mut` 
+while taking advantage of lifetimes and the ability to pass out `&mut`
 references to different fields of a struct at the same time.
 
 ```rust
@@ -122,13 +122,13 @@ impl Tx for Browser {
 
 ## Making Sense of Messages
 
-At the moment the only other system is the `FpsCounter`, so lets create a 
+At the moment the only other system is the `FpsCounter`, so lets create a
 request for clearing the counter.
 
 In the long term we'd like to make adding a new message type and handling it as
 simple as possible. Ideally just a case of adding the message and response types
-(with derives for serializing/deserializing), implementing `Handle` so the 
-system can handle the message, then adding a new arm to `Router`'s match 
+(with derives for serializing/deserializing), implementing `Handle` so the
+system can handle the message, then adding a new arm to `Router`'s match
 statement.
 
 ```rust
@@ -153,7 +153,7 @@ impl<'a> MessageHandler for Router<'a> {
         match msg.id() {
             ...
             // associate this message with an ID of 42, parse the raw bytes to
-            // SomeMessage, make sure my_system handles it, then turn the 
+            // SomeMessage, make sure my_system handles it, then turn the
             // response into a Packet so we can send it to the serial port
             42 => dispatch(&mut self.my_system, msg.content()),
             ...
@@ -166,7 +166,7 @@ impl<'a> MessageHandler for Router<'a> {
 For serializing and deserializing we can use the [scroll][scroll] crate. This
 gives us a nice `#[derive]` for copying the contents of a struct directly to
 a byte buffer. Something that's very common in C programming, and boils down to
-a couple calls to `memcpy()`. 
+a couple calls to `memcpy()`.
 
 {{% notice tip %}}
 As a bonus, this sort of encoding makes troubleshooting communications
@@ -194,8 +194,8 @@ pub trait Handler<M> {
 }
 
 /// Acknowledge a request without returning any extra information.
-#[derive( 
-    Debug, Default, Copy, Clone, PartialEq, Eq, Pread, Pwrite, IOread, IOwrite, 
+#[derive(
+    Debug, Default, Copy, Clone, PartialEq, Eq, Pread, Pwrite, IOread, IOwrite,
     SizeWith,
 )]
 pub struct Ack {}
@@ -263,7 +263,7 @@ fn dispatch<'a, H, M>(
 ) -> Result<Packet, CommsError>
 where
     // M, our message, should be parseable from a slice of bytes (which we can
-    // index into using `usize`). We're also explicitly specifying the 
+    // index into using `usize`). We're also explicitly specifying the
     // endianness
     M: TryFromCtx<'a, scroll::Endian, Size = usize>,
     // pread_with() will automatically translate parsing failures from a generic
@@ -284,11 +284,11 @@ where
 }
 ```
 
-That little incantation completes the guts of the `Router` type. This 
+That little incantation completes the guts of the `Router` type. This
 infrastructure gives our application a well-defined mechanism for transferring
-data between the frontend and the motion controller. 
+data between the frontend and the motion controller.
 
-It also simplifies the process of adding new requests and responses as the 
+It also simplifies the process of adding new requests and responses as the
 application evolves.
 
 ## Actually Sending Some Data
@@ -342,7 +342,7 @@ impl Tx for Browser {
 }
 ```
 
-We also need to provide a couple setters so JavaScript can register this 
+We also need to provide a couple setters so JavaScript can register this
 callback.
 
 ```rust
@@ -364,7 +364,7 @@ impl App {
 
     /// Set the callback to be invoked whenever the simulator wants to send data
     /// to the frontend.
-    /// 
+    ///
     /// The callback will be passed a [`Uint8Array`] as the first argument.
     pub fn on_data_sent(&mut self, callback: Function) {
         self.browser.set_data_sent(callback);
@@ -373,7 +373,7 @@ impl App {
 ```
 
 Next we need to register our callback from the `init()` function in `index.js`.
-Later on we'll add a more realistic handler, but we'll use `console.log()` 
+Later on we'll add a more realistic handler, but we'll use `console.log()`
 temporarily to see what's going on.
 
 ```js
@@ -391,8 +391,8 @@ function init() {
 ```
 
 {{% notice note %}}
-Remember that the first 5 bytes of an ANPP message are the header. We use 
-`data.slice(5)` to skip the first 5 bytes and then interpret the rest as a UTF-8 
+Remember that the first 5 bytes of an ANPP message are the header. We use
+`data.slice(5)` to skip the first 5 bytes and then interpret the rest as a UTF-8
 string using a `TextDecoder`.
 {{% /notice %}}
 
@@ -479,13 +479,13 @@ function init() {
 ```
 
 The `<Browser as Tx>::send()` method will invoke `console.error()` whenever the
-callback returns an `Err` (`wasm_bindgen` generates shims to turn exceptions 
-into a `Result<T, JsValue>`), so in theory it should show in the dev tools 
+callback returns an `Err` (`wasm_bindgen` generates shims to turn exceptions
+into a `Result<T, JsValue>`), so in theory it should show in the dev tools
 window with a backtrace.
 
 ![Error log with backtrace](console_error.png)
 
-The backtrace isn't stellar, but it's definitely usable. 
+The backtrace isn't stellar, but it's definitely usable.
 
 If you know how to set up source maps or some other tool for translating those
 opaque WASM offsets into file names and line numbers, let me know!

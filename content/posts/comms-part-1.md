@@ -3,7 +3,7 @@ title: "The Communications System: Part 1"
 date: "2019-09-06T23:00:00+08:00"
 tags:
 - adventures-in-motion-control
-- rust
+- Rust
 ---
 
 ## Prelude
@@ -12,7 +12,7 @@ The *Communications* system is arguably one of the most important parts of
 our simulator. After all, it's kinda hard to debug a program when you can't
 ask it why something isn't working.
 
-The user will interact with our simulated motion controller via a single 
+The user will interact with our simulated motion controller via a single
 *Serial Port*, which we'll be modelling as a simple thing which sends and
 receives bytes. Serial ports are a fairly old technology, and have several
 drawbacks compared to the Ethernet and TCP protocols that most programmers
@@ -21,7 +21,7 @@ are familiar with.
 - There are no "packets" (i.e. bring your own [frames][framing])
 - There's no guarantee the other side has received a message (i.e. bring your
   own [ACKs][ack]) - or even that there's anyone on the other end!
-- If you receive data, there's no guarantee it wasn't garbled during 
+- If you receive data, there's no guarantee it wasn't garbled during
   transmission (i.e. bring your own [error detection and correction][er])
 
 This all combines to make the *Serial* protocol an [unreliable][reliability]
@@ -42,7 +42,7 @@ pairs. This means:
 The way we'll be adding reliability to the underlying error-prone stream of
 bytes received from the *Serial* connection is by using a protocol called the
 *Advanced Navigation Packet Protocol* (ANPP). This is a handly little protocol
-*published by [*Advanced Navigation*][an] under the MIT license, with an 
+*published by [*Advanced Navigation*][an] under the MIT license, with an
 [open-source Rust port][anpp-rs].
 
 Each message sent using ANPP will be laid out as:
@@ -61,9 +61,9 @@ periodically scan through the received bytes looking for a valid header
 identify the message body (the next `Length` bytes) and identify transmission
 errors using the CRC-16 checksum.
 
-ANPP gives us a nice way of detecting when a message has been recieved 
+ANPP gives us a nice way of detecting when a message has been recieved
 successfully, but we also need a higher-level mechanism for detecting
-transmission failures and correcting them. 
+transmission failures and correcting them.
 
 The easiest way to do this is called [Automatic Repeat reQuest][arq], i.e. tell
 the sender to resend because an error was detected, and/or automatically resend
@@ -73,8 +73,8 @@ the previous message if it hasn't been answered after X seconds.
 
 Data can be received at any time in a normal microcontroller. The typical way to
 handle this is by either frequently polling the pins wired up to our serial
-port, or to configure the microcontroller to automatically invoke a callback 
-whenever a byte is received. 
+port, or to configure the microcontroller to automatically invoke a callback
+whenever a byte is received.
 
 In this case the interrupt approach seems quite natural due to JavaScript's
 callback-based nature.
@@ -100,7 +100,7 @@ pub trait Rx {
 }
 ```
 
-We'll also give the WASM code a way to write data to a buffer owned by our 
+We'll also give the WASM code a way to write data to a buffer owned by our
 `App`.
 
 ```rust
@@ -126,7 +126,7 @@ impl Inputs {
     ...
 
     pub(crate) fn on_data_received(&mut self, data: &[u8]) {
-        // writes up to `capacity` bytes to the buffer. Extra items are 
+        // writes up to `capacity` bytes to the buffer. Extra items are
         // silently dropped on the floor.
         self.rx_buffer.extend(data.into_iter().copied());
     }
@@ -134,7 +134,7 @@ impl Inputs {
 ```
 
 {{% notice note %}}
-In most microcontrollers an *Interrupt Service Routine* is a function that 
+In most microcontrollers an *Interrupt Service Routine* is a function that
 takes no arguments and returns nothing (`fn()`), meaning the only way to send
 data from the ISR to the main application is via `static` memory.
 
@@ -204,10 +204,10 @@ This looks fairly straightforward, but it's raised three questions:
   data we haven't had a chance to look at yet?
 - **B:** We've got a valid packet... now what?
 - **C:** Invalid CRCs indicate that a message was garbled in transit. Should we
-  just ignore the error, or do we want to keep track of how many CRC errors 
+  just ignore the error, or do we want to keep track of how many CRC errors
   we've had and report it to the frontend at some point?
 
-For now, lets handle **A** by clearing the `Decoder` buffer. This lets us get 
+For now, lets handle **A** by clearing the `Decoder` buffer. This lets us get
 rid of garbled data left over from previous `poll()`s and start with a clean
 slate.
 
@@ -237,13 +237,13 @@ impl<I: Rx, O> System<I, O> for Communications {
 {{% notice tip %}}
 Either way, this situation isn't ideal. We don't want to drop data at all, so
 ideally the frontend wouldn't send more data than the `Communications` system
-can handle. 
+can handle.
 
-This gives us an effective limit of 
+This gives us an effective limit of
 [`anpp::Decoder::DEFAULT_DECODER_BUFFER_SIZE`][buffer-size] (512 bytes) per
 `poll()` of the `Communications` system. Considering will be polling the
 simulator from `requestAnimationFrame()`, and `requestAnimationFrame()` only
-fires when the browser redraws (about 60Hz, or every 16ms), this limits the 
+fires when the browser redraws (about 60Hz, or every 16ms), this limits the
 entire application to a maximum transfer rate of `512*60 = 30720` bytes per
 second.
 
@@ -367,7 +367,7 @@ impl<'a, M: MessageHandler> MessageHandler for &'a mut M {
 ```
 
 To handle **C** (CRC errors), we'll give the `MessageHandler` a method that'll
-be called whenever a CRC error occurs. That way the component in charge of 
+be called whenever a CRC error occurs. That way the component in charge of
 routing messages can note down how many errors have occurred within a single
 run.
 

@@ -3,19 +3,19 @@ title: "A Better Frontend"
 date: "2019-09-27T03:47:00+08:00"
 tags:
 - adventures-in-motion-control
-- rust
+- Rust
 - wasm
 - vue
 - javascript
 ---
 
 Now we've got a half-usable motion controller, we need a graphical way for
-humans to interact with it. The controller runs in a browser, which makes 
+humans to interact with it. The controller runs in a browser, which makes
 [Vue][vue-js] a perfect candidate for the UI.
 
 ## Adding Vue to the Frontend
 
-Now, we don't actually have much frontend code (47 lines of JavaScript to be 
+Now, we don't actually have much frontend code (47 lines of JavaScript to be
 exact) so it's actually easier to delete the existing `frontend` and use the
 [`vue` CLI tool][vue-cli] to create a new one.
 
@@ -30,7 +30,7 @@ $ vue create frontend
   ? Use Babel alongside TypeScript (required for modern mode, auto-detected polyfills, transpiling JSX)? Yes
   ? Where do you prefer placing config for Babel, PostCSS, ESLint, etc.? In dedicated config files
   ? Save this as a preset for future projects? No
-  
+
   ...
 ```
 
@@ -103,11 +103,11 @@ new `frontend`.
 yarn add ../sim/pkg
 ```
 
-Next in order to support Vue's reactive way of doing things, we'll need to 
+Next in order to support Vue's reactive way of doing things, we'll need to
 rewrite the `Browser` module so it'll accept a reference to some JavaScript
 object.
 
-We want to take advantage of `wasm-bindgen`'s ability to work with [Duck-typed 
+We want to take advantage of `wasm-bindgen`'s ability to work with [Duck-typed
 interfaces][ducks] so the top-level Vue `App` can communicate with the motion
 controller by passing down something that has some pre-defined methods.
 
@@ -147,9 +147,9 @@ impl<'a> Tx for B<'a> {
 }
 ```
 
-Believe it or not, but this makes the `aimc_sim::App` *cleaner* because we 
+Believe it or not, but this makes the `aimc_sim::App` *cleaner* because we
 aren't binding to the DOM directly, and therefore don't have to worry about
-setup failing. 
+setup failing.
 
 I'll elide the changes to `sim/src/app.rs` for now seeing as they're mostly
 mechanical code changes. The WASM functions exported by `lib.rs` are kinda
@@ -218,7 +218,7 @@ If you squint, you can almost see our [original `index.js`][original] in
 there...
 
 You may have also noticed that the call to `wasm.poll()` is passed a reference
-to `this`. That means we'll need to implement the `Browser` "interface" on 
+to `this`. That means we'll need to implement the `Browser` "interface" on
 `App`.
 
 ```vue
@@ -288,12 +288,12 @@ The first step when designing a UI is to look at what other people have done for
 inspiration.
 
 This screenshot of [OctoPrint][octo] web UI, showing their *"terminal"* tab
-looks promising. We'll probably want something similar to the terminal for 
+looks promising. We'll probably want something similar to the terminal for
 diagnostics and viewing the raw messages as they go back and forth.
 
 ![OctoPrint terminal tab](octoprint-terminal.png)
 
-Another example, more machine-oriented this time, is [Mach4][m4]. This is a 
+Another example, more machine-oriented this time, is [Mach4][m4]. This is a
 commercial desktop program commonly used to control CNC machines.
 
 ![Mach4](mach4.jpg)
@@ -342,7 +342,7 @@ Vue.use(BootstrapVue)
 ...
 ```
 
-The next step is to mock out the various UI elements. This part can take a 
+The next step is to mock out the various UI elements. This part can take a
 while, especially if you aren't a normally frontend developer (like me!).
 
 After some tweaking, I came up with this:
@@ -367,7 +367,7 @@ way whenever they get updated on the `App`, the new values will be automagically
 passed down to the `Sidebar` and trigger a redraw.
 
 Rendering is just a case of tweaking [the Accordian example][accordian] from
-BootstrapVue's website. Axis positions aren't actually recorded anywhere, so 
+BootstrapVue's website. Axis positions aren't actually recorded anywhere, so
 we'll use dummy values for the moment.
 
 ```vue
@@ -398,7 +398,7 @@ we'll use dummy values for the moment.
       <b-collapse id="accordion-2" accordion="my-accordion" role="tabpanel">
         <b-card-body>
           <table class="table">
-            <tr><td>X</td><td>123</td></tr> 
+            <tr><td>X</td><td>123</td></tr>
             <tr><td>Y</td><td>321</td></tr>
             <tr><td>Z</td><td>456.7</td></tr>
           </table>
@@ -409,7 +409,7 @@ we'll use dummy values for the moment.
 </template>
 ```
 
-The bulk of the page is filled with the *Body*. This contains a set of tabs 
+The bulk of the page is filled with the *Body*. This contains a set of tabs
 (may or may not be copied from BootstrapVue's [tabs example][tabs]) with a
 couple useful panels.
 
@@ -512,7 +512,7 @@ For now the `Terminal` is quite minimal, but later on it'll also include buttons
 and fields for manually sending messages to the motion controller.
 
 ```vue
-// frontend/src/components/Terminal.vue 
+// frontend/src/components/Terminal.vue
 
 <template>
   <div class="console">
@@ -614,7 +614,7 @@ differentiate between the message direction.
 So far we've built a *Communications* system, a *Motion* system and automation
 routines, and we've stubbed out the *User Interface*. For a change, instead of
 spending the entire time in the bowels of our Rust motion controller code, we
-jumped back up the stack and wrote a big chunk of the user-facing frontend. 
+jumped back up the stack and wrote a big chunk of the user-facing frontend.
 
 This isn't uncommon when working in smaller teams. Often implementing a
 feature will require adding a bunch of low-level logic to the embedded

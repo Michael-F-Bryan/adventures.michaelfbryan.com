@@ -3,10 +3,10 @@ title: "Simple Automation Sequences"
 date: "2019-09-14T23:55:00+08:00"
 tags:
 - adventures-in-motion-control
-- rust
+- Rust
 ---
 
-Now we can communicate with the outside world, let's start interacting with the 
+Now we can communicate with the outside world, let's start interacting with the
 "hardware" attached to our motion controller. This will be the beginning of our
 *Motion* system.
 
@@ -16,7 +16,7 @@ home position.
 
 ## System Inputs and Outputs
 
-From our [initial requirements gathering][requirements] we know that our 3D 
+From our [initial requirements gathering][requirements] we know that our 3D
 printer will have three linear axes (X, Y, and Z), with limit switches at the
 ends of each axis. This gives our new *Motion* system six inputs to deal with.
 
@@ -28,7 +28,7 @@ component, and it tells us how many pulses it has sent since the last `poll()`
 of the application.
 
 {{% notice note %}}
-For technical reasons (the browser won't trigger our `App::poll()` more 
+For technical reasons (the browser won't trigger our `App::poll()` more
 frequently than 60Hz) we won't be implementing a "true" stepper motor driver
 component. Instead, we can emulate its behaviour from JavaScript.
 {{% /notice %}}
@@ -84,8 +84,8 @@ trait Outputs {
 One downside of *Velocity Control* is that you have less control over position
 and unless you have specific hardware which provides feedback (e.g. an
 [encoder][encoder]), the only way to know an axis' position is by counting it
-yourself based on time between ticks and the current speed (i.e. 
-`position += velocity*dt`). 
+yourself based on time between ticks and the current speed (i.e.
+`position += velocity*dt`).
 
 Keep in mind that positional accuracy will depend directly on the `poll()`
 frequency. This is one of the big differentiators between realtime systems
@@ -103,7 +103,7 @@ inputs available moving all axes to the end of travel seems logical.
 There are a couple ways we could implement this:
 
 1. Move one axis to its home position at a time
-2. Move all axes simultaneously, stopping each axis when it reaches its 
+2. Move all axes simultaneously, stopping each axis when it reaches its
    corresponding limit in turn
 
 The former would be simpler to implement, but for a small increase in complexity
@@ -121,7 +121,7 @@ while not (at_x_lower_limit and at_y_lower_limit and at_z_lower_limit):
 ## Implementing a *Go To Home* Sequence
 
 There are a couple tricks we'll use to make the implementation if this homing
-sequence easier. 
+sequence easier.
 
 First we'll abstract over the exact type of axis this sequence works on. That
 means it doesn't matter whether we're controlling a stepper motor attached to
@@ -281,7 +281,7 @@ fn actuating_the_lower_limit_completes_the_sequence() {
 ```
 
 We've now got enough tests to implement a basic `MoveAxisHome` sequence. There
-are still a couple edge cases to cover (e.g. what happens if we start the 
+are still a couple edge cases to cover (e.g. what happens if we start the
 sequence on the upper limit?) but they can be an exercise for the reader.
 
 A quick'n'dirty implementation that makes all the tests pass:
@@ -323,7 +323,7 @@ analogy would be the `and_then()` and `join()` combinators commonly used with
 
 The general idea is:
 
-- Create an array of `Option<AutomationSequence>`s 
+- Create an array of `Option<AutomationSequence>`s
 - to implement `AutomationSequence::poll()`, iterate over the sequences, polling
   each sequence that is present
 - If any sequence returns a `Transition::Fault`, halt immediately with that

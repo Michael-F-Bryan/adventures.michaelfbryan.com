@@ -2,7 +2,7 @@
 title: "How to RiiR"
 date: "2019-12-02T01:00:00+08:00"
 tags:
-- rust
+- Rust
 ---
 
 In [a previous article][previous-riir] we've talked about how you can avoid

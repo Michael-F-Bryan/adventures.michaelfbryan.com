@@ -2,7 +2,7 @@
 title: "A Thought Experiment: Using the ECS Pattern Outside of Game Engines"
 date: "2019-12-28T00:00:00+08:00"
 tags:
-- rust
+- Rust
 - ecs
 - architecture
 ---

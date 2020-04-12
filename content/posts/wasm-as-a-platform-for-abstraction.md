@@ -2,7 +2,7 @@
 title: "WebAssembly as a Platform for Abstraction"
 date: "2019-12-15T11:55:00+08:00"
 tags:
-- rust
+- Rust
 - wasm
 ---
 

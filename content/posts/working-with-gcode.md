@@ -3,10 +3,10 @@ title: "Working With G-Code"
 date: "2019-10-18T00:05:00+08:00"
 tags:
 - adventures-in-motion-control
-- rust
+- Rust
 ---
 
-As mentioned in [the previous post][next-step] there are a handful of tasks 
+As mentioned in [the previous post][next-step] there are a handful of tasks
 which may be tackled next, but only one of them really allows us to make progress
 towards our goal of implementing the simulated firmware for a 3D Printer.
 
@@ -14,7 +14,7 @@ Let's send the motion controller some g-code.
 
 ## Creating Message types
 
-If we want to send g-code programs between the frontend and backend we'll need 
+If we want to send g-code programs between the frontend and backend we'll need
 to make a couple message definitions.
 
 ```rust
@@ -127,7 +127,7 @@ function toPacket(request: Request): Packet {
 
 ## Sending the Messages
 
-Now we've got definitions for a `GcodeProgram` message, we'll need a way to 
+Now we've got definitions for a `GcodeProgram` message, we'll need a way to
 construct and send those messages from the frontend to the backend.
 
 Let's add a text input to the `Controls` panel which can be used to send g-code
@@ -182,7 +182,7 @@ export default class Controls extends Vue {
 That's about all the frontend code we'll need to write today. Let's move on to
 the backend.
 
-At the moment, our `Router` isn't letting the `Motion` system know when a 
+At the moment, our `Router` isn't letting the `Motion` system know when a
 `GcodeProgram` message is received. Let's fix that.
 
 
@@ -202,7 +202,7 @@ impl<'a> MessageHandler for Router<'a> {
         }
 ```
 
-To make the compiler happy, we'll implement 
+To make the compiler happy, we'll implement
 `aimc_hal::messaging::Handler<GcodeProgram<'_>>` for `Motion` though using the
 good old `unimplemented!()` macro. We can use the panic message and backtrace as
 a crude sanity check to make sure everything is wired up correctly.
@@ -278,8 +278,8 @@ If you are familiar with parsers, this would be referred to as a *Push
 Parser*. We're notifying the caller of parse results via callbacks that get
 invoked during the parsing process.
 
-An alternative approach is called *Pull Parsing*. This is where the caller 
-will ask the parse for the next item, typically implemented using the 
+An alternative approach is called *Pull Parsing*. This is where the caller
+will ask the parse for the next item, typically implemented using the
 `Iterator` trait.
 
 *Push Parsing* happens to be slightly easier to implement and test in this
@@ -332,7 +332,7 @@ impl Translator {
 ```
 
 Annoyingly, the gcode language is only loosly specified with each vendor using
-their own dialect and associating different meanings to different commands. 
+their own dialect and associating different meanings to different commands.
 
 For our purposes we'll only need to support the most common commands, though.
 
@@ -520,7 +520,7 @@ impl Translator {
 }
 ```
 
-We need a way to notify the caller when a motion is translated, so the 
+We need a way to notify the caller when a motion is translated, so the
 `Callbacks` trait needs a couple more methods.
 
 ```rust
@@ -562,7 +562,7 @@ pub enum Direction {
 }
 ```
 
-From here on out, processing a `GCode` command becomes mostly a mechanical 
+From here on out, processing a `GCode` command becomes mostly a mechanical
 process of:
 
 1. `match`ing on the `Mnemonic`
@@ -645,7 +645,7 @@ impl Translator {
 }
 ```
 
-The dwell command (`G04`) is easiest to handle. It has a single required 
+The dwell command (`G04`) is easiest to handle. It has a single required
 argument, `P`, the time to wait in seconds.
 
 ```rust

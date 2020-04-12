@@ -2,7 +2,7 @@
 title: "Plugins in Rust"
 date: "2019-09-30T22:04:58+08:00"
 tags:
-- rust
+- Rust
 ---
 
 Imagine you are implementing a calculator application and want users to be able
@@ -13,7 +13,7 @@ using [random.org][r-o] instead of the pseudo-random numbers that a crate like
 
 The Rust language gives you a lot of really powerful tools for adding
 flexibility and extensibility to your applications (e.g. traits, enums,
-macros), but all of these happen at compile time. Unfortunately, to get the 
+macros), but all of these happen at compile time. Unfortunately, to get the
 flexibility that we're looking we'll need to be able to add new functionalty at
 runtime.
 
@@ -23,7 +23,7 @@ This can be achieved using a technique called [Dynamic Loading][wiki].
 The code written in this article is available [on GitHub][repo]. Feel free to
 browse through and steal code or inspiration.
 
-If you found this useful or spotted a bug, let me know on the blog's 
+If you found this useful or spotted a bug, let me know on the blog's
 [issue tracker][issue]!
 
 [repo]: https://github.com/Michael-F-Bryan/plugins_in_rust
@@ -53,7 +53,7 @@ Example usage from `man dlopen`:
 #include <stdlib.h>
 #include <dlfcn.h>
 // Defines LIBM_SO (which will be a string such as "libm.so.6")
-#include <gnu/lib-names.h>  
+#include <gnu/lib-names.h>
 
 // the type signature used by our cosine function
 typedef double (*trig_func)(double);
@@ -125,14 +125,14 @@ pub enum InvocationError {
 }
 ```
 
-Now we've defined the application-level API, we also need a way to declare 
-plugins so they're accessible when dynamically loading. This isn't difficult, 
+Now we've defined the application-level API, we also need a way to declare
+plugins so they're accessible when dynamically loading. This isn't difficult,
 but there are a couple gotchas to keep in mind to prevent undesired behaviour
 (UB, crashes, etc.).
 
 Some things to keep in mind:
 
-- Rust doesn't have a stable ABI, meaning different compiler versions can 
+- Rust doesn't have a stable ABI, meaning different compiler versions can
   generate incompatible code, and
 - Different versions of the `core` crate may have different definitions of the
   `Function` trait
@@ -224,7 +224,7 @@ macro_rules! export_plugin {
 
 ## Creating a Plugin
 
-Now we have a public plugin interface and a mechanism for registering new 
+Now we have a public plugin interface and a mechanism for registering new
 plugins, lets actually create one.
 
 First we'll need to create a `plugins_random` crate and add it to the workspace.
@@ -275,21 +275,21 @@ $ cargo build --all
    Compiling plugins_core v0.1.0 (/home/michael/Documents/plugins/core)
    Compiling plugins_random v0.1.0 (/home/michael/Documents/plugins/random)
     Finished dev [unoptimized + debuginfo] target(s) in 1.32s
-$ ls ../target/debug 
+$ ls ../target/debug
 build deps examples incremental libplugins_core.d libplugins_core.rlib
 libplugins_random.d libplugins_random.so
 ```
 
 Now things are set up, we can start implementing our `random()` plugin.
 
-Looking at the [Random Integer Generator][rand-int] page, retrieving a set of 
-random integers is just a case of sending a GET request to 
+Looking at the [Random Integer Generator][rand-int] page, retrieving a set of
+random integers is just a case of sending a GET request to
 `https://www.random.org/integers/`.
 
 For example, to get 10 numbers from 1 to 6 in base 10 and one number per line:
 
 ```console
-$ curl 'https://www.random.org/integers/?num=10&min=1&max=6&col=1&base=10&format=plain' 
+$ curl 'https://www.random.org/integers/?num=10&min=1&max=6&col=1&base=10&format=plain'
 5
 2
 6
@@ -339,7 +339,7 @@ fn fetch(request: RequestInfo) -> Result<f64, InvocationError> {
 ```
 
 To make `?` work nicely, I've also added a `From` impl which lets us create an
-`InvocationError` from anything that is `ToString` (which all 
+`InvocationError` from anything that is `ToString` (which all
 `std::error::Error` types implement).
 
 ```rust
@@ -354,7 +354,7 @@ impl<S: ToString> From<S> for InvocationError {
 }
 ```
 
-Finally, we just need to create a `Random` struct which will implement our 
+Finally, we just need to create a `Random` struct which will implement our
 `Function` interface.
 
 ```rust
@@ -381,7 +381,7 @@ fn random(max: f64) -> f64;
 fn random(min: f64, max: f64) -> f64;
 ```
 
-The logic for turning the `&[f64]` args into a `RequestInfo` can be neatly 
+The logic for turning the `&[f64]` args into a `RequestInfo` can be neatly
 extracted into its own function.
 
 ```rust
@@ -415,7 +415,7 @@ impl Function for Random {
 }
 ```
 
-Now our `random()` function is fully implemented, we just need to make a 
+Now our `random()` function is fully implemented, we just need to make a
 `register()` function and call `plugins_core::export_plugin!()`.
 
 ```rust
@@ -447,8 +447,8 @@ $ cargo add libloading ../core
       Adding plugins_core (unknown version) to dependencies
 ```
 
-When a library is loaded into memory, we need to make sure that it outlives 
-anything created from it. For example, a trait object's vtable (and all the 
+When a library is loaded into memory, we need to make sure that it outlives
+anything created from it. For example, a trait object's vtable (and all the
 functions it points to) is embedded in the library's code. If we tried to invoke
 a plugin object's methods after its parent library was unloaded from memory,
 we'd try to execute garbage and crash the entire application.
@@ -500,7 +500,7 @@ impl ExternalFunctions {
 }
 ```
 
-The `ExternalFunctions::load()` method is the real meat and potatoes of our 
+The `ExternalFunctions::load()` method is the real meat and potatoes of our
 plugin system. It's where we:
 
 1. Load the library into memory
@@ -615,7 +615,7 @@ arguments.
 Usage: app <plugin-path> <function> <args>...
 ```
 
-First we'll create a quick `Args` struct to parse our command-line arguments 
+First we'll create a quick `Args` struct to parse our command-line arguments
 into.
 
 ```rust
@@ -741,7 +741,7 @@ $ cargo run -- ../target/release/libplugins_random.so random 42 64
 random(42, 64) = 54
 
 # Note: the function doesn't support 3 arguments
-$ cargo run -- ../target/release/libplugins_random.so random 1 2 3    
+$ cargo run -- ../target/release/libplugins_random.so random 1 2 3
 thread 'main' panicked at 'Invocation failed: Other { msg: "0, 1, or 2 arguments are required" }', src/libcore/result.rs:1165:5
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace.
 ```
@@ -750,7 +750,7 @@ If a plugin author forgot to invoke the `export_plugin!()` macro, they may see
 an error like this:
 
 ```console
-$ cargo run -- ../target/debug/libplugins_random.so random  
+$ cargo run -- ../target/debug/libplugins_random.so random
     Finished dev [unoptimized + debuginfo] target(s) in 0.02s
      Running `/home/michael/Documents/plugins/target/debug/plugins_app ../target/debug/libplugins_random.so random`
 thread 'main' panicked at 'Function loading failed: Custom { kind: Other, error: "../target/debug/libplugins_random.so: undefined symbol: plugin_declaration" }', src/libcore/result.rs:1165:5
@@ -762,7 +762,7 @@ use the `nm` tool to help with troubleshooting, it shows all symbols exported by
 a library.
 
 ```console
-nm ../target/release/libplugins_random.so  | grep plugin            
+nm ../target/release/libplugins_random.so  | grep plugin
 00000000004967b0 D plugin_declaration
 0000000000056c60 t _ZN12plugins_core8Function4help17hc92b9e8d4917f964E
 0000000000057f60 t _ZN14plugins_random8register17hd43ebfdd726021a4E

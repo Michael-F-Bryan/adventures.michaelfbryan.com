@@ -2,7 +2,7 @@
 title: "Implementing ArrayVec Using Const Generics"
 date: "2019-11-15T00:57:00+08:00"
 tags:
-- rust
+- Rust
 ---
 
 If you've ever done much embedded programming in Rust, you've most probably run
@@ -24,7 +24,7 @@ this neat feature on *nightly* at the moment called [*"Const Generics"*][cg]...
     src="https://imgs.xkcd.com/comics/nerd_sniping.png"
     link="https://xkcd.com/356/"
     caption="(obligatory XKCD reference)"
-    alt="Nerd Sniping" 
+    alt="Nerd Sniping"
 >}}
 
 {{% notice note %}}

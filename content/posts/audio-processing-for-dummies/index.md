@@ -2,7 +2,7 @@
 title: "Audio Processing for Dummies"
 date: "2019-10-27T23:34:00+08:00"
 tags:
-- rust
+- Rust
 - audio
 ---
 
@@ -23,7 +23,7 @@ The code written in this article is available [on GitHub][repo]. Feel free to
 browse through and steal code or inspiration. It's also been published as a
 crate [on crates.io][crate].
 
-If you found this useful or spotted a bug, let me know on the blog's 
+If you found this useful or spotted a bug, let me know on the blog's
 [issue tracker][issue]!
 
 [repo]: https://github.com/Michael-F-Bryan/noise-gate
@@ -33,7 +33,7 @@ If you found this useful or spotted a bug, let me know on the blog's
 
 ## What Even Is Audio?
 
-We've all consumed audio media at some point, but have you ever stopped and 
+We've all consumed audio media at some point, but have you ever stopped and
 wondered how it works under the hood?
 
 At its core, audio works by rapidly reading the volume level (a "sample"),
@@ -58,7 +58,7 @@ membrane is deflected at a particular point in time.
 It's not uncommon to record multiple audio tracks at a time, for example
 imagine multiple microphones were used to provide a sense of
 direction/perspective (see [Sound Localisation][sl] for more). These multiple
-tracks are usually referred to as *Channels*. 
+tracks are usually referred to as *Channels*.
 
 **TL;DR:** In Rust lingo, you can think of an audio stream as:
 
@@ -95,11 +95,11 @@ full clip = 30 * sizeof(1 second) = 5292000 bytes = 5.3 MB
 If we want to implement a noise gate we're going to need some sample clips to
 test it on.
 
-I've found the Air Traffic Controller recordings from [LiveATC.net][lan] are 
+I've found the Air Traffic Controller recordings from [LiveATC.net][lan] are
 reasonably similar to my target, with the added bonus that they're publicly
 available.
 
-One example: 
+One example:
 
 <audio controls>
   <source src="a-turtle-of-an-issue.mp3" type="audio/mp3">
@@ -125,7 +125,7 @@ $ ffmpeg -i a-turtle-of-an-issue.mp3 -ac 1 a-turtle-of-an-issue.wav
 For now, our *Noise Gate* will have two knobs for tweaking its behaviour:
 
 - `open_threshold` - the (absolute) noise value above which the gate should open
-- `release_time` - how long to hold the gate open after dropping below the 
+- `release_time` - how long to hold the gate open after dropping below the
   `open_threshold`. This will manifest itself as the gate being in a sort of
   half-open state for the next `release_time` samples, where new samples
   above the `open_threshold` will re-open the gate.
@@ -166,7 +166,7 @@ We'll be using some abstractions, namely [`Frame`][frame] and
 [`Sample`][sample] from the [`sample` crate][sample-crate], to make the
 *Noise Gate* work with multiple channels and any type of audio input.
 
-Let's define a helper which will take a `Frame` of audio input and tell us 
+Let's define a helper which will take a `Frame` of audio input and tell us
 whether all audio channels are below a certain threshold.
 
 ```rust
@@ -197,7 +197,7 @@ fn abs<S: SignedSample>(sample: S) -> S {
 }
 ```
 
-The `State` transitions are done using one big `match` statement and are almost 
+The `State` transitions are done using one big `match` statement and are almost
 a direct translation of the previous state machine diagram.
 
 ```rust
@@ -384,7 +384,7 @@ impl<S: Sample> NoiseGate<S> {
 ## Measuring Performance
 
 If we want to use the `NoiseGate` in realtime applications we'll need to make
-sure it can handle typical sample rates. 
+sure it can handle typical sample rates.
 
 I don't expect our algorithm to add much in terms of a performance overhead, but
 it's always a good idea to check.
@@ -425,8 +425,8 @@ impl<F> Sink<F> for Counter {
 }
 ```
 
-We've already downloaded a handful of example WAV files to the `data/` 
-directory, so we can register a new benchmark group (a group of related 
+We've already downloaded a handful of example WAV files to the `data/`
+directory, so we can register a new benchmark group (a group of related
 benchmarks which should be graphed together) and register a benchmark for every
 WAV file in the `data/` directory.
 
@@ -452,7 +452,7 @@ fn bench_throughput(c: &mut Criterion) {
 
 The setup work for each WAV file benchmark is non-trivial, so we've pulled it
 out into its own function. To set things up we'll use [`hound`][hound] to read
-the entire audio clip into a `Vec<[i16; 1]>` in memory and guess a reasonable 
+the entire audio clip into a `Vec<[i16; 1]>` in memory and guess a reasonable
 `release_time` and `noise_threshold`.
 
 Then it's just a case of telling the `BenchmarkGroup` how many samples we're
@@ -520,7 +520,7 @@ criterion_main!(benches);
 These are the WAV files I've downloaded to the `data/` directory:
 
 ```console
-$ ls -l data 
+$ ls -l data
 .rw-r--r-- 1.6M michael 27 Oct 21:21 a-turtle-of-an-issue.wav
 .rw-r--r-- 4.2M michael 27 Oct 21:17 KBDL-B17-Tribute-20191005.wav
 .rw-r--r-- 7.6M michael 27 Oct 21:17 N11379_KSCK.wav
@@ -539,7 +539,7 @@ $ cargo bench
      Running target/release/deps/throughput-dbdb305fc8a0e002
 Benchmarking throughput/a-turtle-of-an-issue: Warming up for 3.0000 s
 Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 37.5s or reduce sample count to 20
-throughput/a-turtle-of-an-issue                                                                             
+throughput/a-turtle-of-an-issue
                         time:   [7.0509 ms 7.1617 ms 7.2892 ms]
                         thrpt:  [113.14 Melem/s 115.15 Melem/s 116.96 Melem/s]
                  change:
@@ -568,7 +568,7 @@ We're now at the point where we have a fully implemented *Noise Gate*. Let's
 create an example program for splitting WAV files and see what happens when
 we point it at our sample data!
 
-Even though it's an example, we should probably implement proper command-line 
+Even though it's an example, we should probably implement proper command-line
 argument handling to make experimentation easier. By far the easiest way to
 do this is with [the structopt crate][structopt].
 
@@ -605,7 +605,7 @@ pub struct Args {
 }
 ```
 
-Now we'll need a `Sink` type. The general idea is every time the `record()` 
+Now we'll need a `Sink` type. The general idea is every time the `record()`
 method is called we'll write another frame to a cached `hound::WavWriter`. If
 the `WavWriter` doesn't exist we'll need to create a new one which writes to
 a file named like `output_dir/clip_1.wav`. An `end_of_transmission()` tells
@@ -711,7 +711,7 @@ acceptible for this audio, but I figure `50` and `0.3s` should be usable?
 
 ```console
 $ ./target/release/examples/wav-splitter -o output --threshold 50 --release-time 0.3 data/N11379_KSCK.wav
-$ ls output   
+$ ls output
 clip_0.wav clip_3.wav clip_6.wav clip_9.wav clip_12.wav clip_15.wav
 clip_18.wav clip_21.wav clip_1.wav clip_4.wav clip_7.wav clip_10.wav
 clip_13.wav clip_16.wav clip_19.wav clip_22.wav clip_2.wav clip_5.wav

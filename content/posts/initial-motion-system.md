@@ -3,7 +3,7 @@ title: "Initial Motion System"
 date: "2019-09-18T20:00:00+08:00"
 tags:
 - adventures-in-motion-control
-- rust
+- Rust
 ---
 
 Now we've got [some simple automation][previous] code, lets start a proper
@@ -64,7 +64,7 @@ graph LR;
 
 You may also notice that a lot of the transitions are in response to a message
 from the user via our *Communications* system. This means we'll end up declaring
-several new message types and handle them using the 
+several new message types and handle them using the
 `aimc_hal::messaging::Handler` trait.
 
 For now, we can keep things simple with just a set of `GoHome` and `AbortMotion`
@@ -74,7 +74,7 @@ time.
 
 ## Implementation
 
-In its current form, the *Motion* system is rather simple. We haven't 
+In its current form, the *Motion* system is rather simple. We haven't
 implemented recipes or manual motion yet, so the only states are `Idle` and
 `Home` (our only automation sequence).
 
@@ -97,7 +97,7 @@ impl<L: Limits, A: Axes> System<L, A> for Motion {
             ControlMode::Home(ref mut home) => match home.poll(inputs, outputs) {
                 Transition::Complete => {
                     self.control_mode = ControlMode::Idle
-                } 
+                }
                 Transition::Fault(_) => {
                     // TODO: we should probably do something about this fault...
                     self.control_mode = ControlMode::Idle
@@ -159,7 +159,7 @@ where
 {{% notice note %}}
 Because `Motion` will need to return a `Result<Ack, Nack>`, we've had to update
 the `dispatch()` helper so we can manually specify the function for turning
-`H::Response` back into a `Packet`. 
+`H::Response` back into a `Packet`.
 
 Previously it would always just use `response.into()`, but for the `Motion`
 we want to use `map_result()` instead.
@@ -169,7 +169,7 @@ though, we may want to revisit it in the future and try to make things less
 clever...
 {{% /notice %}}
 
-The `Motion` system is now part of our application state, so we'll also need to 
+The `Motion` system is now part of our application state, so we'll also need to
 update the `App` appropriately.
 
 ```rust
@@ -198,7 +198,7 @@ impl App {
 
 To actually handle the `StartHomingSequence` message and switch to the `Home`
 control mode we'll need to remember how the machine is wired up (e.g. axis
-numbers and speeds). 
+numbers and speeds).
 
 This requires adding a new `MotionParameters` struct to the `Motion` system.
 Later on we'll let the user configure the motion parameters, but for now it's
@@ -276,7 +276,7 @@ We've got one big problem though...
 This is a simulation that runs in the browser and at the moment all we can see
 is a white screen with a rapidly changing [FPS Counter][fps-counter] in one
 corner. There's currently no way to interact with our simulator, set motion
-parameters, or even see what it's doing. 
+parameters, or even see what it's doing.
 
 That'll be our goal for next time.
 

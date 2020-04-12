@@ -3,10 +3,10 @@ title: "Bring Your Own Sync"
 date: "2019-11-23T00:39:31+08:00"
 draft: true
 tags:
-- rust
+- Rust
 ---
 
-The other day I was looking through *The Rust Nomicon* and came across 
+The other day I was looking through *The Rust Nomicon* and came across
 [this page][nomicon]:
 
 > **Implementing Arc and Mutex**
