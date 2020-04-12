@@ -81,6 +81,16 @@ I figure the best course of action here is to just copy what `lpass` do. If
 my code generates byte-for-byte identical input and output, we should be as
 secure as `lpass` 🤷‍
 
+{{% notice warning %}}
+If you've read this far hopefully you've realised this isn't one of those
+*"LastPass is broken!"* posts. I'm just reverse-engineering how the `lpass`
+program works so I can implement it myself.
+
+If anything, after spending several hours banging my head against a wall and
+trying to figure out why things weren't working, I can assure you that the
+crypto used by LastPass does a pretty good job at keeping people out.
+{{% /notice %}}
+
 ## Baby Steps
 
 <!--
@@ -136,13 +146,18 @@ secure as `lpass` 🤷‍
 
 ## Conclusions
 
-Oh, and I'm still working on [my dotfiles script][install-py] by the way.
+I enjoyed playing around with crypto again, even though I barely went further
+than passing around keys and calling library functions, it's a big difference
+to the code I write at my day job.
 
-I know it's massively over-engineered (after all, there's no kill like
-overkill), but it's quite liberating to know that hitting a single button is
-enough to install all the software I need, set up the correct keys and config
-files, and apply little tweaks like a udev rule for rearranging my windows
-and workspaces when the second monitor is plugged in.
+I'm also surprised at how easy this was to implement. Rust has a really nice
+ecosystem, and thanks to the work of projects like [`serde`][serde],
+[`reqwest`][reqwest], and [RustCrypto][rust-crypto], I have all the necessary
+pieces at my fingertips. The hardest bit was deciphering the `blob` parsing
+code, and that's because it was written in C.
+
+Oh, and I'm still working on [my dotfiles script][install-py] by the way.
+It's massively over-engineered, but there's no kill like overkill, after all.
 
 {{% notice note %}}
 Also I'd be keen to hear from you if you are a developer from LastPass! What
@@ -163,3 +178,4 @@ out on that front.
 [serde]: https://serde.rs/
 [aes]: https://crates.io/crates/aes
 [pbkdf2]: https://crates.io/crates/pbkdf2
+[rust-crypto]: https://github.com/RustCrypto
