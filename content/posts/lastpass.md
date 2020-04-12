@@ -47,6 +47,9 @@ with a LastPass vault. Although, in the short term I'm going to make a beeline
 for downloading and decrypting attachments, seeing as that was the original
 inspiration for this endeavour.
 
+Someone may want to create a nice command-line tool on top of the library, but
+I don't have any intention of being that someone (for now, anyways).
+
 I've also got a lot of experience writing FFI code, so I'm intending to write
 bindings so the library is usable from Python (my dotfiles install script is
 written in Python) and C. I might wait a bit to flesh out the crate's API
@@ -80,13 +83,56 @@ secure as `lpass` 🤷‍
 
 ## Baby Steps
 
+<!--
+    TODO: write about
+    - Download the lastpass/lastpass-cli source code
+    - Find how you log in
+    - Backtrack to something easier
+    - Implement logging out
+-->
+
 ## Creating an Abstraction for Key Management
+
+<!--
+    TODO: write about
+    - what keys are needed to log in?
+    - how do I get the iteration count?
+    - generate a login key
+    - generate a decryption key
+    - implement decryption routines for DecryptionKey
+ -->
 
 ## Logging In
 
+<!--
+    TODO: write about
+    - Create the login key
+    - construct+send the post request
+    - parse the results into a session
+    - decode the private key
+-->
+
 ## Parsing the Vault Into Memory
+<!--
+    TODO: write about
+    - grab a copy of the vault
+    - what are chunks?
+    - what's with the big if-else chain?
+    - parsing account info
+    - parsing attachment metadata
+ -->
 
 ## Downloading Attachments
+<!--
+    TODO: write about
+    - download the attachment
+    - decrypting the filename
+    - decrypting the account's attachment key
+    - using the attachment key to decode the attachment
+    - turn it back into binary (from base64)
+    - put it all together in an example application
+ -->
+
 
 ## Conclusions
 
@@ -97,6 +143,16 @@ overkill), but it's quite liberating to know that hitting a single button is
 enough to install all the software I need, set up the correct keys and config
 files, and apply little tweaks like a udev rule for rearranging my windows
 and workspaces when the second monitor is plugged in.
+
+{{% notice note %}}
+Also I'd be keen to hear from you if you are a developer from LastPass! What
+are your thoughts on my efforts? Has the analysis been accurate, and can you
+spot any bugs or issues?
+
+I feel like having an official library that lets developers work with the
+LastPass API can enable a lot of benefits for customers, and I'd like to help
+out on that front.
+{{% /notice %}}
 
 [dotfiles]: https://github.com/Michael-F-Bryan/dotfiles
 [lastpass-cli]: https://github.com/lastpass/lastpass-cli
