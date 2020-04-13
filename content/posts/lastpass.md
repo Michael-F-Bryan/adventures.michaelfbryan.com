@@ -1850,15 +1850,26 @@ pub enum VaultParseError {
 
 ## Conclusions
 
-I enjoyed playing around with crypto again, even though I barely went further
-than passing around keys and calling library functions, it's a big difference
-to the code I write at my day job.
+Sorry if it took a while to get to the end. It turns out reading through the
+source code for a 15,000-line C program and explaining how my 2,000-line Rust
+implementation works takes a while...
 
-I'm also surprised at how easy this was to implement. Rust has a really nice
-ecosystem, and thanks to the work of projects like [`serde`][serde],
-[`reqwest`][reqwest], and [RustCrypto][rust-crypto], I have all the necessary
-pieces at my fingertips. The hardest bit was deciphering the `blob` parsing
-code, and that's because it was written in C.
+It was fun to play around with crypto again, even if I barely went further
+than passing around keys and calling library functions. I'm no cartographer,
+but it seems like the LastPass system has been pretty well designed.
+
+I'm also pleasantly surprised at how easy this was to implement. Rust has a
+really nice ecosystem, and thanks to the work of projects like
+[`serde`][serde], [`reqwest`][reqwest], and [RustCrypto][rust-crypto], I have
+all the necessary pieces at my fingertips. You'd hardly notice that
+async-await was only stabilised relatively recently.
+
+The hardest bit was actually deciphering the `blob` parsing code, and that's
+because it was written in C and the lack of existing unit tests meant I spent
+a fair amount of time running `lpass` under the debugger to see what certain
+values are meant to be. It's not a deal breaker, but you'd think a C program
+for accessing your passwords and bank account details would have some sort of
+unit testing or input fuzzing...
 
 {{% notice note %}}
 I'd be keen to hear from you if you are a developer from LastPass! What are
