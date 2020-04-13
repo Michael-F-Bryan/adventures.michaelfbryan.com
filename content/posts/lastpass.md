@@ -1516,14 +1516,325 @@ impl Parser {
 }
 ```
 
-<!--
-    TODO: write about
-    - grab a copy of the vault
-    - what are chunks?
-    - what's with the big if-else chain?
-    - parsing account info
-    - parsing attachment metadata
- -->
+Let's have a think about what we'll need to write the `parse_account()`
+function.
+
+In LastPass parlance, an `Account` is the fundamental unit in the vault.
+These are used to represent things like account credentials (e.g. username
+and password), it lets you attach a URL so you can quickly jump to the
+website, you can have notes (a free-form string), attached files, and much
+more.
+
+As I've coded it, an `Account` looks something like this:
+
+```rust
+// src/account.rs
+
+use crate::{Attachment, DecryptionError, DecryptionKey, Id};
+use url::Url;
+
+/// A single entry, typically a password or address.
+pub struct Account {
+    pub id: Id,
+    /// The account's name.
+    pub name: String,
+    /// Which group the account is in (think of it like a directory).
+    pub group: String,
+    /// The URL associated with this account.
+    pub url: Url,
+    /// Any notes that may be attached.
+    pub note: String,
+    pub note_type: String,
+    /// Did the user mark this [`Account`] as a favourite?
+    pub favourite: bool,
+    /// The associated username.
+    pub username: String,
+    /// The associated password.
+    pub password: String,
+    /// Should we prompt for the master password before showing details to the
+    /// user?
+    pub password_protected: bool,
+    /// An encrypted copy of the key used to decode this [`Account`]'s
+    /// attachments.
+    pub encrypted_attachment_key: String,
+    /// Does this account have any [`Attachment`]s?
+    pub attachment_present: bool,
+    pub last_touch: String,
+    pub last_modified: String,
+    /// Files which may be attached to this [`Account`].
+    pub attachments: Vec<Attachment>,
+}
+
+
+// src/attachment.rs
+
+/// Metadata about an attached file.
+pub struct Attachment {
+    pub id: Id,
+    /// The ID of the parent [`Account`].
+    pub parent: Id,
+    /// The file's mimetype.
+    pub mime_type: String,
+    /// An opaque string which is used by the backend to find the correct
+    /// version of an attached file.
+    pub storage_key: String,
+    /// The size of the attachment, in bytes.
+    pub size: u64,
+    /// The attachment's filename, encrypted using the account's
+    /// `attachment_key`.
+    pub encrypted_filename: String,
+}
+```
+
+Like a lot of core business objects tend to do, you can see the `Account` has
+grown a large number of fields over the years.
+
+To help handle the monotony of parsing dozens of fields, `lastpass-cli` has
+introduced a couple helper macros and functions.
+
+```c
+// vendor/lastpass-cli/blob.c
+
+static bool read_item(struct chunk *chunk, struct item *item) { ... }
+
+static char *read_hex_string(struct chunk *chunk) { ... }
+
+static char *read_plain_string(struct chunk *chunk) { ... }
+
+static char *read_crypt_string(struct chunk *chunk,
+                               const unsigned char key[KDF_HASH_LEN],
+                               char **stored_base64) { ... }
+
+static int read_boolean(struct chunk *chunk) { ... }
+
+#define entry_plain_at(base, var) do { \
+	char *__entry_val__ = read_plain_string(chunk); \
+	if (!__entry_val__) \
+		goto error; \
+	base->var = __entry_val__; \
+	} while (0)
+#define entry_plain(var) entry_plain_at(parsed, var)
+#define entry_hex_at(base, var) do { \
+	char *__entry_val__ = read_hex_string(chunk); \
+	if (!__entry_val__) \
+		goto error; \
+	base->var = __entry_val__; \
+	} while (0)
+#define entry_hex(var) entry_hex_at(parsed, var)
+#define entry_boolean(var) do { \
+	int __entry_val__ = read_boolean(chunk); \
+	if (__entry_val__ < 0) \
+		goto error; \
+	parsed->var = __entry_val__; \
+	} while (0)
+#define entry_crypt_at(base, var) do { \
+	char *__entry_val__ = read_crypt_string(chunk, key, &base->var##_encrypted); \
+	if (!__entry_val__) \
+		goto error; \
+	base->var = __entry_val__; \
+	} while (0)
+#define entry_crypt(var) entry_crypt_at(parsed, var)
+#define skip(placeholder) do { \
+	struct item skip_item; \
+	if (!read_item(chunk, &skip_item)) \
+		goto error; \
+	} while (0)
+```
+
+The only non-trivial helper is `read_crypt_string()`, the equivalent of our
+`DecodeKey::decode()`. The rest just pop the next item from a `Chunk` and
+parse it into the desired format.
+
+From here, we can see how the `account_parse()` function is implemented. It's
+not complicated per-se, just long.
+
+```c
+// vendor/lastpass-cli/blob.c
+
+static struct account *account_parse(struct chunk *chunk, const unsigned char key[KDF_HASH_LEN])
+{
+	struct account *parsed = new_account();
+
+	entry_plain(id);
+	entry_crypt(name);
+	entry_crypt(group);
+	entry_hex(url);
+	entry_crypt(note);
+	entry_boolean(fav);
+	skip(sharedfromaid);
+	entry_crypt(username);
+	entry_crypt(password);
+	entry_boolean(pwprotect);
+	skip(genpw);
+	skip(sn);
+	entry_plain(last_touch);
+	skip(autologin);
+	skip(never_autofill);
+	skip(realm_data);
+	skip(fiid);
+	skip(custom_js);
+	skip(submit_id);
+	skip(captcha_id);
+	skip(urid);
+	skip(basic_auth);
+	skip(method);
+	skip(action);
+	skip(groupid);
+	skip(deleted);
+	entry_plain(attachkey_encrypted);
+	entry_boolean(attachpresent);
+	skip(individualshare);
+	skip(notetype);
+	skip(noalert);
+	entry_plain(last_modified_gmt);
+	skip(hasbeenshared);
+	skip(last_pwchange_gmt);
+	skip(created_gmt);
+	skip(vulnerable);
+
+	if (parsed->name[0] == 16)
+		parsed->name[0] = '\0';
+	if (parsed->group[0] == 16)
+		parsed->group[0] = '\0';
+
+	if (strlen(parsed->attachkey_encrypted)) {
+		parsed->attachkey = cipher_aes_decrypt_base64(
+			parsed->attachkey_encrypted, key);
+	}
+	if (!parsed->attachkey)
+		parsed->attachkey = xstrdup("");
+
+	/* use name as 'fullname' only if there's no assigned group */
+	if (strlen(parsed->group) &&
+	    (strlen(parsed->name) || account_is_group(parsed)))
+		xasprintf(&parsed->fullname, "%s/%s", parsed->group, parsed->name);
+	else
+		parsed->fullname = xstrdup(parsed->name);
+
+	return parsed;
+
+error:
+	account_free(parsed);
+	return NULL;
+}
+```
+
+Our `parse_account()` function looks quite similar, although deciding to just
+use helper functions and not macros means it's more visually cluttered.
+
+```rust
+
+pub(crate) fn parse_account(
+    buffer: &[u8],
+    decryption_key: &DecryptionKey,
+) -> Result<Account, VaultParseError> {
+    let (id, buffer) = read_parsed(buffer, "account.id")?;
+    let (name, buffer) = read_encrypted(buffer, "account.name", decryption_key)?;
+    let (group, buffer) = read_encrypted(buffer, "account.group", decryption_key)?;
+    let (url, buffer) = read_hex_string(buffer, "account.url")?;
+    let (note, buffer) = read_encrypted(buffer, "account.note", &decryption_key)?;
+    let (fav, buffer) = read_bool(buffer, "account.fav")?;
+    let buffer = skip(buffer, "account.sharedfromaid")?;
+    let (username, buffer) = read_encrypted(buffer, "account.username", decryption_key)?;
+    let (password, buffer) = read_encrypted(buffer, "account.password", decryption_key)?;
+    let (password_protected, buffer) = read_bool(buffer, "account.pwprotect")?;
+    let buffer = skip(buffer, "account.genpw")?;
+    let buffer = skip(buffer, "account.sn")?;
+    let (last_touch, buffer) = read_str_item(buffer, "account.last_touch")?;
+    let buffer = skip(buffer, "account.autologin")?;
+    let buffer = skip(buffer, "account.never_autofill")?;
+    let buffer = skip(buffer, "account.realm_data")?;
+    let buffer = skip(buffer, "account.fiid")?;
+    let buffer = skip(buffer, "account.custom_js")?;
+    let buffer = skip(buffer, "account.submit_id")?;
+    let buffer = skip(buffer, "account.captcha_id")?;
+    let buffer = skip(buffer, "account.urid")?;
+    let buffer = skip(buffer, "account.basic_auth")?;
+    let buffer = skip(buffer, "account.method")?;
+    let buffer = skip(buffer, "account.action")?;
+    let buffer = skip(buffer, "account.groupid")?;
+    let buffer = skip(buffer, "account.deleted")?;
+    let (attachkey_encrypted, buffer) = read_str_item(buffer, "account.attachkey_encrypted")?;
+    let (attachment_present, buffer) = read_bool(buffer, "account.attachpresent")?;
+    let buffer = skip(buffer, "account.individualshare")?;
+    let (note_type, buffer) = read_str_item(buffer, "account.notetype")?;
+    let buffer = skip(buffer, "account.noalert")?;
+    let (last_modified_gmt, buffer) = read_str_item(buffer, "account.last_modified_gmt")?;
+    let buffer = skip(buffer, "account.hasbeenshared")?;
+    let buffer = skip(buffer, "account.last_pwchange_gmt")?;
+    let buffer = skip(buffer, "account.created_gmt")?;
+    let buffer = skip(buffer, "account.vulnerable")?;
+
+    let _ = buffer;
+
+    Ok(Account {
+        id,
+        name,
+        username,
+        password,
+        password_protected,
+        note: note.to_string(),
+        note_type: note_type.to_string(),
+        last_touch: last_touch.to_string(),
+        encrypted_attachment_key: attachkey_encrypted.to_string(),
+        attachment_present,
+        favourite: fav,
+        group,
+        last_modified: last_modified_gmt.to_string(),
+        url: Url::parse(&url).map_err(|e| VaultParseError::BadParse {
+            field: "account.url",
+            inner: Box::new(e),
+        })?,
+        attachments: Vec::new(),
+    })
+}
+```
+
+{{% notice note %}}
+You may have noticed that each helper function is passed a string with the
+field name. That comes about because I'm trying to give really clear error
+messages when things go wrong (that way they're easier to debug), so instead of
+saying *"unable to parse the vault"*, we'll be able to say something more useful
+like *"Unable to decrypt account.password"*).
+
+This is the full declaration for `VaultParseError`. You'll notice we're using
+[`thiserror`][thiserror] to automatically derive `std::fmt::Display` and make
+sure things like `Error::source()` will return the underlying issue if one is
+present.
+
+```rust
+// src/parser.rs
+
+/// Errors that can happen when parsing a [`Vault`] from raw bytes.
+#[derive(Debug, thiserror::Error)]
+pub enum VaultParseError {
+    #[error("The \"{}\" chunk should contain a UTF-8 string", name)]
+    ChunkShouldBeString {
+        name: String,
+        #[source]
+        inner: Utf8Error,
+    },
+    #[error("Parsing didn't find, {}", name)]
+    MissingField { name: &'static str },
+    #[error("Reached the end of input while looking for {}", expected_field)]
+    UnexpectedEOF { expected_field: &'static str },
+    #[error("Unable to decrypt {}", field)]
+    UnableToDecrypt {
+        field: &'static str,
+        #[source]
+        inner: DecryptionError,
+    },
+    #[error("Parsing the {} field failed", field)]
+    BadParse {
+        field: &'static str,
+        #[source]
+        inner: Box<dyn Error + Send + Sync + 'static>,
+    },
+}
+```
+
+[thiserror]: https://crates.io/crates/thiserror
+{{% /notice %}}
 
 ## Downloading Attachments
 <!--
