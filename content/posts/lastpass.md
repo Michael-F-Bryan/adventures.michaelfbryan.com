@@ -396,7 +396,7 @@ async fn main() -> Result<(), Error> {
         .cookie_store(true)
         .build()?;
 
-    endpoints::login(
+    let session = endpoints::login(
         &client,
         "lastpass.com",
         "my-test-account@example.com",
@@ -404,6 +404,8 @@ async fn main() -> Result<(), Error> {
         100100,
     )
     .await?;
+
+    println!("Logged in as my-test-account@example.com {:#?}", session);
 
     Ok(())
 }
@@ -443,7 +445,7 @@ back a big blob of XML.
        save_a_site_otp="1" site_feedback="1" omar_vault_migration="0" account_version_tracking=""
        blob_version_set="1" yubikeyenabled="0" googleauthenabled="1" microsoftauthenabled="0"
        outofbandenabled="0" serverts="1586587085100000" iconsversion="85" isadmin="0"
-       lpusername="michaelfbryan@gmail.com" email="michaelfbryan@gmail.com" loglogins="1"
+       lpusername="my-test-account@example.com" email="my-test-account@example.com" loglogins="1"
        client_enc="1" accts_version="198"
        pwdeckey="PASSWORDDECODEKEY"
        hih="0" genh="0" addh="0" seclvl="0" updated_enc="1"
@@ -608,6 +610,20 @@ fn interpret_response(root: Root) -> Result<Session, LoginError> {
 }
 ```
 
+Running the test program shows we've got an actual session.
+
+```console
+$ cargo run
+Logged in as my-test-account@example.com Session {
+    uid: "123456789",
+    token: "X3BYcEFjRDFZYlRoVG42r1kTj/UvbBGar2zRpDXgzQyIbQpCMkocUHSFS3AMt3duyU4=",
+    private_key: "DEADBEEFCAFEBABE",
+    session_id: "3d,UxdQVzFSznYkCXfYXabP2Bw8",
+}
+```
+
+Success!
+
 While it may seem like we've written a lot of code our quick'n'dirty login
 function, complete with error handling code (which I've skipped for simplicity),
 and a test program, only took about 100 lines of Rust.
@@ -625,14 +641,519 @@ you need to [implement your own doubly-linked list][doubly-linked-list].
 
 ## Creating an Abstraction for Key Management
 
-<!--
-    TODO: write about
-    - what keys are needed to log in?
-    - how do I get the iteration count?
-    - generate a login key
-    - generate a decryption key
-    - implement decryption routines for DecryptionKey
- -->
+Now that we're able to log in, let's start getting rid of those hard-coded
+values.
+
+### Login Keys
+
+The first thing I'd like to do is create a `LoginKey`. After a little digging,
+it looks like we use `kdf_login_key()` to derive the login key based on the
+user's username and master password.
+
+```c
+// vendor/lastpass-cli/kdf.c
+
+void kdf_login_key(const char *username, const char *password, int iterations, char hex[KDF_HEX_LEN])
+{
+	unsigned char hash[KDF_HASH_LEN];
+	size_t password_len;
+	_cleanup_free_ char *user_lower = xstrlower(username);
+
+	password_len = strlen(password);
+
+	if (iterations < 1)
+		iterations = 1;
+
+	if (iterations == 1) {
+		sha256_hash(user_lower, strlen(user_lower), password, password_len, hash);
+		bytes_to_hex(hash, &hex, KDF_HASH_LEN);
+		sha256_hash(hex, KDF_HEX_LEN - 1, password, password_len, hash);
+	} else {
+		pbkdf2_hash(user_lower, strlen(user_lower), password, password_len, iterations, hash);
+		pbkdf2_hash(password, password_len, (char *)hash, KDF_HASH_LEN, 1, hash);
+	}
+
+	bytes_to_hex(hash, &hex, KDF_HASH_LEN);
+	mlock(hex, KDF_HEX_LEN);
+}
+```
+
+Now we can see that the `iterations` parameter is used by [PBKDF2][pbkdf2] to
+increase the number of times the hash is applied, allowing the algorithm to
+scale as hardware gets faster.
+
+As a special case, when `iterations <= 1` we do two passes through SHA-256.
+This looks like a backwards compatibility thing, where the `LoginKey` used by
+older servers or accounts was computed using SHA-256 and they later
+transitioned to PBKDF2 for increased security.
+
+Looking through the source code we can see that a login key is `KDF_HASH_LEN`
+bytes long, or about 64 bytes + 1 for a null terminator.
+
+```c
+// /usr/include/openssl/sha.h
+
+# define SHA256_DIGEST_LENGTH    32
+
+
+// vendor/lastpass-cli/kdf.h
+
+#include <openssl/sha.h>
+
+#define KDF_HASH_LEN SHA256_DIGEST_LENGTH
+#define KDF_HEX_LEN (KDF_HASH_LEN * 2 + 1)
+```
+
+This tells us enough to define a `LoginKey`. For now it's just a newtype around
+a `[u8; 64]` array.
+
+```rust
+// src/keys/login_key.rs
+
+/// A hex-encoded hash of the username and password.
+pub struct LoginKey([u8; LoginKey::LEN]);
+
+const KDF_HASH_LEN: usize = 32;
+
+impl LoginKey {
+    pub const LEN: usize = KDF_HASH_LEN * 2;
+}
+```
+
+You can create a `LoginKey` using the `LoginKey::calculate()` constructor. This
+just defers to `LoginKey::sha256()` and `LoginKey::pbkdf2()` based on the number
+of iterations.
+
+```rust
+// src/keys/login_key.rs
+
+impl LoginKey {
+    ...
+
+    /// Calculate a new [`LoginKey`].
+    pub fn calculate(
+        username: &str,
+        password: &str,
+        iterations: usize,
+    ) -> Self {
+        let username = username.to_lowercase();
+
+        if iterations <= 1 {
+            LoginKey::sha256(&username, password)
+        } else {
+            LoginKey::pbkdf2(&username, password, iterations)
+        }
+    }
+
+    fn sha256(username: &str, password: &str) -> Self { unimplemented!() }
+
+    fn pbkdf2(username: &str, password: &str, iterations: usize) -> Self { unimplemented!() }
+}
+```
+
+I'll start with the `LoginKey::sha256()` constructor because that seems easiest,
+so let's have a look at the `sha256_hash()` function used by `lastpass-cli`.
+
+```rust
+// vendor/lastpass-cli/kdf.c
+
+static void sha256_hash(const char *username, size_t username_len, const char *password, size_t password_len, unsigned char hash[KDF_HASH_LEN])
+{
+	SHA256_CTX sha256;
+
+	if (!SHA256_Init(&sha256))
+		goto die;
+	if (!SHA256_Update(&sha256, username, username_len))
+		goto die;
+	if (!SHA256_Update(&sha256, password, password_len))
+		goto die;
+	if (!SHA256_Final(hash, &sha256))
+		goto die;
+	return;
+
+die:
+	die("Failed to compute SHA256 for %s", username);
+}
+```
+
+Seems fair enough, it'll generate a hash of the `username + password`, then
+hash that with the password.
+
+I don't particularly want to implement any of this myself myself, so let's pull
+in a couple crates:
+
+- [`sha2`][sha2] - for the SHA-256 algorithm
+- [`digest`][digest] - the `digest::Digest` trait comes from the
+  [RustCrypto][rust-crypto] project and is used to implement generic
+  cryptographic hash functions
+- [`hex`][hex] - for converting bytes to their hexadecimal representation and
+  back again
+
+And then we can implement `LoginKey::sha256()`.
+
+```rust
+// src/keys/login_key.rs
+
+use digest::Digest;
+use sha2::Sha256;
+
+impl LoginKey {
+    ...
+
+    fn sha256(username: &str, password: &str) -> Self {
+        let first_pass = Sha256::new()
+            .chain(username)
+            .chain(password)
+            .result();
+        let first_pass_hex = hex::encode(&first_pass);
+
+        let second_pass = Sha256::new()
+            .chain(&first_pass_hex)
+            .chain(password)
+            .result();
+
+        LoginKey::from_bytes(&second_pass)
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Self {
+        assert_eq!(bytes.len() * 2, LoginKey::LEN);
+
+        let mut key = [0; LoginKey::LEN];
+        hex::encode_to_slice(bytes, &mut key)
+            .expect("the assert guarantees we've got the right length");
+
+        LoginKey(key)
+    }
+}
+```
+
+To make sure I've implemented this correctly, I gave the `lpass` program a dummy
+set of credentials and using the debugger was able to see what they should hash
+to.
+
+This lets me write a simple sanity test.
+
+```rust
+// src/keys/login_key.rs
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn login_key_with_sha256() {
+        let username = "my-test-account@example.com";
+        let password = "My Super Secret Password!";
+        let should_be = LoginKey(*b"b8a31d9784fa9a263d0e7a0d866b70612687f7067733126d74ccde02d3bab494");
+
+        let got = LoginKey::sha256(username, password);
+
+        assert_eq!(got, should_be);
+    }
+}
+```
+
+I can implement the `LoginKey::pbkdf2()` constructor in much the same way,
+again letting the proper crate (in this case, [`pbkdf2`][pbkdf2]) do the heavy
+lifting.
+
+```rust
+// src/keys/login_key.rs
+
+use sha2::Sha256;
+use hmac::Hmac;
+
+impl LoginKey {
+    ...
+
+    fn pbkdf2(username: &str, password: &str, iterations: usize) -> Self {
+        // the first rearranges the password (maintaining length), salting it
+        // with the username
+        let mut first_pass = [0; KDF_HASH_LEN];
+        pbkdf2::pbkdf2::<Hmac<Sha256>>(
+            password.as_bytes(),
+            username.as_bytes(),
+            iterations,
+            &mut first_pass,
+        );
+
+        // we then hash the previous key, salting with the password
+        // previous key
+        let mut key = [0; KDF_HASH_LEN];
+        pbkdf2::pbkdf2::<Hmac<Sha256>>(
+            &first_pass,
+            password.as_bytes(),
+            1,
+            &mut key,
+        );
+
+        LoginKey::from_bytes(&key)
+    }
+}
+```
+
+In much the same way, we can use the debugger to find a set of inputs and
+outputs to test that our `LoginKey::pbkdf2()` function was implemented
+correctly.
+
+```rust
+// src/keys/login_key.rs
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    ...
+
+    #[test]
+    fn login_key_with_pbkdf2() {
+        let username = "michaelfbryan@gmail.com";
+        let password = "My Super Secret Password!";
+        let iterations = 100;
+        let should_be =
+            LoginKey(*b"f93111b2fb6699de187ef8307aa84b1e9fdabf4a46cb821e83e507a95c3f7c97");
+
+        let got = LoginKey::pbkdf2(username, password, iterations);
+
+        assert_eq!(got, should_be);
+    }
+}
+```
+
+Now we can construct a `LoginKey`, we can [update the test executable][main-rs-2]
+to accept credentials instead of a hard-coded login key.
+
+```rust
+// src/bin/main.rs
+
+use anyhow::Error;
+use lastpass::{endpoints, keys::LoginKey};
+use reqwest::Client;
+use structopt::StructOpt;
+
+#[tokio::main]
+async fn main() -> Result<(), Error> {
+    env_logger::init();
+    let args = Args::from_args();
+    log::debug!("Starting application with {:#?}", args);
+
+    let client = Client::builder()
+        .user_agent(lastpass::DEFAULT_USER_AGENT)
+        .cookie_store(true)
+        .build()?;
+
+    let iterations = endpoints::iterations(&client, &args.host, &args.username).await?;
+
+    let login_key = LoginKey::calculate(&args.username, &args.password, iterations);
+
+    endpoints::login(
+        &client,
+        &args.host,
+        &args.username,
+        &login_key,
+        iterations,
+    )
+    .await?;
+
+    log::info!("Logged in as {}", args.username);
+
+    Ok(())
+}
+
+#[derive(Debug, StructOpt)]
+struct Args {
+    #[structopt(
+        long = "host",
+        default_value = "lastpass.com",
+        help = "The LastPass server's hostname"
+    )]
+    host: String,
+    #[structopt(short = "u", long = "username", help = "Your username")]
+    username: String,
+    #[structopt(short = "p", long = "password", help = "Your master password")]
+    password: String,
+}
+```
+
+While you reading through the earlier section, I took the liberty of creating
+a function that asks LastPass how many iterations to use when generating a
+login key. The `iterations.php` endpoint replies with a single integer, so
+it's dead simple.
+
+```rust
+// src/endpoints/iterations.rs
+
+pub async fn iterations(
+    client: &Client,
+    hostname: &str,
+    username: &str,
+) -> Result<usize, EndpointError> {
+    let url = format!("https://{}/iterations.php", hostname);
+    let data = IterationsData { email: username };
+
+    let response = client
+        .post(&url)
+        .form(&data)
+        .send()
+        .await?
+        .error_for_status()?;
+    let body = response.text().await?;
+
+    body.trim().parse().map_err(EndpointError::from)
+}
+
+#[derive(Debug, Serialize)]
+struct IterationsData<'a> {
+    email: &'a str,
+}
+```
+
+### Decryption Keys
+
+To accompany the `LoginKey`, which has been shared with the LastPass servers
+to prove who you are, there is also a `DecryptionKey` for decrypting your
+actual LastPass vault.
+
+This second key is derived from your master password and never leaves your
+computer, hence the claim that LastPass themselves can't read your personal
+data.
+
+The `DecryptionKey` is constructed in a similar (but not identical) way to
+the `LoginKey`, so I won't go into detail on that. Instead, I'd like to add a
+method for decrypting ciphertext using a `DecryptionKey`.
+
+I guess the best place to start is by looking at how the `lastpass-cli` project
+decrypts things using the `DecryptionKey`.
+
+```c
+// vendor/lastpass-cli/cipher.c
+
+char *cipher_aes_decrypt(const unsigned char *ciphertext, size_t len, const unsigned char key[KDF_HASH_LEN])
+{
+	EVP_CIPHER_CTX *ctx;
+	char *plaintext;
+	int out_len;
+
+	if (!len)
+		return NULL;
+
+	ctx = EVP_CIPHER_CTX_new();
+	if (!ctx)
+		return NULL;
+
+	plaintext = xcalloc(len + AES_BLOCK_SIZE + 1, 1);
+	if (len >= 33 && len % 16 == 1 && ciphertext[0] == '!') {
+		if (!EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, (unsigned char *)(ciphertext + 1)))
+			goto error;
+		ciphertext += 17;
+		len -= 17;
+	} else {
+		if (!EVP_DecryptInit_ex(ctx, EVP_aes_256_ecb(), NULL, key, NULL))
+			goto error;
+	}
+	if (!EVP_DecryptUpdate(ctx, (unsigned char *)plaintext, &out_len, (unsigned char *)ciphertext, len))
+		goto error;
+	len = out_len;
+	if (!EVP_DecryptFinal_ex(ctx, (unsigned char *)(plaintext + out_len), &out_len))
+		goto error;
+	len += out_len;
+	plaintext[len] = '\0';
+	EVP_CIPHER_CTX_free(ctx);
+	return plaintext;
+
+error:
+	EVP_CIPHER_CTX_free(ctx);
+	secure_clear(plaintext, len + AES_BLOCK_SIZE + 1);
+	free(plaintext);
+	return NULL;
+}
+```
+
+Although the code is a bit convoluted due to way error handling and argument
+validation are done, it looks like we switch between two input algorithms at
+the start based, then pass the ciphertext through the decryption function.
+
+Similar to the `LoginKey::calculate()` function I'm guessing this is because
+the encryption algorithm has changed over time. So it was initially just
+using AES-256 with the ECB [block cipher mode][cipher-mode], then later they
+transitioned to CBC with a 16-byte [initialization vector][iv] (that's why
+there's the `ciphertext[0] == '!'` and all that pointer arithmetic).
+
+The [`aes`][aes] and [`block-modes`][block-modes] crates made this a lot easier
+than I was expecting.
+
+```rust
+// src/keys/decryption_key.rs
+
+use aes::Aes256;
+use block_modes::{block_padding::Pkcs7, BlockMode, Cbc, Ecb};
+
+impl DecryptionKey {
+    pub fn decrypt(
+        &self,
+        ciphertext: &[u8],
+    ) -> Result<Vec<u8>, DecryptionError> {
+        if ciphertext.is_empty() {
+            // If there's no input, there's nothing to decrypt
+            return Ok(Vec::new());
+        }
+
+        let decrypted = if uses_cbc(ciphertext) {
+            let iv = &ciphertext[1..17];
+            let ciphertext = &ciphertext[17..];
+
+            Cbc::<Aes256, Pkcs7>::new_var(&self.0, &iv)?
+                .decrypt_vec(ciphertext)?
+        } else {
+            Ecb::<Aes256, Pkcs7>::new_var(&self.0, &[])?
+                .decrypt_vec(ciphertext)?
+        };
+
+        Ok(decrypted)
+    }
+}
+
+fn uses_cbc(ciphertext: &[u8]) -> bool {
+    ciphertext.len() >= 33
+        && ciphertext.len() % 16 == 1
+        && ciphertext.starts_with(b"!")
+}
+```
+
+The `lastpass-cli` project doesn't have any tests with examples of decrypted
+data (or any tests at all for that matter), so I'll need to resort to using
+debugger on `lpass` and seeing how real data is decrypted if I want to make
+sure my code works.
+
+```rust
+// src/keys/decryption_key.rs
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decrypt_some_text() {
+        let key = DecryptionKey::from_raw(b"...");
+        let ciphertext = [
+            33, 11, 151, 186, 165, 216, 165, 58, 154, 207, 238, 219, 138, 19,
+            26, 178, 141, 91, 241, 31, 28, 69, 189, 39, 5, 10, 161, 76, 57, 10,
+            240, 137, 11, 124, 42, 129, 213, 123, 192, 182, 178, 194, 84, 175,
+            73, 19, 104, 137, 123,
+        ];
+
+        let got = key.decrypt(&ciphertext).unwrap();
+
+        assert_eq!(
+            String::from_utf8(got).unwrap(),
+            "Example password without folder"
+        );
+    }
+}
+```
+
+Well the test passes, so if everything goes to plan we should have everything
+we need to decode the vault.
 
 ## Parsing the Vault Into Memory
 <!--
@@ -692,6 +1213,11 @@ out on that front.
 [pbkdf2]: https://crates.io/crates/pbkdf2
 [rust-crypto]: https://github.com/RustCrypto
 [main-rs-1]: https://github.com/Michael-F-Bryan/lastpass/blob/0a5da0262548d475e81138f91a22fa125658ea3e/src/bin/main.rs
+[main-rs-2]: https://github.com/Michael-F-Bryan/lastpass/blob/c0b7d260dcdf78cbaae83b15d9059573913f3366/src/bin/main.rs
 [serde-xml-rs]: https://crates.io/crates/serde_xml_rs
 [primitive-obsession]: https://refactoring.guru/smells/primitive-obsession
 [doubly-linked-list]: https://github.com/lastpass/lastpass-cli/blob/8767b5e53192ad4e72d1352db4aa9218e928cbe1/list.h
+[pbkdf2]: https://en.wikipedia.org/wiki/PBKDF2
+[sha2]: https://crates.io/crates/sha2
+[digest]: https://crates.io/crates/digest
+[hex]: https://crates.io/crates/hex
