@@ -1836,7 +1836,25 @@ pub enum VaultParseError {
 [thiserror]: https://crates.io/crates/thiserror
 {{% /notice %}}
 
+We're actually able to read the `Vault` into memory and start looking at its
+contents now!
+
+Let's update the example executable so it'll log in and print out the name
+and password for each item in our vault.
+
+```console
+$ RUST_LOG=info cargo run --username $EMAIL --password=$PASSWORD
+Sending a request to https://lastpass.com/getaccts.php
+Some Folder\Nested\Example password without folder => "password"
+\Another Password => "My Super Secret Password!!1!"
+Some Folder\ => ""
+Some Folder\Nested\ => ""
+Some Folder\My Address => ""
+\My Secure Note => ""
+```
+
 ## Downloading Attachments
+
 <!--
     TODO: write about
     - download the attachment
