@@ -1155,7 +1155,367 @@ mod tests {
 Well the test passes, so if everything goes to plan we should have everything
 we need to decode the vault.
 
-## Parsing the Vault Into Memory
+## Reading the Vault
+
+Now we've implemented the fundamental things like crypto and calling a couple
+API endpoints, we're getting into the more juicy stuff. The next step is to
+download a copy of the password vault and read it into memory.
+
+### Retrieving the Vault
+
+Once you've logged in, retrieving a copy of the password vault from LastPass is
+really easy. We don't need to supply any authentication information because
+LastPass already gave us a PHP session cookie and I'll be reusing the same
+`reqwest::Client` for both calls.
+
+Just like `login.php` and `iterations.php`, we need to send a POST request
+to the `getaccts.php` endpoint and read the response body.
+
+```rust
+// src/endpoints/vault.rs
+
+use crate::{ Vault, VaultParseError };
+use reqwest::{Client, Error as ReqwestError};
+use serde_derive::Serialize;
+
+const LASTPASS_CLI_VERSION: &str = "1.3.3.15.g8767b5e";
+
+/// Fetch the latest vault snapshot from LastPass.
+pub async fn get_vault(
+    client: &Client,
+    hostname: &str,
+) -> Result<Vault, VaultError> {
+    let data = Data {
+        mobile: 1,
+        request_src: "cli",
+        // I'm not sure why lastpass-cli used its version number instead of a
+        // bool here, but \_(ツ)_/¯
+        has_plugin: LASTPASS_CLI_VERSION,
+    };
+
+    let body = super::send(client, hostname, "getaccts.php", &data)
+        .await?
+        .bytes()
+        .await?;
+
+    Vault::parse(&body).map_err(VaultError::Parse)
+}
+
+#[derive(Debug, Serialize)]
+struct Data<'a> {
+    mobile: usize,
+    #[serde(rename = "requestsrc")]
+    request_src: &'a str,
+    #[serde(rename = "hasplugin")]
+    has_plugin: &'a str,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum VaultError {
+    /// The HTTP client encountered an error.
+    #[error("Unable to send the request")]
+    HttpClient(#[from] ReqwestError),
+    #[error("Unable to parse the vault")]
+    Parse(#[from] VaultParseError),
+}
+```
+
+For now I've also stubbed out a `Vault` type and given it a `Vault::parse()`
+method that accepts a `&[u8]` and will return either a `Vault` or a
+`VaultParseError`.
+
+### Decoding the Vault
+
+Running our test program again and inserting a line which will write the
+response `body` to disk shows a big hunk of binary.
+
+Let's print this data out as hex and see if we can spot any patterns...
+
+```
+# xxd src/vault_from_dummy_account.bin | head -n 30
+
+00000000: 4c50 4156 0000 0002 3132 4154 5652 0000  LPAV....12ATVR..
+00000010: 0001 3145 4e43 5500 0000 2c35 4e5a 5969  ..1ENCU...,5NZYi
+00000020: 7967 7236 6659 514d 3950 424f 3765 5243  ygr6fYQM9PBO7eRC
+00000030: 6357 6f71 4336 454d 7a6c 3159 594b 705a  cWoqC6EMzl1YYKpZ
+00000040: 7357 7272 446b 3d43 4243 5500 0000 0131  sWrrDk=CBCU....1
+00000050: 4242 5445 0000 000a 3135 3839 3236 3534  BBTE....15892654
+00000060: 3836 4950 5445 0000 000a 3135 3839 3236  86IPTE....158926
+00000070: 3534 3836 574d 5445 0000 000a 3135 3839  5486WMTE....1589
+00000080: 3236 3534 3836 414e 5445 0000 000a 3135  265486ANTE....15
+00000090: 3839 3236 3534 3836 444f 5445 0000 000a  89265486DOTE....
+000000a0: 3135 3839 3236 3534 3836 4645 5445 0000  1589265486FETE..
+000000b0: 000a 3135 3839 3236 3534 3836 4655 5445  ..1589265486FUTE
+000000c0: 0000 000a 3135 3839 3236 3534 3836 5359  ....1589265486SY
+000000d0: 5445 0000 000a 3135 3839 3236 3534 3836  TE....1589265486
+000000e0: 574f 5445 0000 000a 3135 3839 3236 3534  WOTE....15892654
+000000f0: 3836 5441 5445 0000 000a 3135 3839 3236  86TATE....158926
+00000100: 3534 3836 5750 5445 0000 000a 3135 3839  5486WPTE....1589
+00000110: 3236 3534 3836 5350 4d54 0000 0037 0000  265486SPMT...7..
+00000120: 0001 3000 0000 0130 0000 0001 3000 0000  ..0....0....0...
+00000130: 0130 0000 0001 3000 0000 0131 0000 0001  .0....0....1....
+00000140: 3100 0000 0130 0000 0001 3000 0000 0130  1....0....0....0
+00000150: 0000 0001 304e 4d41 4300 0000 0136 4143  ....0NMAC....6AC
+00000160: 4354 0000 01c4 0000 0013 3534 3936 3233  CT........549623
+00000170: 3039 3734 3133 3031 3830 3637 3300 0000  0974130180673...
+00000180: 3121 0b97 baa5 d8a5 3a9a cfee db8a 131a  1!......:.......
+00000190: b28d 5bf1 1f1c 45bd 2705 0aa1 4c39 0af0  ..[...E.'...L9..
+000001a0: 890b 7c2a 81d5 7bc0 b6b2 c254 af49 1368  ..|*..{....T.I.h
+000001b0: 897b 0000 0031 215d ae99 4843 6321 5162  .{...1!]..HCc!Qb
+000001c0: 80f5 6587 f669 4628 588e 8ba5 51b5 e6a3  ..e..iF(X...Q...
+000001d0: 83ed ba28 65e4 786d 2b2a 7ef8 c7d2 ccf9  ...(e.xm+*~.....
+```
+
+{{% notice note %}}
+I set up a dummy LastPass account just for this analysis, so I'm not overly
+concerned about publishing it on the internet.
+
+Besides, all the "interesting" bits are encrypted and you don't have access
+to the master password so the most anyone can see is a couple unencrypted
+timestamps.
+{{% /notice %}}
+
+After staring at the wall of hex for a couple seconds I noticed an interesting
+pattern. This blob contains a repeating pattern...
+
+- a 4-byte ASCII mnemonic
+- a 4-byte big-endian integer, `n`
+- `n` bytes worth of data, sometimes cleartext (e.g. base64-encoded text or a
+  long number that looks like a unix timestamp) and other times it'll look like
+  garbage (encrypted data)
+
+Now we have a rough idea of how a vault is structured, let's dive into some
+source code and see how it's turned into something more usable.
+
+Internally, it looks like LastPass refer to this thing as a `blob`, and there
+happens to be `blob_parse()` function in `blob.h`. Let's start there.
+
+```c
+// vendor/lastpass-cli/blob.c
+
+struct blob *blob_parse(const unsigned char *blob, size_t len, const unsigned char key[KDF_HASH_LEN], const struct private_key *private_key)
+{
+    ...
+
+	while (read_chunk(&blob_pos, &chunk)) {
+		if (!strcmp(chunk.name, "LPAV")) {
+			versionstr = xstrndup((char *) chunk.data, chunk.len);
+			parsed->version = strtoull(versionstr, NULL, 10);
+		} else if (!strcmp(chunk.name, "ACCT")) {
+			account = account_parse(&chunk, last_share ? last_share->key : key);
+			if (!account)
+				goto error;
+
+            ...
+		} else if (!strcmp(chunk.name, "ACFL") || !strcmp(chunk.name, "ACOF")) {
+            ...
+		} else if (!strcmp(chunk.name, "LOCL")) {
+			parsed->local_version = true;
+		} else if (!strcmp(chunk.name, "SHAR")) {
+            ...
+		} else if (!strcmp(chunk.name, "AACT")) {
+            ...
+		} else if (!strcmp(chunk.name, "AACF")) {
+            ...
+		} else if (!strcmp(chunk.name, "ATTA")) {
+            ...
+	}
+
+	if (!versionstr)
+		goto error;
+	return parsed;
+
+error:
+	blob_free(parsed);
+	return NULL;
+}
+```
+
+This seems simple enough. Those patterns we saw earlier are called `chunk`s, and
+parsing a `blob` is just a case of reading each `chunk` in the `blob`,
+invoking different routines depending on the mnemonic.
+
+Let's have a look at how each chunk is parsed.
+
+```c
+// vendor/lastpass-cli/blob.h
+
+struct chunk {
+	char name[4 + 1];
+	const unsigned char *data;
+	size_t len;
+};
+
+
+// vendor/lastpass-cli/blob.c
+
+static bool read_chunk(struct blob_pos *blob, struct chunk *chunk)
+{
+	if (blob->len < 4)
+		return false;
+	chunk->name[0] = blob->data[0];
+	chunk->name[1] = blob->data[1];
+	chunk->name[2] = blob->data[2];
+	chunk->name[3] = blob->data[3];
+	chunk->name[4] = '\0';
+	blob->len -= 4;
+	blob->data += 4;
+
+	if (blob->len < sizeof(uint32_t))
+		return false;
+	chunk->len = be32toh(*((uint32_t *)blob->data));
+	blob->len -= sizeof(uint32_t);
+	blob->data += sizeof(uint32_t);
+
+	if (chunk->len > blob->len)
+		return false;
+	chunk->data = blob->data;
+	blob->data += chunk->len;
+	blob->len -= chunk->len;
+
+	return true;
+}
+```
+
+This can be converted fairly mechanically into Rust.
+
+The only difference is that instead of mutating the slice every time we read
+some data off the front, I'll return a new slice. This means when the caller
+removes some data from a buffer they'll be able to *shadow* the old variable,
+making sure it's not possible to accidentally confuse what has been already
+parsed and what hasn't. I've found this pattern works quite well when parsing.
+
+```rust
+// src/parser.rs
+
+use byteorder::{BigEndian, ByteOrder};
+
+struct Chunk<'a> {
+    name: &'a [u8],
+    data: &'a [u8],
+}
+
+impl<'a> Chunk<'a> {
+    fn parse(buffer: &'a [u8]) -> Option<(Chunk<'a>, &'a [u8])> {
+        if buffer.len() < 4 { return None; }
+
+        let (name, buffer) = buffer.split_at(4);
+
+        if buffer.len() < std::mem::size_of::<u32>() { return None; }
+
+        let (num_bytes, buffer) = buffer.split_at(std::mem::size_of::<u32>());
+        let num_bytes: usize = BigEndian::read_u32(num_bytes).try_into().unwrap();
+
+        if num_bytes > buffer.len() { return None; }
+
+        let (data, rest) = buffer.split_at(num_bytes);
+        let chunk = Chunk { name, data };
+
+        Some((chunk, rest))
+    }
+}
+```
+
+Now we can read a `Chunk` from the front of a byte buffer, we can start working
+on the `Parser`. Instead of leaving all the state and code inline like they did
+in `blob_parse()`, I've decided to pull intermediate values into their own
+`Parser` struct and give each chunk type its own `handle_XXX()` method. That
+just helps to keep functions at a manageable size and improve readability.
+
+```rust
+// src/parser.rs
+
+use crate::{Account, Share, App, DecryptionKey, VaultParseError};
+
+#[derive(Debug, Default)]
+struct Parser {
+    vault_version: Option<u64>,
+    accounts: Vec<Account>,
+    shares: Vec<Share>,
+    app: Option<App>,
+    local: bool,
+}
+
+impl Parser {
+    fn new() -> Self { Parser::default() }
+
+    fn parse(
+        &mut self,
+        mut buffer: &[u8],
+        decryption_key: &DecryptionKey,
+    ) -> Result<(), VaultParseError> {
+        while let Some((chunk, rest)) = Chunk::parse(buffer) {
+            buffer = rest;
+            self.handle_chunk(chunk, decryption_key)?;
+        }
+
+        Ok(())
+    }
+}
+```
+
+You can see the `Parser::parse()` method just reads chunks and passes them to
+the `Parser::handle_chunk()` method. Likewise, `Parser::handle_chunk()` just
+does a `match` on the `chunk`'s name and passes the chunk body to the
+appropriate method.
+
+```rust
+// src/parser.rs
+
+impl Parser {
+    ...
+
+    fn handle_chunk(
+        &mut self,
+        chunk: Chunk<'_>,
+        decryption_key: &DecryptionKey,
+    ) -> Result<(), VaultParseError> {
+        match chunk.name {
+            b"LPAV" => { self.vault_version = chunk.data_as_str()?.parse().ok(); },
+            b"ACCT" => self.handle_account(chunk.data, decryption_key)?,
+            b"ATTA" => self.handle_attachment(chunk.data)?,
+            b"LOCL" => self.local = true,
+            b"SHAR" => self.handle_share(chunk.data)?,
+            b"AACT" => self.handle_app(chunk.data, decryption_key)?,
+            _ => {},
+        }
+
+        Ok(())
+    }
+
+    fn handle_account(&mut self, buffer: &[u8], decryption_key: &DecryptionKey) -> Result<(), VaultParseError> {
+        self.accounts.push(parse_account(buffer, decryption_key)?);
+        Ok(())
+    }
+
+    fn handle_attachment(&mut self, buffer: &[u8]) -> Result<(), VaultParseError> {
+        let attachment = parse_attachment(buffer)?;
+
+        match self.accounts.iter_mut().find(|account| account.id == attachment.parent)
+        {
+            Some(parent) => { parent.attachments.push(attachment); },
+            None => return Err(VaultParseError::AttachmentWithoutAccount {
+                attachment_id: attachment.id,
+                account_id: attachment.parent,
+            }),
+        }
+
+        Ok(())
+    }
+
+    fn handle_share(&mut self, buffer: &[u8]) -> Result<(), VaultParseError> {
+        self.shares.push(parse_share(buffer)?);
+        Ok(())
+    }
+
+    fn handle_app(&mut self, buffer: &[u8], decryption_key: &DecryptionKey) -> Result<(), VaultParseError> {
+        self.app = Some(parse_app(buffer, decryption_key)?);
+
+        Ok(())
+    }
+}
+```
+
 <!--
     TODO: write about
     - grab a copy of the vault
@@ -1189,17 +1549,14 @@ ecosystem, and thanks to the work of projects like [`serde`][serde],
 pieces at my fingertips. The hardest bit was deciphering the `blob` parsing
 code, and that's because it was written in C.
 
-Oh, and I'm still working on [my dotfiles script][install-py] by the way.
-It's massively over-engineered, but there's no kill like overkill, after all.
-
 {{% notice note %}}
-Also I'd be keen to hear from you if you are a developer from LastPass! What
-are your thoughts on my efforts? Has the analysis been accurate, and can you
-spot any bugs or issues?
+I'd be keen to hear from you if you are a developer from LastPass! What are
+your thoughts on my efforts? Has the analysis been accurate, and can you spot
+any bugs or issues?
 
 I feel like having an official library that lets developers work with the
 LastPass API can enable a lot of benefits for customers, and I'd like to help
-out on that front.
+out on that front 😁
 {{% /notice %}}
 
 [dotfiles]: https://github.com/Michael-F-Bryan/dotfiles
@@ -1210,6 +1567,7 @@ out on that front.
 [reqwest]: https://crates.io/crates/reqwest
 [serde]: https://serde.rs/
 [aes]: https://crates.io/crates/aes
+[block-modes]: https://crates.io/crates/block_modes
 [pbkdf2]: https://crates.io/crates/pbkdf2
 [rust-crypto]: https://github.com/RustCrypto
 [main-rs-1]: https://github.com/Michael-F-Bryan/lastpass/blob/0a5da0262548d475e81138f91a22fa125658ea3e/src/bin/main.rs
@@ -1221,3 +1579,5 @@ out on that front.
 [sha2]: https://crates.io/crates/sha2
 [digest]: https://crates.io/crates/digest
 [hex]: https://crates.io/crates/hex
+[cipher-mode]: https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation
+[iv]: https://en.wikipedia.org/wiki/Initialization_vector
