@@ -16,27 +16,30 @@ their [command line tool (`lpass`)][lastpass-cli] in an interactive way, but
 I found there was no way to ask `lpass` which files are attached to a secret,
 and get the output in a machine readable format.
 
-Like most self-respecting members of the open-source community, I
-[filed an issue][issue-547] on their GitHub page and started digging into the
-source code to find where changes might need to be made. That way I can make
-the change myself if it's easy enough, or I'll be able to provide someone else
-with a bit more information.
+Like most self-respecting members of the open-source community, I [filed an
+issue][issue-547] on their GitHub page and in the meantime I started digging
+into the source code to find where changes might need to be made. That way I
+can make the change myself if it's easy enough, or I'll be able to provide
+someone else with a bit more information.
 
 However, reading through the source code got me thinking. There currently
-aren't any libraries for working with LastPass, and although the `lpass`
-tool's source code is GPL'd and on GitHub, by reading the source code you can
-quickly tell it was only ever intended as a command-line tool.
+aren't any libraries for working with LastPass, and although the `lpass` tool
+is GPL'd and the source code is freely accessible on GitHub, by reading the
+source code you can quickly tell it was only ever intended as a command-line
+tool.
 
 Soo..... Why not rewrite it in Rust?
 
 {{% notice note %}}
-The code written in this article is available [on GitHub][repo]. Feel free to
-browse through and steal code or inspiration.
+The code written in this article is available [on GitHub][repo] and
+[published on crates.io][crate]. Feel free to browse through and steal code
+or inspiration.
 
 If you found this useful or spotted a bug, let me know on the blog's
 [issue tracker][issue]!
 
 [repo]: https://github.com/Michael-F-Bryan/lastpass
+[crate]: https://crates.io/crates/lastpass
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
 {{% /notice %}}
 
@@ -50,7 +53,7 @@ inspiration for this endeavour.
 Someone may want to create a nice command-line tool on top of the library, but
 I don't have any intention of being that someone (for now, anyways).
 
-I've also got a lot of experience writing FFI code, so I'm intending to write
+I've also got a lot of experience writing FFI code, so I'd like to write
 bindings so the library is usable from Python (my dotfiles install script is
 written in Python) and C. I might wait a bit to flesh out the crate's API
 though, that way I'll have a better idea of how the bindings should be
@@ -65,7 +68,7 @@ The `lpass` tool has roughly three responsibilities,
    you don't need to keep entering your master password every time)
 
 As a library, the third point is usually left up to the frontend application
-so we've already made our job easier.
+so we've already made our job 33% easier.
 
 I'd also consider the HTTP bit a solved problem. The [`reqwest`][reqwest]
 crate provides a robust and fully-featured asynchronous HTTP client, and we
@@ -82,11 +85,18 @@ I figure the best course of action here is to just copy what `lpass` do.
 {{% notice warning %}}
 If you've read this far hopefully you've realised this isn't one of those
 *"LastPass is broken!"* posts. I'm just reverse-engineering how the `lpass`
-program works so I can implement it myself.
+program works so I can implement it myself and publish it as a library.
 
 If anything, after spending several hours banging my head against a wall and
 trying to figure out why things weren't working, I can assure you that the
 LastPass does a pretty good job at keeping people out.
+
+I've also deliberately only consulted freely accessible information, namely
+the `lastpass-cli` project's source code, so this should also be fine from a
+copyright standpoint. The resulting [`lastpass`][crate] crate has also been
+published under the GPL because it's considered a derived work.
+
+[crate]: https://crates.io/crates/lastpass
 {{% /notice %}}
 
 ## Baby Steps
@@ -209,8 +219,8 @@ static bool otp_login(const char *login_server, const unsigned char key[KDF_HASH
 }
 ```
 
-So it looks like there are 3 methods for doing login, I'm guessing the
-`ordinary_login()` is for a standard username/password login, and `oob_login()`
+So it looks like there are 3 methods for doing login... I'm guessing the
+`ordinary_login()` is for a standard username/password login and `oob_login()`
 and `otp_login()` are for multi-factor authentication where you've got an
 out-of-band authentication device (e.g. a USB dongle) or are using an app that
 uses one-time-pads (e.g. the Google Authenticator app).
@@ -229,11 +239,11 @@ From there, it looks like the response body is parsed as XML into a `session`
 using `xml_ok_session()`. Interestingly, we need to pass in a `key`, so
 presumably parts of the response will be encrypted with our master password.
 If parsing was successful, the parsed session is "returned" to the caller via
-the `session` pointer and we return. The rest of the function seems to be
-around identifying the cause for a login failure, so we can ignore it for the
-time being.
+the `session` pointer and we leave the function. The rest of the function
+seems to be around identifying the cause for a login failure, so we can
+ignore it for the time being.
 
-Jumping to the function that calls `ordinary_login()`, we reach
+Looking up the stack to the function that calls `ordinary_login()`, we reach
 `lastpass_login()`.
 
 ```c
@@ -264,14 +274,13 @@ struct session *lastpass_login(const char *username, const char hash[KDF_HEX_LEN
 
 It looks like this is responsible for constructing the POST data and sending
 a request to `ordinary_login()`. I've elided the bits afterwards because they
-just fall back to the out-of-band and one-time-pad logins, and we don't
-really care about that for now.
+just fall back to the out-of-band and one-time-pad logins.
 
 If you squint at `append_post()` calls in the previous snippet, you'll see
 that we're constructing the key-value pairs to submit a HTML form.
 
 At this point we actually know enough to start sending login requests to the
-LastPass API.
+LastPass API!
 
 I'm going to use the HTTP client from the [`reqwest`][reqwest] crate for this.
 As well as having nice things like connection pooling, `async`, TLS,
@@ -297,6 +306,14 @@ struct Data<'a> {
     uuid: Option<&'a str>,
 }
 ```
+
+{{% notice note %}}
+Don't worry too much about those lifetime annotations (the `'a` in `&'a
+str`). I don't feel like making a bunch of temporary strings just to create
+the form data, so we'll use references to existing strings (e.g. a dynamic
+string that was passed in by the caller, or a string literal compiled into
+the binary).
+{{% /notice %}}
 
 Then we can write a function to send this data to the `login.php` endpoint.
 
@@ -333,6 +350,10 @@ pub async fn login(
     unimplemented!("How do we parse the body into a session? {}", body);
 }
 ```
+
+Throughout this I'll be assuming you're either moderately familiar with Rust,
+or have played with enough programming languages that you'll understand common
+concepts like method chaining and `async-await`.
 
 {{% notice note %}}
 As a side note, I think the decision to make `await` a postfix operator works
@@ -532,10 +553,10 @@ out:
 }
 ```
 
-Looking at just the string literals, it seems like we're expecting a root
-`<ok>` node. From there we skim through the `<ok>` node's attributes and copy
-`"uid"`, `"sessionid"`, `"token"`, and `"privatekeyenc"` to the relevant
-fields on `session`.
+Looking at just the string literals and function names, it seems like we're
+expecting a root `<ok>` node. From there we skim through the `<ok>` node's
+attributes and copy `"uid"`, `"sessionid"`, `"token"`, and `"privatekeyenc"`
+to the relevant fields on `session`.
 
 That seems easy enough.
 
