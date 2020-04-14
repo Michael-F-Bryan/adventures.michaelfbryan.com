@@ -1,7 +1,6 @@
 ---
 title: "How I Reverse Engineered the LastPass CLI Tool"
-date: "2020-04-13T00:53:39+08:00"
-draft: true
+date: "2020-04-14T22:40:00+08:00"
 tags:
 - Rust
 - I Made a Thing
