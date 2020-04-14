@@ -726,7 +726,8 @@ bytes long, or about 64 bytes + 1 for a null terminator.
 ```
 
 This tells us enough to define a `LoginKey`. For now it's just a newtype around
-a `[u8; 64]` array.
+a `[u8; 64]` array, we don't need the null terminator because arrays in Rust
+always know how long they are.
 
 ```rust
 // src/keys/login_key.rs
@@ -928,7 +929,7 @@ mod tests {
 
     #[test]
     fn login_key_with_pbkdf2() {
-        let username = "michaelfbryan@gmail.com";
+        let username = "my-test-account@example.com";
         let password = "My Super Secret Password!";
         let iterations = 100;
         let should_be =
@@ -998,8 +999,10 @@ struct Args {
 
 While you reading through the earlier section, I took the liberty of creating
 a function that asks LastPass how many iterations to use when generating a
-login key. The `iterations.php` endpoint replies with a single integer, so
-it's dead simple.
+login key.
+
+The `iterations.php` endpoint replies with a single integer, so it's dead
+simple.
 
 ```rust
 // src/endpoints/iterations.rs
@@ -1010,7 +1013,7 @@ pub async fn iterations(
     username: &str,
 ) -> Result<usize, EndpointError> {
     let url = format!("https://{}/iterations.php", hostname);
-    let data = IterationsData { email: username };
+    let data = Data { email: username };
 
     let response = client
         .post(&url)
@@ -1024,7 +1027,7 @@ pub async fn iterations(
 }
 
 #[derive(Debug, Serialize)]
-struct IterationsData<'a> {
+struct Data<'a> {
     email: &'a str,
 }
 ```
@@ -1039,9 +1042,9 @@ This second key is derived from your master password and never leaves your
 computer, hence the claim that LastPass themselves can't read your personal
 data.
 
-The `DecryptionKey` is constructed in a similar (but not identical) way to
-the `LoginKey`, so I won't go into detail on that. Instead, I'd like to add a
-method for decrypting ciphertext using a `DecryptionKey`.
+The `DecryptionKey` is also constructed using SHA-256 or PBKDF2, so I won't
+go into detail on that. Instead, I'd like to add a method for decrypting
+ciphertext using a `DecryptionKey`.
 
 I guess the best place to start is by looking at how the `lastpass-cli` project
 decrypts things using the `DecryptionKey`.
@@ -1359,7 +1362,7 @@ error:
 
 This seems simple enough. Those patterns we saw earlier are called `chunk`s, and
 parsing a `blob` is just a case of reading each `chunk` in the `blob`,
-invoking different routines depending on the mnemonic.
+invoking different routines depending on a 4-character mnemonic.
 
 Let's have a look at how each chunk is parsed.
 
@@ -1403,13 +1406,15 @@ static bool read_chunk(struct blob_pos *blob, struct chunk *chunk)
 }
 ```
 
-This can be converted fairly mechanically into Rust.
+This can be converted fairly mechanically into Rust. The only noticeable
+difference is that instead of mutating the slice every time we read some data
+off the front, I'll return a new slice.
 
-The only difference is that instead of mutating the slice every time we read
-some data off the front, I'll return a new slice. This means when the caller
-removes some data from a buffer they'll be able to *shadow* the old variable,
-making sure it's not possible to accidentally confuse what has been already
-parsed and what hasn't. I've found this pattern works quite well when parsing.
+This means when the caller removes some data from a buffer they'll be able to
+*shadow* the old variable, making sure it's not possible to accidentally
+confuse what has been already parsed and what hasn't.
+
+I've found this pattern works quite well when parsing.
 
 ```rust
 // src/parser.rs
@@ -2014,10 +2019,12 @@ Talk about defence in depth!
 ### Downloading Attachments
 
 It looks like the `Attachment`'s `storage_key` field doesn't actually have
-anything to do with encryption.
+anything to do with encryption. When I first saw it, my thoughts were *"oh
+great, yet another layer of encryption"*, but after printing the value out
+you can see it's obviously not a key or encrypted data.
 
 Don't just take my word on it though, here's the `Debug` representation of
-an `Attachment`
+an `Attachment`:
 
 ```rust
 Attachment {
@@ -2047,7 +2054,7 @@ To figure out how attachments are downloaded, let's have another look at the
 `lastpass-cli` source code.
 
 At the very bottom of `endpoints.h` there's a declaration for the
-`lastpass_load_attachment()` function... That seems promising.
+`lastpass_load_attachment()` function... That seems promising 🙂
 
 ```c
 // vendor/lastpass-cli/endpoints.c
@@ -2113,7 +2120,8 @@ int lastpass_load_attachment(const struct session *session,
 
 {{% notice tip %}}
 For reference, the `attach` struct is almost identical to our `Attachment`,
-except written in C.
+except it also has references to the next and previous attachments because
+it's stored in a doubly-linked list (we use a `Vec<Attachment>`).
 
 ```c
 // vendor/lastpass-cli/blob.h
@@ -2142,10 +2150,10 @@ This `lastpass_load_attachment()` function seems fairly straightforward.
    attachment
 4. Decrypt the attachment using the attachment key. This isn't strictly part of
    `lastpass_load_attachment()`, but I'd prefer to do it all in the same
-   function so callers don't need to remember the `Vec<u8>` they've got is
-   still encrypted
+   function so callers aren't second-guessing whether the `Vec<u8>` they've
+   got is still encrypted
 
-By now you've already seen me write several endpoint definitions, and we've
+By now you've already seen me write several endpoint definitions and we've
 used the `DecryptionKey` once or twice, so nothing should be overly new here.
 
 First we define a `Data` type to hold our form data.
@@ -2164,7 +2172,7 @@ struct Data<'a> {
 ```
 
 I'm also creating a dedicated error type, because no other endpoints deal with
-*just* base64-decoding and decryption errors.
+these particular base64-decoding and decryption errors.
 
 ```rust
 // src/endpoints/load_attachment.rs
@@ -2216,11 +2224,11 @@ abstractions (key management, an ergonomic HTTP client, async-await, the
 `base64` crate, serialization to/from arbitrary formats, etc.) everything
 sort of *falls into place*.
 
-I mean loading an attachment only took about 30 lines of easily readable
-code, and about half of that is taken up by the definitions for `Data` and
+I mean, loading an attachment only took about 30 lines of easily readable
+code and about half of that is taken up by the definitions for `Data` and
 `LoadAttachmentError`.
 
-And look...
+And check it out...
 
 ```
 *** My Secure Note - hello-world.txt (70 bytes) ***
@@ -2236,20 +2244,17 @@ Sorry if it took a while, but we got there in the end. It turns out reading
 through the source code for a 15,000-line C program and explaining how my
 2,000-line Rust implementation works takes a while...
 
-It was fun to play around with crypto again, even if I barely went further
-than passing around keys and calling library functions.
-
-I'm also no professional cartographer, but it seems like the LastPass system
-has been pretty well designed. They've deliberately separated the `LoginKey`
-from the key you use to decrypt your vault. Plus the defence-in-depth (e.g.
+I'm no professional cartographer, but it seems like the LastPass system has
+been pretty well designed. They've deliberately separated the `LoginKey` from
+the key you use to decrypt your vault. Plus the defence-in-depth (e.g.
 attachment keys) should help protect users from attacking a vault that's been
 cached locally.
 
-I'm also pleasantly surprised at how easy this was to implement. Rust has a
-really nice ecosystem, and thanks to the work of projects like
-[`serde`][serde], [`reqwest`][reqwest], and [RustCrypto][rust-crypto], I have
-all the necessary pieces at my fingertips. You'd hardly notice that
-async-await is only 4 months old.
+You've probably noticed already but I'm also pleasantly surprised at how easy
+this was to implement. Rust has a really nice ecosystem, and thanks to the
+work of projects like [`serde`][serde], [`reqwest`][reqwest], and
+[RustCrypto][rust-crypto], I have all the necessary pieces at my fingertips.
+You'd hardly notice that async-await is only 4 months old.
 
 The hardest bit was actually deciphering the `blob` parsing code, and that's
 because it was written in C and the lack of existing unit tests meant I spent
