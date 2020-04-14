@@ -1192,9 +1192,14 @@ pub async fn get_vault(
         // bool here, but \_(ツ)_/¯
         has_plugin: LASTPASS_CLI_VERSION,
     };
+    let url = format!("https://{}/getaccts.php", hostname);
 
-    let body = super::send(client, hostname, "getaccts.php", &data)
+    let body = client
+        .post(&url)
+        .form(&data)
+        .send()
         .await?
+        .error_for_status()?
         .bytes()
         .await?;
 
@@ -1836,51 +1841,394 @@ pub enum VaultParseError {
 [thiserror]: https://crates.io/crates/thiserror
 {{% /notice %}}
 
+I'm not going to go show too much more parsing code (because it's all kinda the
+same and you can [read it on github][parser-rs]), but I'd like to show how
+simple it is to read an encrypted field is. Most of the code is actually
+dedicated to providing detailed parse errors to the caller.
+
+```rust
+// src/parser.rs
+
+fn read_encrypted<'a>(
+    buffer: &'a [u8],
+    field: &'static str,
+    decryption_key: &DecryptionKey,
+) -> Result<(String, &'a [u8]), VaultParseError> {
+    // read the next "item" (&[u8]) from the front of our buffer
+    let (ciphertext, buffer) = read_item(buffer, field)?;
+
+    // then decrypt it using our decryption key
+    let decrypted = decryption_key
+        .decrypt(ciphertext)
+        .map_err(|e| VaultParseError::UnableToDecrypt { field, inner: e })?;
+
+    // and interpret the decrypted text as a UTF-8 string
+    let decrypted = String::from_utf8(decrypted)
+        .map_err(|e| VaultParseError::BadParse { field, inner: Box::new(e) })?;
+
+    Ok((decrypted, buffer))
+}
+```
+
 We're actually able to read the `Vault` into memory and start looking at its
 contents now!
 
-Let's update the example executable so it'll log in and print out the name
-and password for each item in our vault.
+Let's update the example executable so it'll log in and print out the first
+`Account` in my test vault.
 
 ```console
 $ RUST_LOG=info cargo run --username $EMAIL --password=$PASSWORD
 Sending a request to https://lastpass.com/getaccts.php
-Some Folder\Nested\Example password without folder => "password"
-\Another Password => "My Super Secret Password!!1!"
-Some Folder\ => ""
-Some Folder\Nested\ => ""
-Some Folder\My Address => ""
-\My Secure Note => ""
+Account {
+    id: Id(
+        "533903346832032070",
+    ),
+    name: "Another Password",
+    group: "",
+    url: "https://google.com/",
+    note: "This is a super secure note.",
+    note_type: "Generic",
+    favourite: false,
+    username: "user",
+    password: "My Super Secret Password!!1!",
+    password_protected: false,
+    encrypted_attachment_key: "!MOEcIddt5GaMMH8eoMWyRA==|BWdjMSoIvClMRyWrDdIlz38tZiU3O1nmcbg95PRXCT4zKLTTG4s0OD9v/co2l2PwNaKL4oaVPSIB8oUFhk3kAl77qBbrkAH03lWY/wIModA=",
+    attachment_present: true,
+    last_touch: "0",
+    last_modified: "1586717786",
+    attachments: [
+        Attachment {
+            id: Id(
+                "533923346832032065-27281",
+            ),
+            parent: Id(
+                "533923346832032065",
+            ),
+            mime_type: "other:txt",
+            storage_key: "100000020283",
+            size: 70,
+            encrypted_filename: "!zdLMAcQ2okxs3MFWNjoCaw==|B7NqfcNPX0IbYFXNtykqEw==",
+        },
+    ],
+}
 ```
 
 ## Downloading Attachments
 
-<!--
-    TODO: write about
-    - download the attachment
-    - decrypting the filename
-    - decrypting the account's attachment key
-    - using the attachment key to decode the attachment
-    - turn it back into binary (from base64)
-    - put it all together in an example application
- -->
+An interesting part about accounts is that each gets an
+`encrypted_attachment_key` field. This is a key that is base64-encoded and
+encrypted using your master key, and is what you use for all
+attachment-related decryption.
 
+Let's give the `Account` a helper method for extracting the account key.
+
+```rust
+// src/account.rs
+
+impl Account {
+    /// Get the key used to work with this [`Account`]'s attachments.
+    pub fn attachment_key(
+        &self,
+        decryption_key: &DecryptionKey,
+    ) -> Result<DecryptionKey, DecryptionError> {
+        let hex = decryption_key.decrypt_base64(&self.encrypted_attachment_key)?;
+        let key = DecryptionKey::from_hex(&hex)?;
+
+        Ok(key)
+    }
+}
+```
+
+Now we've got the attachment key, we can decrypt an `Attachment`'s filename from
+the metadata stored in the vault.
+
+```rust
+// src/attachment.rs
+
+use crate::{DecryptionError, DecryptionKey, Id};
+
+/// Metadata about an attached file.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct Attachment {
+    pub id: Id,
+    /// The ID of the parent [`crate::Account`].
+    pub parent: Id,
+    /// The file's mimetype.
+    pub mime_type: String,
+    /// An opaque string which is used by the backend to find the correct
+    /// version of an attached file.
+    pub storage_key: String,
+    /// The size of the attachment, in bytes.
+    pub size: u64,
+    /// The attachment's filename, encrypted using the account's `attachment_key`.
+    pub encrypted_filename: String,
+}
+
+impl Attachment {
+    pub fn filename(
+        &self,
+        attachment_key: &DecryptionKey,
+    ) -> Result<String, DecryptionError> {
+        attachment_key
+            .decrypt_base64(&self.encrypted_filename)
+            .map(|filename| String::from_utf8(filename).unwrap())
+    }
+}
+```
+
+So now we're able to read an attachment's filename.
+
+It may not sound like much, but by this point we've actually gone through
+three levels of encryption...
+
+1. First we needed a login key to prove who we are
+2. Then we needed to use the master decryption key so we can read things like
+   an account's name, associated username and password, and extract the
+   attachment key
+3. Then we used the attachment key to read the attachment's filename
+
+Talk about defence in depth!
+
+### Downloading Attachments
+
+It looks like the `Attachment`'s `storage_key` field doesn't actually have
+anything to do with encryption.
+
+Don't just take my word on it though, here's the `Debug` representation of
+an `Attachment`
+
+```rust
+Attachment {
+    id: Id(
+        "533903346832032070-27282",
+    ),
+    parent: Id(
+        "533903346832032070",
+    ),
+    mime_type: "other:txt",
+    storage_key: "100000027282",
+    size: 70,
+    encrypted_filename: "!zdLMAcQ9okxR3MFWNjoCaw==|B7NqfcNPX0IayFXNtxkqEw==",
+}
+```
+
+The value `100000027282` seems far too regular to be anything related to
+crypto, so I'm guessing the use of the word *"key"* is intended as *"unique
+identifier"*.
+
+I'm guessing it's an ID that LastPass use to refer to a particular resource
+stored on S3 or in a database somewhere. I doubt only 27282 attachments have
+been uploaded to LastPass, so that means they're probably randomising storage
+keys instead of using an auto-incrementing number.
+
+To figure out how attachments are downloaded, let's have another look at the
+`lastpass-cli` source code.
+
+At the very bottom of `endpoints.h` there's a declaration for the
+`lastpass_load_attachment()` function... That seems promising.
+
+```c
+// vendor/lastpass-cli/endpoints.c
+
+/*
+ * Get the attachment for a given attachment id.  The crypttext is returned
+ * and should be decrypted with account->attachkey.  The pointer returned
+ * in *result should be freed by the caller.
+ */
+int lastpass_load_attachment(const struct session *session,
+			     const char *shareid,
+			     struct attach *attach,
+			     char **result)
+{
+	char *reply = NULL;
+	char *p;
+
+	*result = NULL;
+
+	struct http_param_set params = {
+		.argv = NULL,
+		.n_alloced = 0
+	};
+
+	http_post_add_params(&params,
+			     "token", session->token,
+			     "getattach", attach->storagekey,
+			     NULL);
+
+	if (shareid) {
+		http_post_add_params(&params,
+				     "sharedfolderid", shareid,
+				     NULL);
+	}
+
+	reply = http_post_lastpass_param_set("getattach.php",
+					     session, NULL,
+					     &params);
+
+	free(params.argv);
+	if (!reply)
+		return -ENOENT;
+
+	/* returned string is json-encoded base64 string; unescape it */
+	if (reply[0] == '"')
+		memmove(reply, reply+1, strlen(reply));
+	if (reply[strlen(reply)-1] == '"')
+		reply[strlen(reply)-1] = 0;
+
+	p = reply;
+	while (*p) {
+		if (*p == '\\') {
+			memmove(p, p + 1, strlen(p));
+		} else {
+			p++;
+		}
+	}
+
+	*result = reply;
+	return 0;
+}
+```
+
+{{% notice tip %}}
+For reference, the `attach` struct is almost identical to our `Attachment`,
+except written in C.
+
+```c
+// vendor/lastpass-cli/blob.h
+
+struct attach {
+	char *id;
+	char *parent;
+	char *mimetype;
+	char *storagekey;
+	char *size;
+	char *filename;
+
+	struct list_head list;
+};
+```
+{{% /notice %}}
+
+This `lastpass_load_attachment()` function seems fairly straightforward.
+
+1. Send a request to `getattach.php` with a `token` and `getattach`, our
+   `storage_key` (I don't care about shared folders for now, so we can ignore
+   the `sharedfolderid` parameter)
+2. Parse the string that's returned as a JSON string (i.e. wrapped in quotes and
+   with escape characters)
+3. Base64-decode it to get the blob of bytes that makes up the encrypted
+   attachment
+4. Decrypt the attachment using the attachment key. This isn't strictly part of
+   `lastpass_load_attachment()`, but I'd prefer to do it all in the same
+   function so callers don't need to remember the `Vec<u8>` they've got is
+   still encrypted
+
+By now you've already seen me write several endpoint definitions, and we've
+used the `DecryptionKey` once or twice, so nothing should be overly new here.
+
+First we define a `Data` type to hold our form data.
+
+```rust
+// src/endpoints/load_attachment.rs
+
+use serde_derive::Serialize;
+
+#[derive(Debug, Serialize)]
+struct Data<'a> {
+    token: &'a str,
+    #[serde(rename = "getattach")]
+    storage_key: &'a str,
+}
+```
+
+I'm also creating a dedicated error type, because no other endpoints deal with
+*just* base64-decoding and decryption errors.
+
+```rust
+// src/endpoints/load_attachment.rs
+
+#[derive(Debug, thiserror::Error)]
+pub enum LoadAttachmentError {
+    /// The HTTP client encountered an error.
+    #[error("Unable to send the request")]
+    HttpClient(#[from] reqwest::Error),
+    #[error("Unable to decrypt the payload")]
+    Decrypt(#[from] crate::DecryptionError),
+    #[error("Unable to decode the decrypted attachment")]
+    Decode(#[from] base64::DecodeError),
+}
+```
+
+And finally, the endpoint function itself.
+
+```rust
+// src/endpoints/load_attachment.rs
+
+pub async fn load_attachment(
+    client: &Client,
+    hostname: &str,
+    token: &str,
+    storage_key: &str,
+    decryption_key: &DecryptionKey,
+) -> Result<Vec<u8>, LoadAttachmentError> {
+    let data = Data { token, storage_key };
+    let url = format!("https://{}/getattach.php", hostname);
+
+    let response = client
+        .post(&url)
+        .form(&data)
+        .send()
+        .await?
+        .error_for_status()?;
+
+    let ciphertext: String = response.text().await?;
+    let data = decryption_key.decrypt_base64(&ciphertext)?;
+
+    // not only was the ciphertext in base64, the attachment body was too
+    base64::decode(data).map_err(LoadAttachmentError::Decode)
+}
+```
+
+The thing I really like about this is once you have the underlying
+abstractions (key management, an ergonomic HTTP client, async-await, the
+`base64` crate, serialization to/from arbitrary formats, etc.) everything
+sort of *falls into place*.
+
+I mean loading an attachment only took about 30 lines of easily readable
+code, and about half of that is taken up by the definitions for `Data` and
+`LoadAttachmentError`.
+
+And look...
+
+```
+*** My Secure Note - hello-world.txt (70 bytes) ***
+Sending a request to https://lastpass.com/getattach.php
+Hello, World
+```
+
+It was able to download our `hello-world.txt` attachment! 🎉
 
 ## Conclusions
 
-Sorry if it took a while to get to the end. It turns out reading through the
-source code for a 15,000-line C program and explaining how my 2,000-line Rust
-implementation works takes a while...
+Sorry if it took a while, but we got there in the end. It turns out reading
+through the source code for a 15,000-line C program and explaining how my
+2,000-line Rust implementation works takes a while...
 
 It was fun to play around with crypto again, even if I barely went further
-than passing around keys and calling library functions. I'm no cartographer,
-but it seems like the LastPass system has been pretty well designed.
+than passing around keys and calling library functions.
+
+I'm also no professional cartographer, but it seems like the LastPass system
+has been pretty well designed. They've deliberately separated the `LoginKey`
+from the key you use to decrypt your vault. Plus the defence-in-depth (e.g.
+attachment keys) should help protect users from attacking a vault that's been
+cached locally.
 
 I'm also pleasantly surprised at how easy this was to implement. Rust has a
 really nice ecosystem, and thanks to the work of projects like
 [`serde`][serde], [`reqwest`][reqwest], and [RustCrypto][rust-crypto], I have
 all the necessary pieces at my fingertips. You'd hardly notice that
-async-await was only stabilised relatively recently.
+async-await is only 4 months old.
 
 The hardest bit was actually deciphering the `blob` parsing code, and that's
 because it was written in C and the lack of existing unit tests meant I spent
@@ -1921,3 +2269,4 @@ out on that front 😁
 [hex]: https://crates.io/crates/hex
 [cipher-mode]: https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation
 [iv]: https://en.wikipedia.org/wiki/Initialization_vector
+[parser-rs]: https://github.com/Michael-F-Bryan/lastpass/blob/60499b7531689c4f3f5dc7180bc705528cd64bf4/src/parser.rs
