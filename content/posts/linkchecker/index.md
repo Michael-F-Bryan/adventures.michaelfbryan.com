@@ -257,9 +257,270 @@ nice to have a solid solution.
 [issue-478]: https://github.com/rust-lang/rustc-dev-guide/issues/478
 {{% /notice %}}
 
+By now you've probably identified a pattern with implementing scanners.
+
+Basically,
+
+1. Find a crate that already exists
+2. let them do the hard work of parsing your document
+3. do a bit of post-processing to extract just the bits we care about
+
 ## Validating Links to Local Files
 
+The main reason we want to check links to other local files is for
+documentation tools like [`mdbook`][mdbook]. This is where several markdown
+files exist in a directory tree, and they will be compiled to HTML that
+maintains the same tree structure.
+
+It's important to re-state this mdbook-specific aspect because it adds a couple
+interesting constraints to the problem...
+
+1. You can write a link to a directory (e.g. `/foo/`) and the browser will
+   fall back to a default path (e.g. `/foo/index.html`)
+2. There is the concept of a "root directory" which the document will be served
+   from, and any absolute links (i.e. a link starting with a `/`) should be
+   relative to this directory
+3. We want to control whether links can go outside the root directory (e.g.
+   `../../../../etc/passwd`) for security reasons and because these sorts of
+   links make assumptions about the environment which may not always be true
+   (e.g. the relative location of two repositories on disk)
+
+These constraints are encapsulated in our `Options` type:
+
+```rust
+// src/validation/filesystem.rs
+
+use std::{ffi::OsString, path::PathBuf};
+
+pub struct Options {
+    root_directory: Option<PathBuf>,
+    default_file: OsString,
+    links_may_traverse_the_root_directory: bool,
+}
+
+impl Options {
+    pub const DEFAULT_FILE: &'static str = "index.html";
+
+    pub fn new() -> Self {
+        Options {
+            root_directory: None,
+            default_file: OsString::from(Options::DEFAULT_FILE),
+            links_may_traverse_the_root_directory: false,
+        }
+    }
+}
+```
+
+The type also has several getters and setters, but they are largely irrelevant
+for our purposes.
+
+The first big operation that we can do with `Options` is to "join" a directory
+and a link. This reduces to a `current_dir.join(second)` in the simplest case,
+but we need to do some fancy logic when the link is absolute.
+
+```rust
+// src/validation/filesystem.rs
+
+impl Options {
+    fn join(
+        &self,
+        current_dir: &Path,
+        second: &Path,
+    ) -> Result<PathBuf, Reason> {
+        if second.is_absolute() {
+            // if the path is absolute (i.e. has a leading slash) then it's
+            // meant to be relative to the root directory, not the current one
+            match self.root_directory() {
+                Some(root) => {
+                    let mut buffer = root.to_path_buf();
+                    // append everything except the root element
+                    buffer.extend(second.iter().skip(1));
+                    Ok(buffer)
+                },
+                // You really shouldn't provide links to absolute files on your
+                // system (e.g. "/home/michael/Documents/whatever" or
+                // "/etc/passwd").
+                //
+                // For one, it's extremely brittle and will probably only work
+                // on that computer, but more importantly it's also a vector
+                // for directory traversal attacks.
+                //
+                // Feel free to send a PR if you believe otherwise.
+                None => Err(Reason::TraversesParentDirectories),
+            }
+        } else {
+            Ok(current_dir.join(second))
+        }
+    }
+}
+```
+
+The next big operation is path canonicalisation. This is where we convert the
+joined path to its canonical form, resolving symbolic links and `..`'s
+appropriately. As a side-effect of canonicalisation, the OS will return a
+`FileNotFound` error if the item doesn't exist.
+
+```rust
+// src/validation/filesystem.rs
+
+impl Options {
+    fn canonicalize(&self, path: &Path) -> Result<PathBuf, Reason> {
+        let mut canonical = path.canonicalize()?;
+
+        if canonical.is_dir() {
+            canonical.push(&self.default_file);
+            // we need to canonicalize again because the default file may be a
+            // symlink, or not exist at all
+            canonical = canonical.canonicalize()?;
+        }
+
+        Ok(canonical)
+    }
+}
+```
+
+We also need to do a quick sanity check to make sure links don't escape the
+"root" directory unless explicitly allowed.
+
+```rust
+// src/validation/filesystem.rs
+
+impl Options {
+    fn sanity_check(&self, path: &Path) -> Result<(), Reason> {
+        if let Some(root) = self.root_directory() {
+            if !(self.links_may_traverse_the_root_directory || path.starts_with(root))
+            {
+                return Err(Reason::TraversesParentDirectories);
+            }
+        }
+
+        Ok(())
+    }
+}
+```
+
+And finally, we can wrap all this code up into a single function which will try
+to figure out which file has been linked to.
+
+```rust
+// src/validation/filesystem.rs
+
+pub fn resolve_link(
+    current_directory: &Path,
+    link: &Path,
+    options: &Options,
+) -> Result<PathBuf, Reason> {
+    let joined = options.join(current_directory, link)?;
+
+    let canonical = options.canonicalize(&joined)?;
+    options.sanity_check(&canonical)?;
+
+    // Note: canonicalizing also made sure the file exists
+    Ok(canonical)
+}
+```
+
+We use the [`thiserror`][thiserror] crate to simplify the boilerplate around
+defining the reason that validation may fail, `Reason`.
+
+```rust
+// src/validation/mod.rs
+
+/// Possible reasons for a bad link.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum Reason {
+    #[error("Linking outside of the book directory is forbidden")]
+    TraversesParentDirectories,
+    #[error("An OS-level error occurred")]
+    Io(#[from] std::io::Error),
+    #[error("The web client encountered an error")]
+    Web(#[from] reqwest::Error),
+}
+
+impl Reason {
+    pub fn file_not_found(&self) -> bool {
+        match self {
+            Reason::Io(e) => e.kind() == std::io::ErrorKind::NotFound,
+            _ => false,
+        }
+    }
+
+    pub fn timed_out(&self) -> bool {
+        match self {
+            Reason::Web(e) => e.is_timeout(),
+            _ => false,
+        }
+    }
+}
+```
+
 ## Validating Links on the Web
+
+## What Colour is Your Function?
+
+When I was originally developing [`mdbook-linkcheck`][mdbook-linkcheck] the
+only real option was to use synchronous IO for validating everything (i.e.
+local files and remote links on the web), implementing parallelism with
+OS-level threads via [`rayon`][rayon]. However, in the last 12 months or so
+Rust has made massive strides towards making asynchronous IO a first-class
+citizen in the ecosystem.
+
+This is awesome, but now I've got a choice to make... Should the link-checker
+leverage asynchronous IO to get cheap performance improvements when going over
+the internet, or should we stick with the existing (synchronous) solution?
+
+There's this interesting article on the topic titled [*"What Colour is Your
+Function?"*][function-colour], if you haven't already, I'd suggest giving it a
+read.
+
+In the article, *Bob Nystrom* discusses a hypothetical language with the
+following peculiarities:
+
+1. Every function has a colour - each function **must** be coloured either
+   *Red* or *Blue*
+2. The way you call a function depends on its colour - imagine they use
+   different syntax or something
+3. You can only call a red function from within another red function
+4. Red functions are more painful to call
+5. Some core library functions are red
+
+The author follows these rules through and compares them to the sync/async
+divide in well-known languages like C#, JavaScript, and Python.
+
+> For example, let’s say we have a nice little blob of code that, I don’t
+> know, implements Dijkstra’s algorithm over a graph representing how much your
+> social network are crushing on each other. (I spent way too long trying to
+> decide what such a result would even represent. Transitive undesirability?)
+>
+> Later, you end up needing to use this same blob of code somewhere else. You
+> do the natural thing and hoist it out into a separate function. You call it
+> from the old place and your new code that uses it. But what colour should it
+> be? Obviously, you’ll make it blue if you can, but what if it uses one of
+> those nasty red-only core library functions?
+>
+> What if the new place you want to call it is blue? You’ll have to turn it
+> red. Then you’ll have to turn the function that calls it red. Ugh. No matter
+> what, you’ll have to think about colour constantly. It will be the sand in
+> your swimsuit on the beach vacation of development.
+
+Now imagine synchronous code is blue and asynchronous code is red.
+
+If I want to use async-await for some of my validators (because it'll
+drastically improve throughput when checking links on the web) then all the
+other validation machinery will need to be async too. Not only that, but
+anyone that wants to use my `linkcheck` crate will *also* need to opt-in to
+async. Asynchrony is contagious like that.
+
+It also doesn't help that [`tokio`][tokio] and [`hyper`][hyper] (the
+fundamental crates most async web clients are built on top of) pull in a
+*lot* of transitive dependencies and can have a massive impact on compilation
+times.
+
+<!--
+    FIXME: Should I remove this entire section? It feels like rambling and
+    doesn't really have a firm direction...
+-->
 
 ## Conclusions
 
@@ -279,3 +540,8 @@ nice to have a solid solution.
 [linkify-tests]: https://github.com/robinst/linkify/blob/a08b343bb524f267130d67ad3e1a752c34dd49ac/tests/url.rs
 [pulldown-cmark]: https://crates.io/crates/pulldown-cmark
 [pulldown-offset-iter]: https://docs.rs/pulldown-cmark/0.7.0/pulldown_cmark/struct.OffsetIter.html
+[rayon]: https://crates.io/crates/rayon
+[function-colour]: https://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/
+[tokio]: https://crates.io/crates/tokio
+[hyper]: https://crates.io/crates/hyper
+[thiserror]: https://crates.io/crates/thiserror
