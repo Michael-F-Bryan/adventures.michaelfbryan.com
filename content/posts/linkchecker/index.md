@@ -1,5 +1,5 @@
 ---
-title: "Creating a Reusable Link-checker"
+title: "Creating a Robust, Reusable Link-Checker"
 date: "2020-04-23T21:59:54+08:00"
 draft: true
 tags:
@@ -784,7 +784,7 @@ Next up is a call to the `get()` function we wrote earlier.
 
 pub async fn check_web<C>(url: &Url, ctx: &C) -> Result<(), Reason>
 where
-    C: Context + ?Sized,
+    C: Context,
 {
     ...
 
@@ -825,7 +825,7 @@ the next bit... updating the cache.
 
 pub async fn check_web<C>(url: &Url, ctx: &C) -> Result<(), Reason>
 where
-    C: Context + ?Sized,
+    C: Context,
 {
     ...
 
@@ -837,7 +837,7 @@ where
 
 fn update_cache<C>(url: &Url, ctx: &C, entry: CacheEntry)
 where
-    C: Context + ?Sized,
+    C: Context,
 {
     if let Some(mut cache) = ctx.cache() {
         cache.insert(url.clone(), entry);
@@ -856,7 +856,7 @@ And finally we can return the result, converting the `reqwest::Error` from
 
 pub async fn check_web<C>(url: &Url, ctx: &C) -> Result<(), Reason>
 where
-    C: Context + ?Sized,
+    C: Context,
 {
     ...
 
@@ -865,6 +865,446 @@ where
 ```
 
 ## Tying it All Together
+
+Now we've implemented a couple validators it's time to give users a more
+convenient interface. Ideally, I'd like to provide a single asynchronous
+`validate()` function that accepts a list of links and a `Context`, and returns
+a summary of all the checks.
+
+This turned out to be kinda annoying because one of our validators is
+asynchronous and the other isn't. It's not made easier by needing to deal
+with all the different possible outcomes of link checking, including...
+
+- *valid* - the check passed successfully
+- *invalid* - the check failed for some `Reason`
+- *unknown link type* - we can't figure out which validator to use, and
+- *ignored* - sometimes users will want to skip certain links (e.g. to skip
+  false positives, or because the server on the other end is funny)
+
+For reference, a `Link` is just a string containing the link itself, plus
+some information we can use to figure out which text it came from (e.g. to
+provide pretty error messages).
+
+```rust
+// src/lib.rs
+
+/// A link to some other resource.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Link {
+    /// The link itself.
+    pub href: String,
+    /// Where the [`Link`] lies in its source text.
+    pub span: Span,
+    /// Which document does this [`Link`] belong to?
+    pub file: FileId,
+}
+```
+
+### Categorising Links
+
+To figure out which validator to use, we'll need to sort links into categories.
+
+```rust
+// src/lib.rs
+
+use std::path::PathBuf;
+use reqwest::Url;
+
+enum Category {
+    /// A local file.
+    FileSystem {
+        path: PathBuf,
+        fragment: Option<String>,
+    },
+    /// A URL for something on the web.
+    Url(Url),
+}
+```
+
+From my work with `mdbook-linkcheck` I know categorising can be kinda annoying,
+so let's create a couple tests.
+
+```rust
+// src/lib.rs
+
+#[test]
+fn parse_into_categories() {
+    let inputs = vec![
+        (
+            "https://example.com/",
+            Some(Category::Url(
+                Url::parse("https://example.com/").unwrap(),
+            )),
+        ),
+        (
+            "README.md",
+            Some(Category::FileSystem {
+                path: PathBuf::from("README.md"),
+                fragment: None,
+            }),
+        ),
+        (
+            "./README.md",
+            Some(Category::FileSystem {
+                path: PathBuf::from("./README.md"),
+                fragment: None,
+            }),
+        ),
+        (
+            "./README.md#license",
+            Some(Category::FileSystem {
+                path: PathBuf::from("./README.md"),
+                fragment: Some(String::from("license")),
+            }),
+        ),
+    ];
+
+    for (src, should_be) in inputs {
+        let got = Category::categorise(src);
+        assert_eq!(got, should_be);
+    }
+}
+```
+
+Luckily, `reqwest::Url` implements `std::str::FromStr` so we can just use
+`some_string.parse()` for the `Url` variant.
+
+```rust
+// src/lib.rs
+
+impl Category {
+    fn categorise(src: &str) -> Option<Self> {
+        if let Ok(url) = src.parse() {
+            return Some(Category::Url(url));
+        }
+
+        ...
+    }
+}
+```
+
+If parsing it as a `Category::Url` fails it's probably going to fall into the
+`FileSystem` category. We can't reuse something like the `reqwest::Url` or
+`http::Uri` types because they both expect the URL/URI to have a schema so
+we'll need to get creative.
+
+Regardless of whether we check fragments for file system links or not, we'll
+need to make sure we can handle links with fragments otherwise we'll try to
+see if the `./README.md#license` file exists when we actually meant
+`./README.md`.
+
+The first step in parsing file system links is to split it into `path` and
+`fragment` bits.
+
+```rust
+// src/lib.rs
+
+impl Category {
+    fn categorise(src: &str) -> Option<Self> {
+        ...
+
+        let (path, fragment) = match src.find("#") {
+            Some(hash) => {
+                let (path, rest) = src.split_at(hash);
+                (path, Some(String::from(&rest[1..])))
+            },
+            None => (src, None),
+        };
+
+        ...
+    }
+}
+```
+
+Something else to consider is that the `path` may be URL-encoded (e.g.
+because the file's name contains a space). Because I'm lazy, instead of
+pulling in a crate for URL decoding I'm going to reuse the same machinery the
+`http` crate uses for parsing the path section of a URL...
+[`http::uri::PathAndQuery`][path-and-query].
+
+```rust
+// src/lib.rs
+
+impl Category {
+    fn categorise(src: &str) -> Option<Self> {
+        ...
+
+        // as a sanity check we use the http crate's PathAndQuery type to make
+        // sure the path is decoded correctly
+        if let Ok(path_and_query) = path.parse::<PathAndQuery>() {
+            return Some(Category::FileSystem {
+                path: PathBuf::from(path_and_query.path()),
+                fragment,
+            });
+        }
+
+        ...
+    }
+}
+```
+
+And that should be enough to categorise a link.
+
+{{% expand "Full code for `Category::categorise()`." %}}
+```rust
+impl Category {
+    fn categorise(src: &str) -> Option<Self> {
+        if let Ok(url) = src.parse() {
+            return Some(Category::Url(url));
+        }
+
+        let (path, fragment) = match src.find("#") {
+            Some(hash) => {
+                let (path, rest) = src.split_at(hash);
+                (path, Some(String::from(&rest[1..])))
+            },
+            None => (src, None),
+        };
+
+        // as a sanity check we use the http crate's PathAndQuery type to make
+        // sure the path is decoded correctly
+        if let Ok(path_and_query) = path.parse::<PathAndQuery>() {
+            return Some(Category::FileSystem {
+                path: PathBuf::from(path_and_query.path()),
+                fragment,
+            });
+        }
+
+        None
+    }
+}
+```
+{{% /expand %}}
+
+### Validating a Single Link
+
+Now we need to write a function that will `match` on the `Category` and invoke
+the appropriate validator.
+
+When a link fails validation we'll tell the caller by returning the name of the
+failing link and why it failed (`InvalidLink`).
+
+```rust
+// src/validation/mod.rs
+
+/// A [`Link`] and the [`Reason`] why it is invalid.
+#[derive(Debug)]
+pub struct InvalidLink {
+    /// The invalid link.
+    pub link: Link,
+    /// Why is this link invalid?
+    pub reason: Reason,
+}
+```
+
+I'm also going to need an intermediate type representing the different possible
+outcomes.
+
+```rust
+// src/validation/mod.rs
+
+enum Outcome {
+    Valid(Link),
+    Invalid(InvalidLink),
+    Ignored(Link),
+    UnknownCategory(Link),
+}
+```
+
+Now we can start writing our `validate_one()` function.
+
+```rust
+// src/validation/mod.rs
+
+/// Try to validate a single link, deferring to the appropriate validator based
+/// on the link's [`Category`].
+async fn validate_one<C>(
+    link: Link,
+    current_directory: &Path,
+    ctx: &C,
+) -> Outcome
+where
+    C: Context,
+{
+    unimplemented!()
+}
+```
+
+Users need the ability to skip a link if desired, so let's give `Context` a
+`should_ignore()` method and call it at the top of `validate_one()`.
+
+```rust
+// src/validation/mod.rs
+
+pub trait Context {
+    ...
+
+    /// Should this [`Link`] be skipped?
+    fn should_ignore(&self, _link: &Link) -> bool { false }
+}
+
+async fn validate_one<C>(
+    link: Link,
+    current_directory: &Path,
+    ctx: &C,
+) -> Outcome
+where
+    C: Context,
+{
+    if ctx.should_ignore(&link) {
+        log::debug!("Ignoring \"{}\"", link.href);
+        return Outcome::Ignored(link);
+    }
+
+    ...
+}
+```
+
+And now comes the big ugly `match` statement for dispatching to the appropriate
+validator.
+
+```rust
+// src/validation/mod.rs
+
+async fn validate_one<C>(
+    link: Link,
+    current_directory: &Path,
+    ctx: &C,
+) -> Outcome
+where
+    C: Context,
+{
+    ...
+
+    match link.category() {
+        Some(Category::FileSystem { path, fragment }) => Outcome::from_result(
+            link,
+            check_filesystem(
+                current_directory,
+                &path,
+                fragment.as_deref(),
+                ctx,
+            ),
+        ),
+        Some(Category::Url(url)) => {
+            Outcome::from_result(link, check_web(&url, ctx).await)
+        },
+        None => Outcome::UnknownCategory(link),
+    }
+}
+```
+
+{{% notice info %}}
+The astute amongst you may have noticed that the `check_filesystem()` function
+is synchronous and will need to do some interaction with the file system...
+Which may block, especially if we might be reading the file's contents to
+check that a fragment identifier is valid.
+
+Normally we get taught that doing something that may block is a big no-no
+when writing asynchronous code.
+
+And yeah, technically I'd agree with that sentiment... But practically speaking
+you probably won't notice the difference.
+
+If we don't need check fragments, a call to `check_filesystem()` won't need
+much more than a couple calls to [`stat(2)`][stat]. Even if we did need to
+scan through a file to find the section identified by a fragment you can
+expect file system links to point at reasonably sized files (e.g. less than
+1MB) and reasonably close (i.e. not on a network drive on the other side of
+the world).
+
+All of this means that we won't block for very long (maybe 10s of
+milliseconds at worst?) and the link checker will still be making progress,
+plus if link-checking will be slow if we're going over the network anyway,
+so... she'll be right?
+
+[stat]: https://linux.die.net/man/2/stat
+{{% /notice %}}
+
+### Validating Bulk Links
+
+The final step in creating a high-level `validate()` function is to actually
+write it.
+
+We can implement a buffered fan-out, fan-in flow by leveraging
+[`StreamExt::buffer_unordered()`][buffer_unordered] adapter to run up to `n`
+validations concurrently, then use [`StreamExt::collect()][collect] to merge
+the results.
+
+```rust
+// src/validation/mod.rs
+
+/// Validate several [`Link`]s relative to a particular directory.
+pub fn validate<'a, L, C>(
+    current_directory: &'a Path,
+    links: L,
+    ctx: &'a C,
+) -> impl Future<Output = Outcomes> + 'a
+where
+    L: IntoIterator<Item = Link>,
+    L::IntoIter: 'a,
+    C: Context,
+{
+    futures::stream::iter(links)
+        .map(move |link| validate_one(link, current_directory, ctx))
+        .buffer_unordered(ctx.concurrency())
+        .collect()
+}
+```
+
+The function signature looks pretty gnarly because we're wanting to accept
+anything which can be turned into an iterator that yields `Link`s (e.g. a
+`Vec<Link>` or one of the scanner iterators), but other than that it's rather
+straightforward.
+
+1. Convert the synchronous iterator into a `futures::Stream`
+2. Map each `Link` to an unstarted future which will validate that link
+3. Make sure we poll up to `ctx.concurrency()` futures to completion
+   concurrently with `buffer_unordered()`
+4. Collect the results into one container
+
+We have almost everything we need, too. The only necessary additions are some
+sort of bucket for `Outcome`s (called `Outcomes`), and a way for `Context` to
+control how many validations are polled to completion at a time.
+
+```rust
+// src/validation/mod.rs
+
+pub trait Context {
+    ...
+
+    /// How many items should we check at a time?
+    fn concurrency(&self) -> usize { 64 }
+}
+
+/// The result of validating a batch of [`Link`]s.
+#[derive(Debug, Default)]
+pub struct Outcomes {
+    /// Valid links.
+    pub valid: Vec<Link>,
+    /// Links which are broken.
+    pub invalid: Vec<InvalidLink>,
+    /// Items that were explicitly ignored by the [`Context`].
+    pub ignored: Vec<Link>,
+    /// Links which we weren't able to identify a suitable validator for.
+    pub unknown_category: Vec<Link>,
+}
+
+impl Extend<Outcome> for Outcomes {
+    fn extend<T: IntoIterator<Item = Outcome>>(&mut self, items: T) {
+        for outcome in items {
+            match outcome {
+                Outcome::Valid(v) => self.valid.push(v),
+                Outcome::Invalid(i) => self.invalid.push(i),
+                Outcome::Ignored(i) => self.ignored.push(i),
+                Outcome::UnknownCategory(u) => self.unknown_category.push(u),
+            }
+        }
+    }
+}
+```
+
+And yeah, that's all there is to it. Pretty easy, huh?
 
 ## What Colour is Your Function?
 
@@ -933,6 +1373,24 @@ times.
 
 ## Conclusions
 
+This took a bit longer than I expected to walk through, but hopefully you've now
+got a good idea of how the [`linkcheck`][crate] crate works 🙂
+
+Overall it wasn't *too* difficult to implement, although it took a couple
+iterations until I found a way to merge the different validators that
+worked... My first attempt at integrating synchronous and asynchronous
+validators, all of which have their own sets of inputs and expectations, led
+to some rather ugly code.
+
+It kinda reminds me of an article called [*"What Colour is Your
+Function?"*][function-colour] by *Bob Nystrom*.
+
+Bob makes a good case that having a sync/async split in your language (like
+Rust, Python, or Node) can lead to poor ergonomics and difficulty reusing
+code. He also points out that it's possible to have *both* a single "mode" of
+execution *and* all the nice things that come along with async code. Go's
+green threading (*"goroutines"*) are a really good example of this.
+
 [mdbook-linkcheck]: https://github.com/Michael-F-Bryan/mdbook-linkcheck
 [mdbook]: https://github.com/rust-lang/mdBook
 [trpl]: https://doc.rust-lang.org/book/
@@ -955,3 +1413,6 @@ times.
 [hyper]: https://crates.io/crates/hyper
 [thiserror]: https://crates.io/crates/thiserror
 [ripgrep]: https://crates.io/crates/ripgrep
+[path-and-query]: https://docs.rs/http/0.2.1/http/uri/struct.PathAndQuery.html
+[buffer-unordered]: https://docs.rs/futures/0.3.4/futures/stream/trait.StreamExt.html#method.buffer_unordered
+[collect]: https://docs.rs/futures/0.3.4/futures/stream/trait.StreamExt.html#method.collect
