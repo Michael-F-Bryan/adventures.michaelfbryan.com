@@ -1,13 +1,12 @@
 ---
 title: "Creating a Robust, Reusable Link-Checker"
-date: "2020-04-23T21:59:54+08:00"
-draft: true
+date: "2020-05-02T19:20:00+08:00"
 tags:
 - Rust
 - I Made a Thing
 ---
 
-With around 63,544 downloads, one of my most successful Rust projects is a
+With over 68,842 downloads, one of my most successful Rust projects is a
 nondescript little program called [mdbook-linkcheck][mdbook-linkcheck]. This
 is a link-checker for [mdbook][mdbook], the tool powering a lot of
 documentation in the Rust community, including [*The Rust Programming
