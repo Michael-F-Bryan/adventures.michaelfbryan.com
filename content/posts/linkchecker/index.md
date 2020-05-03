@@ -562,6 +562,310 @@ so I'm going to skip it for now.
 
 ## Validating Links on the Web
 
+Now we've reached the core part of our link checker, checking if a URL points
+to a valid resource on the internet.
+
+The good news is that actually checking that a URL is valid is almost trivial.
+The [`reqwest`][reqwest] crate provides an asynchronous HTTP client with a nice
+API, so checking the URL is as simple as sending a GET request.
+
+```rust
+// src/validation/web.rs
+
+use http::HeaderMap;
+use reqwest::{Client, Url};
+
+/// Send a GET request to a particular endpoint.
+pub async fn get(
+    client: &Client,
+    url: &Url,
+    extra_headers: HeaderMap,
+) -> Result<(), reqwest::Error> {
+    client
+        .get(url.clone())
+        .headers(extra_headers)
+        .send()
+        .await?
+        .error_for_status()?;
+
+    Ok(())
+}
+```
+
+Something to note is that we accept this `extra_headers` parameter. Sometimes
+you'll need to send extra headers to particular endpoints (imagine needing to
+send `Authorization: bearer some-token` to access a page that requires
+logging in), so we'll give the caller a way to do that.
+
+{{% notice note %}}
+From a performance standpoint it's also nice to know creating an empty
+`HeaderMap` [won't make any allocations][docs]. I doubt we'd even notice/care
+if it did, but it's still nice to know.
+
+[docs]: https://docs.rs/http/0.2.1/http/header/struct.HeaderMap.html#method.new
+{{% /notice %}}
+
+### Caching
+
+While sending a GET request to a particular URL is easy to do, going with
+just the naive version (`for link in links { check(link) }`) will make the
+link checking process incredibly slow.
+
+What we want to do is avoid unnecessary trips over the network by reusing
+previous results, both from within the same run (e.g. a file links to the
+same URL twice) or from multiple runs (e.g. the last time link checking was
+done in CI).
+
+We'll need some sort of caching layer.
+
+{{% notice info %}}
+To see why this is important, let's have a look at how many web links there are
+in some of the books on my computer.
+
+```console
+# The Rust Programming Language (aka "The Book")
+$ cd ~/Documents/forks/book
+$ rg 'http(s?)://' --stats --glob '*.md' --quiet
+421 matches
+415 matched lines
+330 files contained matches
+430 files searched
+
+# The Rust developers guide
+$ cd ~/Documents/forks/rustc-guide
+$ rg 'http(s?)://' --stats --glob '*.md' --quiet
+566 matches
+558 matched lines
+79 files contained matches
+102 files searched
+```
+
+The `mdbook-linkcheck` plugin is executed whenever a `mdbook` book is built
+and I know Rust is fast, but the network is slow and making 400-500 web
+requests every time you make a change is quickly going to make the link
+checker unusable.
+{{% /notice %}}
+
+To mix things up a little I'm going to show you the final `check_web()`
+function and we can step through it bit by bit.
+
+```rust
+// src/validation/web.rs
+
+/// Check whether a [`Url`] points to a valid resource on the internet.
+pub async fn check_web<C>(url: &Url, ctx: &C) -> Result<(), Reason>
+where
+    C: Context,
+{
+    log::debug!("Checking \"{}\" on the web", url);
+
+    if already_valid(&url, ctx) {
+        log::debug!("The cache says \"{}\" is still valid", url);
+        return Ok(());
+    }
+
+    let result = get(ctx.client(), &url, ctx.url_specific_headers(&url)).await;
+
+    if let Some(fragment) = url.fragment() {
+        // TODO: check the fragment
+        log::warn!("Fragment checking isn't implemented, not checking if there is a \"{}\" header in \"{}\"", fragment, url);
+    }
+
+    let entry = CacheEntry::new(SystemTime::now(), result.is_ok());
+    update_cache(url, ctx, entry);
+
+    result.map_err(Reason::from)
+}
+```
+
+The first interesting bit is the `already_valid()` check. This runs beforehand
+and lets us skip any further work if our cache says the link is already valid.
+
+```rust
+// src/validation/web.rs
+
+fn already_valid<C>(url: &Url, ctx: &C) -> bool
+where
+    C: Context,
+{
+    if let Some(cache) = ctx.cache() {
+        return cache.url_is_still_valid(url, ctx.cache_timeout());
+    }
+
+    false
+}
+```
+
+What we do is check if the `Context` has a cache (for simplicity, some users
+may not care about caching) and then ask the cache to do a lookup, specifying
+how long a cache entry can be considered valid for.
+
+The `Cache` itself isn't anything special. It's just a wrapper around a
+`HashMap`.
+
+```rust
+// src/validation/mod.rs
+
+use reqwest::Url;
+use std::{collections::HashMap, time::SystemTime};
+
+pub struct Cache {
+    entries: HashMap<Url, CacheEntry>,
+}
+
+pub struct CacheEntry {
+    pub timestamp: SystemTime,
+    pub valid: bool,
+}
+```
+
+The `Cache::url_is_still_valid()` method is a bit more complex because we
+need to deal with the fact that you can sometimes time travel when using
+`SystemTime` (e.g. because your computer's clock changed between now and
+whenever the `CacheEntry` was added).
+
+```rust
+
+impl Cache {
+    pub fn url_is_still_valid(&self, url: &Url, timeout: Duration) -> bool {
+        if let Some(entry) = self.lookup(url) {
+            if entry.valid {
+                if let Ok(time_since_check_was_done) = entry.timestamp.elapsed()
+                {
+                    return time_since_check_was_done < timeout;
+                }
+            }
+        }
+
+        false
+    }
+
+    pub fn lookup(&self, url: &Url) -> Option<&CacheEntry> {
+        self.entries.get(url)
+    }
+}
+```
+
+Something to note is that this cache is deliberately conservative. It'll only
+consider an entry to *"still be valid"* if it was previously valid and there
+have been no time-travelling shenanigans. We also need a `timeout` parameter
+to allow for cache invalidation.
+
+To facilitate caching, the `Context` trait will need a couple more methods:
+
+```rust
+// src/validation/mod.rs
+
+pub trait Context {
+    ...
+
+    /// An optional cache that can be used to avoid unnecessary network
+    /// requests.
+    ///
+    /// We need to use internal mutability here because validation is done
+    /// concurrently. This [`MutexGuard`] is guaranteed to be short lived (just
+    /// the duration of a [`Cache::insert()`] or [`Cache::lookup()`]), so it's
+    /// okay to use a [`std::sync::Mutex`] instead of [`futures::lock::Mutex`].
+    fn cache(&self) -> Option<MutexGuard<Cache>> { None }
+
+    /// How long should a cached item be considered valid for before we need to
+    /// check again?
+    fn cache_timeout(&self) -> Duration {
+        // 24 hours should be a good default
+        Duration::from_secs(24 * 60 * 60)
+    }
+}
+```
+
+Next up is a call to the `get()` function we wrote earlier.
+
+```rust
+// src/validation/web.rs
+
+pub async fn check_web<C>(url: &Url, ctx: &C) -> Result<(), Reason>
+where
+    C: Context + ?Sized,
+{
+    ...
+
+    let result = get(ctx.client(), &url, ctx.url_specific_headers(&url)).await;
+
+    ...
+}
+```
+
+We want to reuse the same HTTP client if possible because we get nice things
+like connection pooling and the ability to set headers that'll be sent with
+every request (e.g. `User-Agent`). We also need to ask the `Context` if there
+are any headers that need to be sent when checking *this* specific URL.
+
+*\*sigh\**... Okay, let's add some more methods to the `Context` trait.
+
+```rust
+// src/validation/mod.rs
+
+pub trait Context {
+    ...
+
+    /// The HTTP client to use.
+    fn client(&self) -> &Client;
+
+    /// Get any extra headers that should be sent when checking this [`Url`].
+    fn url_specific_headers(&self, _url: &Url) -> HeaderMap { HeaderMap::new() }
+
+}
+```
+
+You'll also notice that we store the return value from `get()` in a `result`
+variable instead of using `?` to bail if an error occurs. That's necessary for
+the next bit... updating the cache.
+
+```rust
+// src/validation/web.rs
+
+pub async fn check_web<C>(url: &Url, ctx: &C) -> Result<(), Reason>
+where
+    C: Context + ?Sized,
+{
+    ...
+
+    let entry = CacheEntry::new(SystemTime::now(), result.is_ok());
+    update_cache(url, ctx, entry);
+
+    ...
+}
+
+fn update_cache<C>(url: &Url, ctx: &C, entry: CacheEntry)
+where
+    C: Context + ?Sized,
+{
+    if let Some(mut cache) = ctx.cache() {
+        cache.insert(url.clone(), entry);
+    }
+}
+```
+
+Updating the cache isn't overly interesting, we just create a new `CacheEntry`
+and add it to the `cache` if the `Context` has one.
+
+And finally we can return the result, converting the `reqwest::Error` from
+`get()` into a `Reason`.
+
+```rust
+// src/validation/web.rs
+
+pub async fn check_web<C>(url: &Url, ctx: &C) -> Result<(), Reason>
+where
+    C: Context + ?Sized,
+{
+    ...
+
+    result.map_err(Reason::from)
+}
+```
+
+## Tying it All Together
+
 ## What Colour is Your Function?
 
 When I was originally developing [`mdbook-linkcheck`][mdbook-linkcheck] the
@@ -650,3 +954,4 @@ times.
 [tokio]: https://crates.io/crates/tokio
 [hyper]: https://crates.io/crates/hyper
 [thiserror]: https://crates.io/crates/thiserror
+[ripgrep]: https://crates.io/crates/ripgrep
