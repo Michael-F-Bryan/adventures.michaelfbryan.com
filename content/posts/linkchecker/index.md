@@ -89,9 +89,10 @@ mapping the [`Matches`][regex::Matches] iterator from the [`regex`][regex]
 crate, but it turns out URLs aren't that easy to work with.
 
 After searching google for about 10 minutes and scanning through dozens of
-StackOverflow questions I wasn't able to find an expression which would
-match *all* the types of URLs I expected while also avoiding punctuation
-like a trailing full stop or when a link is in parentheses.
+StackOverflow questions I wasn't able to find an expression which would match
+*all* the types of URLs I expected while also avoiding punctuation like a
+trailing full stop or when a link is in parentheses, and detecting links
+don't have a scheme (e.g. `./README.md` instead of `file:///README.md`).
 
 This reminds me of a popular quote...
 
@@ -272,6 +273,8 @@ documentation tools like [`mdbook`][mdbook]. This is where several markdown
 files exist in a directory tree, and they will be compiled to HTML that
 maintains the same tree structure.
 
+### Constraints
+
 It's important to re-state this mdbook-specific aspect because it adds a couple
 interesting constraints to the problem...
 
@@ -311,8 +314,8 @@ impl Options {
 }
 ```
 
-The type also has several getters and setters, but they are largely irrelevant
-for our purposes.
+(The type also has several getters and setters, but they are largely irrelevant
+for our purposes)
 
 The first big operation that we can do with `Options` is to "join" a directory
 and a link. This reduces to a `current_dir.join(second)` in the simplest case,
@@ -356,8 +359,8 @@ impl Options {
 ```
 
 The next big operation is path canonicalisation. This is where we convert the
-joined path to its canonical form, resolving symbolic links and `..`'s
-appropriately. As a side-effect of canonicalisation, the OS will return a
+joined path to its canonical form, resolving symbolic links and `..`s
+appropriately. As a side-effect of canonicalisation, the OS will also return a
 `FileNotFound` error if the item doesn't exist.
 
 ```rust
@@ -399,8 +402,11 @@ impl Options {
 }
 ```
 
-And finally, we can wrap all this code up into a single function which will try
-to figure out which file has been linked to.
+### Resolving File System Links
+
+Now we've encoded our constraints in the `Options` type, we can wrap all this
+code up into a single function. This function will take a "link" and tries to
+figure out which file is being linked to.
 
 ```rust
 // src/validation/filesystem.rs
@@ -420,8 +426,9 @@ pub fn resolve_link(
 }
 ```
 
-We use the [`thiserror`][thiserror] crate to simplify the boilerplate around
-defining the reason that validation may fail, `Reason`.
+As a side note, we use the [`thiserror`][thiserror] crate to simplify the
+boilerplate around defining the reason that validation may fail, `Reason`. Our
+`Reason` type is just an enum of the different reasons that validation may fail.
 
 ```rust
 // src/validation/mod.rs
@@ -454,6 +461,104 @@ impl Reason {
     }
 }
 ```
+
+### Wrapping It Up in a Check
+
+The whole point of this endeavour is to have some sort of validation function
+which takes a link to a local file and makes sure it's valid.
+
+For this, I'm going to introduce the idea of a validator context. This is a
+collections of useful properties and callbacks to help guide the validation
+process.
+
+At the moment we only need access to the file system validator's `Options`, so
+the `Context` trait looks a little bare.
+
+```rust
+// src/validation/mod.rs
+
+pub trait Context {
+    /// Options to use when checking a link on the filesystem.
+    fn filesystem_options(&self) -> &Options;
+}
+```
+
+Now we need to wrap our `resolve_link()` in a `check_filesystem()` function
+which uses the `Context`
+
+```rust
+// src/validation/filesystem.rs
+
+use crate::validation::Context;
+
+/// Check whether a [`Path`] points to a valid file on disk.
+///
+/// If a fragment specifier is provided, this function will scan through the
+/// linked document and check that the file contains the corresponding anchor
+/// (e.g. markdown heading or HTML `id`).
+pub fn check_filesystem<C>(
+    current_directory: &Path,
+    path: &Path,
+    fragment: Option<&str>,
+    ctx: &C,
+) -> Result<(), Reason>
+where
+    C: Context,
+{
+    log::debug!(
+        "Checking \"{}\" in the context of \"{}\"",
+        path.display(),
+        current_directory.display()
+    );
+
+    let resolved_location = resolve_link(
+        current_directory,
+        path,
+        ctx.filesystem_options(),
+    )?;
+
+    log::debug!(
+        "\"{}\" resolved to \"{}\"",
+        path.display(),
+        resolved_location.display()
+    );
+
+    if let Some(fragment) = fragment {
+        // TODO: detect the file type and check the fragment exists
+        log::warn!(
+            "Not checking that the \"{}\" section exists in \"{}\" because fragment resolution isn't implemented",
+            fragment,
+            resolved_location.display(),
+        );
+    }
+
+    Ok(())
+}
+```
+
+The code isn't overly exciting, it boils down to a bunch of log statements and
+returns a `()` instead of `PathBuf` to indicate we don't care about the result
+of a successful check.
+
+{{% notice note %}}
+You may have noticed there's this new `fragment` parameter and a big `TODO`
+comment when one is provided.
+
+The idea is that sometimes we won't *just* have a link to some document (e.g.
+`../index.md`) and will want to link to a particular part of the document. In
+HTML this is often done using a [fragment identifier][id], the `some-heading`
+part in `../index.md#some-heading`.
+
+I'm not really sure how I'll implement this one. Different document types
+will implement *fragment identifiers* in different ways, so I'd probably need
+to check the linked file's mime-type and search for an element with a
+`id="some-heading"` attribute in HTML, or a markdown heading who's
+[slug][slug] looks something like `some-heading`... That sounds a bit fiddly,
+so I'm going to skip it for now.
+
+[id]: https://en.wikipedia.org/wiki/Fragment_identifier
+[slug]: https://en.wikipedia.org/wiki/Clean_URL#Slug
+{{% /notice %}}
 
 ## Validating Links on the Web
 
