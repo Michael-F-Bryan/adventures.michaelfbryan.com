@@ -1306,71 +1306,6 @@ impl Extend<Outcome> for Outcomes {
 
 And yeah, that's all there is to it. Pretty easy, huh?
 
-## What Colour is Your Function?
-
-When I was originally developing [`mdbook-linkcheck`][mdbook-linkcheck] the
-only real option was to use synchronous IO for validating everything (i.e.
-local files and remote links on the web), implementing parallelism with
-OS-level threads via [`rayon`][rayon]. However, in the last 12 months or so
-Rust has made massive strides towards making asynchronous IO a first-class
-citizen in the ecosystem.
-
-This is awesome, but now I've got a choice to make... Should the link-checker
-leverage asynchronous IO to get cheap performance improvements when going over
-the internet, or should we stick with the existing (synchronous) solution?
-
-There's this interesting article on the topic titled [*"What Colour is Your
-Function?"*][function-colour], if you haven't already, I'd suggest giving it a
-read.
-
-In the article, *Bob Nystrom* discusses a hypothetical language with the
-following peculiarities:
-
-1. Every function has a colour - each function **must** be coloured either
-   *Red* or *Blue*
-2. The way you call a function depends on its colour - imagine they use
-   different syntax or something
-3. You can only call a red function from within another red function
-4. Red functions are more painful to call
-5. Some core library functions are red
-
-The author follows these rules through and compares them to the sync/async
-divide in well-known languages like C#, JavaScript, and Python.
-
-> For example, let’s say we have a nice little blob of code that, I don’t
-> know, implements Dijkstra’s algorithm over a graph representing how much your
-> social network are crushing on each other. (I spent way too long trying to
-> decide what such a result would even represent. Transitive undesirability?)
->
-> Later, you end up needing to use this same blob of code somewhere else. You
-> do the natural thing and hoist it out into a separate function. You call it
-> from the old place and your new code that uses it. But what colour should it
-> be? Obviously, you’ll make it blue if you can, but what if it uses one of
-> those nasty red-only core library functions?
->
-> What if the new place you want to call it is blue? You’ll have to turn it
-> red. Then you’ll have to turn the function that calls it red. Ugh. No matter
-> what, you’ll have to think about colour constantly. It will be the sand in
-> your swimsuit on the beach vacation of development.
-
-Now imagine synchronous code is blue and asynchronous code is red.
-
-If I want to use async-await for some of my validators (because it'll
-drastically improve throughput when checking links on the web) then all the
-other validation machinery will need to be async too. Not only that, but
-anyone that wants to use my `linkcheck` crate will *also* need to opt-in to
-async. Asynchrony is contagious like that.
-
-It also doesn't help that [`tokio`][tokio] and [`hyper`][hyper] (the
-fundamental crates most async web clients are built on top of) pull in a
-*lot* of transitive dependencies and can have a massive impact on compilation
-times.
-
-<!--
-    FIXME: Should I remove this entire section? It feels like rambling and
-    doesn't really have a firm direction...
--->
-
 ## Conclusions
 
 This took a bit longer than I expected to walk through, but hopefully you've now
@@ -1383,7 +1318,7 @@ validators, all of which have their own sets of inputs and expectations, led
 to some rather ugly code.
 
 It kinda reminds me of an article called [*"What Colour is Your
-Function?"*][function-colour] by *Bob Nystrom*.
+Function?"*][function-colour] by *Bob Nystrom*...
 
 Bob makes a good case that having a sync/async split in your language (like
 Rust, Python, or Node) can lead to poor ergonomics and difficulty reusing
