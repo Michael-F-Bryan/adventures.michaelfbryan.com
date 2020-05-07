@@ -31,8 +31,7 @@ inspiration.
 If you found this useful or spotted a bug, let me know on the blog's
 [issue tracker][issue]!
 
-[crate]: https://crates.io/crates/linkcheck
-[repo]: https://github.com/Michael-F-Bryan/linkchecker
+[repo]: https://github.com/Michael-F-Bryan/linkcheck
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
 {{% /notice %}}
 
@@ -42,7 +41,7 @@ When you start building a library it's good to think about what problem the
 library is trying to solve. That way you know what features belong in the
 library and, more importantly, what doesn't.
 
-The [`linkchecker`][crate] crate's primary objective is to find links in a
+The [`linkcheck`][crate] crate's primary objective is to find links in a
 document and check that they point to something valid. There seem to be two
 concepts here:
 
