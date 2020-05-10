@@ -79,6 +79,27 @@ fn main() {
 }
 ```
 
+{{% notice note %}}
+To make the C function callable from Rust, we need to add the corresponding
+function declarations.
+
+```rust
+// src/simple.rs
+
+use std::os::raw::c_int;
+
+pub type AddCallback = unsafe extern "C" fn(c_int);
+
+extern "C" {
+    pub fn simple_add_two_numbers(a: c_int, b: c_int, cb: AddCallback);
+}
+```
+
+We also need to use `unsafe` here because the `simple_add_two_numbers()`
+function was written in another language and Rust has no way of knowing that
+it's safe to use.
+{{% /notice %}}
+
 We can even run this code and see what it generates.
 
 ```console
@@ -200,6 +221,96 @@ impossible for the callback to update state!
 Now we know the original native function was flawed, let's go about fixing it.
 
 If the original flaw is that our callback can't use any non-global state, we
-should give it a way to access state passed in by the caller. 
+should give it a way to access state passed in by the caller.
+
+Normally this state would be passed around as a pointer, but what type should
+we be using? In theory the caller may want to use their own custom struct as
+state (imagine we need to update a text field on a GUI program), so hard-coding
+a pointer to an integer won't really cut it.
+
+Luckily, that's where C's `void *` pointer comes in. This says *"I've got a
+pointer to... something"* and to make that pointer usable downstream code will
+need to cast it to the desired type.
+
+Here is the amended function for adding numbers:
+
+```c
+// native/better.c
+
+typedef void (*AddCallback)(int result, void *user_data);
+
+void better_add_two_numbers(int a, int b, AddCallback cb, void *user_data)
+{
+    int result = a + b;
+    cb(result, user_data);
+}
+```
+
+I've also taken the liberty of providing Rust declarations for
+`better_add_two_numbers()`.
+
+```rust
+// src/better.rs
+
+use std::os::raw::{c_int, c_void};
+
+pub type AddCallback = unsafe extern "C" fn(c_int, *mut c_void);
+
+extern "C" {
+    pub fn better_add_two_numbers(
+        a: c_int,
+        b: c_int,
+        cb: AddCallback,
+        user_data: *mut c_void,
+    );
+}
+```
+
+It's actually pretty straightforward to use this `void *` user data argument
+for our counter.  Here's the equivalent of our `simple_with_global_variable`
+example.
+
+```rust
+// examples/better_with_counter_pointer.rs
+
+use rust_closures_and_ffi::better::better_add_two_numbers;
+use std::os::raw::{c_int, c_void};
+
+fn main() {
+    let numbers = [1, 2, 3, 4, 5, 6, 7];
+    let mut total = 0;
+
+    for i in 0..numbers.len() {
+        for j in i..numbers.len() {
+            let a = numbers[i];
+            let b = numbers[j];
+
+            unsafe {
+                better_add_two_numbers(
+                    a,
+                    b,
+                    add_result_to_total,
+                    &mut total as *mut c_int as *mut c_void,
+                );
+            }
+        }
+    }
+
+    println!("The sum is {}", total);
+}
+
+unsafe extern "C" fn add_result_to_total(
+    result: c_int,
+    user_data: *mut c_void,
+) {
+    let total = &mut *(user_data as *mut c_int);
+    *total += result;
+}
+```
+
+If you squint, you'll notice that we didn't need to change much from the
+global variable version. The only extra work we needed to do was casting
+`total` to a `void *` when calling `better_add_two_numbers()` and then cast
+it back at the top of `add_result_to_total()`.
 
 [strategy]: https://sourcemaking.com/design_patterns/strategy
