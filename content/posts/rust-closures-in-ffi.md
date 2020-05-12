@@ -9,16 +9,19 @@ tags:
 ---
 
 Every now and then when using native libraries from Rust you'll be asked to
-pass a callback across the FFI boundary. Often this might be done to notify
-the caller when "interesting" things happen, for injecting logic (see the
-[Strategy Pattern][strategy]), or to handle the result of an asynchronous
-operation.
+pass a callback across the FFI boundary. The reasons are varied, but often
+this might be done to notify the caller when "interesting" things happen, for
+injecting logic (see the [Strategy Pattern][strategy]), or to handle the
+result of an asynchronous operation.
 
-If this were normal Rust, we'd just accept a closure (e.g. a `Box<dyn Fn(...)>`
-or by being generic over any function-like type) and be done with it. However,
-the C language (or more specifically, the ABI and machine code in general) don't
-understand generics or Rust's "fat" pointers, meaning we need to be a little...
-creative.
+If this were normal Rust, we'd just accept a closure (e.g. a
+`Box<dyn Fn(...)>` or by being generic over any function-like type) and be
+done with it. However, when working with other languages you are reduced to
+the lowest common denominator, a the C language (or more specifically, the
+ABI and machine code in general) doesn't understand generics or Rust's "fat"
+pointers.
+
+This means we need to be a little... creative.
 
 {{% notice note %}}
 The code written in this article is available [on GitHub][repo]. Feel free to
@@ -48,8 +51,23 @@ void simple_add_two_numbers(int a, int b, AddCallback cb)
 }
 ```
 
-The straightforward way to use the `simple_add_two_numbers()` is to define a
-function with the correct signature...
+{{% notice note %}}
+To help make things cleaner, I've pulled the callback's signature out into the
+`AddCallback` typedef.
+
+I don't know about you, but I always get confused when looking at the way to
+write function pointers in C, and writing it inline as a function's argument
+tends to turn its signature into a mess of `(`s and `*`s.
+
+The equivalent without the `AddCallback` typedef would be this:
+
+ ```c
+void simple_add_two_numbers(int a, int b, void (*cb)(int, void *)) { ... }
+ ```
+{{% /notice %}}
+
+The straightforward way to use `simple_add_two_numbers()` from Rust is to
+define a function with the correct signature...
 
 ```rust
 // src/simple.rs
@@ -96,9 +114,10 @@ extern "C" {
 }
 ```
 
-We also need to use `unsafe` here because the `simple_add_two_numbers()`
-function was written in another language and Rust has no way of knowing that
-it's safe to use.
+As most resources involving FFI will mention, we need to use `unsafe` when
+invoking a native function because the `simple_add_two_numbers()` function
+was written in another language, and the Rust compiler has no way of knowing
+that it'll follow the borrow checker's rules.
 {{% /notice %}}
 
 We can even run this code and see what it generates.
@@ -219,19 +238,20 @@ impossible for the callback to update state!
 
 ## A Better Adding Function
 
-Now we know the original native function was flawed, let's go about fixing it.
+Now we know the original native function was flawed, let's go about fixing
+it. If the original flaw is that our callback can't use any non-global state,
+we just need to give it a way to access state from the caller.
 
-If the original flaw is that our callback can't use any non-global state, we
-should give it a way to access state passed in by the caller.
+Normally this state would be passed in by the caller as a pointer, but what
+type should we be using?
 
-Normally this state would be passed around as a pointer, but what type should
-we be using? In theory the caller may want to use their own custom struct as
-state (imagine we need to update a text field on a GUI program), so hard-coding
-a pointer to an integer won't really cut it.
+In theory the caller may want to use their own custom struct as state
+(imagine we need to update a text field on a GUI program), so hard-coding a
+pointer to an integer won't really cut it.
 
 Luckily, that's where C's `void *` pointer comes in. This says *"I've got a
-pointer to... something"* and to make that pointer usable downstream code will
-need to cast it to the desired type.
+pointer to... something"* and to make that pointer all usable downstream code
+will need to cast it to the desired type.
 
 Here is the amended function for adding numbers:
 
@@ -393,7 +413,7 @@ native code by "splitting" it into its data (instance of the anonymous type)
 and function (the `call()` method) parts.
 
 The easiest way to do this is by creating a "shim" function which is generic
-over one of the `Fn*()` traits and will invoke the closure with the provided
+over one of the `Fn()` traits and will invoke the closure with the provided
 arguments. Then we can get the data bit by taking a reference to the closure
 variable and casting that to a `void *` pointer.
 
@@ -446,10 +466,9 @@ fn use_the_trampoline_function() {
 ```
 
 Unfortunately, `rustc` will complain if you try to use this `trampoline()`
-function by itself because it can't infer the `F` type variable. This is
-because the type variable is completely unrelated to any of the functions
-inputs or outputs, so there isn't any information available to type
-inference.
+function by itself because it can't infer the `F` type variable. The type
+variable is completely unrelated to any of the functions inputs or outputs,
+so there isn't any information available to type inference.
 
 ```console
 $ cargo test
@@ -470,8 +489,14 @@ error: could not compile `rust-closures-and-ffi`.
 To help things along, we can define a getter function which accepts a
 reference to the closure as an argument (allowing type inference to figure
 out what `F` is) and using [turbofish][turbofish] to return a version of
-`trampoline()` specialised for `F` (the technical terminology is to
-*"instantiate"* a the `trampoline` function for the type, `F`).
+`trampoline()` specialised for `F`.
+
+{{% notice note %}}
+The technical terminology for this is to [*"instantiate"*][reference] a the
+`trampoline` function with the type, `F`.
+
+[reference]: https://doc.rust-lang.org/reference/items/functions.html#generic-functions
+{{% /notice %}}
 
 ```rust
 // src/better.rs
@@ -512,7 +537,7 @@ And everything compiles with the new getter.
 ```
 
 You can see I've written this as a test, so now we can be confident that
-`1 + 2` does in fact equal `3`.
+`1 + 2` does in fact equal `3` 🎉
 
 To tie everything together, if I were trying to provide a safe interface to
 `better_add_two_numbers()` it might be written like this:
@@ -543,9 +568,11 @@ This is because our specialised `trampoline()` function will blindly cast
 `user_data` to a pointer to that closure type without doing any type checks,
 so if you try to use it on anything else you're gonna have a bad time...
 
-This means it's important to make sure the callback is always an `unsafe`
-function, making it the caller's responsibility to ensure the correct
-`user_data` is used.
+It's important to make sure the callback is always an `unsafe` function,
+making it the caller's responsibility to ensure the correct `user_data` is
+used. You may sometimes need to compromise when the function signature is
+outside of your control, but the times you need to do this are usually far
+and few between, and you'll add big `SAFETY` comments where it's done.
 {{% /notice %}}
 
 ## Conclusions
