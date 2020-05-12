@@ -5,6 +5,7 @@ draft: true
 tags:
 - Rust
 - Unsafe Rust
+- FFI
 ---
 
 Every now and then when using native libraries from Rust you'll be asked to
@@ -513,8 +514,68 @@ And everything compiles with the new getter.
 You can see I've written this as a test, so now we can be confident that
 `1 + 2` does in fact equal `3`.
 
-## Conclusion
+To tie everything together, if I were trying to provide a safe interface to
+`better_add_two_numbers()` it might be written like this:
 
+```rust
+// better.rs
+
+/// Add two numbers, passing the result to the provided closure for further
+/// processing.
+pub fn add_two_numbers<F>(a: i32, b: i32, on_result_calculated: F)
+where
+    F: FnMut(i32),
+{
+    unsafe {
+        let mut closure = on_result_calculated;
+        let cb = get_trampoline(&closure);
+
+        better_add_two_numbers(a, b, cb, &mut closure as *mut _ as *mut c_void);
+    }
+}
+```
+
+{{% notice warning %}}
+A very important thing to note is the function pointer returned by
+`get_trampoline()` can **only** be used on the same closure that was passed in.
+
+This is because our specialised `trampoline()` function will blindly cast
+`user_data` to a pointer to that closure type without doing any type checks,
+so if you try to use it on anything else you're gonna have a bad time...
+
+This means it's important to make sure the callback is always an `unsafe`
+function, making it the caller's responsibility to ensure the correct
+`user_data` is used.
+{{% /notice %}}
+
+## Conclusions
+
+While it may seem like a niche problem, and it is, when trying to write
+idiomatic bindings for a native library it's not uncommon to deal with
+callbacks.
+
+In the past I used to use a slightly different version of `get_trampoline()`
+which would return *both* the `trampoline` function pointer and `user_data`,
+and it even [became part][split_closure] of my `ffi_helpers` crate. However,
+after [some lengthy discussion][ffi_helpers_3] with
+[`@danielhenrymantilla`][dhm], I've decided the above version is safer and
+helps prevent callers from accidentally creating aliased mutable pointers.
+
+{{% expand "(Original trampoline getter)" %}}
+
+```rust
+pub fn get_trampoline<F>(closure: &mut F) -> (*mut c_void, AddCallback)
+where
+    F: FnMut(c_int),
+{
+    (closure as *mut F as *mut c_void, trampoline::<F>)
+}
+```
+
+{{% /expand %}}
 
 [strategy]: https://sourcemaking.com/design_patterns/strategy
 [turbofish]: https://turbo.fish/
+[split_closure]: https://docs.rs/ffi_helpers/0.2.0/ffi_helpers/fn.split_closure.html
+[ffi_helpers_3]: https://github.com/Michael-F-Bryan/ffi_helpers/pull/3/
+[dhm]: https://github.com/danielhenrymantilla
