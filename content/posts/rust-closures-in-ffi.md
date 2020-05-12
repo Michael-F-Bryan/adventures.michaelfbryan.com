@@ -1,7 +1,6 @@
 ---
 title: "Rust Closures in FFI"
-date: "2020-05-10T16:47:27+08:00"
-draft: true
+date: "2020-05-12T22:00:00+08:00"
 tags:
 - Rust
 - Unsafe Rust
