@@ -313,4 +313,208 @@ global variable version. The only extra work we needed to do was casting
 `total` to a `void *` when calling `better_add_two_numbers()` and then cast
 it back at the top of `add_result_to_total()`.
 
+Of course, there's no reason why we can only use a `c_int` for our
+`user_data`. For more complex scenarios you'll often need to use a custom
+type and update multiple members at a time.
+
+For example, imagine we wanted to count the number of times the callback is
+invoked as well as the final total.
+
+First we create a new `Counter` type.
+
+```rust
+// examples/better_with_counter_struct.rs
+
+#[derive(Debug, Default, Clone, PartialEq)]
+struct Counter {
+    total: c_int,
+    calls: usize,
+}
+```
+
+And then we can tweak the code to update our `Counter` struct.
+
+```diff
+  // examples/better_with_counter_struct.rs
+
+  fn main() {
+      let numbers = [1, 2, 3, 4, 5, 6, 7];
++     let mut counter = Counter::default();
+-     let mut total = 0;
+
+      for i in 0..numbers.len() {
+          for j in i..numbers.len() {
+              let a = numbers[i];
+              let b = numbers[j];
+
+              unsafe {
+                  better_add_two_numbers(
+                      a,
+                      b,
+                      add_result_to_total,
+-                     &mut total as *mut c_int as *mut c_void,
++                     &mut counter as *mut Counter as *mut c_void,
+                  );
+              }
+          }
+      }
+
+-     println!("The sum is {}", total);
++     println!("The result is {:?}", counter);
+  }
+
+  unsafe extern "C" fn add_result_to_total(
+      result: c_int,
+      user_data: *mut c_void,
+  ) {
+-     let total = &mut *(user_data as *mut c_int);
+-     *total += result;
++     let mut counter = &mut *(user_data as *mut Counter);
++     counter.total += result;
++     counter.calls += 1;
+  }
+```
+
+And of course, we can compile and run this code.
+
+```console
+$ cargo run --example better_with_counter_struct
+    Finished dev [unoptimized + debuginfo] target(s) in 0.02s
+     Running `target/debug/examples/better_with_counter_struct`
+The result is Counter { total: 224, calls: 28 }
+```
+
+## Introducing Closures
+
+In Rust, a closure is just syntactic sugar for defining a new type with some
+sort of `call()` method. So in theory, we should be able to pass a closure to
+native code by "splitting" it into its data (instance of the anonymous type)
+and function (the `call()` method) parts.
+
+The easiest way to do this is by creating a "shim" function which is generic
+over one of the `Fn*()` traits and will invoke the closure with the provided
+arguments. Then we can get the data bit by taking a reference to the closure
+variable and casting that to a `void *` pointer.
+
+Using the last section's example, here is a function which satisfies the
+`AddCallback` signature and will treat the provided `user_data` as a closure.
+
+```rust
+// src/better.rs
+
+unsafe extern "C" fn trampoline<F>(result: c_int, user_data: *mut c_void)
+where
+    F: FnMut(c_int),
+{
+    let user_data = &mut *(user_data as *mut F);
+    user_data(result);
+}
+```
+
+Now let's see how this `trampoline()` might be used in practice. Here I've
+created a simple integer variable, `got`, and a `closure` closure which will
+set `got` to the `result` given to us by `better_add_two_numbers()`.
+
+You can see that we've taken a reference to the `closure` variable (which is
+an instance of the anonymous struct `rustc` generated, and is currently
+sitting on the stack) and done a couple pointer casts to turn it into
+something we can use as our `user_data`.
+
+```rust
+// src/better.rs
+
+#[test]
+fn use_the_trampoline_function() {
+    let mut got = 0;
+
+    {
+        let mut closure = |result: c_int| got = result;
+
+        unsafe {
+            better_add_two_numbers(
+                1,
+                2,
+                trampoline,
+                &mut closure as *mut _ as *mut c_void,
+            );
+        }
+    }
+
+    assert_eq!(got, 1 + 2);
+}
+```
+
+Unfortunately, `rustc` will complain if you try to use this `trampoline()`
+function by itself because it can't infer the `F` type variable. This is
+because the type variable is completely unrelated to any of the functions
+inputs or outputs, so there isn't any information available to type
+inference.
+
+```console
+$ cargo test
+    Finished dev [unoptimized + debuginfo] target(s) in 0.01s
+   Compiling rust-closures-and-ffi v0.1.0 (/home/michael/Documents/rust-closures-and-ffi)
+error[E0282]: type annotations needed
+  --> src/better.rs:44:21
+   |
+44 |                     trampoline,
+   |                     ^^^^^^^^^^
+
+error: aborting due to previous error
+
+For more information about this error, try `rustc --explain E0282`.
+error: could not compile `rust-closures-and-ffi`.
+```
+
+To help things along, we can define a getter function which accepts a
+reference to the closure as an argument (allowing type inference to figure
+out what `F` is) and using [turbofish][turbofish] to return a version of
+`trampoline()` specialised for `F` (the technical terminology is to
+*"instantiate"* a the `trampoline` function for the type, `F`).
+
+```rust
+// src/better.rs
+
+pub fn get_trampoline<F>(_closure: &F) -> AddCallback
+where
+    F: FnMut(c_int),
+{
+    trampoline::<F>
+}
+```
+
+And everything compiles with the new getter.
+
+```diff
+  // src/better.rs
+
+  #[test]
+  fn use_the_trampoline_function() {
+      let mut got = 0;
+
+      {
+          let mut closure = |result: c_int| got = result;
++         let trampoline = get_trampoline(&closure);
+
+          unsafe {
+              better_add_two_numbers(
+                  1,
+                  2,
+                  trampoline,
+                  &mut closure as *mut _ as *mut c_void,
+              );
+          }
+      }
+
+      assert_eq!(got, 3);
+  }
+```
+
+You can see I've written this as a test, so now we can be confident that
+`1 + 2` does in fact equal `3`.
+
+## Conclusion
+
+
 [strategy]: https://sourcemaking.com/design_patterns/strategy
+[turbofish]: https://turbo.fish/
