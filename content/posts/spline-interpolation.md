@@ -52,7 +52,11 @@ If you found this useful or spotted a bug, let me know on the blog's
 
 ## Generalising To Higher Degrees
 
+## Approximating
+
 ## Taking Derivatives
+
+## A Better Approximation
 
 ## Conclusions
 
