@@ -286,6 +286,90 @@ impl Polynomial {
 }
 ```
 
+This all seems well and good, but an interesting phenomena emerges as you start
+trying to get the interpolation function for more and more points.
+
+To show this effect, I've created a `quadratic()` function which evaluates
+$x = 3 - t + 5 t^2$.
+
+In theory, no matter how many inputs we provide, our `Polynomial` abstraction
+should find that the "best" function for interpolating our data has the
+coefficients `[3, -1, 5]` because that's what we used to generate the points
+in the first place.
+
+
+```rust
+fn quadratic(t: usize) -> f64 {
+    let t = t as f64;
+
+    5.0 * t * t - t + 3.0
+}
+
+for num_points in 14..23 {
+    let data_points: Vec<_> = (0..num_points)
+        .map(quadratic)
+        .collect();
+    let poly = Polynomial::approximating_data(&data_points);
+
+    println!(
+      "Coefficients with {} points: {:.4?}",
+      data_points.len(),
+      significant_coefficients(&poly),
+    );
+}
+```
+
+But that's not what we see when increasing the number of points from 14 to
+23...
+
+```
+Coefficients with 14 points: [3.0000, -1.0000, 5.0000]
+Coefficients with 15 points: [3.0000, -1.0002, 5.0000]
+Coefficients with 16 points: [3.0000, -1.0025, 5.0001]
+Coefficients with 17 points: [3.0000, -0.9956, 5.0061, -0.0017]
+Coefficients with 18 points: [3.0000, -1.1404, 5.0015, 0.0032]
+Coefficients with 19 points: [3.0000, -1.3804, 5.1542, -0.0022, -0.0088, 0.0023]
+Coefficients with 20 points: [3.0000, 27.2128, -5.6370, 1.7740, -0.1443, 0.0024]
+Coefficients with 21 points: [3.0000, 66.5303, 8.2934, -1.1984, 0.1849, -0.0202]
+Coefficients with 22 points: [3.0000, 615.5219, -90.7595, 7.4350, 0.0597, -0.0945, 0.0139, -0.0013]
+```
+
+You can see for lower numbers of points it figures out the coefficients for
+our quadratic just fine, but around 16 points it starts to diverge.
+
+By 19 points we're no longer using our perfect quadratic for approximation,
+and some higher order coefficients (e.g. cubic and quartic) are starting to
+come into play.
+
+Then when we reach 20 or more points our original quadratic is all but
+unrecognisable.
+
+{{% notice info %}}
+The technical term for this is [Runge's phenomenon][runge-phenomenon], named
+after [Carl David Tolmé Runge][runge-wiki] (of [Runge–Kutta][runge-kutta]
+fame), who discovered it while exploring the behaviour of errors when using
+polynomial interpolation to approximate certain functions.
+
+You can think of it as the interpolation analogue of [overfitting your
+data][overfitting].
+
+By construction the resulting polynomial will always pass through our
+original points. However as we add more terms, the larger terms start to
+dominate and become too big to to be cancelled out (which would give us the
+smoothness we desire). Even if the 5th coefficient is something small like
+$-0.0945$, $-0.0945 \times t^5$ is going to be a big number.
+
+![Example of Runge's Phenomenon](runge-phenomenon.png)
+
+[runge-phenomenon]: https://en.wikipedia.org/wiki/Runge%27s_phenomenon
+[runge-wiki]: https://en.wikipedia.org/wiki/Carl_David_Tolm%C3%A9_Runge
+[runge-kutta]: https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta_methods
+[overfitting]: https://en.wikipedia.org/wiki/Overfitting
+{{% /notice %}}
+
+Luckily for us, there are a couple techniques we can use to avoid
+*Runge's phenomenon*.
+
 [arcs]: https://github.com/Michael-F-Bryan/arcs
 [wiki]: https://en.wikipedia.org/wiki/Polynomial_interpolation
 [interpolate]: https://en.wikipedia.org/wiki/Interpolation
