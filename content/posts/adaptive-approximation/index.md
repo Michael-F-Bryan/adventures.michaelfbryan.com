@@ -13,6 +13,47 @@ approximate the spline as a bunch of points. This is useful when you want to
 draw the polyline on a screen because you can draw lines through each point
 and get a pretty good approximation of the polyline's shape.
 
+Normally you'll define a polyline as some sort of mathematical function which
+spits out X-Y coordinates, so the simplest approximation strategy is to split
+the curve's length into `n` equally spaced segments. It might look something
+like this:
+
+```rust
+fn approximate(num_pieces: usize, poly: &Polyline) -> impl Iterator<Item = Point> {
+    let step_size = 1.0 / num_pieces as f64;
+
+    (0..num_pieces)
+        .map(|step| step_size * step)
+        .map(|t| poly.evaluate(t))
+}
+```
+
+This works but has a couple problems...
+
+For example, what step size (the reciprocal of `n`) should I use split the
+curve into? Too few and our connect-the-dots approximation will look blocky
+or miss features, however too many pieces can massively hurt performance
+because we may be processing 10-10,000x more line segments than we need to
+(and need to copy all those bytes around).
+
+points at corners (which is great, because that's where the curve is changing
+quickly) and just as many points along the straight stretches (which isn't as
+great, because we could have approximated it as a single line segment).
+
+It also doesn't feel very elegant. Usually you'll be able to use
+domain-specific knowledge to estimate how many pieces to split a curve into
+(e.g. you know the drawing will be consumed by a machine with 0.1 mm
+tolerances) and that's file, but it still feels naive and taking the
+conservative approach leaves a lot of performance on the table.
+
+I feel like we can improve on this approach by taking a smarter approach.
+
+Often polylines will be composed of tight corners connected by long
+straight-ish sections, so instead of using a uniform step size what if we
+adjusted the step so we increase the point density when things change
+rapidly? Conversely, we could space them out when the curve is fairly
+straight to reduce the overall number of points in the approximation.
+
 {{% notice note %}}
 The code written in this article is available [on GitHub][repo]. Feel free to
 browse through and steal code or inspiration.
@@ -26,16 +67,16 @@ If you found this useful or spotted a bug, let me know on the blog's
 
 ## The Polyline
 
-At its most basic, an *Interpolated Polyline* is composed of a series of
-segments, where each segment is a polynomial function (usually cubic)
-defining that section of the spline.
+At its most basic, an *Interpolated Spline* is a polyline composed of a
+series of segments, where each segment is a polynomial function (usually
+cubic) defining that section of the spline.
 
 Polylines can double back on themselves and fail [the vertical line
 test][vertical-test], so we can't define each segment using something like $y
 = f(x)$. Instead we [introduce another parameter][parameter], $t$ (I usually
 think of it as the % distance along the polyline, or the fractional segment
 number), and define each component in terms of $t$. Parameterising an
-equation is the math equivalent of adding [another level of
+equation is the mathematical equivalent of adding [another level of
 indirection][indirection].
 
 In Rust parlance, we might write this like so:
@@ -95,7 +136,7 @@ impl Polyline {
 }
 ```
 
-## The Implementation
+## Sprinkling in a Bit of Calculus
 
 ## Conclusions
 
