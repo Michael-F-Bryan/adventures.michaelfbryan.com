@@ -88,6 +88,8 @@ There is a mathematical technique referred to as [Interpolation][interpolate]
 which looks at some data points and uses trends to estimate the shape of the
 curve passing through them.
 
+<span id="desired-properties"></span>
+
 Ideally this interpolation process would give us a mathematical function
 which...
 
@@ -359,6 +361,11 @@ dominate and become too big to to be cancelled out (which would give us the
 smoothness we desire). Even if the 5th coefficient is something small like
 $-0.0945$, $-0.0945 \times t^5$ is going to be a big number.
 
+See how the higher order terms are causing large oscillations towards the
+endpoints in the graph below (red is the actual curve, blue is our polynomial
+approximation). The interpolated curve is only really usable between the
+three central data points.
+
 ![Example of Runge's Phenomenon](runge-phenomenon.png)
 
 [runge-phenomenon]: https://en.wikipedia.org/wiki/Runge%27s_phenomenon
@@ -370,9 +377,69 @@ $-0.0945$, $-0.0945 \times t^5$ is going to be a big number.
 Luckily for us, there are a couple techniques we can use to avoid
 *Runge's phenomenon*.
 
+## Interpolation Using Cubic Polynomials
+
+Okay, so we've seen that using a n-degree polynomial to draw a curve through
+n points isn't ideal. But if you look back at [the desired
+properties](#desired-properties) we wrote down earlier, you might notice we
+don't actually care how many terms our approximation function uses, only that
+it is continuous and smooth.
+
+So let's take a different approach.
+
+What if, instead of creating a single function which can be used for
+interpolation across the entire domain, we use a series of smaller
+polynomials which are only valid for their particular segment?
+
+That's the approach used by quadratic and cubic interpolated splines.
+
+It's easy enough to make sure a piecewise polynomial is continuous, in fact
+we can get that for free by saying that each piece in our curve starts and
+ends on a data point.
+
+Likewise, because polynomials with degree 2 or greater are able to change
+their slope (compared to a line which, by definition, can only be straight)
+when solving for our coefficients we can add a constraint that at the slope
+is continuous at each segment endpoint. That solves our "smooth" requirement
+as well.
+
+While we didn't mention it earlier, a lot of real world applications like
+graphic arts, engineering, and manufacturing also care about splines having
+continuous (i.e. change in slope).
+
+This throws a spanner in the works if we want to use segments based on
+quadratic polynomials. Because the second derivative of a quadratic is always
+a constant there's no way to specify a constraint that the second derivative
+is constant across segment endpoints. Constants can't change, so it's almost
+like we've run out of the variables/flexibility we need. That's why a lot of
+interpolated splines are based on cubic polynomials instead.
+
+Okay, so we know we're going to use segments approximated using cubics, now
+what?
+
+Well [according to Wikipedia][cubic-spline-algorithm] the cubic, $f(t) = x$
+ that passes through the points $(t_0, x_0), \ldots (t_3, x_3)$ can be written
+ as
+
+{{< latex >}}
+\begin{align}
+f(t) &= {\big (}1-k(t){\big )} y_{1} +
+        k(t) y_{2} +
+        k(t){\big (}1-k(t){\big )}{\Big (}{\big (}1-k(t){\big )}\,a+k(t)\,b{\Big )} \\
+\textit{where:} & \\
+k(t) &= \frac{t - t_0}{t_1 - t_0} \\
+a &=k_{1}(x_{2}-x_{1})-(y_{2}-y_{1}) \\
+b &=-k_{2}(x_{2}-x_{1})+(y_{2}-y_{1})
+\end{align}
+{{< /latex >}}
+
+{{< youtube id="rtwOrZL02M0" >}}
+
+
 [arcs]: https://github.com/Michael-F-Bryan/arcs
 [wiki]: https://en.wikipedia.org/wiki/Polynomial_interpolation
 [interpolate]: https://en.wikipedia.org/wiki/Interpolation
 [poly]: https://en.wikipedia.org/wiki/Polynomial
 [vertical-test]: https://en.wikipedia.org/wiki/Vertical_line_test
 [nalgebra]: https://crates.io/crates/nalgebra
+[cubic-spline-algorithm]: https://en.wikipedia.org/wiki/Spline_interpolation#Algorithm_to_find_the_interpolating_cubic_spline

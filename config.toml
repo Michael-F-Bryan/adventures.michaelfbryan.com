@@ -30,6 +30,10 @@ commit = "https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree"
 [markup.goldmark.renderer]
 unsafe= true
 
+[privacy.googleAnalytics]
+respectDoNotTrack = true
+useSessionStorage = true
+
 [[params.social]]
 name = "Github"
 icon = "fab fa-github fa-2x"
