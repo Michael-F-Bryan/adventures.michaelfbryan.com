@@ -151,6 +151,18 @@ error: aborting due to 2 previous errors
 
 [(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=d9293c605ba8fd1fc6c656b5155410b0)
 
+{{ %notice tip %}}
+This `assert_is_digital_input()` function is a nice little trick you can use
+to make sure something implements a particular trait. By using
+[turbofish][fish] we can specify *exactly* which type we're trying to check,
+skipping things like auto-defer and coersion.
+
+You can find more gems like this in [the `static_assertions` crate][s],
+
+[fish]: https://turbo.fish/
+[s]: https://docs.rs/static_assertions
+{{ /notice %}}
+
 The key bits to look out for:
 
 > the trait bound `std::boxed::Box<dyn DigitalInput>: DigitalInput` is not satisfied
