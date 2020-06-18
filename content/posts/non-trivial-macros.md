@@ -214,7 +214,7 @@ to try and parse some tokens as an expression, and assign the AST node to
 
 Our first step is to write a macro that can match a method signature.
 
-Matching something like `fn get_x(&self) -> u32` isn't too difficult. The only
+Matching something like `fn get_x(&self) -> u32;` isn't too difficult. The only
 bits that will change are `get_x` and `u32`, where `get_x` is some identifier
 for the item name and `u32` is our return type.
 
@@ -222,7 +222,7 @@ for the item name and `u32` is our return type.
 // src/lib.rs
 
 macro_rules! visit_members {
-    ( fn $name:ident(&self) -> $ret:ty ) =>  {}
+    ( fn $name:ident(&self) -> $ret:ty; ) =>  {}
 }
 ```
 
@@ -237,7 +237,7 @@ mod tests {
 
     #[test]
     fn visit_simple_getter_method() {
-        visit_members! { fn get_x(&self) -> u32 }
+        visit_members! { fn get_x(&self) -> u32; }
     }
 }
 ```
@@ -250,13 +250,13 @@ We can also use repetition to match a function with 0 or more arguments.
 // src/lib.rs
 
 macro_rules! visit_members {
-    ( fn $name:ident(&self $(, $arg_name:ident : $arg_ty:ty )*) -> $ret:ty ) => {};
+    ( fn $name:ident(&self $(, $arg_name:ident : $arg_ty:ty )*) -> $ret:ty; ) => {};
 }
 
 #[test]
 fn visit_method_with_multiple_parameters() {
-    visit_members! { fn get_x(&self, foo: usize) -> u32 }
-    visit_members! { fn get_x(&self, bar: &str, baz: impl FnOnce()) -> u32 }
+    visit_members! { fn get_x(&self, foo: usize) -> u32; }
+    visit_members! { fn get_x(&self, bar: &str, baz: impl FnOnce()) -> u32; }
 }
 ```
 
@@ -268,12 +268,12 @@ functions which don't return anything (i.e. the implicit `-> ()`).
 // src/lib.rs
 
 macro_rules! visit_members {
-    ( fn $name:ident(&self $(, $arg_name:ident : $arg_ty:ty )*) $(-> $ret:ty)? ) => {};
+    ( fn $name:ident(&self $(, $arg_name:ident : $arg_ty:ty )*) $(-> $ret:ty)?; ) => {};
 }
 
 #[test]
 fn visit_method_without_return_type() {
-    visit_members! { fn get_x(&self) }
+    visit_members! { fn get_x(&self); }
 }
 ```
 
@@ -286,7 +286,7 @@ attributes or docs-comment attached to a function.
 macro_rules! visit_members {
     (
         $( #[$attr:meta] )*
-        fn $name:ident(&self $(, $arg_name:ident : $arg_ty:ty )*) $(-> $ret:ty)?
+        fn $name:ident(&self $(, $arg_name:ident : $arg_ty:ty )*) $(-> $ret:ty)?;
     ) => {};
 }
 
@@ -295,7 +295,7 @@ fn visit_method_with_attributes() {
     visit_members! {
         /// Get `x`.
         #[allow(bad_style)]
-        fn get_x(&self) -> u32
+        fn get_x(&self) -> u32;
     }
 }
 ```
@@ -341,7 +341,257 @@ We're going to use a TT muncher to match multiple function signatures. The idea
 is that we'll adapt our existing `visit_members!()` macro to match the function
 signature at the start of our input stream, then recurse on the rest.
 
+The first step is to add something which will match any tokens after our
+signature.
+
+```rust
+// src/lib.rs
+
+macro_rules! visit_members {
+    (
+        $( #[$attr:meta] )*
+        fn $name:ident(&self $(, $arg_name:ident : $arg_ty:ty )*) $(-> $ret:ty)?;
+
+        $( $rest:tt )*
+    ) => {};
+}
+```
+
+At this point all our existing tests still pass because they don't have any
+trailing tokens.
+
+While we're at it let's actually add in the recursion call, otherwise we'd be
+matching everything after our first method signature and silently throwing it
+away.
+
+```rust
+// src/lib.rs
+
+macro_rules! visit_members {
+    (
+        $( #[$attr:meta] )*
+        fn $name:ident(&self $(, $arg_name:ident : $arg_ty:ty )*) $(-> $ret:ty)?;
+
+        $( $rest:tt )*
+    ) => {
+        // TODO: do something with the signature we just matched
+
+        visit_members! { $($rest)* }
+    };
+}
+```
+
+I have [`cargo watch`][cargo-watch] running on a background terminal to
+automatically recompile whenever something changes, and immediately after
+hitting save I started seeing lots of red...
+
+```
+    Finished dev [unoptimized + debuginfo] target(s) in 0.00s
+   Compiling non-trivial-macros v0.1.0 (/home/michael/Documents/non-trivial-macros)
+error: unexpected end of macro invocation
+  --> src/lib.rs:11:9
+   |
+2  | macro_rules! visit_members {
+   | -------------------------- when calling this macro
+...
+11 |         visit_members! { $($rest)* }
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+21 |         visit_members! { fn get_x(&self) -> u32; }
+   |         ------------------------------------------ in this macro invocation
+   |
+   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
+
+...
+```
+
+The important bit is that *"unexpected end of macro invocation"* message. It's
+saying the macro ran out of tokens when it was expecting to match something.
+
+Just like with normal programming, when you do recursion you need to add a
+base case so you can stop recursing. The error message is telling us that it
+matched the function signature, then when trying to match the rest of the
+input (of which there is none) it didn't have enough tokens.
+
+The solution is easy enough, just add a base case which matches exactly nothing.
+
+```rust
+// src/lib.rs
+
+macro_rules! visit_members {
+    (
+        $( #[$attr:meta] )*
+        fn $name:ident(&self $(, $arg_name:ident : $arg_ty:ty )*) $(-> $ret:ty)?;
+
+        $( $rest:tt )*
+    ) => {
+        visit_members! { $($rest)* }
+    };
+    () => {}
+}
+```
+
+Now that's solved, let's add a test with two signatures and see what happens.
+
+```rust
+// src/lib.rs
+
+#[test]
+fn match_two_getters() {
+    visit_members! {
+        fn get_x(&self) -> u32;
+        fn get_y(&self) -> u32;
+    }
+}
+```
+
+Looking back at the output from my terminal, it seems like it all just
+works... Don't you love it when you write something based on theory and it
+all works perfectly first time?
+
+It doesn't happen often, so I like to cherish these moments 😉
+
+## Callbacks
+
+*The Little Book of Rust Macros* also includes a couple techniques for
+generating code. Most notable among them for our purposes is the
+[Callback][callback].
+
+This lets us pass the name of a macro into a macro so it can be invoked later
+with the results of our pattern matching.
+
+Passing in the callback's name is easy enough. Just add it to the start of the
+macro input.
+
+```rust
+// src/lib.rs
+
+macro_rules! visit_members {
+    (
+        $callback:ident;
+
+        $( #[$attr:meta] )*
+        fn $name:ident(&self $(, $arg_name:ident : $arg_ty:ty )*) $(-> $ret:ty)?;
+
+        $( $rest:tt )*
+    ) => {
+        visit_members! { $callback; $($rest)* }
+    };
+    ($callback:ident;) => {}
+}
+```
+
+{{% notice note %}}
+Make sure you update the base case now we're always passing a `$callback;` at
+the start of recursive call.
+{{% /notice %}}
+
+At this point we'll need to update all our tests to start with the callback
+name. I'm using the name `print`, which we'll actually declare in the next
+step. The callback doesn't matter for now because it's never actually used.
+
+```rust
+// src/lib.rs
+
+#[test]
+fn visit_simple_getter_method() {
+    visit_members! { print; fn get_x(&self) -> u32; }
+}
+
+#[test]
+fn match_two_getters() {
+    visit_members! {
+        print;
+
+        fn get_x(&self) -> u32;
+        fn get_y(&self) -> u32;
+    }
+}
+```
+
+Now we can make the macro invoke our callback with the matched signature.
+
+For now I just want to swallow the tokens and do nothing. If the code compiles,
+we can be pretty sure we're invoking the callback correctly.
+
+```rust
+// src/lib.rs
+
+macro_rules! visit_members {
+    (
+        $callback:ident;
+
+        $( #[$attr:meta] )*
+        fn $name:ident(&self $(, $arg_name:ident : $arg_ty:ty )*) $(-> $ret:ty)?;
+
+        $( $rest:tt )*
+    ) => {
+        $callback!(
+            $( #[$attr] )*
+            fn $name(&self $(, $arg_name : $arg_ty )*) $(-> $ret)?
+        );
+
+        visit_members! { $callback; $($rest)* }
+    };
+    ($callback:ident;) => {};
+}
+
+macro_rules! my_callback {
+    ( $($whatever:tt)* ) => {}
+}
+```
+
+{{% notice tip %}}
+If you ever get stuck and are wanting some sort of "print statement" to see what
+a macro is doing, have a look at the `compile_error!()` macro.
+
+By combining `compile_error!()` with `stringify!()` and `concat!()` you can
+concatenate the stringified form of arbitrary tokens to create an error message
+containing the tokens you've matched.
+
+```rust
+macro_rules! my_callback {
+    ( $($tokens:tt)* ) => {
+        compile_error!(
+            concat!(
+                $(
+                    stringify!($tokens), " "
+                ),*
+            )
+        );
+    };
+}
+```
+
+When used on our existing tests, we get errors like this:
+
+```
+error: fn get_x (& self) -> u32
+  --> src/lib.rs:27:13
+   |
+27 | /             compile_error!(
+28 | |                 concat!(
+29 | |                     $(
+30 | |                         stringify!($tokens), " "
+31 | |                     ),*
+32 | |                 )
+33 | |             );
+   |
+...
+39 |           visit_members! { echo; fn get_x(&self) -> u32; }
+   |           ------------------------------------------------ in this macro invocation
+   |
+   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
+
+```
+
+It's not particularly elegant, but this (ab)use of the `compile_error!()`
+macro lets us see that `fn get_x (& self) -> u32` was passed to the callback.
+{{% /notice %}}
+
 
 [object-safety]: https://doc.rust-lang.org/book/ch17-02-trait-objects.html#object-safety-is-required-for-trait-objects
 [replace-conditional]: https://refactoring.guru/replace-conditional-with-polymorphism
 [tt]: https://danielkeep.github.io/tlborm/book/pat-incremental-tt-munchers.html
+[cargo-watch]: https://crates.io/crates/cargo-watch
+[callback]: https://danielkeep.github.io/tlborm/book/pat-callbacks.html
