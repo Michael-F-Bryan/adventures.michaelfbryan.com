@@ -6,6 +6,52 @@ tags:
 - Rust
 ---
 
+Macros in Rust tend to have a reputation for being complex and magical, the
+likes which only seasoned veterans like [`@dtolnay`][dt] can hope to
+understand, let alone master.
+
+Rust's declarative macros provide a mechanism for pattern matching on
+arbitrary syntax to generate valid Rust code at compile time. I use them all
+the time for simple search/replace style operations like generating tests
+that have a lot of boilerplate, or straightforward trait implementations for
+a large number of types.
+
+```rust
+pub trait AstNode {
+    /// The location of this node in its source document.
+    fn span(&self) -> ByteSpan;
+}
+
+macro_rules! impl_ast_node {
+    ($($name:ty,)*) => {
+        $(
+            impl AstNode for $name {
+                fn span(&self) -> ByteSpan { self.span }
+            }
+        )*
+    };
+}
+
+// these types all have a `span` field.
+impl_ast_node!(
+    Literal,
+    Assignment,
+    Declaration,
+    Identifier,
+    BinaryExpression,
+    IfStatement,
+    ...
+);
+```
+
+Unfortunately once you need to do more than these trivial macros, the
+difficulty tends to go through the roof.
+
+I recently encountered a situation at work where a non-trivial technical
+problem could be solved by writing an equally non-trivial macro. There are a
+number of tricks and techniques I employed along the way that helped keep the
+code manageable and easy to implement, so I thought I'd write about them to
+help the next adventurer who walks this path.
 
 {{% notice note %}}
 The code written in this article is available [on GitHub][repo]. Feel free to
@@ -14,7 +60,7 @@ browse through and steal code or inspiration.
 If you found this useful or spotted a bug, let me know on the blog's
 [issue tracker][issue]!
 
-[repo]: https://github.com/Michael-F-Bryan/💩🔥🦀
+[repo]: https://github.com/Michael-F-Bryan/non-trivial-macros
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
 {{% /notice %}}
 
@@ -815,9 +861,21 @@ TODO: Talk about handling `&self` and `&mut self`.
 
 ## Conclusions
 
+{{% notice warning %}}
+TODO: The conclusion
+
+The takeaways:
+
+- tests are great for iterating and providing examples later on
+- start as simple as possible and take tiny steps
+- make an effort to keep things simple and not fit all the logic into a single
+  macro
+{{% /notice %}}
+
 
 [object-safety]: https://doc.rust-lang.org/book/ch17-02-trait-objects.html#object-safety-is-required-for-trait-objects
 [replace-conditional]: https://refactoring.guru/replace-conditional-with-polymorphism
 [tt]: https://danielkeep.github.io/tlborm/book/pat-incremental-tt-munchers.html
 [cargo-watch]: https://crates.io/crates/cargo-watch
 [callback]: https://danielkeep.github.io/tlborm/book/pat-callbacks.html
+[dt]: https://github.com/dtolnay
