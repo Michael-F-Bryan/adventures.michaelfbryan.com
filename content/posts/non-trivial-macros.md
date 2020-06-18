@@ -204,5 +204,144 @@ trait_with_dyn_impls! {
 ... And have it automatically implement the trait for `&mut dyn InterestingTrait`
 and `Box<dyn InterestingTrait>`.
 
+You can think of Rust's declarative (`macro_rules`) macros as a form of
+pattern matching which, instead of relying on the type system, uses parsing
+machinery from the compiler itself.
+
+For example, when you write `$value:expr` in a macro, that asks the compiler
+to try and parse some tokens as an expression, and assign the AST node to
+`$value` on success.
+
+Our first step is to write a macro that can match a method signature.
+
+Matching something like `fn get_x(&self) -> u32` isn't too difficult. The only
+bits that will change are `get_x` and `u32`, where `get_x` is some identifier
+for the item name and `u32` is our return type.
+
+```rust
+// src/lib.rs
+
+macro_rules! visit_members {
+    ( fn $name:ident(&self) -> $ret:ty ) =>  {}
+}
+```
+
+We can even write a test for it.
+
+```rust
+// src/lib.rs
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn visit_simple_getter_method() {
+        visit_members! { fn get_x(&self) -> u32 }
+    }
+}
+```
+
+If the code compiles, it works 👍
+
+We can also use repetition to match a function with 0 or more arguments.
+
+```rust
+// src/lib.rs
+
+macro_rules! visit_members {
+    ( fn $name:ident(&self $(, $arg_name:ident : $arg_ty:ty )*) -> $ret:ty ) => {};
+}
+
+#[test]
+fn visit_method_with_multiple_parameters() {
+    visit_members! { fn get_x(&self, foo: usize) -> u32 }
+    visit_members! { fn get_x(&self, bar: &str, baz: impl FnOnce()) -> u32 }
+}
+```
+
+In the same way you can use `$( ... )*` for zero or more repeats, you can use
+`$( ... )?` to match exactly zero or one items. This gives us a nice way to handle
+functions which don't return anything (i.e. the implicit `-> ()`).
+
+```rust
+// src/lib.rs
+
+macro_rules! visit_members {
+    ( fn $name:ident(&self $(, $arg_name:ident : $arg_ty:ty )*) $(-> $ret:ty)? ) => {};
+}
+
+#[test]
+fn visit_method_without_return_type() {
+    visit_members! { fn get_x(&self) }
+}
+```
+
+We can also use the `meta` specifier to handle an arbitrary number of
+attributes or docs-comment attached to a function.
+
+```rust
+// src/lib.rs
+
+macro_rules! visit_members {
+    (
+        $( #[$attr:meta] )*
+        fn $name:ident(&self $(, $arg_name:ident : $arg_ty:ty )*) $(-> $ret:ty)?
+    ) => {};
+}
+
+#[test]
+fn visit_method_with_attributes() {
+    visit_members! {
+        /// Get `x`.
+        #[allow(bad_style)]
+        fn get_x(&self) -> u32
+    }
+}
+```
+
+{{% notice note %}}
+You'll notice that I introduced a couple line breaks to help make the pattern
+expression look similar to the code we're trying to match. Something you'll
+learn in this article is that readability is super important.
+
+Rust's declarative macros are similar to [APL][apl] in that they're really
+powerful and let you accomplish a lot with not much code... but it's also the
+kind of code that will only be written once. Then when a bug shows up you
+throw it away and start again instead of trying to understand the mess of
+punctuation, words, and symbols.
+
+[apl]: https://en.wikipedia.org/wiki/APL_(programming_language)
+{{% /notice %}}
+
+{{% notice info %}}
+I'm going to skip the problem of handling `&self` versus `&mut self` for the
+time being. The macro system has a couple... quirks... which make dealing
+with `self` kinda awkward.
+{{% /notice %}}
+
+This `visit_members!()` forms the core part of our `trait_with_dyn_impls!()`
+macro.
+
+## Incremental TT Munching
+
+When you have a stream of input where you want to apply different logic based
+on what each item looks like, one of the most powerful tools in your Rust
+macro arsenal is the [Incremental TT Muncher][tt].
+
+*The Little Book of Rust Macros* does a pretty good job of explaining how it
+works:
+
+> A "TT muncher" is a recursive macro that works by incrementally processing
+> its input one step at a time. At each step, it matches and removes (munches)
+> some sequence of tokens from the start of its input, generates some
+> intermediate output, then recurses on the input tail.
+
+We're going to use a TT muncher to match multiple function signatures. The idea
+is that we'll adapt our existing `visit_members!()` macro to match the function
+signature at the start of our input stream, then recurse on the rest.
+
+
 [object-safety]: https://doc.rust-lang.org/book/ch17-02-trait-objects.html#object-safety-is-required-for-trait-objects
 [replace-conditional]: https://refactoring.guru/replace-conditional-with-polymorphism
+[tt]: https://danielkeep.github.io/tlborm/book/pat-incremental-tt-munchers.html
