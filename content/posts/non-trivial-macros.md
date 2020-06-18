@@ -589,6 +589,220 @@ It's not particularly elegant, but this (ab)use of the `compile_error!()`
 macro lets us see that `fn get_x (& self) -> u32` was passed to the callback.
 {{% /notice %}}
 
+## Generating Our Impl Blocks
+
+Now we've got a way to invoke a macro on each method we can actually start
+generating some code!
+
+If you look back towards the beginning, we're trying to take something like
+this...
+
+```rust
+fn get_x(&self) -> u32;
+```
+
+... and expand it to some code that dereferences `&self` twice (once to get
+past `&self` and a second time to dereference the pointer that is `self`) then
+invokes the method.
+
+```rust
+fn get_x(&self) -> u32 {
+    (**self).get_x()
+}
+```
+
+First off, I'm going to create a new macro to use as our callback. We know
+ahead of time that we'll be passed a valid method signature, so we can steal the
+matching code from `visit_members!()`.
+
+```rust
+// src/lib.rs
+
+macro_rules! call_via_deref {
+    (
+        $( #[$attr:meta] )*
+        fn $name:ident(&self $(, $arg_name:ident : $arg_ty:ty )*) $(-> $ret:ty)?
+    ) => { };
+}
+```
+
+(note the lack of a trailing semicolon)
+
+Now we can generate the method body.
+
+```rust
+// src/lib.rs
+
+macro_rules! call_via_deref {
+    (
+        $( #[$attr:meta] )*
+        fn $name:ident(&self $(, $arg_name:ident : $arg_ty:ty )*) $(-> $ret:ty)?
+    ) => {
+        fn $name(&self $(, $arg_name : $arg_ty )*) $(-> $ret)? {
+            (**self).$name( $($arg_name),* )
+        }
+    };
+}
+```
+
+We can test this by using it in the same place it's intended for.
+
+```rust
+// src/lib.rs
+
+#[test]
+fn defer_impl_to_item_behind_pointer() {
+    trait GetX {
+        fn get_x(&self) -> u32;
+    }
+
+    impl GetX for u32 {
+        fn get_x(&self) -> u32 { *self }
+    }
+
+    impl GetX for Box<u32> {
+        call_via_deref!( fn get_x(&self) -> u32 );
+    }
+
+    fn assert_is_get_x<G: GetX>() {}
+
+    assert_is_get_x::<u32>();
+    assert_is_get_x::<Box<u32>>();
+}
+```
+
+We're on the home stretch now. We just need to tie together our callback and
+TT muncher to generate `GetX` impls for `Box<dyn GetX>`.
+
+Here's the macro for working with boxed trait objects. All it really does is
+wrap everything in an `impl Trait for Box<dyn Trait>` block then defer to
+`visit_members!()` and `call_via_deref!()` for the hard work.
+
+```rust
+// src/lib.rs
+
+macro_rules! impl_trait_for_boxed {
+    (
+        $( #[$attr:meta] )*
+        $vis:vis trait $name:ident {
+            $( $body:tt )*
+        }
+    ) => {
+        impl<F: $name + ?Sized> $name for Box<F> {
+            visit_members!( call_via_deref; $($body)* );
+        }
+    };
+}
+```
+
+We can also test this by creating a trait, implementing it for one type, then
+copy/pasting the trait definition into an `impl_trait_for_boxed!()` call and
+making sure it generates the desired impls.
+
+```rust
+// src/lib.rs
+
+#[test]
+fn impl_trait_for_boxed() {
+    trait Foo {
+        fn get_x(&self) -> u32;
+        fn execute(&self, expression: &str);
+    }
+
+    impl Foo for u32 {
+        fn get_x(&self) -> u32 { unimplemented!() }
+
+        fn execute(&self, _expression: &str) { unimplemented!() }
+    }
+
+    impl_trait_for_boxed! {
+        trait Foo {
+            fn get_x(&self) -> u32;
+            fn execute(&self, expression: &str);
+        }
+    }
+
+    fn assert_is_foo<F: Foo>() {}
+
+    assert_is_foo::<u32>();
+    assert_is_foo::<Box<u32>>();
+    assert_is_foo::<Box<dyn Foo>>();
+}
+```
+
+Once you've got your head around the `Box` version, you'll notice it's almost
+identical to the macro for references.
+
+```rust
+// src/lib.rs
+
+#[macro_export]
+macro_rules! impl_trait_for_ref {
+    (
+        $( #[$attr:meta] )*
+        $vis:vis trait $name:ident {
+            $( $body:tt )*
+        }
+    ) => {
+        impl<'f, F: $name + ?Sized> $name for &'f F {
+            visit_members!( call_via_deref; $($body)* );
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_trait_for_mut_ref {
+    (
+        $( #[$attr:meta] )*
+        $vis:vis trait $name:ident {
+            $( $body:tt )*
+        }
+    ) => {
+        impl<'f, F: $name + ?Sized> $name for &'f mut F {
+            visit_members!( call_via_deref; $($body)* );
+        }
+    };
+}
+```
+
+From here the full `trait_with_dyn_impls!()` macro just falls out. We make sure
+the trait gets declared, then pass it to `impl_trait_for_boxed!()` and friends
+to generate the appropriate impls.
+
+```rust
+// src/lib.rs
+
+#[macro_export]
+macro_rules! trait_with_dyn_impls {
+    (
+        $( #[$attr:meta] )*
+        $vis:vis trait $name:ident { $( $body:tt )* }
+    ) => {
+        // emit the trait declaration
+        $( #[$attr] )*
+        $vis trait $name { $( $body )* }
+
+        // then implement it for Box and references
+        impl_trait_for_ref! {
+            $( #[$attr] )*
+            $vis trait $name { $( $body )* }
+        }
+        impl_trait_for_boxed! {
+            $( #[$attr] )*
+            $vis trait $name { $( $body )* }
+        }
+    };
+}
+```
+
+## Non-Identifier Identifiers
+
+{{% notice warning %}}
+TODO: Talk about handling `&self` and `&mut self`.
+{{% /notice %}}
+
+## Conclusions
+
 
 [object-safety]: https://doc.rust-lang.org/book/ch17-02-trait-objects.html#object-safety-is-required-for-trait-objects
 [replace-conditional]: https://refactoring.guru/replace-conditional-with-polymorphism
