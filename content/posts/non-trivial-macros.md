@@ -1,7 +1,6 @@
 ---
-title: "Non Trivial Rust Macros"
-date: "2020-06-18T22:52:32+08:00"
-draft: true
+title: "Writing Non-Trivial Macros in Rust"
+date: "2020-06-21T01:15:00+08:00"
 tags:
 - Rust
 ---
