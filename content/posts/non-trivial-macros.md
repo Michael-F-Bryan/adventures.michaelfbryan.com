@@ -7,7 +7,7 @@ tags:
 ---
 
 Macros in Rust tend to have a reputation for being complex and magical, the
-likes which only seasoned veterans like [`@dtolnay`][dt] can hope to
+likes which only seasoned wizards like [`@dtolnay`][dt] can hope to
 understand, let alone master.
 
 Rust's declarative macros provide a mechanism for pattern matching on
@@ -15,6 +15,8 @@ arbitrary syntax to generate valid Rust code at compile time. I use them all
 the time for simple search/replace style operations like generating tests
 that have a lot of boilerplate, or straightforward trait implementations for
 a large number of types.
+
+This is copied directly from a DSL parser I wrote many moons ago.
 
 ```rust
 pub trait AstNode {
@@ -45,13 +47,13 @@ impl_ast_node!(
 ```
 
 Unfortunately once you need to do more than these trivial macros, the
-difficulty tends to go through the roof.
+difficulty tends to go through the roof...
 
 I recently encountered a situation at work where a non-trivial technical
 problem could be solved by writing an equally non-trivial macro. There are a
 number of tricks and techniques I employed along the way that helped keep the
-code manageable and easy to implement, so I thought I'd write about them to
-help the next adventurer who walks this path.
+code manageable and easy to implement, so I thought I'd help the next adventurer
+by writing them down.
 
 {{% notice note %}}
 The code written in this article is available [on GitHub][repo]. Feel free to
@@ -74,44 +76,49 @@ see in most typical Rust codebases:
 > [object-safe][object-safety]**.
 
 The reasoning for this is quite straightforward, the application may need to
-reconfigure both its behaviour and hardware bindings at runtime.
+reconfigure both its behaviour and hardware bindings at runtime, and allowing
+the possibility of dynamic dispatch makes this a lot easier.
 
-This is a soft-realtime motion controller which can control several families
-of machines, so imagine it is initially configured to run machine A with
+This is a soft-realtime motion controller which can control several related
+families of machine using the same electronics and electrical components, but
+with different mechanical configurations.
+
+Now, imagine the controller is initially configured to run machine A with
 particular assumptions about the world (which inputs things are attached to,
-available optional components, etc.) and then the user changes some settings
-to make it behave like machine B with its own assumptions about the world.
+available optional components, etc.) and the user changes some settings to
+make it behave like machine B with its own assumptions about the world.
 
 You have a couple options for how to implement this:
 
 1. Load the machine configuration on startup and jump to the corresponding
    code... This requires a restart for any settings changes to take effect
 2. Use enums to encapsulate the different IO layouts or business logic...
-   Congratulations, your code now has 10x times more `match` statements
+   Congratulations, your code now has 10x more `match` statements
 3. Take an object-oriented approach, replacing the conditionals from option 2
    [with polymorphism][replace-conditional] (i.e. dynamic dispatch)... Adds
-   constraints on the behaviour you can expect from things, but reduces
+   constraints on the behaviour you can expect from dependencies, but reduces
    cognitive load and lets you switch between things at runtime by pointing at
    a different object
 
-The last option looks like the least-bad of the 3, but no doubt you'll know
-if it doesn't work out. Just look out for the blog post exploring different
-architectures for complicated systems 😛
+The last option looked like the least-bad of the 3, but no doubt you'll find
+out if it doesn't work for us... Just look out for the blog post exploring
+different architectures for complicated systems 😛
 
-Making allowances for dynamic dispatch where possible adds an interesting
-challenge, though...
+Making allowances for dynamic dispatch where possible adds its own set of
+interesting challenge, though.
 
 Imagine you're programming the flashing lights on an operator console and come
 up with something like this:
 
 ```rust
+/// Port A of the on-board General Purpose IOs.
 struct GPIOA { ... }
 
 fn flash_periodically(gpio: &mut GPIOA, pin: usize, interval: Duration) {
     let mut current_state = false;
 
     loop {
-        lamp.set_state(pin, current_state);
+        gpio.set_state(pin, current_state);
         current_state = !current_state;
         sleep(interval);
     }
@@ -201,7 +208,7 @@ error: aborting due to 2 previous errors
 This `assert_is_digital_input()` function is a nice little trick you can use
 to make sure something implements a particular trait. By using
 [turbofish][fish] we can specify *exactly* which type we're trying to check,
-skipping things like auto-defer and coersion.
+avoiding things like auto-defer and coersion.
 
 You can find more gems like this in [the `static_assertions` crate][s],
 
@@ -209,7 +216,7 @@ You can find more gems like this in [the `static_assertions` crate][s],
 [s]: https://docs.rs/static_assertions
 {{% /notice %}}
 
-The key bits to look out for:
+The key bits to look out for in thiserror message:
 
 > the trait bound `std::boxed::Box<dyn DigitalInput>: DigitalInput` is not satisfied
 
@@ -239,13 +246,16 @@ with 2 or 3 traits each (each with their own set of methods) and this
 copy-pasta gets annoying pretty quickly.
 
 My solution is to use a macro (i.e. compile-time codegen) to automatically
-generate the necessary impl blocks. This *could* be implemented using
-procedural macros, but they can have a negative impact on compile times and
-I'd like an excuse to play around with Rust's declarative macros some more.
+generate the necessary impl blocks.
+
+This *could* be implemented using procedural macros, but they can have a
+negative impact on compile times and I'd like an excuse to play around with
+Rust's declarative macros.
 
 ## Getting Started
 
-The end goal is to write something like this...
+Now you have a better understanding of the problem we're trying to solve, the
+end goal I have in mind is being able to write something like this...
 
 ```rust
 trait_with_dyn_impls! {
@@ -264,11 +274,9 @@ and `Box<dyn InterestingTrait>`.
 
 You can think of Rust's declarative (`macro_rules`) macros as a form of
 pattern matching which, instead of relying on the type system, uses parsing
-machinery from the compiler itself.
-
-For example, when you write `$value:expr` in a macro, that asks the compiler
-to try and parse some tokens as an expression, and assign the AST node to
-`$value` on success.
+machinery from the compiler itself. For example, when you write `$value:expr`
+in a macro, that asks the compiler to try and parse some tokens as an
+expression, and assign the AST node to `$value` on success.
 
 Our first step is to write a macro that can match a method signature.
 
@@ -300,7 +308,7 @@ mod tests {
 }
 ```
 
-If the code compiles, it works 👍
+Testing this sort of thing is really simple. If the code compiles, it works 👍
 
 We can also use repetition to match a function with 0 or more arguments.
 
@@ -379,13 +387,14 @@ with `self` kinda awkward.
 {{% /notice %}}
 
 This `visit_members!()` forms the core part of our `trait_with_dyn_impls!()`
-macro.
+macro. Now we're able to match the method signatures you're likely to see in
+object-safe traits we can start building on this foundation.
 
 ## Incremental TT Munching
 
-When you have a stream of input where you want to apply different logic based
-on what each item looks like, one of the most powerful tools in your Rust
-macro arsenal is the [Incremental TT Muncher][tt].
+One of the most powerful tools in your Rust macro arsenal is the
+[Incremental TT Muncher][tt]. This is perfect for when you have a stream of
+input and want to apply different logic based on what each item looks like.
 
 *The Little Book of Rust Macros* does a pretty good job of explaining how it
 works:
@@ -414,6 +423,8 @@ macro_rules! visit_members {
     ) => {};
 }
 ```
+
+(note the `\$( $rest:tt )*`)
 
 At this point all our existing tests still pass because they don't have any
 trailing tokens.
@@ -504,10 +515,11 @@ fn match_two_getters() {
 ```
 
 Looking back at the output from my terminal, it seems like it all just
-works... Don't you love it when you write something based on theory and it
-all works perfectly first time?
+works
 
-It doesn't happen often, so I like to cherish these moments 😉
+Don't you love it when you write something based on theory and it all works
+perfectly first time? It doesn't happen often, so I like to cherish these
+moments 🎉
 
 ## Callbacks
 
@@ -545,8 +557,8 @@ the start of recursive call.
 {{% /notice %}}
 
 At this point we'll need to update all our tests to start with the callback
-name. I'm using the name `print`, which we'll actually declare in the next
-step. The callback doesn't matter for now because it's never actually used.
+name. I'm using the name `print`, but the callback doesn't matter for now
+because it's not used.
 
 ```rust
 // src/lib.rs
@@ -569,8 +581,8 @@ fn match_two_getters() {
 
 Now we can make the macro invoke our callback with the matched signature.
 
-For now I just want to swallow the tokens and do nothing. If the code compiles,
-we can be pretty sure we're invoking the callback correctly.
+To begin with, I just want to swallow the tokens and do nothing. If the code
+compiles, we can be pretty sure we're invoking the callback correctly.
 
 ```rust
 // src/lib.rs
@@ -621,7 +633,8 @@ macro_rules! my_callback {
 }
 ```
 
-When used on our existing tests, we get errors like this:
+When passing `my_callback` to the `match_two_getters` test, we get a compile
+error like this:
 
 ```
 error: fn get_x (& self) -> u32
@@ -1391,7 +1404,7 @@ letting the caller provide arguments for the callback, we can copy the old
 ## Conclusions
 
 It's been a long journey but this crate now lets us do everything I wanted so
-I think we can finally call it done.
+I think we can finally call it done 🙂
 
 Some tips:
 
@@ -1405,7 +1418,7 @@ Some tips:
 As a bonus, unlike a lot of complex macros I've written in the past, I have a
 fairly high degree of confidence in its implementation because of the
 comprehensive test suite we built along the way. It really makes a difference
-in demystifying how the macro works 😄
+in demystifying how the macro works.
 
 [object-safety]: https://doc.rust-lang.org/book/ch17-02-trait-objects.html#object-safety-is-required-for-trait-objects
 [replace-conditional]: https://refactoring.guru/replace-conditional-with-polymorphism
