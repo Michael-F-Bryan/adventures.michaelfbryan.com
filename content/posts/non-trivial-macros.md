@@ -197,7 +197,7 @@ error: aborting due to 2 previous errors
 
 [(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=d9293c605ba8fd1fc6c656b5155410b0)
 
-{{ %notice tip %}}
+{{% notice tip %}}
 This `assert_is_digital_input()` function is a nice little trick you can use
 to make sure something implements a particular trait. By using
 [turbofish][fish] we can specify *exactly* which type we're trying to check,
@@ -207,7 +207,7 @@ You can find more gems like this in [the `static_assertions` crate][s],
 
 [fish]: https://turbo.fish/
 [s]: https://docs.rs/static_assertions
-{{ /notice %}}
+{{% /notice %}}
 
 The key bits to look out for:
 
@@ -855,9 +855,294 @@ macro_rules! trait_with_dyn_impls {
 
 ## Non-Identifier Identifiers
 
-{{% notice warning %}}
-TODO: Talk about handling `&self` and `&mut self`.
+Do you remember how we deferred dealing with traits that have `&mut self`
+methods, claiming there are a couple quirks that make handling `&self` or
+`&mut self` awkward?
+
+Now that you've got a couple more tools in your `macro_rules` toolbox, we're
+better positioned to talk about these quirks.
+
+So, how do you write a macro that matches both `&self` and `&mut self` and pass
+that to a callback?
+
+`&self` looks like a valid expression as far as the language grammar is
+concerned, so we could define a macro like this:
+
+```rust
+macro_rules! match_self {
+    ($callback:ident, fn $name:ident($self:expr)) => {
+        $callback!(fn $name($self));
+    }
+}
+```
+
+Then our `$callback` is a macro that attaches a method to some type, `Foo`.
+
+```rust
+macro_rules! callback {
+    (fn $name:ident($self:expr)) => {
+        impl Foo {
+            fn $name($self) {}
+        }
+    };
+}
+
+struct Foo;
+```
+
+And in theory we should be able to use it like this, right?
+
+```rust
+match_self!(callback, fn foo(&self));
+```
+
+However `rustc` doesn't agree. Instead, we get the following... less than
+optimal... compile error.
+
+```rust
+error: expected one of `...`, `..=`, `..`, `:`, or `|`, found `)`
+   --> src/lib.rs:215:35
+    |
+206 | /         macro_rules! match_self {
+207 | |             ($callback:ident, fn $name:ident($self:expr)) => {
+208 | |                 $callback!(fn $name($self));
+    | |                 ---------------------------- in this macro invocation
+209 | |             }
+210 | |         }
+    | |_________- in this expansion of `match_self!`
+211 |
+212 | /         macro_rules! callback {
+213 | |             (fn $name:ident($self:expr)) => {
+214 | |                 impl Foo {
+215 | |                     fn $name($self) {}
+    | |                                   ^
+216 | |                 }
+217 | |             };
+218 | |         }
+    | |_________- in this expansion of `callback!`
+...
+222 |           match_self!(callback, fn foo(&self));
+    |           ------------------------------------- in this macro invocation
+```
+
+It looks like the callback is expecting some sort of pattern (e.g.
+`self ..= other`) when it tries to use `$self` as the method's `self` parameter.
+
+So what if we try matching on `$self:pat` instead of `$self:expr`?
+
+```diff
+ macro_rules! match_self {
+-    ($callback:ident, fn $name:ident($self:expr)) => {
++    ($callback:ident, fn $name:ident($self:pat)) => {
+         $callback!(fn $name($self));
+     }
+ }
+
+ macro_rules! callback {
+-    (fn $name:ident($self:expr)) => {
++    (fn $name:ident($self:pat)) => {
+         impl Foo {
+             fn $name($self) {}
+         }
+     };
+ }
+```
+
+We get the same error, except the list of expected tokens has shortened a bit.
+
+```text
+error: expected one of `:` or `|`, found `)`
+   --> src/lib.rs:215:35
+    |
+206 | /         macro_rules! match_self {
+207 | |             ($callback:ident, fn $name:ident($self:pat)) => {
+208 | |                 $callback!(fn $name($self));
+    | |                 ---------------------------- in this macro invocation
+209 | |             }
+210 | |         }
+    | |_________- in this expansion of `match_self!`
+211 |
+212 | /         macro_rules! callback {
+213 | |             (fn $name:ident($self:pat)) => {
+214 | |                 impl Foo {
+215 | |                     fn $name($self) {}
+    | |                                   ^
+216 | |                 }
+217 | |             };
+218 | |         }
+    | |_________- in this expansion of `callback!`
+...
+222 |           match_self!(callback, fn foo(&self));
+    |           ------------------------------------- in this macro invocation
+```
+
+Another option is to combine the `$(...)?` syntax for matching something zero or
+one times with the fact that `self` is a valid Rust identifier.
+
+```diff
+ macro_rules! match_self {
+-    ($callback:ident, fn $name:ident($self:pat)) => {
++    ($callback:ident, fn $name:ident(& $(mut)? $self:ident)) => {
+         $callback!(fn $name(& $self));
+     }
+ }
+
+ macro_rules! callback {
+-    (fn $name:ident($self:pat)) => {
++    (fn $name:ident(& $(mut)? $self:ident)) => {
+         impl Foo {
+             fn $name($self) {}
+         }
+     };
+ }
+```
+
+Our `match_self!(callback, fn foo(&self))` example even compiles and will
+define a `foo` method on `Foo`. However, if you look carefully you'll see the
+new `foo()` method silently drops the leading `&` or `&mut` and takes `self`
+by value.
+
+You can verify this by trying to store `Foo::foo` in a variable expecting
+`fn(&Foo)`.
+
+```rust
+let _: fn(&Foo) = Foo::foo;
+```
+
+The compiler throws up a *"mismatched types"* compile error upon seeing this.
+
+```text
+error[E0308]: mismatched types
+   --> src/lib.rs:224:27
+    |
+224 |         let _: fn(&Foo) = Foo::foo;
+    |                --------   ^^^^^^^^
+    |                |
+    |                expected due to this
+    |
+    = note: expected fn pointer `for<'r> fn(&'r tests::match_on_self::Foo)`
+                  found fn item `fn(tests::match_on_self::Foo) {tests::match_on_self::Foo::foo}`
+
+error: aborting due to previous error
+```
+
+Even if we *did* write our callback to not drop the leading `&`, we'd run
+into issues trying to pass the optional `mut` through to the callback.
+Because we can't store `mut` in a macro variable (you can't bind to literal
+tokens and using something like `$mut:ident` would match the `self` token
+when `mut` isn't present) we don't really have a way to refer to it or pass
+the token around any more.
+
+{{% notice tip %}}
+[Non-Identifier Identifiers][id] from *The Little Book of Rust Macros*
+explains in a lot more detail what we're seeing here, so I'd recommend
+checking out that page if you want to know more.
+
+[id]: https://danielkeep.github.io/tlborm/book/mbe-min-non-identifier-identifiers.html
 {{% /notice %}}
+
+After banging my head against a wall for half an hour or so I gave up on
+trying to match both `&self` and `&mut self` methods in a single pattern and
+decided to take advantage of another tool that I have at my disposal... My
+editor's ability to copy and paste 🙃
+
+My solution to making `visit_members` and its `callback` handle both `&self`
+and `&mut self` is to just copy the entire pattern and make the second version
+handle the `mut` token.
+
+That way, when the TT muncher tries to match the next function signature
+it'll be able to take one branch for `&self` methods and another for `&mut
+self`. The callback will also need to use the same trick because it needs to
+somehow emit `&self` or `&mut self` as the receiver for each generated
+method.
+
+```diff
+ // src/lib.rs
+
+ macro_rules! visit_members {
+     (
+         $callback:ident;
+
+         $( #[$attr:meta] )*
+         fn $name:ident(&self $(, $arg_name:ident : $arg_ty:ty )*) $(-> $ret:ty)?;
+
+         $( $rest:tt )*
+     ) => {
+         $callback!(
+             $( #[$attr] )*
+             fn $name(&self $(, $arg_name : $arg_ty )*) $(-> $ret)?
+         );
+
+         visit_members! { $callback; $($rest)* }
+     };
++    (
++        $callback:ident;
+
++        $( #[$attr:meta] )*
++        fn $name:ident(&mut self $(, $arg_name:ident : $arg_ty:ty )*) $(-> $ret:ty)?;
+
++        $( $rest:tt )*
++    ) => {
++        $callback!(
++            $( #[$attr] )*
++            fn $name(&mut self $(, $arg_name : $arg_ty )*) $(-> $ret)?
++        );
+
++        visit_members! { $callback; $($rest)* }
++    };
+     ($callback:ident;) => {};
+ }
+
+ macro_rules! call_via_deref {
+     (
+         $( #[$attr:meta] )*
+         fn $name:ident(&self $(, $arg_name:ident : $arg_ty:ty )*) $(-> $ret:ty)?
+     ) => {
+         fn $name(&self $(, $arg_name : $arg_ty )*) $(-> $ret)? {
+             (**self).$name( $($arg_name),* )
+         }
+     };
++    (
++        $( #[$attr:meta] )*
++        fn $name:ident(&mut self $(, $arg_name:ident : $arg_ty:ty )*) $(-> $ret:ty)?
++    ) => {
++        fn $name(&mut self $(, $arg_name : $arg_ty )*) $(-> $ret)? {
++            (**self).$name( $($arg_name),* )
++        }
++    };
+ }
+```
+
+Amongst all that copy-pasta, you *might* even be able to spot the three
+letter change that was made to the second copy (`mut`).
+
+{{% notice info %}}
+If you know of an easy way to match both `&self` and `&mut self` methods,
+*please* let me know!
+
+The solution I've proposed here (i.e. copy/paste) far from elegant and you
+can already tell that someone will be cursing your name 6 months from now
+when they need to come in and make a minor change.
+{{% /notice %}}
+
+As ugly as it is... our tests show that it works.
+
+```rust
+#[test]
+fn handle_mutable_and_immutable_self() {
+    trait Foo {
+        fn get_x(&self) -> u32;
+        fn execute(&mut self, expression: &str);
+    }
+
+    impl_trait_for_boxed! {
+        trait Foo {
+            fn get_x(&self) -> u32;
+            fn execute(&mut self, expression: &str);
+        }
+    }
+}
+```
 
 ## Conclusions
 
