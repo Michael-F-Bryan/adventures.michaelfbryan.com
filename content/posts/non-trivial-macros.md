@@ -840,8 +840,11 @@ macro_rules! trait_with_dyn_impls {
         $( #[$attr] )*
         $vis trait $name { $( $body )* }
 
-        // then implement it for Box and references
         impl_trait_for_ref! {
+            $( #[$attr] )*
+            $vis trait $name { $( $body )* }
+        }
+        impl_trait_for_mut_ref! {
             $( #[$attr] )*
             $vis trait $name { $( $body )* }
         }
@@ -1144,19 +1147,265 @@ fn handle_mutable_and_immutable_self() {
 }
 ```
 
+## Deciding Which Impl Blocks to Generate
+
+Now we're able to handle both mutable and immutable methods we run into an
+interesting problem.
+
+Let's create a variant of the `full_implementation` test which has a `&mut self`
+method.
+
+```rust
+#[test]
+fn full_implementation_with_mut_methods() {
+    trait_with_dyn_impls! {
+        trait Foo {
+            fn get_x(&self) -> u32;
+            fn execute(&mut self, expression: &str);
+        }
+    }
+
+    fn assert_is_foo<F: Foo>() {}
+
+    assert_is_foo::<&dyn Foo>();
+    assert_is_foo::<Box<dyn Foo>>();
+}
+```
+
+It's identical to `full_implementation`, except `execute()` takes `&mut self`...
+and it fails to compile:
+
+```text
+error[E0596]: cannot borrow `**self` as mutable, as it is behind a `&` reference
+   --> src/lib.rs:51:13
+    |
+2   |  / macro_rules! visit_members {
+3   |  |     (
+4   |  |         $callback:ident;
+5   |  |
+...    |
+16  |  |         visit_members! { $callback; $($rest)* }
+    |  |         --------------------------------------- in this macro invocation (#4)
+...    |
+26  | /|         $callback!(
+27  | ||             $( #[$attr] )*
+28  | ||             fn $name(&mut self $(, $arg_name : $arg_ty )*) $(-> $ret)?
+29  | ||         );
+    | ||__________- in this macro invocation (#5)
+...    |
+33  |  |     ($callback:ident;) => {};
+34  |  | }
+    |  | -
+    |  | |
+    |  |_in this expansion of `visit_members!` (#3)
+    |    in this expansion of `visit_members!` (#4)
+...
+37  | /  macro_rules! call_via_deref {
+38  | |      (
+39  | |          $( #[$attr:meta] )*
+40  | |          fn $name:ident(&self $(, $arg_name:ident : $arg_ty:ty )*) $(-> $ret:ty)?
+...   |
+51  | |              (**self).$name( $($arg_name),* )
+    | |              ^^^^^^^^
+52  | |          }
+53  | |      };
+54  | |  }
+    | |__- in this expansion of `call_via_deref!` (#5)
+```
+
+It's a little hard to see, but if you look at the error text we get a
+familiar message: *"cannot borrow `**self` as mutable, as it is behind a `&`
+reference"*.
+
+This isn't a macro problem, the borrow checker is complaining about one of our
+generated methods!
+
+Other than the error text, the rest of this compile error is kinda useless.
+There's a problem with our generated code, and because generated code doesn't
+actually exist in the source file (i.e. `src/lib.rs`), `rustc` can't point at
+a specific line to tell the programmer where the problem is.
+
+The [`cargo expand`][cargo-expand] tool is designed for just these occasions.
+Its entire purpose is to ask the compiler to expand all macros and display the
+expanded source code to the user.
+
+Here's what `full_implementation_with_mut_methods` expands to:
+
+```rust
+fn full_implementation_with_mut_methods() {
+    trait Foo {
+        fn get_x(&self) -> u32;
+        fn execute(&mut self, expression: &str);
+    }
+    impl<'f, F: Foo + ?Sized> Foo for &'f F {
+        fn get_x(&self) -> u32 {
+            (**self).get_x()
+        }
+        fn execute(&mut self, expression: &str) {
+            (**self).execute(expression)
+        }
+    }
+    impl<'f, F: Foo + ?Sized> Foo for &'f mut F {
+        fn get_x(&self) -> u32 {
+            (**self).get_x()
+        }
+        fn execute(&mut self, expression: &str) {
+            (**self).execute(expression)
+        }
+    }
+    impl<F: Foo + ?Sized> Foo for Box<F> {
+        fn get_x(&self) -> u32 {
+            (**self).get_x()
+        }
+        fn execute(&mut self, expression: &str) {
+            (**self).execute(expression)
+        }
+    }
+    fn assert_is_foo<F: Foo>() {}
+    assert_is_foo::<&dyn Foo>();
+    assert_is_foo::<Box<dyn Foo>>();
+}
+```
+
+The output is a little dense, but look at the `&'f F` impl. We've got an
+immutable reference to some `F: Foo` and are invoking a method which takes
+`&mut self`.
+
+This is a pretty trivial borrowing error and indicates there's a bug in our
+`trait_with_dyn_impls!()` macro. We shouldn't be emitting the `&'f F` impl if
+*any* trait method takes `&mut self`... but how do you make these sorts of
+decisions, its not like `macro_rules` macros let you use `if`-statements!
+
+The answer has been under our noses this entire time. Pattern matching is just
+a fancy chain of `if-else` statements, and we can use callbacks to invoke
+caller-defined behaviour depending on which branch matches, and a TT muncher to
+scan through the input tokens one at a time until we find `&mut self`.
+
+If you are familiar with functional programming, this is sometimes called
+[*Continuation Passing Style*][cps] (CPS).
+
+Here's my attempt.
+
+```rust
+// src/lib.rs
+
+/// Scans through a stream of tokens looking for `&mut self`. If nothing is
+/// found a callback is invoked.
+macro_rules! search_for_mut_self {
+    // if we see `&mut self`, stop and don't invoke the callback
+    ($callback:ident!($($callback_args:tt)*); &mut self $($rest:tt)*) => { };
+    ($callback:ident!($($callback_args:tt)*); (&mut self $($other_args:tt)*) $($rest:tt)*) => { };
+
+    // haven't found it yet, drop the first item and keep searching
+    ($callback:ident!($($callback_args:tt)*); $_head:tt $($tokens:tt)*) => {
+        search_for_mut_self!($callback!( $($callback_args)* ); $($tokens)*);
+
+    };
+    // we completed without hitting `&mut self`, invoke the callback and exit
+    ($callback:ident!($($callback_args:tt)*);) => {
+        $callback!( $($callback_args)* )
+    }
+}
+```
+
+I also wrote up a couple tests.
+
+```rust
+// src/lib.rs
+
+#[test]
+fn dont_invoke_the_callback_when_mut_self_found() {
+    search_for_mut_self! {
+        compile_error!("This callback shouldn't have been invoked");
+
+        &mut self asdf
+    }
+}
+
+#[test]
+fn handle_mut_self_inside_parens() {
+    search_for_mut_self! {
+        compile_error!("This callback shouldn't have been invoked");
+
+        fn foo(&mut self);
+    }
+}
+
+#[test]
+fn invoke_the_callback_if_search_for_mut_self_found() {
+    macro_rules! declare_struct {
+        ($name:ident) => {
+            struct $name;
+        };
+    }
+
+    search_for_mut_self! {
+        declare_struct!(Foo);
+
+        blah blah ... blah
+    }
+
+    // we should have declared Foo as a unit struct
+    let _: Foo;
+}
+```
+
+This gives us what we need to conditionally call `impl_trait_for_ref!()`. By
+letting the caller provide arguments for the callback, we can copy the old
+`impl_trait_for_ref!()` invocation across verbatim.
+
+```diff
+ macro_rules! trait_with_dyn_impls {
+     (
+         $( #[$attr:meta] )*
+         $vis:vis trait $name:ident { $( $body:tt )* }
+     ) => {
+         // emit the trait declaration
+         $( #[$attr] )*
+         $vis trait $name { $( $body )* }
+
+-        impl_trait_for_ref! {
+-            $( #[$attr] )*
+-            $vis trait $name { $( $body )* }
+-        }
+         impl_trait_for_mut_ref! {
+             $( #[$attr] )*
+             $vis trait $name { $( $body )* }
+         }
+         impl_trait_for_boxed! {
+             $( #[$attr] )*
+             $vis trait $name { $( $body )* }
+         }
+
++        // we can only implement the trait for `&T` if there are NO `&mut self`
++        // methods
++        search_for_mut_self! {
++            impl_trait_for_ref!( $( #[$attr] )* $vis trait $name { $( $body )* } );
+
++            $( $body )*
++        }
++    };
+ }
+```
+
 ## Conclusions
 
-{{% notice warning %}}
-TODO: The conclusion
+It's been a long journey but this crate now lets us do everything I wanted so
+I think we can finally call it done.
 
-The takeaways:
+Some tips:
 
-- tests are great for iterating and providing examples later on
-- start as simple as possible and take tiny steps
-- make an effort to keep things simple and not fit all the logic into a single
+- Tests are great for iterating and providing examples later on
+- Start as simple as possible and take tiny steps
+- Make an effort to keep things simple and not fit all the logic into a single
   macro
-{{% /notice %}}
+- Sometimes you'll need to think outside the box or use concepts from different
+  paradigms/languages (e.g. CPS)
 
+As a bonus, unlike a lot of complex macros I've written in the past, I have a
+fairly high degree of confidence in its implementation because of the
+comprehensive test suite we built along the way. It really makes a difference
+in demystifying how the macro works 😄
 
 [object-safety]: https://doc.rust-lang.org/book/ch17-02-trait-objects.html#object-safety-is-required-for-trait-objects
 [replace-conditional]: https://refactoring.guru/replace-conditional-with-polymorphism
@@ -1164,3 +1413,5 @@ The takeaways:
 [cargo-watch]: https://crates.io/crates/cargo-watch
 [callback]: https://danielkeep.github.io/tlborm/book/pat-callbacks.html
 [dt]: https://github.com/dtolnay
+[cargo-expand]: https://crates.io/crates/cargo-expand
+[cps]: https://en.wikipedia.org/wiki/Continuation-passing_style
