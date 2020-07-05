@@ -415,6 +415,88 @@ fn pretty_printing_works_similarly_to_a_human() {
 ```
 {{% /expand %}}
 
+### Operator Overloads
+
+The use of operator overloads can often be quite controversial, but in this
+case I think it could help add some level of [*syntactic sugar*][sugar] to
+make constructing `Expression`s more readable.
+
+In this case, we'll overload the normal binary operators so they wrap the left
+and right operands with an `Expression::Binary`.
+
+```rust
+// src/expr.rs
+
+use std::ops::{Add, Div, Mul, Sub};
+
+// define some operator overloads to make constructing an expression easier.
+
+impl Add for Expression {
+    type Output = Expression;
+
+    fn add(self, rhs: Expression) -> Expression {
+        Expression::Binary {
+            left: Rc::new(self),
+            right: Rc::new(rhs),
+            op: BinaryOperation::Plus,
+        }
+    }
+}
+
+impl Sub for Expression {
+    type Output = Expression;
+
+    fn sub(self, rhs: Expression) -> Expression {
+        Expression::Binary {
+            left: Rc::new(self),
+            right: Rc::new(rhs),
+            op: BinaryOperation::Minus,
+        }
+    }
+}
+
+impl Mul for Expression {
+    type Output = Expression;
+
+    fn mul(self, rhs: Expression) -> Expression {
+        Expression::Binary {
+            left: Rc::new(self),
+            right: Rc::new(rhs),
+            op: BinaryOperation::Times,
+        }
+    }
+}
+
+impl Div for Expression {
+    type Output = Expression;
+
+    fn div(self, rhs: Expression) -> Expression {
+        Expression::Binary {
+            left: Rc::new(self),
+            right: Rc::new(rhs),
+            op: BinaryOperation::Divide,
+        }
+    }
+}
+```
+
+While we're at it, let's add a `Neg` impl so you can write things like `-x`.
+
+```rust
+// src/expr.rs
+
+use std::ops::Neg;
+
+impl Neg for Expression {
+    type Output = Expression;
+
+    fn neg(self) -> Self::Output { Expression::Negate(Rc::new(self)) }
+}
+```
+
+You can see none of these operator overloads are particularly interesting, they
+just let us avoid a bunch of typing.
+
 ## Parsing
 
 ## Expression Tree Operations
@@ -424,3 +506,4 @@ fn pretty_printing_works_similarly_to_a_human() {
 [ast]: https://en.wikipedia.org/wiki/Abstract_syntax_tree
 [sso]: https://stackoverflow.com/questions/10315041/meaning-of-acronym-sso-in-the-context-of-stdstring/10319672#10319672
 [infinite-size]: https://stackoverflow.com/questions/25296195/why-are-recursive-struct-types-illegal-in-rust
+[sugar]: https://en.wikipedia.org/wiki/Syntactic_sugar
