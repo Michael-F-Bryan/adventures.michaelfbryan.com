@@ -103,7 +103,7 @@ pub enum Expression {
     /// Invoke a builtin function.
     FunctionCall {
         /// The name of the function being called.
-        function: SmolStr,
+        name: SmolStr,
         /// The argument passed to this function call.
         argument: Rc<Expression>,
     },
@@ -273,8 +273,8 @@ impl Display for Expression {
                 )?;
                 Ok(())
             },
-            Expression::FunctionCall { function, argument } => {
-                write!(f, "{}({})", function, argument)
+            Expression::FunctionCall { name, argument } => {
+                write!(f, "{}({})", name, argument)
             },
         }
     }
@@ -317,7 +317,7 @@ fn pretty_printing_works_similarly_to_a_human() {
         (Expression::Constant(3.0), "3"),
         (
             Expression::FunctionCall {
-                function: "sin".into(),
+                name: "sin".into(),
                 argument: Rc::new(Expression::Constant(5.0)),
             },
             "sin(5)",
@@ -328,7 +328,7 @@ fn pretty_printing_works_similarly_to_a_human() {
         ),
         (
             Expression::Negate(Rc::new(Expression::FunctionCall {
-                function: "sin".into(),
+                name: "sin".into(),
                 argument: Rc::new(Expression::Constant(5.0)),
             })),
             "-sin(5)",
@@ -496,6 +496,96 @@ impl Neg for Expression {
 
 You can see none of these operator overloads are particularly interesting, they
 just let us avoid a bunch of typing.
+
+### Iterators
+
+A useful building block for working with the `Expression` tree is being able
+to iterate over every node in the tree. Imagine scanning through a big
+expression to figure out which parameters it references or the functions that
+it calls.
+
+To do this, we'll create an `iter()` method which returns something
+implementing `Iterator<Item = &Expression>`.
+
+```rust
+// src/expr.rs
+
+impl Expression {
+    /// Iterate over all [`Expression`]s in this [`Expression`] tree.
+    pub fn iter(&self) -> impl Iterator<Item = &Expression> + '_ {
+        Iter {
+            to_visit: vec![self],
+        }
+    }
+}
+
+/// A depth-first iterator over the sub-[`Expression`]s in an [`Expression`].
+#[derive(Debug)]
+struct Iter<'expr> {
+    to_visit: Vec<&'expr Expression>,
+}
+```
+
+The `Iter` type works by maintaining a list of `&Expression` references for the
+nodes it still needs to visit. Getting the `next_item` is then just a case of
+popping a reference from the list, queueing any sub-expressions under
+`next_item` itself before returning it.
+
+```rust
+// src/expr.rs
+
+impl<'expr> Iterator for Iter<'expr> {
+    type Item = &'expr Expression;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let next_item = self.to_visit.pop()?;
+
+        match next_item {
+            Expression::Binary { left, right, .. } => {
+                self.to_visit.push(right);
+                self.to_visit.push(left);
+            },
+            Expression::Negate(inner) => self.to_visit.push(inner),
+            Expression::FunctionCall { argument, .. } => {
+                self.to_visit.push(argument)
+            },
+            _ => {},
+        }
+
+        Some(next_item)
+    }
+}
+```
+
+This enables nice things like an iterator over all referenced parameters or
+functions, and checking whether an expression depends on a parameter.
+
+```rust
+// src/expr.rs
+
+impl Expression {
+    /// Iterate over all [`Parameter`]s mentioned in this [`Expression`].
+    pub fn params(&self) -> impl Iterator<Item = &Parameter> + '_ {
+        self.iter().filter_map(|expr| match expr {
+            Expression::Parameter(p) => Some(p),
+            _ => None,
+        })
+    }
+
+    /// Does this [`Expression`] involve a particular [`Parameter`]?
+    pub fn depends_on(&self, param: &Parameter) -> bool {
+        self.params().any(|p| p == param)
+    }
+
+    /// Iterate over all functions used by this [`Expression`].
+    pub fn functions(&self) -> impl Iterator<Item = &str> + '_ {
+        self.iter().filter_map(|expr| match expr {
+            Expression::FunctionCall { name, .. } => Some(name.as_ref()),
+            _ => None,
+        })
+    }
+}
+```
 
 ## Parsing
 
