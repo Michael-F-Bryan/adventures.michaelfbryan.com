@@ -79,6 +79,9 @@ couple simple types.
 ```rust
 // src/expr.rs
 
+use std::rc::Rc;
+use smol_str::SmolStr;
+
 /// An expression.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
@@ -154,6 +157,263 @@ This should reduce memory usage and hopefully increase performance because
 shared nodes are more likely to be in cache.
 
 ## Pretty-Printing and Other Useful Methods
+
+To make our `Expression` type easier to work with we can implement several
+traits from the standard library.
+
+Arguably the most useful of these is `std::fmt::Display`, a mechanism for
+getting the `Expression`'s human-readable form.
+
+### Writing the Display Implementation
+
+To help make writing parentheses and spaces in `Display` a bit easier, let's
+create a temporary type for handling operator precedence.
+
+
+```rust
+// src/expr.rs
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
+enum Precedence {
+    Bi,
+    Md,
+    As,
+}
+```
+
+{{% notice note %}}
+The mnemonic I learned in school was *BIMDAS*, short for *Brackets*,
+*Indices*, *Multiply and Divide*, and *Addition and Subtraction*. Hence the
+cryptic variant names.
+
+We don't support exponents (yet?), so it's fine for *Brackets* and *Indices* to
+be in the same precedence variant.
+{{% /notice %}}
+
+We also define some helper methods for getting an `Expression`'s precedence.
+In this case parameters, constants, and function calls all have the highest
+possible precedence level.
+
+```rust
+// src/expr.rs
+
+impl Expression {
+    fn precedence(&self) -> Precedence {
+        match self {
+            Expression::Parameter(_)
+            | Expression::Constant(_)
+            | Expression::FunctionCall { .. } => Precedence::Bi,
+            Expression::Negate(_) => Precedence::Md,
+            Expression::Binary { op, .. } => op.precedence(),
+        }
+    }
+}
+
+impl BinaryOperation {
+    fn precedence(self) -> Precedence {
+        match self {
+            BinaryOperation::Plus | BinaryOperation::Minus => Precedence::As,
+            BinaryOperation::Times | BinaryOperation::Divide => Precedence::Md,
+        }
+    }
+}
+```
+
+Printing a `Parameter` works by either printing the name as-is, or the
+parameter number preceded by a `$` if it is anonymous (i.e. `$2`).
+
+```rust
+// src/expr.rs
+
+use std::fmt::{self, Display, Formatter};
+
+impl Display for Parameter {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Parameter::Named(name) => write!(f, "{}", name),
+            Parameter::Anonymous { number } => write!(f, "${}", number),
+        }
+    }
+}
+```
+
+In `Expression`'s `Display` implementation we just need to do a `match` and
+use the `write!()` macro to generate the desired string for each variant.
+
+```rust
+// src/expr.rs
+
+impl Display for Expression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Expression::Parameter(p) => write!(f, "{}", p),
+            Expression::Constant(value) => write!(f, "{}", value),
+            Expression::Binary { left, right, op } => {
+                write_with_precedence(op.precedence(), left, f)?;
+
+                let middle = match op {
+                    BinaryOperation::Plus => " + ",
+                    BinaryOperation::Minus => " - ",
+                    BinaryOperation::Times => "*",
+                    BinaryOperation::Divide => "/",
+                };
+                write!(f, "{}", middle)?;
+
+                write_with_precedence(op.precedence(), right, f)?;
+
+                Ok(())
+            },
+            Expression::Negate(inner) => {
+                write!(f, "-")?;
+
+                write_with_precedence(
+                    BinaryOperation::Times.precedence(),
+                    inner,
+                    f,
+                )?;
+                Ok(())
+            },
+            Expression::FunctionCall { function, argument } => {
+                write!(f, "{}({})", function, argument)
+            },
+        }
+    }
+}
+
+fn write_with_precedence(
+    current_precedence: Precedence,
+    expr: &Expression,
+    f: &mut Formatter<'_>,
+) -> fmt::Result {
+    if expr.precedence() > current_precedence {
+        // we need parentheses to maintain ordering
+        write!(f, "({})", expr)
+    } else {
+        write!(f, "{}", expr)
+    }
+}
+```
+
+The `write_with_precedence()` helper is used to make sure our pretty-printer
+respects the precedence of its operands by adding parentheses when necessary.
+This prevents awkward bugs like `-(x + 3)` being printed as `-x + 3`.
+
+We also deliberately add space before and after operators with the
+`Precedence::As` precedence to help visually separate the different terms in an
+expression.
+
+The `Display` implementation is really easy to test. Just create a list of
+tuples containing an `Expression` and its expected string representation,
+then loop over asserting each gets formatted as desired.
+
+{{% expand "Long table-based pretty-printer test" %}}
+
+```rust
+// src/expr.rs
+
+#[test]
+fn pretty_printing_works_similarly_to_a_human() {
+    let inputs = vec![
+        (Expression::Constant(3.0), "3"),
+        (
+            Expression::FunctionCall {
+                function: "sin".into(),
+                argument: Rc::new(Expression::Constant(5.0)),
+            },
+            "sin(5)",
+        ),
+        (
+            Expression::Negate(Rc::new(Expression::Constant(5.0))),
+            "-5",
+        ),
+        (
+            Expression::Negate(Rc::new(Expression::FunctionCall {
+                function: "sin".into(),
+                argument: Rc::new(Expression::Constant(5.0)),
+            })),
+            "-sin(5)",
+        ),
+        (
+            Expression::Binary {
+                left: Rc::new(Expression::Constant(1.0)),
+                right: Rc::new(Expression::Constant(1.0)),
+                op: BinaryOperation::Plus,
+            },
+            "1 + 1",
+        ),
+        (
+            Expression::Binary {
+                left: Rc::new(Expression::Constant(1.0)),
+                right: Rc::new(Expression::Constant(1.0)),
+                op: BinaryOperation::Minus,
+            },
+            "1 - 1",
+        ),
+        (
+            Expression::Binary {
+                left: Rc::new(Expression::Constant(1.0)),
+                right: Rc::new(Expression::Constant(1.0)),
+                op: BinaryOperation::Times,
+            },
+            "1*1",
+        ),
+        (
+            Expression::Binary {
+                left: Rc::new(Expression::Constant(1.0)),
+                right: Rc::new(Expression::Constant(1.0)),
+                op: BinaryOperation::Divide,
+            },
+            "1/1",
+        ),
+        (
+            Expression::Negate(Rc::new(Expression::Binary {
+                left: Rc::new(Expression::Constant(1.0)),
+                right: Rc::new(Expression::Constant(1.0)),
+                op: BinaryOperation::Plus,
+            })),
+            "-(1 + 1)",
+        ),
+        (
+            Expression::Negate(Rc::new(Expression::Binary {
+                left: Rc::new(Expression::Constant(1.0)),
+                right: Rc::new(Expression::Constant(1.0)),
+                op: BinaryOperation::Times,
+            })),
+            "-1*1",
+        ),
+        (
+            Expression::Binary {
+                left: Rc::new(Expression::Binary {
+                    left: Rc::new(Expression::Constant(1.0)),
+                    right: Rc::new(Expression::Constant(2.0)),
+                    op: BinaryOperation::Plus,
+                }),
+                right: Rc::new(Expression::Constant(3.0)),
+                op: BinaryOperation::Divide,
+            },
+            "(1 + 2)/3",
+        ),
+        (
+            Expression::Binary {
+                left: Rc::new(Expression::Constant(3.0)),
+                right: Rc::new(Expression::Binary {
+                    left: Rc::new(Expression::Constant(1.0)),
+                    right: Rc::new(Expression::Constant(2.0)),
+                    op: BinaryOperation::Times,
+                }),
+                op: BinaryOperation::Minus,
+            },
+            "3 - 1*2",
+        ),
+    ];
+
+    for (expr, should_be) in inputs {
+        let got = expr.to_string();
+        assert_eq!(got, should_be);
+    }
+}
+```
+{{% /expand %}}
 
 ## Parsing
 
