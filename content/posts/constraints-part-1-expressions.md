@@ -589,6 +589,145 @@ impl Expression {
 
 ## Parsing
 
+An incredibly useful tool is the ability to parse an `Expression` from a string.
+
+Besides letting the user input enter an expression into the computer in
+textual form, it can also be a powerful tool during development. In
+combination with our earlier pretty-printer, you can use strings to concisely
+say what an `Expression` should look like before and after a particular
+operation.
+
+Throw in a macro or two and a suite of unit tests could look like this:
+
+```rust
+expr_test!(simplify_multiplication, "2*2 + x" => fold_constants => "4 + x");
+expr_test!(simplify_sine_90, "sin(90)" => fold_constants => "1");
+expr_test!(differentiate_cos, "cos(t)" => partial_derivative(t) => "-sin(t)");
+expr_test!(evaluate_tricky_expression, "10 - 2*x + x*x" => evaluate(x: 5.0) => "25");
+```
+
+The process of turning unstructured text into a more structured form, an
+`Expression` tree in our case, is commonly referred to as *"parsing"*.
+
+To make things simpler I'm going to apply a pre-processing step called
+[*Tokenisation*][tokenise] which breaks the string up into the "atoms" of our
+language. These are things like identifiers (`"foo"`), numbers (`"3.14"`),
+punctuation (`"("`), and operators (`"+"`).
+
+### Tokenising
+
+A `Token` is a string which has been categorised and knows where it
+occurred in the original body of text (for diagnostic purposes).
+
+```rust
+// src/parse.rs
+
+use std::ops::Range;
+
+#[derive(Debug, Clone, PartialEq)]
+struct Token<'a> {
+    text: &'a str,
+    span: Range<usize>,
+    kind: TokenKind,
+}
+
+/// The kinds of token that can appear in an [`Expression`]'s text form.
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum TokenKind {
+    Identifier,
+    Number,
+    OpenParen,
+    CloseParen,
+    Plus,
+    Minus,
+    Times,
+    Divide,
+}
+```
+
+We use the `Iterator` trait to represent a stream of tokens. For our purposes,
+a `Tokens` stream wraps a `&str` and uses a cursor to keep track of where it
+has read up to. I've attached a couple helper methods for seeing what text is
+remaining.
+
+```rust
+// src/parse.rs
+
+#[derive(Debug, Clone, PartialEq)]
+struct Tokens<'a> {
+    src: &'a str,
+    cursor: usize,
+}
+
+impl<'a> Tokens<'a> {
+    fn new(src: &'a str) -> Self { Tokens { src, cursor: 0 } }
+
+    fn rest(&self) -> &'a str { &self.src[self.cursor..] }
+
+    fn peek(&self) -> Option<char> { self.rest().chars().next() }
+}
+```
+
+While it's nice to see what text is remaining, we also need a way to advance
+the `cursor` along the string.
+
+```rust
+// src/parse.rs
+
+impl<'a> Tokens<'a> {
+    fn advance(&mut self) -> Option<char> {
+        let c = self.peek()?;
+        self.cursor += c.len_utf8();
+        Some(c)
+    }
+}
+```
+
+If you wanted to, you could implement the rest of the `Tokens` type purely using
+calls to `peek()` and `advance()`, but sometimes it's easier to have a more
+high-level primitive.
+
+For this sort of thing I'll typically use some sort of `take_while()` method
+which accepts a predicate and will keep advancing the `cursor` until the
+predicate doesn't like the next character in line.
+
+```rust
+// src/parse.rs
+
+impl<'a> Tokens<'a> {
+    fn take_while<P>(
+        &mut self,
+        mut predicate: P,
+    ) -> Option<(&'a str, Range<usize>)>
+    where
+        P: FnMut(char) -> bool,
+    {
+        let start = self.cursor;
+
+        while let Some(c) = self.peek() {
+            if !predicate(c) { break; }
+
+            self.advance();
+        }
+
+        let end = self.cursor;
+
+        if start != end {
+            let text = &self.src[start..end];
+            Some((text, start..end))
+        } else {
+            None
+        }
+    }
+}
+```
+
+{{% notice note %}}
+By stashing away the `cursor`'s value before and after looping we can
+calculate the range of characters that have been consumed, and whether
+anything was consumed at all.
+{{% /notice %}}
+
 ## Expression Tree Operations
 
 ## Conclusions
@@ -597,3 +736,4 @@ impl Expression {
 [sso]: https://stackoverflow.com/questions/10315041/meaning-of-acronym-sso-in-the-context-of-stdstring/10319672#10319672
 [infinite-size]: https://stackoverflow.com/questions/25296195/why-are-recursive-struct-types-illegal-in-rust
 [sugar]: https://en.wikipedia.org/wiki/Syntactic_sugar
+[tokenise]: https://en.wikipedia.org/wiki/Lexical_analysis#Tokenization
