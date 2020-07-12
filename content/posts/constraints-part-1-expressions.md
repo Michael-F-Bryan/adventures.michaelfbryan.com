@@ -589,19 +589,34 @@ impl Expression {
 
 ## Parsing
 
-An incredibly useful tool is the ability to parse an `Expression` from a string.
+Now you may be wondering why we'd mention parsing in an article about
+creating a geometric constraints system, and the answer is quite simple...
+Constructing a full `Expression` tree using object literals is really verbose
+and annoying. In turn, this increases the effort required to write and maintain
+tests,
 
-Besides letting the user input enter an expression into the computer in
-textual form, it can also be a powerful tool during development. In
-combination with our earlier pretty-printer, you can use strings to concisely
-say what an `Expression` should look like before and after a particular
-operation.
+It's also useful if we want to provide users with a text box so they can
+enter their own custom constraints. *SolidWorks* uses this to let an engineer
+specify entire families of designs who's final dimensions are driven by one
+or two parameters (this is often referred to as [a
+*"Configuration"*][configuration]). For example, imagine having a proprietary
+*bolt design and being able to say *"I want this as an `M6x1.0`"* (initial
+parameters are `outside_diameter = 6.0` millimetres, `thread_pitch = 1.0`
+threads per millimetre) and the constraints system figuring out all the other
+dimensions.
 
-Throw in a macro or two and a suite of unit tests could look like this:
+Besides letting the end user or developer input enter an expression into the
+computer in textual form, it can also be a powerful tool during development.
+In combination with our earlier pretty-printer, you can use strings to
+concisely say what an `Expression` should look like before and after a
+particular operation.
+
+Throw in a macro or two and a suite of unit tests for testing various
+expression operations could look like this:
 
 ```rust
 expr_test!(simplify_multiplication, "2*2 + x" => fold_constants => "4 + x");
-expr_test!(simplify_sine_90, "sin(90)" => fold_constants => "1");
+expr_test!(simplify_sine_90_degrees, "sin(90)" => fold_constants => "1");
 expr_test!(differentiate_cos, "cos(t)" => partial_derivative(t) => "-sin(t)");
 expr_test!(evaluate_tricky_expression, "10 - 2*x + x*x" => evaluate(x: 5.0) => "25");
 ```
@@ -610,14 +625,23 @@ The process of turning unstructured text into a more structured form, an
 `Expression` tree in our case, is commonly referred to as *"parsing"*.
 
 To make things simpler I'm going to apply a pre-processing step called
-[*Tokenisation*][tokenise] which breaks the string up into the "atoms" of our
-language. These are things like identifiers (`"foo"`), numbers (`"3.14"`),
-punctuation (`"("`), and operators (`"+"`).
+which breaks the string up into the "atoms" of our
 
 ### Tokenising
 
-A `Token` is a string which has been categorised and knows where it
-occurred in the original body of text (for diagnostic purposes).
+Often the first step in turning an unstructured string of characters into a
+structured `Expression` tree is [*Tokenisation*][tokenise]. This is where the
+string is broken up into the "atoms" of our language (aka `Token`s), so
+things like identifiers (`"foo"`), numbers (`"3.14"`), punctuation (`"("`),
+and operators (`"+"`).
+
+We also keep track of where each `Token` occurred in the source text. That
+way we've got somewhere to point to when reporting errors to the user.
+
+By pre-processing a stream of text into a slightly more high-level
+representation your parser can operate at the granularity of tokens (e.g. a
+number, plus symbol, or an identifier) instead of needing to process
+individual characters.
 
 ```rust
 // src/parse.rs
@@ -645,10 +669,10 @@ pub enum TokenKind {
 }
 ```
 
-We use the `Iterator` trait to represent a stream of tokens. For our purposes,
-a `Tokens` stream wraps a `&str` and uses a cursor to keep track of where it
-has read up to. I've attached a couple helper methods for seeing what text is
-remaining.
+We use the `Iterator` trait to represent a stream of tokens. For our
+purposes, a `Tokens` stream wraps a `&str` and uses a `cursor` variable to
+keep track of where it has read up to. I've attached a couple helper methods
+for seeing what text is remaining.
 
 ```rust
 // src/parse.rs
@@ -728,6 +752,147 @@ calculate the range of characters that have been consumed, and whether
 anything was consumed at all.
 {{% /notice %}}
 
+Reading a token from the stream is just a case of peeking at the next
+character, and executing a `match` statement based on what we find. Something
+to keep in mind is we don't care about whitespace, so the entire thing is
+executed in a loop which will keep skipping whitespace until we encounter
+something else.
+
+```rust
+// src/parse.rs
+
+impl<'a> Iterator for Tokens<'a> {
+    type Item = Result<Token<'a>, ParseError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            return match self.peek()? {
+                space if space.is_whitespace() => {
+                    self.advance();
+                    continue;
+                },
+                '(' => self.chomp(TokenKind::OpenParen),
+                ')' => self.chomp(TokenKind::CloseParen),
+                '+' => self.chomp(TokenKind::Plus),
+                '-' => self.chomp(TokenKind::Minus),
+                '*' => self.chomp(TokenKind::Times),
+                '/' => self.chomp(TokenKind::Divide),
+                '_' | 'a'..='z' | 'A'..='Z' => {
+                    Some(Ok(self.chomp_identifier()))
+                },
+                '0'..='9' => Some(Ok(self.chomp_number())),
+                other => Some(Err(ParseError::InvalidCharacter {
+                    character: other,
+                    index: self.cursor,
+                })),
+            };
+        }
+    }
+}
+```
+
+The `next()` method makes use of several helper methods, the simplest of
+which is `chomp()` for reading a single character as a `Token` with the
+specified `TokenKind`.
+
+```rust
+// src/parse.rs
+
+impl<'a> Tokens<'a> {
+    fn chomp(
+        &mut self,
+        kind: TokenKind,
+    ) -> Option<Result<Token<'a>, ParseError>> {
+        let start = self.cursor;
+        self.advance()?;
+        let end = self.cursor;
+
+        let tok = Token {
+            text: &self.src[start..end],
+            span: start..end,
+            kind,
+        };
+
+        Some(Ok(tok))
+    }
+```
+
+We're also introducing `chomp_identifier()` for consuming an entire
+identifier (i.e. anything that would match the regex, `[\w_][\w\d_]*`), and
+`chomp_number()` for extracting a floating-point number (which I'm just
+defining as the regex `\d+(\.\d*)?`, because I'm too lazy to worry about the
+`1e-5` notation for now).
+
+It's overkill to actually pull in the `regex` crate for simple patterns like
+these though, so we leverage our existing `take_while()` function and the
+fact that closures can use variables from an outside scope to change their
+behaviour.
+
+First, let's look at how `chomp_number()` is implemented.
+
+```rust
+// src/parse.rs
+
+impl<'a> Tokens<'a> {
+    fn chomp_number(&mut self) -> Token<'a> {
+        let mut seen_decimal_point = false;
+
+        let (text, span) = self
+            .take_while(|c| match c {
+                '.' if !seen_decimal_point => {
+                    seen_decimal_point = true;
+                    true
+                },
+                '0'..='9' => true,
+                _ => false,
+            })
+            .expect("We know there is at least one digit in the input");
+
+        Token {
+            text,
+            span,
+            kind: TokenKind::Number,
+        }
+    }
+}
+```
+
+The idea is we want to keep consuming digits, but only accept the first `.`
+character we see (hence the `seen_decimal_point` flag). That allows us to
+recognise input like `1234`, `12.34`, and `.1234` as numbers, but reject
+things like `1.2.3.4` or `1..23`.
+
+We do something very similar in `chomp_identifier()`, where we want to make
+sure the first character is either a letter or `_`, but all characters after
+that can be also contain digits.
+
+```rust
+// src/parse.rs
+
+impl<'a> Tokens<'a> {
+    fn chomp_identifier(&mut self) -> Token<'a> {
+        let mut seen_first_character = false;
+
+        let (text, span) = self
+            .take_while(|c| {
+                if seen_first_character {
+                    c.is_alphabetic() || c.is_ascii_digit() || c == '_'
+                } else {
+                    seen_first_character = true;
+                    c.is_alphabetic() || c == '_'
+                }
+            })
+            .expect("We know there should be at least 1 character");
+
+        Token {
+            text,
+            span,
+            kind: TokenKind::Identifier,
+        }
+    }
+}
+```
+
 ## Expression Tree Operations
 
 ## Conclusions
@@ -737,3 +902,4 @@ anything was consumed at all.
 [infinite-size]: https://stackoverflow.com/questions/25296195/why-are-recursive-struct-types-illegal-in-rust
 [sugar]: https://en.wikipedia.org/wiki/Syntactic_sugar
 [tokenise]: https://en.wikipedia.org/wiki/Lexical_analysis#Tokenization
+[configuration]: https://www.cati.com/blog/2018/01/solidworks-configurations-part-1-basics-and-creating-configurations/
