@@ -624,8 +624,30 @@ expr_test!(evaluate_tricky_expression, "10 - 2*x + x*x" => evaluate(x: 5.0) => "
 The process of turning unstructured text into a more structured form, an
 `Expression` tree in our case, is commonly referred to as *"parsing"*.
 
-To make things simpler I'm going to apply a pre-processing step called
-which breaks the string up into the "atoms" of our
+While you *could* hack something together using string operations or even a
+regular expression or two, this approach will often fall over the moment you
+give it more complex expressions (e.g. using parentheses to nest expressions
+inside expressions) or if different levels of precedence are involved.
+
+{{% notice tip %}}
+If you are initially tempted to parse a non-trivial expression using regular
+expressions, I would invite you to first read [this famous StackOverflow
+answer][re].
+
+The underlying problem is that an expression is something called a [*Context
+Free Language*][ctx-free], while a regular expression is based on a [*Regular
+Language*][regular]. To parse a *Regular Language* you (in theory) just need
+to keep track of the current state (a state machine), however *Context Free
+Languages* require you to track not just the current state, but also support
+nesting and keep track of each nested state (a pushdown automata).
+
+Google the [*Chomsky Hierarchy*][chomsky] for more.
+
+[re]: https://stackoverflow.com/a/1732454/7149940
+[chomsky]: https://stackoverflow.com/a/8398208/7149940
+[ctx-free]: https://en.wikipedia.org/wiki/Context-free_grammar
+[regular]: https://en.wikipedia.org/wiki/Regular_grammar
+{{% /notice %}}
 
 ### Tokenising
 
@@ -893,7 +915,427 @@ impl<'a> Tokens<'a> {
 }
 ```
 
-## Expression Tree Operations
+### Parsing Using Recursive Descent
+
+Arguably one of the most intuitive ways to parse text is a technique called
+[*Recursive Descent*][recursive-descent]. This is a top-down method that uses
+recursive functions to turn a stream of tokens into a tree.
+
+I like using recursive descent because once you've figured out your grammar
+(a *file* is zero or more *statements*, a *statement* maybe an *assignment*
+or *if-statement*, etc.) turning that into code just becomes a case of
+writing one function per rule and matching different things depending on what
+the rule asks for.
+
+I'll often create a `Parser` type which wraps a `Tokens` stream. You don't
+*need* to do it this way, but I like how I can put the grammar in the
+*`Parser`'s doc-comment so if I need to revisit the code 6 months for now I
+can pull up the API docs and immediately get a feel for how an `Expression`
+is parsed.
+
+```rust
+// src/parse.rs
+
+use std::iter::Peekable;
+
+/// A simple recursive descent parser (`LL(1)`) for converting a string into an
+/// expression tree.
+///
+/// The grammar:
+///
+/// ```text
+/// expression := term "+" expression
+///             | term "-" expression
+///             | term
+///
+/// term       := factor "*" term
+///             | factor "/" term
+///             | factor
+///
+/// factor     := "-" term
+///             | IDENTIFIER "(" expression ")"
+///             | IDENTIFIER
+///             | "(" expression ")"
+///             | NUMBER
+/// ```
+#[derive(Debug, Clone)]
+pub(crate) struct Parser<'a> {
+    tokens: Peekable<Tokens<'a>>,
+}
+```
+
+{{% notice note %}}
+You may notice that we've wrapped our `Tokens` in a `std::iter::Peekable`.
+This lets us peek at the next token when we need more information about how
+to proceed. For example, when processing the `expression` rule from above, we
+after parse one `term` we can peek at the next token to see if it is a `+` or
+`-`.
+
+An alternative to looking ahead is to try something anyway and [backtrack][bt]
+if it doesn't work. This might let us simplify the code a bit, but comes with
+the disadvantage that parsing time can become exponential in the face of poor
+(or maliciously crafted) input.
+
+Using a lookahead of one token lets us make performance much more consistent.
+Rust's `regex` crate avoids arbitrary lookahead and back-references [for similar
+reasons][untrusted-input].
+
+[bt]: https://en.wikipedia.org/wiki/Backtracking
+[untrusted-input]: https://docs.rs/regex/1.3.9/regex/#untrusted-input
+{{% /notice %}}
+
+To help provide better error messages than just *"this expression is invalid"*,
+we've defined a `ParseError` type representing the various errors that may
+occur.
+
+For example, we could encounter an `InvalidCharacter` while tokenising or run
+out of tokens when we are expecting more (e.g. `42 +` would result in a
+`ParseError::UnexpectedEndOfInput`), or we could run into a token that isn't
+valid in that context (imagine seeing a `+` when we're expecting a number or
+identifier).
+
+```rust
+// src/parse.rs
+
+/// Possible errors that may occur while parsing.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParseError {
+    InvalidCharacter {
+        character: char,
+        index: usize,
+    },
+    UnexpectedEndOfInput,
+    UnexpectedToken {
+        found: TokenKind,
+        span: Range<usize>,
+        expected: &'static [TokenKind],
+    },
+}
+```
+
+The key to writing a *Recursive Descent* parser is to write down the rules so
+you know what to expect. For example, lets look at the top-level `expression`
+rule.
+
+```
+expression := term "+" expression
+            | term "-" expression
+            | term
+```
+
+{{% notice note %}}
+Order is important here.
+
+When specifying the `expression` rule, I've taken care to put the more
+specific term, `term`, towards the left and then recurse on the right.
+
+Matching on the more specific thing first takes you closer to the base case
+and prevents infinite recursion (I need to parse an `expression` in order to
+parse an `expression` in order to parse an `expression` ...).
+{{% /notice %}}
+
+Now, to parse an `expression` we need to first parse a `term` (which we'll
+define shortly) then look ahead to check whether it is followed by a `+` or
+`-` so we know whether we need to parse the right side.
+
+```rust
+// src/parse.rs
+
+impl<'a> Parser<'a> {
+    fn expression(&mut self) -> Result<Expression, ParseError> {
+        let left = self.term()?;
+
+        match self.peek() {
+            // term + expression
+            Some(TokenKind::Add) => {
+                let _plus_sign = self.advance();
+                let right = self.expression()?;
+
+                Ok(left + right)
+            },
+            // term - expression
+            Some(TokenKind::Sub) => {
+                let _minus_sign = self.advance();
+                let right = self.expression()?;
+
+                Ok(left - right)
+            },
+            // term
+            _ => Ok(left)
+        }
+    }
+
+    fn term(&mut self) -> Result<Expression, ParseError> {
+        todo!()
+    }
+
+    /// What kind of token is the next one in our `Tokens` stream?
+    fn peek(&mut self) -> Option<TokenKind> { ... }
+
+    /// Advance the `Tokens` stream by one, returning the token that was
+    /// consumed.
+    fn advance(&mut self) -> Option<Token> { ... }
+}
+```
+
+You can see how this code almost exactly reflects the `expression`. You'll
+see that there's a lot you can do to remove code duplication, but for our
+purposes it's not necessary.
+
+I chose to reuse our operator overloads, though. They make constructing binary
+expressions slightly less verbose.
+
+Next comes the `term` rule.
+
+```
+term := factor "*" term
+      | factor "/" term
+      | factor
+```
+
+You can see that the `term` rule is almost identical, except it looks for `*`
+and `/`.
+
+There's no point copy-pasting the `expression()` method here, so let's jump
+straight into `factor`.
+
+```
+factor := "-" factor
+        | IDENTIFIER "(" expression ")"
+        | IDENTIFIER
+        | "(" expression ")"
+        | NUMBER
+```
+
+Finally we reach something interesting.
+
+This rule matches a bunch of things which all have the same precedence level:
+
+- Negated `factor`s (i.e. `-(x + y)`)
+- Function calls
+- Variables
+- Nested `expression`s inside parentheses, or
+- Number
+
+The code is fairly similar to before, except we've got a larger `match`
+statement.
+
+```rust
+// src/parse.rs
+
+impl<'a> Parser<'a> {
+    fn factor(&mut self) -> Result<Expression, ParseError> {
+        match self.peek() {
+            // NUMBER
+            Some(TokenKind::Number) => {
+                return self.number();
+            },
+
+            // "-" factor
+            Some(TokenKind::Minus) => {
+                let _ = self.advance()?;
+                let operand = self.factor()?;
+                return Ok(-operand);
+            },
+
+            // IDENTIFIER | IDENTIFIER "(" expression ")"
+            Some(TokenKind::Identifier) => {
+                return self.variable_or_function_call()
+            },
+
+            // "(" expression ")"
+            Some(TokenKind::OpenParen) => {
+                let _ = self.advance()?;
+                let expr = self.expression()?;
+                let close_paren = self.advance()?;
+
+                if close_paren.kind == TokenKind::CloseParen {
+                    return Ok(expr);
+                } else {
+                    return Err(ParseError::UnexpectedToken {
+                        found: close_paren.kind,
+                        span: close_paren.span,
+                        expected: &[TokenKind::CloseParen],
+                    });
+                }
+            },
+
+            // something unexpected
+            _ => {},
+        }
+
+        // We couldn't parse the `factor` so try to return a nice error
+        // indicating what types of tokens we were expecting
+        match self.tokens.next() {
+            // "we found an XXX but were expecting a number, identifier, or minus"
+            Some(Ok(Token { span, kind, .. })) => {
+                Err(ParseError::UnexpectedToken {
+                    found: kind,
+                    expected: &[TokenKind::Number, TokenKind::Identifier, TokenKind::Minus],
+                    span,
+                })
+            },
+            // the underlying tokens stream encountered an error (e.g. unknown
+            // character)
+            Some(Err(e)) => Err(e),
+            // there were just no tokens available to parse as a factor
+            None => Err(ParseError::UnexpectedEndOfInput),
+        }
+    }
+}
+```
+
+We are also in a better position to report parse errors here because we've
+reached several terminals (branches/rules which don't recurse). If possible,
+we try to let the user know what type of token we were expecting to see.
+
+To keep the `match` statement from growing out of control I've pulled
+matching either a variable or function call (both of which start with an
+identifier) out into its own function. However if you look at the rule for
+parenthesised expressions you can probably figure out how it goes.
+
+Sorry if it feels like I've rushed this section. I've written enough recursive
+descent parsers that it tends to be a mechanical process and once you've seen
+how to write one or two rules, you can write pretty much anything.
+
+### Testing
+
+Something I can't overstate enough when writing a parser by hand is to have a
+reasonably large test suite with lots of edge cases.
+
+To make the process easier I'll often create my own `macro_rules` macro to
+make writing tests easier.
+
+For example, to test that we parse something correctly I'll generate a test
+that parses a string into an `Expression` then immediately use the
+pretty-printer created earlier to turn it back into a string.
+
+If the round-tripped version matches the original you can be fairly confident
+your parser is correct without having to write out verbose parse trees by hand.
+
+```rust
+// src/parse.rs
+
+#[cfg(test)]
+mod parser_tests {
+    use super::*;
+
+    macro_rules! parser_test {
+        ($name:ident, $src:expr) => {
+            parser_test!($name, $src, $src);
+        };
+        ($name:ident, $src:expr, $should_be:expr) => {
+            #[test]
+            fn $name() {
+                let got = Parser::new($src).parse().unwrap();
+
+                let round_tripped = got.to_string();
+                assert_eq!(round_tripped, $should_be);
+            }
+        };
+    }
+}
+```
+
+And here are some of my parser tests:
+
+```rust
+// src/parse.rs
+
+#[cfg(test)]
+mod parser_tests {
+    ...
+
+    parser_test!(simple_integer, "1");
+    parser_test!(one_plus_one, "1 + 1");
+    parser_test!(one_plus_one_plus_negative_one, "1 + -1");
+    parser_test!(one_plus_one_times_three, "1 + 1*3");
+    parser_test!(one_plus_one_all_times_three, "(1 + 1)*3");
+    parser_test!(negative_one, "-1");
+    parser_test!(negative_one_plus_one, "-1 + 1");
+    parser_test!(negative_one_plus_x, "-1 + x");
+    parser_test!(number_in_parens, "(1)", "1");
+    parser_test!(bimdas, "1*2 + 3*4/(5 - 2)*1 - 3");
+    parser_test!(function_call, "sin(1)");
+    parser_test!(function_call_with_expression, "sin(1/0)");
+    parser_test!(
+        function_calls_function_calls_function_with_variable,
+        "foo(bar(baz(pi)))"
+    );
+}
+```
+
+The tokeniser tests are quite similar, except we also need to make sure spans
+are correct otherwise the user will get dodgy error messages.
+
+```rust
+// src/parse.rs
+
+#[cfg(test)]
+mod tokenizer_tests {
+    use super::*;
+
+    macro_rules! tokenize_test {
+        ($name:ident, $src:expr, $should_be:expr) => {
+            #[test]
+            fn $name() {
+                let mut tokens = Tokens::new($src);
+
+                let got = tokens.next().unwrap().unwrap();
+
+                let Range { start, end } = got.span;
+                assert_eq!(start, 0);
+                assert_eq!(end, $src.len());
+                assert_eq!(got.kind, $should_be);
+
+                assert!(
+                    tokens.next().is_none(),
+                    "{:?} should be empty",
+                    tokens
+                );
+            }
+        };
+    }
+}
+```
+
+And this is what they look like in action.
+
+```rust
+// src/parse.rs
+
+impl tokenizer_tests {
+    ...
+
+    tokenize_test!(open_paren, "(", TokenKind::OpenParen);
+    tokenize_test!(close_paren, ")", TokenKind::CloseParen);
+    tokenize_test!(plus, "+", TokenKind::Plus);
+    tokenize_test!(minus, "-", TokenKind::Minus);
+    tokenize_test!(times, "*", TokenKind::Times);
+    tokenize_test!(divide, "/", TokenKind::Divide);
+    tokenize_test!(single_digit_integer, "3", TokenKind::Number);
+    tokenize_test!(multi_digit_integer, "31", TokenKind::Number);
+    tokenize_test!(number_with_trailing_dot, "31.", TokenKind::Number);
+    tokenize_test!(simple_decimal, "3.14", TokenKind::Number);
+    tokenize_test!(simple_identifier, "x", TokenKind::Identifier);
+    tokenize_test!(longer_identifier, "hello", TokenKind::Identifier);
+    tokenize_test!(
+        identifiers_can_have_underscores,
+        "hello_world",
+        TokenKind::Identifier
+    );
+    tokenize_test!(
+        identifiers_can_start_with_underscores,
+        "_hello_world",
+        TokenKind::Identifier
+    );
+    tokenize_test!(
+        identifiers_can_contain_numbers,
+        "var5",
+        TokenKind::Identifier
+    );
+}
+```
 
 ## Conclusions
 
