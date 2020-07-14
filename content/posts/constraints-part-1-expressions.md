@@ -1,7 +1,6 @@
 ---
 title: "Geometric Constraint Solvers Part 1: Algebraic Expressions"
-date: "2020-07-05T19:42:47+08:00"
-draft: true
+date: "2020-07-15T00:40:00+08:00"
 tags:
 - Rust
 - Geometric Constraint Solver
