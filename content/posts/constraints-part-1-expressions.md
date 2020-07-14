@@ -1339,9 +1339,26 @@ impl tokenizer_tests {
 
 ## Conclusions
 
+While our main focus is implementing a geometric constraints solver, this
+article mainly focused on defining our `Expression` tree's structure and
+converting to/from its string representation.
+
+Now we've got a way to represent `Expression`s, enter them into a program, and
+print them out for debugging, we've created a solid foundation that the rest of
+the solver can be built on.
+
+As an aside, the code and techniques used here are almost identical to those
+used when implementing a programming language. Indeed, that's where I
+initially learned things like [Backus–Naur form][bnf] (the syntax used to
+represent rules), [Recursive Descent][recursive-descent] parsers, and
+[`LL(1)` grammars][ll-1].
+
 [ast]: https://en.wikipedia.org/wiki/Abstract_syntax_tree
 [sso]: https://stackoverflow.com/questions/10315041/meaning-of-acronym-sso-in-the-context-of-stdstring/10319672#10319672
 [infinite-size]: https://stackoverflow.com/questions/25296195/why-are-recursive-struct-types-illegal-in-rust
 [sugar]: https://en.wikipedia.org/wiki/Syntactic_sugar
 [tokenise]: https://en.wikipedia.org/wiki/Lexical_analysis#Tokenization
 [configuration]: https://www.cati.com/blog/2018/01/solidworks-configurations-part-1-basics-and-creating-configurations/
+[recursive-descent]: https://en.wikipedia.org/wiki/Recursive_descent_parser
+[bnf]: https://en.wikipedia.org/wiki/Backus%E2%80%93Naur_form
+[ll-1]: https://en.wikipedia.org/wiki/LL_parser
