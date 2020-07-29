@@ -207,7 +207,7 @@ error: aborting due to 2 previous errors
 This `assert_is_digital_input()` function is a nice little trick you can use
 to make sure something implements a particular trait. By using
 [turbofish][fish] we can specify *exactly* which type we're trying to check,
-avoiding things like auto-defer and coersion.
+avoiding things like auto-defer and coercion.
 
 You can find more gems like this in [the `static_assertions` crate][s],
 
