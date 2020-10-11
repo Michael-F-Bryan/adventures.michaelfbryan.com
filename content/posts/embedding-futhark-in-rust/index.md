@@ -241,8 +241,34 @@ $ futhark test mandelbrot_test.fut
 
 The ASCII art table for displaying a summary of results is a nice touch.
 
+## Compiling the Futhark Code
+
+Instead of generating machine code like most compilers, the `futhark` compiler
+has several code generators for targeting different languages and platforms.
+
+This includes generators for
+
+- Sequential C code - typically used when you want to run the code on your CPU
+  (e.g. for debugging or as a fallback when dedicated hardware isn't available)
+- Sequential Python code - for the same reasons as sequential C generator
+- PyOpenCL - generate sequential Python code that uses the Python bindings to
+  [OpenCL][open-cl] for offloading work to the GPU
+- CUDA - generates C code that will configure a Nvidia GPU, compile a CUDA
+  kernel containing your Futhark program, and marshal data back and forth
+
+{{% notice note %}}
+There is also a REPL for experimenting interactively.
+
+While I usually prefer using a combination of intellisense, compile errors,
+and unit tests for finding my way around, I tried the REPL out a couple times
+to double-check my code worked as expected and it seemed to work pretty well.
+
+[jupyter]: https://jupyter.org/
+{{% /notice %}}
+
 [futhark]:https://futhark-lang.org/
 [futhark-blog]: https://futhark-lang.org/blog.html
 [wiki]: https://en.wikipedia.org/wiki/Mandelbrot_set
 [parallel]: https://en.wikipedia.org/wiki/Embarrassingly_parallel
 [testing-docs]: https://futhark-book.readthedocs.io/en/latest/practical-matters.html
+[open-cl]: https://documen.tician.de/pyopencl/
