@@ -363,4 +363,52 @@ Time for RefCell implementation: 8.12443462 (0.812 us/iteration)
 Time for index implementation: 10.627504373 (1.063 us/iteration)
 ```
 
+For 10 million elements you can see that the best Rust solution (0.812
+us/iteration) is about 2x slower than the C# implementation (0.46 us/iteration).
+
+[The thread][thread] goes on to discuss possible reasons for the discrepancy,
+
+- The `dotnet` JIT is able to generate more efficient code by doing runtime
+  analysis
+- Rust uses the system allocator, which is known to not be as fast as others
+  (e.g. `jemalloc`)
+- `dotnet` has a tracing GC with generational garbage collection with 3 levels
+  (0, 1, 2)
+  - This optimises for a large number of short lived objects and a small
+    number of large objects
+  - The results from this benchmark never get used and the benchmark runs fast
+    enough that objects don't get moved to the 1st or 2nd generation (later
+    generations do a lot more work)
+  - In particular the 0th generation (where new objects are placed) effectively
+    uses a bump allocator, which next to no overhead
+
+My favourite is alluded to by [this comment][comment-1] by [`@qaopm`][qaopm]:
+
+> A wild guess, without benchmarking -- from what I've heard C# has good
+> implementation of containers and my suspicion is that calling `push()`
+> repeatedly is where Rust implementation of your program is losing time
+> because of memory (re)allocations.
+
+Maybe the people implementing C#, the `dotnet` runtime, and C#'s standard
+library knew what they were doing and put time into making it fast?
+
+[`@Zarenor`][Zarenor] also raises a good point... Just because Rust lets you
+play with raw pointers and memory layout, doesn't mean you automatically get
+faster code than a managed language.
+
+> I think it's a very interesting optimization problem, for sure, and helps
+> reveal the trade-offs we make in using one language or another. Here, in
+> Rust, we can control and have to worry about allocation count, and size, and
+> memory layout, and object lifetime. In C#, we have little or no control over
+> allocation count or size, and less control over memory layout in an instance
+> like this. The obvious implementation in Rust may end up slower as a result.
+> Or more memory hungry. But we have explicit control over that, and we can
+> rewrite to change it. In C#, there's often an obvious way to do things, and
+> only a few less-obvious ways that might trade time for space or vice-versa.
+> It's much less up to us to make those decisions.
+
 [thread]:https://users.rust-lang.org/t/why-is-this-rust-code-slower-than-c/49564
+[comment-1]: https://users.rust-lang.org/t/why-is-this-rust-code-slower-than-c/49564/15
+[qaopm]: https://users.rust-lang.org/u/qaopm
+[comment-2]: https://users.rust-lang.org/t/why-is-this-rust-code-slower-than-c/49564/25
+[Zarenor]: https://users.rust-lang.org/u/Zarenor
