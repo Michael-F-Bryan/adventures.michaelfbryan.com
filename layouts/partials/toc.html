@@ -1,0 +1,18 @@
+{{ if gt .Page.ReadingTime 15 }}
+<div class="notices tip">
+    <p>
+        I often like exploring a topic in great depth and writing about my
+        thoughts and experiences as I go along.
+    </p>
+
+    <p>
+        This is closer to an extended tutorial than an article to be read in
+        a single sitting so feel free to read it one piece at a time, or just
+        skip to the bits that look interesting.
+    </p>
+
+    <p>Here, have a Table of Contents:</p>
+
+    {{ .Page.TableOfContents }}
+</div>
+{{ end }}
