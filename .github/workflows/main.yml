@@ -28,6 +28,9 @@ jobs:
     - name: Build
       run: hugo --minify
 
+    - name: Update CNAME file
+      run: echo 'adventures.michaelfbryan.com' > public/CNAME
+
     - name: GitHub Pages
       uses: crazy-max/ghaction-github-pages@v2
       with:
