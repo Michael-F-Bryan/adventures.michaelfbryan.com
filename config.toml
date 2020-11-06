@@ -46,6 +46,14 @@ icon = "fas fa-envelope fa-2x"
 weight = 3
 url = "mailto:michaelfbryan@gmail.com"
 
+[[params.social]]
+name = "RSS"
+icon = "fas fa-rss"
+weight = 6
+url = "https://adventures.michaelfbryan.com/index.xml"
+rel = "alternate"
+type = "application/rss+xml"
+
 [[menu.main]]
 name = "Blog"
 url  = "/posts/"
