@@ -38,7 +38,9 @@ damn long?!*][long-videos]
 
 With that all said, I'd also like to have something more tangible to show for
 my efforts and there are a couple larger projects I'd like to work on now
-that I'm taking a "break".
+that I've got some free time.
+
+## Polar Plotter
 
 A topic that really interests me is embedded systems and computational
 geometry (using computers to do 2D or 3D maths), and I've been thinking of
@@ -71,7 +73,7 @@ benefit the company.
 I still think this style of management worked really well, especially for
 ongoing operations which already have a well-defined scope of work and
 tasking (i.e. sales, marketing, building repeat machines), but it has a
-couple weaknesses when it comes to project work.
+weakness when it comes to project work.
 
 Namely, a lot of responsibility is put on each individual to make sure their
 projects are progressing as planned.
@@ -133,9 +135,9 @@ whole experience was a 30-month long lesson with several important takeaways:
   - Know the different phases in your project's life cycle
   - Measure and *quantify* your progress
 - Say something when it feels like the project is meandering without direction
-- Sometimes a little process can be a good thing
+- Sometimes a little process can help give a project structure
 - I like to play the "inexperienced newbie" card, relying on others to manage
-  me and make sure the right things are done at the right time
+  me instead of doing the project management myself
 
 
 # GitHub
