@@ -1,4 +1,4 @@
-{{ if gt .Page.ReadingTime 15 }}
+{{ if gt .Page.ReadingTime (default .Site.Params.toc_reading_time_threshold 15)  }}
 <div class="notices tip">
     <p>
         I often like exploring a topic in great depth and writing about my
@@ -6,12 +6,12 @@
     </p>
 
     <p>
-        This is closer to an extended tutorial than an article to be read in
-        a single sitting so feel free to read it one piece at a time, or just
+        This is more of an extended essay than an article to be read in a
+        single sitting. Feel free to read it one piece at a time, or just
         skip to the bits that look interesting.
     </p>
 
-    <p>Here, have a Table of Contents:</p>
+    <p>Here, have a <em>Table of Contents</em>:</p>
 
     {{ .Page.TableOfContents }}
 </div>

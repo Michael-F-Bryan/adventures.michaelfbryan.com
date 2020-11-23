@@ -26,6 +26,7 @@ keywords = "blog,developer,personal"
 custom_css = ["css/master.css"]
 custom_js = ["js/mermaid.min.js", "js/index.js"]
 commit = "https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree"
+toc_reading_time_threshold = 15
 
 [markup.goldmark.renderer]
 unsafe= true
