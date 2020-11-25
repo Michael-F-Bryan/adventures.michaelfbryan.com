@@ -156,7 +156,7 @@ examples, but here some questions to ask yourself:
 - Is there information the caller will need to provide? (see [*Dependency
   Injection*][d-i] and the [Strategy Pattern][strategy])
 - Is this a thin interface, or will I need to leak a lot of implementation
-  details to the caller?
+  details to the caller? (see [*The Law of Leaky Abstractions*][leaky])
 - Would I reasonably want to reuse this component elsewhere?
 - Does my language promote patterns or abstractions that would make this
   feature more ergonomic to use? (C# has events as first-class citizens,
@@ -184,7 +184,55 @@ Pattern*][facade]) and adding another level of [*Indirection*][indirection].
 ## Step 3: Initial Implementation
 
 Now you've done some background research and thought about the feature's API,
-it's time to actually start implementing it.
+it's time to actually start implementing it. Depending on how your research
+went, this stage can be either very easy or very hard.
+
+### The Easy Case
+
+If you are lucky, you may have stumbled upon a similar solution during your
+research that you can reuse or adapt to fit your purposes. This was the case
+with our from earlier, by analysing the feature request we were able to
+reduce it to a pathfinding issue; a solved problem in computer science.
+
+It's really nice when this happens. Often implementation is just a case of
+going to the Wikipedia page, scrolling down to [the pseudocode section][wiki],
+and adapting it fit the API you developed earlier.
+
+Just remember sprinkle in enough tests to make sure the implementation is
+correct and edge cases are handled gracefully. There's not much more to be
+said here.
+
+### The Not-So-Easy Case
+
+Unfortunately, most "interesting" feature requests won't have libraries or
+tutorials you can use directly, requiring you to do a bit of original work.
+
+A lot of the work I do has a visual or mathematical element to it, so you can
+simulate the feature using pen and paper.
+
+I'll often start with the top-most level first, stubbing out the public API
+with code that just blows up (i.e. `throw new NotImplementedException()` in C#
+or `todo!()` in Rust).
+
+From there you can start decomposing each of the functions into
+sub-functions, recursively decomposing the problem into smaller problems
+until you eventually reach a problem you know the solution to.
+
+Whenever you get stuck, look back over the resources you found while
+researching. You may have missed some gem of knowledge which will make
+everything *click*.
+
+An alternative to this top-down approach is attacking the problem bottom-up.
+You'll often take this approach when you know how something deep down is done,
+but aren't quite sure how to connect that with the public API.
+
+When taking the bottom-up approach I'll first implement the thing I know and
+make sure to develop a solid foundation. Then you add higher and higher level
+layers, slowly working your way towards that public API you want to expose.
+
+In practice you'll often use a hybrid approach, doing a little work from the
+top down, then a bit more from the bottom up, until eventually you meet in
+the middle and everything fits together.
 
 ## Step 4: Integration
 
@@ -207,3 +255,5 @@ it's time to actually start implementing it.
 [seam]: https://softwareengineering.stackexchange.com/questions/132563/problem-with-understanding-seam-word
 [indirection]: https://wiki.c2.com/?OneMoreLevelOfIndirection
 [facade]: https://refactoring.guru/design-patterns/facade
+[wiki]:https://en.wikipedia.org/wiki/A*_search_algorithm#Pseudocode
+[leaky]: https://www.joelonsoftware.com/2002/11/11/the-law-of-leaky-abstractions/
