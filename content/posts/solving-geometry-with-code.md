@@ -1,15 +1,16 @@
 ---
-title: "Solving Math Problems With Code"
+title: "How I Translate Feature Requests into Code"
 date: "2020-11-23T01:36:05+08:00"
 draft: true
 ---
 
-I created a CAD/CAM package at my previous job and a very common task would
-be to take a vague feature description, rephrase it as a more formal software
-problem, then use computational geometry algorithms to turn it into code.
+As part of my previous job I worked on a CAD/CAM package, and a very common
+task would be to take a vague feature description, rephrase it as a more
+formal software problem, then use computational geometry algorithms to turn
+it into code.
 
 I eventually got quite good at this, so I'm going to write down the system I
-came up with in the hope that others can gain insight.
+came up with. Hopefully others can gain insight from my experience.
 
 {{% notice note %}}
 The code written in this article is available [on GitHub][repo]. Feel free to
@@ -79,7 +80,7 @@ We ended up needing to rewrite the component because immutability was so
 deeply ingrained into its implementation (direct references to edges, no way
 to tell the component about updates or propagate changes, etc.).
 
-I'd engineered myself into a corner.
+I'd engineered myself into a corner 😞
 {{% /notice %}}
 
 ## Searching for Prior Art
@@ -87,10 +88,19 @@ I'd engineered myself into a corner.
 Once you can phrase the problem in searchable terms it's time to pull out the
 programmer's most powerful tool... The internet.
 
-You're looking anything relevant to the problem at hand. I'll often end up with
-20-40 open tabs because I've opened most of the promising items on the first
-couple pages of search results, then I'll skim through and open interesting
-things those pages link to.
+You're looking anything relevant to the problem at hand. This may take the form
+of:
+
+- Wikipedia - usually my first port of call
+- Blog posts exploring similar problems
+- Academic Papers - tend to be quite information-dense and go into *much* more
+  detail than you care about, but a quick skim through will often find pictures
+  or algorithms that are useful
+- Existing Products or Libraries - why waste weeks reimplementing the wheel?
+
+I'll often end up with 20-40 open tabs because I've opened most of the
+promising items on the first couple pages of search results, then I'll skim
+through and open interesting things those pages link to.
 
 Continuing with our example from before where we're wanting to find the path
 from one point to another preferring to use unvisited edges, I might search
@@ -111,28 +121,70 @@ pictures, which will be handy when it gets to the implementation.
 
 ![Search result showing "Introduction to the A\* Algorithm" with certain words highlighted](/img/pathfinding-search-results.png)
 
-Other things you should be looking for
-
-- Wikipedia - usually my first port of call
-- Academic Papers - tend to be quite information-dense and go into *much* more
-  detail than you care about, but a quick skim through will often find pictures
-  or algorithms that are useful
-- Existing Products or Libraries - why waste weeks reimplementing the wheel?
-
 If your problem involves a lot of maths (like a lot of my computational
 geometry work) it's a good idea to draw sketches and try to work out the
-solution by hand.
+solution by hand. This also lets you derive equations that you'll need later
+on.
 
 ## Step 2: Thinking About the Public API
 
-<!-- - No code exists in a vacuum
-- What seams do I want to provide?
-- What parts of the algorithm need to be controlled by the caller? (strategy
-  pattern or dependency injection)
-- Allow for flexibility and change later on (up to and including ripping out
-  the existing implementation) -->
+No code exists in a vacuum, so knowing how the outside world will use your
+feature has a big effect on how it will be integrated into the rest of the
+application.
+
+In this stage you develop a big picture view of the feature and how it will
+expose its functionality to the outside world.
+
+{{% notice note %}}
+The feature's public API also acts as a natural seam that you can use for
+testing (e.g. mocking out the component when testing the application) and to
+allow you to restructure the feature's implementation (or swap it out
+entirely) without breaking the rest of the application.
+{{% /notice %}}
+
+Every feature will be used differently so it's hard to provide concrete
+examples, but here some questions to ask yourself:
+
+- Is this a well-contained batch process or is the feature interactive?
+- What are my inputs and outputs?
+- Are there any hard constraints imposed by the implementation?
+- If the process will take a long time (i.e. more than 100ms), does it need to
+  report process or support cancellation?
+- Do I need to let the caller update the feature's internal state? (e.g. when
+  altering the "background drawing" from the earlier example)
+- How are we going to report failure?
+- Is there information the caller will need to provide? (see [*Dependency
+  Injection*][d-i] and the [Strategy Pattern][strategy])
+- Is this a thin interface, or will I need to leak a lot of implementation
+  details to the caller?
+- Would I reasonably want to reuse this component elsewhere?
+- Does my language promote patterns or abstractions that would make this
+  feature more ergonomic to use? (C# has events as first-class citizens,
+  Go's goroutines and channels are great for creating streams of events, etc.)
+
+Answering these questions should give you an idea of how your feature will
+interact with the rest of the application, and from there you can start
+thinking in more concrete terms like interfaces and data types.
+
+{{% notice tip %}}
+You actually don't need to write code for this step.
+
+My normal approach was to turn away from my computer and stare at a random
+patch of wall on the other side of the office. This lets me think about how I
+want to interact with the feature without being bogged down with the precise
+details you get when writing code.
+{{% /notice %}}
+
+If your research indicated the feature's implementation will be quite
+complex, there are a couple tools at your disposal for limiting how much of
+that complexity leaks into the wider application. Namely, by encapsulating
+the problem you can paper over the complexity (see the [*Facade
+Pattern*][facade]) and adding another level of [*Indirection*][indirection].
 
 ## Step 3: Initial Implementation
+
+Now you've done some background research and thought about the feature's API,
+it's time to actually start implementing it.
 
 ## Step 4: Integration
 
@@ -150,3 +202,8 @@ solution by hand.
 [simplification]: {{< ref "/posts/line-simplification.md" >}}
 [law]: https://meta.wikimedia.org/wiki/Cunningham%27s_Law
 [intro-to-a-star]: https://www.redblobgames.com/pathfinding/a-star/introduction.html
+[d-i]: https://www.freecodecamp.org/news/a-quick-intro-to-dependency-injection-what-it-is-and-when-to-use-it-7578c84fa88f/
+[strategy]: https://refactoring.guru/design-patterns/strategy
+[seam]: https://softwareengineering.stackexchange.com/questions/132563/problem-with-understanding-seam-word
+[indirection]: https://wiki.c2.com/?OneMoreLevelOfIndirection
+[facade]: https://refactoring.guru/design-patterns/facade
