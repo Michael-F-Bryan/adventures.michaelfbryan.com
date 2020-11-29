@@ -23,7 +23,10 @@ jobs:
           hugo-version: 'latest'
 
       - name: Build
-        run: hugo --buildDrafts --buildExpired --buildFuture
+        run: hugo --buildDrafts --buildExpired --buildFuture --baseURL https://staging.adventures.michaelfbryan.com/
+
+      - name: Add redirect at slash
+        run: echo '<meta http-equiv="refresh" content="0; url=/public/" />' > public/index.html
 
       - id: Upload
         uses: google-github-actions/upload-cloud-storage@main
