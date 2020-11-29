@@ -23,7 +23,7 @@ jobs:
           hugo-version: 'latest'
 
       - name: Build
-        run: hugo --buildDrafts --buildExpired --buildFuture --baseURL https://staging.adventures.michaelfbryan.com/
+        run: hugo --buildDrafts --buildExpired --buildFuture --baseURL https://staging.adventures.michaelfbryan.com/public/
 
       - name: Upload Website
         uses: google-github-actions/upload-cloud-storage@main
