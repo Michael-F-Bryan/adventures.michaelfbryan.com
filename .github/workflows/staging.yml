@@ -25,12 +25,19 @@ jobs:
       - name: Build
         run: hugo --buildDrafts --buildExpired --buildFuture --baseURL https://staging.adventures.michaelfbryan.com/
 
-      - name: Add redirect at slash
-        run: echo '<meta http-equiv="refresh" content="0; url=/public/" />' > public/index.html
-
-      - id: Upload
+      - id: Upload Website
         uses: google-github-actions/upload-cloud-storage@main
         with:
           path: public
           credentials: ${{ secrets.gcp_credentials }}
           destination: staging.adventures.michaelfbryan.com
+
+      - name: Add redirect at slash
+        run: echo '<meta http-equiv="refresh" content="0; url=/public/" />' > index.html
+
+      - id: Upload Redirect
+        uses: google-github-actions/upload-cloud-storage@main
+        with:
+          path: index.html
+          credentials: ${{ secrets.gcp_credentials }}
+          destination: staging.adventures.michaelfbryan.com/index.html
