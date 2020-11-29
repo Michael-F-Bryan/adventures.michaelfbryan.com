@@ -28,6 +28,6 @@ jobs:
       - id: Upload
         uses: google-github-actions/upload-cloud-storage@main
         with:
-          path: public
+          path: public/
           credentials: ${{ secrets.gcp_credentials }}
-          destination: staging.adventures.michaelfbryan.com
+          destination: staging.adventures.michaelfbryan.com/
