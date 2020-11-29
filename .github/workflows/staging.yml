@@ -28,7 +28,7 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@master
         with:
-          project_id: adventures.michaelfbryan.com
+          project_id: adventures-michaelfbryan-com
           service_account_key: ${{ secrets.gcp_credentials }}
           export_default_credentials: true
 
