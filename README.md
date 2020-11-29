@@ -1,6 +1,6 @@
 # Michael's Adventures
 
-(**[Rendered](http://adventures.michaelfbryan.com/)**)
+(**[Published](http://adventures.michaelfbryan.com/) | [Staging](https://staging.adventures.michaelfbryan.com/)**)
 
 A simple blog for documenting my thoughts and adventures.
 
