@@ -7,19 +7,16 @@ draft: true
 As part of my previous job I worked on a CAD/CAM package, and a very common
 task would be to take a vague feature description, rephrase it as a more
 formal software problem, then use computational geometry algorithms to turn
-it into code.
+it into code which can be integrated into the overall application.
 
 I eventually got quite good at this, so I'm going to write down the system I
-came up with. Hopefully others can gain insight from my experience.
+came up with. This process works especially well for larger features which
+add new functionality with minimal coupling to existing code.
 
 {{% notice note %}}
-The code written in this article is available [on GitHub][repo]. Feel free to
-browse through and steal code or inspiration.
-
 If you found this useful or spotted a bug, let me know on the blog's
 [issue tracker][issue]!
 
-[repo]: https://github.com/Michael-F-Bryan/💩🔥🦀
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
 {{% /notice %}}
 
@@ -82,6 +79,10 @@ to tell the component about updates or propagate changes, etc.).
 
 I'd engineered myself into a corner 😞
 {{% /notice %}}
+
+Don't forget to come up with an unambiguous definition of *"done"*. This lets
+you determine when the feature request has been fulfilled, and gives you a way
+to ward off [scope creep][scope-creep].
 
 ## Searching for Prior Art
 
@@ -161,6 +162,8 @@ examples, but here some questions to ask yourself:
 - Does my language promote patterns or abstractions that would make this
   feature more ergonomic to use? (C# has events as first-class citizens,
   Go's goroutines and channels are great for creating streams of events, etc.)
+- Does the larger application provide natural mechanisms or extension points
+  that we can use?
 
 Answering these questions should give you an idea of how your feature will
 interact with the rest of the application, and from there you can start
@@ -180,6 +183,10 @@ complex, there are a couple tools at your disposal for limiting how much of
 that complexity leaks into the wider application. Namely, by encapsulating
 the problem you can paper over the complexity (see the [*Facade
 Pattern*][facade]) and adding another level of [*Indirection*][indirection].
+
+Try to avoid creating a "chatty" API, if possible. Making the caller call
+back and forth into your code to do complex operations leads to increased
+coupling and more bugs down the track.
 
 ## Step 3: Initial Implementation
 
@@ -236,7 +243,89 @@ the middle and everything fits together.
 
 ## Step 4: Integration
 
-## Step 5: Review and Integration Testing
+Integration is the process of merging new functionality into an existing
+application. This is the point where new code meets old and tests how
+suitable your public API from step 2 is.
+
+Again, it's a bit tricky to provide examples when everyone's scenarios are
+different, but we can still discuss integration in the abstract.
+
+If you are lucky, your application will already provide places new
+functionality can naturally be added to. For example, most CAD applications
+are modal (e.g. you might be in the *"add arc"* mode, then switch to *"select
+mode"*) and adding a new mode is often just a case of creating a button which
+calls some `SetCurrentMode()` function.
+
+Other times you'll be adding to existing functionality and need to be a bit
+more careful.
+
+Either way, this step tends to be rather straightforward. You've got some
+existing code and some new code, and you need to wire up the existing code to
+use the new code. You may need to rewrite/restructure pieces so they fit
+together more nicely, but that's the general gist.
+
+{{% notice tip %}}
+Don't forget that you have a variety of tools at your disposal for connecting
+two pieces of code while keeping the overall codebase maintainable.
+
+*The Refactoring Guru*'s section on [*Design Patterns*][design-patterns] may be
+helpful here. These patterns aren't restricted to Object Oriented languages,
+with a bit of ingenuity they can be adapted to more procedural or functional
+languages too.
+
+[Objects are a poor man's closure, after all][closures].
+
+[design-patterns]: https://refactoring.guru/design-patterns
+[closures]: https://wiki.c2.com/?ClosuresAndObjectsAreEquivalent
+{{% /notice %}}
+
+The integration stage is also where you need to think about how users will
+interact with this new functionality (the buzz word is [*User
+Experience*][user-experience]). While the feature's public API determines how
+code interacts, the integration code is usually the part which takes input
+from users and triggers the feature's functionality.
+
+You'll want to think of the intended workflow (your feature's *"happy path"*)
+and make sure that is intuitive for users. Some questions to ask yourself are,
+
+- How many knobs and levers do we want to expose to the user?
+- Can we use some sort of [*Progressive Disclosure*][disclosure] mechanism to
+  simplify the process?
+- What norms and conventions can we build on to lower the barrier-to-entry?
+- Can users get "stuck" in confusing or unintuitive situations when they go
+  off the beaten path?
+
+Something that goes hand-in-hand with user experience is testing. While I'm
+sure you've been writing integration tests as you go (*\*hint, hint\**), the
+best way to make sure a feature has been properly integrated into your
+application is still to use a regular human tester.
+
+{{% notice tip %}}
+It's a good idea to make sure your testers *aren't* the same people that
+develop a feature.
+
+On more than one occasion, I've been showing a newly implemented feature to
+someone and we'll have an exchange like this:
+
+- **Michael:** (draws something in a non-intuitive way)
+- **Co-Worker:** Why did you draw it like that instead of doing X?
+- **Michael:** Oh, because if I drew it that way the maths would make my arc's
+  radius blow out to infinity, and that'll mess up my drawing.
+
+What just happened is the software developer unconsciously avoided a known
+edge case (AKA buggy behaviour) because they wanted the demonstration to go
+smoothly. This scenario sounds ridiculous, but I've been called out for
+unconsciously avoiding "problem" areas by non-technical co-workers several
+times *even when I'm aware of it*.
+
+A lot of people (particularly management!) see the bug tester role as an
+unnecessary overhead or laziness on the part of the developer, especially in
+this era of CI and suites of unit tests. I believe bug testers are a crucial
+part of creating anything user-facing, a good bug tester will hold developers
+accountable and help to make the user experience as smooth as possible.
+{{% /notice %}}
+
+## Step 5: Review
 
 <!-- - Now you've integrated it in, was your original design correct? If not, how
   should it be changed?
@@ -257,3 +346,6 @@ the middle and everything fits together.
 [facade]: https://refactoring.guru/design-patterns/facade
 [wiki]:https://en.wikipedia.org/wiki/A*_search_algorithm#Pseudocode
 [leaky]: https://www.joelonsoftware.com/2002/11/11/the-law-of-leaky-abstractions/
+[scope-creep]: https://www.wrike.com/project-management-guide/faq/what-is-scope-creep-in-project-management/
+[disclosure]: https://www.shopify.com.au/partners/blog/progressive-disclosure
+[user-experience]: https://www.interaction-design.org/literature/topics/ux-design
