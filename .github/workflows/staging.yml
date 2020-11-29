@@ -25,10 +25,12 @@ jobs:
       - name: Build
         run: hugo --buildDrafts --buildExpired --buildFuture --baseURL https://staging.adventures.michaelfbryan.com/
 
-      - name: Upload Website
-        uses: google-github-actions/upload-cloud-storage@main
-        working-directory: public
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@master
         with:
-          path: .
-          credentials: ${{ secrets.gcp_credentials }}
-          destination: staging.adventures.michaelfbryan.com
+          project_id: adventures.michaelfbryan.com
+          service_account_key: ${{ secrets.gcp_credentials }}
+          export_default_credentials: true
+
+      - name: Upload Website
+        run: gsutil rsync -R -d public gs://staging.adventures.michaelfbryan.com
