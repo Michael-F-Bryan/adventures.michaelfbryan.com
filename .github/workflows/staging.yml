@@ -40,4 +40,4 @@ jobs:
         with:
           path: index.html
           credentials: ${{ secrets.gcp_credentials }}
-          destination: staging.adventures.michaelfbryan.com/index.html
+          destination: staging.adventures.michaelfbryan.com
