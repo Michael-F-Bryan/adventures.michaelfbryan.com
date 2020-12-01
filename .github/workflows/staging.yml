@@ -36,7 +36,7 @@ jobs:
 
       - name: Initialize Terraform
         run: terraform init
-        working-dir: terraform
+        working-directory: terraform
 
       - name: Apply Terraform
         run: make plan && make apply-no-confirm
