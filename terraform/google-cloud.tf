@@ -24,11 +24,21 @@ resource "google_storage_bucket" "staging" {
   location = var.gcp_region
 
   uniform_bucket_level_access = true
+  force_destroy               = true
 
   website {
     main_page_suffix = "index.html"
     not_found_page   = "404.html"
   }
+}
+
+# Create a policy that gives all users read-only access
+resource "google_storage_bucket_iam_binding" "readonly" {
+  bucket = google_storage_bucket.staging.name
+  role   = "roles/storage.objectViewer"
+  members = [
+    "allUsers",
+  ]
 }
 
 # We want to set up a load balancer backed by the staging bucket

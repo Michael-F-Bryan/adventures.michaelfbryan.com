@@ -29,3 +29,6 @@ plan:
 
 apply:
 	$(call terraform-action,apply)
+
+destroy:
+	$(call terraform-action,destroy)
