@@ -10,8 +10,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - uses: hashicorp/setup-terraform@v1
-
       - name: Checkout submodules
         shell: bash
         run: |
@@ -33,16 +31,6 @@ jobs:
           project_id: adventures-michaelfbryan-com
           service_account_key: ${{ secrets.gcp_credentials }}
           export_default_credentials: true
-
-      - name: Initialize Terraform
-        run: terraform init
-        working-directory: terraform
-
-      - name: Apply Terraform
-        run: make plan && make apply-no-confirm
-        env:
-          TF_VAR_gcp_credentials: ${{ secrets.gcp_credentials }}
-          TF_VAR_do_token: ${{ secrets.digital_ocean_token }}
 
       - name: Upload Website
         run: gsutil rsync -R -d public gs://staging.adventures.michaelfbryan.com
