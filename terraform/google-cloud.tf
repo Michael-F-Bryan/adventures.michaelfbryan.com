@@ -1,7 +1,7 @@
 provider "google" {
   version = "3.49.0"
 
-  credentials = file("terraform-service-account-key.json")
+  credentials = var.gcp_credentials
 
   project = var.gcp_project_id
   region  = var.gcp_region
@@ -11,7 +11,7 @@ provider "google" {
 provider "google-beta" {
   version = "3.49.0"
 
-  credentials = file("terraform-service-account-key.json")
+  credentials = var.gcp_credentials != null ? var.gcp_credentials : file("terraform-service-account-key.json")
 
   project = var.gcp_project_id
   region  = var.gcp_region

@@ -40,6 +40,8 @@ jobs:
 
       - name: Apply Terraform
         run: make plan && make apply-no-confirm
+        env:
+          TF_VAR_gcp_credentials: ${{ secrets.gcp_credentials }}
 
       - name: Upload Website
         run: gsutil rsync -R -d public gs://staging.adventures.michaelfbryan.com
