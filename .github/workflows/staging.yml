@@ -34,8 +34,12 @@ jobs:
           service_account_key: ${{ secrets.gcp_credentials }}
           export_default_credentials: true
 
-      - name: Apply terraform
-        run: make terraform-init && make plan && make apply-no-confirm
+      - name: Initialize Terraform
+        run: terraform init
+        working-dir: terraform
+
+      - name: Apply Terraform
+        run: make plan && make apply-no-confirm
 
       - name: Upload Website
         run: gsutil rsync -R -d public gs://staging.adventures.michaelfbryan.com
