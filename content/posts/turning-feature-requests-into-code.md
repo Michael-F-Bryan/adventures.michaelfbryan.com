@@ -24,9 +24,12 @@ If you found this useful or spotted a bug, let me know on the blog's
 
 ## Step 1: Research
 
-While you *can* dive into the code immediately, 9 times out of 10 trying to
-make up your own solution for a mathematical problem will lead to a buggy
-implementation with logic flaws.
+While you *can* dive into the code immediately, a lot of the time creating your
+own solution from scratch will lead to an implementation with logic/design
+flaws.
+
+This is especially the case when you are working on things requiring complex
+algorithms or mathematical concepts.
 
 ### Understanding the Problem
 
@@ -36,24 +39,25 @@ non-programmer and will be something a lot less precise, like
 
 > I want to display a CAD drawing in the background, then when I click points
 > on the drawing you should create a path which goes from A to B to C taking the
-> shortest path along that drawing.
+> shortest path along that drawing without doubling back on itself.
 
 Often important bits will be left out, too.
 
 > Oh, and this background drawing may have points added or removed at any time.
 
-(i.e. we need to deal with updates and mutation)
+(i.e. we need to deal with mutation)
 
-Unfortunately, that's a bit too vague to turn into code. What we want is a
+Unfortunately, that's a bit too vague to turn into code and Googling a
+problem statement like that won't be very helpful! What we want is a
 description of the problem which can be phrased as computer operations.
-Unfortunately Googling a problem statement like that won't be very helpful!
 
 When I'm given a vague feature description the first thing I'll do is draw it
 out. Seeing something visualised is often enough to summon the correct keywords
 to rephrase the problem in a more searchable form.
 
 I don't know about you, but when I see something like this, my first thought is
-that we're doing pathfinding where untraversed edges are preferred.
+that we're doing pathfinding. We're also trying to optimise for the shortest
+distance while preferring untraversed edges.
 
 {{< figure
     src="/img/link-lines.gif"
@@ -62,31 +66,38 @@ that we're doing pathfinding where untraversed edges are preferred.
     width="75%"
 >}}
 
-{{% notice tip %}}
-If you haven't noticed by how oddly specific this example is, I've been
-burned by this one before... I created a component for doing pathfinding by
-converting the "background drawing" into a graph and throwing it at *A\**,
-but neglected to ask whether the background drawing would change.
-
-Only after I'd finished integrating the component into the overall CAD/CAM
-package did I find out that we need a way to add a path midway along an edge
-of the background drawing (logically equivalent to removing an edge from the
-graph and replacing it with two smaller edges).
-
-We ended up needing to rewrite the component because immutability was so
-deeply ingrained into its implementation (direct references to edges, no way
-to tell the component about updates or propagate changes, etc.).
-
-I'd engineered myself into a corner 😞
-{{% /notice %}}
-
 Don't forget to come up with an unambiguous definition of *"done"*. This lets
 you determine when the feature request has been fulfilled, and gives you a way
 to ward off [scope creep][scope-creep].
 
+{{% notice info %}}
+This example came was one of the feature requests which taught me the
+importance of getting the full picture up front and leaving yourself room to
+make changes down the track.
+
+In this case, I'd created a component for doing pathfinding by converting the
+"background drawing" into a graph and passing it to *A\**, but neglected to
+ask whether the background drawing would change.
+
+Only after I'd finished integrating the component into the overall CAD/CAM
+package did I find out that we need a way to add a path midway along an edge
+of the background drawing (mutating the graph by removing an edge and
+replacing it with two smaller edges). I'm a big fan of immutability, so you
+can see how this might be a problem.
+
+We ended up needing to rewrite the component because immutability was so
+deeply ingrained into its implementation... I'd engineered myself into a
+corner!
+{{% /notice %}}
+
+If your problem involves a lot of maths (like a lot of my computational
+geometry work) it's a good idea to draw sketches and try to work out the
+solution by hand. This also lets you derive equations that you'll need later
+on.
+
 ## Searching for Prior Art
 
-Once you can phrase the problem in searchable terms it's time to pull out the
+Once you can phrase the problem in computer terms it's time to pull out the
 programmer's most powerful tool... The internet.
 
 You're looking anything relevant to the problem at hand. This may take the form
@@ -99,9 +110,9 @@ of:
   or algorithms that are useful
 - Existing Products or Libraries - why waste weeks reimplementing the wheel?
 
-I'll often end up with 20-40 open tabs because I've opened most of the
-promising items on the first couple pages of search results, then I'll skim
-through and open interesting things those pages link to.
+I'll often end up with 20-40 open tabs with promising items from the first
+couple pages of search results, then I'll skim through the content on each
+tab, also checking out interesting things *those* pages link to.
 
 Continuing with our example from before where we're wanting to find the path
 from one point to another preferring to use unvisited edges, I might search
@@ -121,11 +132,6 @@ of those boxes. Plus it seems to be a tutorial with lots of code snippets and
 pictures, which will be handy when it gets to the implementation.
 
 ![Search result showing "Introduction to the A\* Algorithm" with certain words highlighted](/img/pathfinding-search-results.png)
-
-If your problem involves a lot of maths (like a lot of my computational
-geometry work) it's a good idea to draw sketches and try to work out the
-solution by hand. This also lets you derive equations that you'll need later
-on.
 
 ## Step 2: Thinking About the Public API
 
