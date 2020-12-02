@@ -433,4 +433,4 @@ experiences, please let me know via [the accompanying Reddit thread][reddit].
 [scope-creep]: https://www.wrike.com/project-management-guide/faq/what-is-scope-creep-in-project-management/
 [disclosure]: https://www.shopify.com.au/partners/blog/progressive-disclosure
 [user-experience]: https://www.interaction-design.org/literature/topics/ux-design
-[reddit]: https://reddit.com/
+[reddit]: https://www.reddit.com/r/programming/comments/k55l1j/how_i_translate_feature_requests_into_code/?utm_source=share&utm_medium=web2x&context=3
