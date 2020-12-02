@@ -156,7 +156,7 @@ examples, but here some questions to ask yourself:
 - What are my inputs and outputs?
 - Are there any hard constraints imposed by the implementation?
 - If the process will take a long time (i.e. more than 100ms), does it need to
-  report process or support cancellation?
+  report progress or support cancellation?
 - Do I need to let the caller update the feature's internal state? (e.g. when
   altering the "background drawing" from the earlier example)
 - How are we going to report failure?
@@ -165,9 +165,10 @@ examples, but here some questions to ask yourself:
 - Is this a thin interface, or will I need to leak a lot of implementation
   details to the caller? (see [*The Law of Leaky Abstractions*][leaky])
 - Would I reasonably want to reuse this component elsewhere?
-- Does my language promote patterns or abstractions that would make this
-  feature more ergonomic to use? (C# has events as first-class citizens,
-  Go's goroutines and channels are great for creating streams of events, etc.)
+- Does my language promote patterns or abstractions that would make the code
+  more ergonomic to use if written in a certain way? (C# has events as
+  first-class citizens, Go's goroutines and channels are great for creating
+  streams of events, etc.)
 - Does the larger application provide natural mechanisms or extension points
   that we can use?
 
@@ -188,11 +189,12 @@ If your research indicated the feature's implementation will be quite
 complex, there are a couple tools at your disposal for limiting how much of
 that complexity leaks into the wider application. Namely, by encapsulating
 the problem you can paper over the complexity (see the [*Facade
-Pattern*][facade]) and adding another level of [*Indirection*][indirection].
+Pattern*][facade]) or adding another level of [*Indirection*][indirection]
+(e.g. introduce a middle-man).
 
-Try to avoid creating a "chatty" API, if possible. Making the caller call
-back and forth into your code to do complex operations leads to increased
-coupling and more bugs down the track.
+Try to avoid creating a "chatty" API, if possible. Making the caller go back
+and forth into your code to do complex operations leads to increased coupling
+and more bugs down the track.
 
 ## Step 3: Initial Implementation
 
@@ -211,9 +213,10 @@ It's really nice when this happens. Often implementation is just a case of
 going to the Wikipedia page, scrolling down to [the pseudocode section][wiki],
 and adapting it fit the API you developed earlier.
 
-Just remember sprinkle in enough tests to make sure the implementation is
-correct and edge cases are handled gracefully. There's not much more to be
-said here.
+Just remember to sprinkle in enough tests to make sure the implementation is
+correct and edge cases are handled gracefully.
+
+There's not much more to be said here.
 
 ### The Not-So-Easy Case
 
@@ -260,7 +263,7 @@ If you are lucky, your application will already provide places new
 functionality can naturally be added to. For example, most CAD applications
 are modal (e.g. you might be in the *"add arc"* mode, then switch to *"select
 mode"*) and adding a new mode is often just a case of creating a button which
-calls some `SetCurrentMode()` function.
+calls some `SetCurrentMode()` function with an instance of your new mode.
 
 Other times you'll be adding to existing functionality and need to be a bit
 more careful.
@@ -286,8 +289,8 @@ languages too.
 {{% /notice %}}
 
 The integration stage is also where you need to think about how users will
-interact with this new functionality (the buzz word is [*User
-Experience*][user-experience]). While the feature's public API determines how
+interact with this new functionality (the buzz word is [*"User
+Experience"*][user-experience]). While the feature's public API determines how
 code interacts, the integration code is usually the part which takes input
 from users and triggers the feature's functionality.
 
