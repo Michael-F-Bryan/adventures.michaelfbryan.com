@@ -327,14 +327,86 @@ accountable and help to make the user experience as smooth as possible.
 
 ## Step 5: Review
 
-<!-- - Now you've integrated it in, was your original design correct? If not, how
-  should it be changed?
-- Make sure the happy path works
-- Try a bunch of things a normie would do and start looking for edge cases
-- Is this implementation intuitive?
-- Do we need a v2? -->
+So now you've implemented a feature and rolled it out to production. For most
+features you are done and can move on to other things, but it's worth setting
+up a paper trail for anything that's taken more than a couple days to
+implement.
+
+When merging in the PR which "activates" a new feature (e.g. adds a new item
+to the UI which lets users access it) I'll write up a brief summary containing:
+
+- What has been implemented
+- Design decisions and constraints
+- Possible areas of concern (*"I feel like this area isn't overly robust and we
+  may find bugs later on"*)
+- Ways you could extend the feature to give the user more value
+- Should we come back later on and re-implement the feature? (e.g. we came up
+  with a better design later on or a minor design flaw was found)
+
+There's a good chance you didn't achieve perfection and there are points that
+could be improved, or extensions that could be made to make the feature even
+more useful.
+
+It's important to note down all those thoughts now while they're still fresh in
+your mind!
+
+You can also create tickets for new features which extend this one, possibly
+adding thoughts on how you would attack the problem and links to significant
+parts of the codebase.
+
+Tasks like *"add a checkbox to the window which will make the feature do X
+slightly differently"* are great for on-boarding new developers, giving them
+a chance to learn the codebase without the pressure of fixing bugs in
+production or working to a hard deadline.
+
+{{% notice tip %}}
+Issue labels work great for this sort of triage. We used GitLab's [scoped
+labels][scoped] to help prioritise how urgent a ticket is.
+
+- `priority::on-demand` - Waiting for some external prompt before allocating
+  time to it (e.g. a customer asks about it or requests from the product development
+  team)
+- `priority::low` - This low priority and can be safely left on the back burner
+- `priority::normal` - Normal priority
+- `priority::urgent` - This needed to be done yesterday and customers are
+  demonstrably impacted (e.g. lost revenue due to downtime)
+
+We used to have `priority::high`, but found it got abused. When people run
+into a bug or missing feature that impacts their workflow, the knee-jerk
+reaction is to give it a high priority (*"it's breaking my workflow and needs
+to be fixed right now, damn-it!"*).
+
+The end result was that 3/4 of open issues were marked as `priority::high`
+(man-years worth of effort) with the rest marked as `priority::low`... Which
+makes it extremely difficult to find out which items were *actually*
+important.
+
+[scoped]: https://docs.gitlab.com/ee/user/project/labels.html#scoped-labels
+{{% /notice %}}
+
+While it sounds like a bunch of useless paperwork, your future self will
+thank you for it. It's a real pleasure when you go to work on an issue and
+see someone has already done some research and planning.
+
+If you are crafty, you could also use this to gain brownie points with your
+manager. Being able say *"I've got some ideas for how we can make X better"*
+and pointing to some initial research or plans shows initiative and that you
+care about giving the customer value.
 
 ## Conclusions
+
+There are definitely other approaches which you might take depending on the
+feature scope and how much it interacts with other components, but the
+workflow I've outlined works quite well for self-contained, mid-sized
+features (e.g. 5-10 man-days of effort).
+
+Most of the examples I've provided are from a professional environment where
+customers will directly interact with the product you are working on, because
+that's what I've got experience with, but there's no reason why it wouldn't
+apply to micro-service architectures or a large library. Just replace the
+word *"customer"* with *"fellow developer"*.
+
+I love hearing war stories from other people who create software for a living.
 
 [simplification]: {{< ref "/posts/line-simplification.md" >}}
 [law]: https://meta.wikimedia.org/wiki/Cunningham%27s_Law
