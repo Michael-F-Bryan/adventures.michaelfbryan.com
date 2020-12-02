@@ -416,7 +416,9 @@ that's what I've got experience with, but there's no reason why it wouldn't
 apply to micro-service architectures or a large library. Just replace the
 word *"customer"* with *"fellow developer"*.
 
-I love hearing war stories from other people who create software for a living.
+I love hearing war stories from other people who create software for a
+living. If you've got a different approach or want to share your own
+experiences, please let me know via [the accompanying Reddit thread][reddit].
 
 [simplification]: {{< ref "/posts/line-simplification.md" >}}
 [law]: https://meta.wikimedia.org/wiki/Cunningham%27s_Law
@@ -431,3 +433,4 @@ I love hearing war stories from other people who create software for a living.
 [scope-creep]: https://www.wrike.com/project-management-guide/faq/what-is-scope-creep-in-project-management/
 [disclosure]: https://www.shopify.com.au/partners/blog/progressive-disclosure
 [user-experience]: https://www.interaction-design.org/literature/topics/ux-design
+[reddit]: https://reddit.com/
