@@ -1,7 +1,8 @@
 ---
 title: "How I Translate Feature Requests into Code"
-date: "2020-11-23T01:36:05+08:00"
-draft: true
+date: "2020-12-02T16:10:00+08:00"
+tags:
+- Architecture
 ---
 
 As part of my previous job I worked on a CAD/CAM package, and a very common
