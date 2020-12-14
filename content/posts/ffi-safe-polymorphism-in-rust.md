@@ -188,7 +188,7 @@ the [urlo thread][forum-post] that inspired this article.
 ```rust
 // src/file_handle.rs
 
-use std::{ alloc::Layout, any::TypeId, io::{Error, Write}};
+use std::{any::TypeId, io::{Error, Write}};
 
 #[repr(C)]
 pub struct FileHandle {
@@ -230,7 +230,7 @@ To do this we just need a normal generic struct.
 
 #[repr(C)]
 pub(crate) struct Repr<W> {
-    // Safety: The FileHandle must be the first field so we can cast between
+    // SAFETY: The FileHandle must be the first field so we can cast between
     // *mut Repr<W> and *mut FileHandle
     pub(crate) base: FileHandle,
     pub(crate) writer: W,
@@ -255,17 +255,15 @@ impl FileHandle {
 
         let boxed = Box::into_raw(Box::new(repr));
 
-        // Safety: A pointer to the first field on a #[repr(C)] struct has the
+        // SAFETY: A pointer to the first field on a #[repr(C)] struct has the
         // same address as the struct itself
         boxed as *mut _
     }
 
     fn vtable<W: Write + 'static>() -> FileHandle {
-        let layout = Layout::new​::<W>();
         let type_id = TypeId::of::<W>();
 
         FileHandle {
-            layout,
             type_id,
             destroy: destroy::<W>,
             write: write::<W>,
@@ -559,6 +557,211 @@ running tests with `cargo miri test`.
 
 # An Owned Wrapper
 
+Now our hypothetical C caller has the ability to create a `*mut FileHandle`,
+but we don't want to be using `unsafe` and raw pointers when the file handle
+gets passed to normal Rust code.
+
+We need a safe smart pointer.
+
+```rust
+// src/owned.rs
+
+use std::ptr::NonNull;
+
+#[repr(transparent)]
+pub struct OwnedFileHandle(NonNull<FileHandle>);
+```
+
+{{% notice note %}}
+We use a `std::ptr::NonNull` instead of a normal raw pointer (`*mut FileHandle`)
+because it guarantees the pointer can never be `null`.
+
+A nice side-effect is that the Rust compiler knows `NonNull` can never be
+`null`. This means if it ever needs to store a `OwnedFileHandle` alongside a
+single bit of information (e.g. an enum's tag), `null` can be used to
+represent this information.
+
+This *Null Pointer Optimisation* means types like `Option<OwnedFileHandle>`
+are guaranteed to be the same size as `OwnedFileHandle`, which in turn is
+guaranteed to be the same size as a pointer.
+{{% /notice %}}
+
+As you would have guessed by the name, our `OwnedFileHandle` needs to run the
+destructor from its `Drop` impl.
+
+```rust
+// src/owned.rs
+
+impl Drop for OwnedFileHandle {
+    fn drop(&mut self) {
+        unsafe {
+            let ptr = self.0.as_mut();
+            (ptr.destroy)(ptr);
+        }
+    }
+}
+```
+
+
+This smart pointer also needs functions for converting to/from its raw pointer
+form or constructing it with `FileHandle::for_writer()` directly.
+
+```rust
+// src/owned.rs
+
+impl OwnedFileHandle {
+    /// Create a new [`OwnedFileHandle`] which wraps some [`Write`]r.
+    pub fn new<W: Write + 'static>(writer: W) -> Self {
+        unsafe {
+            let handle = FileHandle::for_writer(writer);
+            assert!(!handle.is_null());
+            OwnedFileHandle::from_raw(handle)
+        }
+    }
+
+    /// Create an [`OwnedFileHandle`] from a `*mut FileHandle`, taking
+    /// ownership of the [`FileHandle`].
+    ///
+    /// # Safety
+    ///
+    /// Ownership of the `handle` is given to the [`OwnedFileHandle`] and the
+    /// original pointer may no longer be used.
+    ///
+    /// The `handle` must be a non-null pointer which points to a valid
+    /// `FileHandle`.
+    pub unsafe fn from_raw(handle: *mut FileHandle) -> Self {
+        debug_assert!(!handle.is_null());
+        OwnedFileHandle(NonNull::new_unchecked(handle))
+    }
+
+    /// Consume the [`OwnedFileHandle`] and get a `*mut FileHandle` that can be
+    /// used from native code.
+    pub fn into_raw(self) -> *mut FileHandle {
+        let ptr = self.0.as_ptr();
+        std::mem::forget(self);
+        ptr
+    }
+}
+```
+
+We can also implement `std::io::Write` by directly calling the vtable methods.
+
+```rust
+// src/owned.rs
+
+impl Write for OwnedFileHandle {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        unsafe {
+            let ptr = self.0.as_mut();
+            (ptr.write)(ptr, buf)
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        unsafe {
+            let ptr = self.0.as_mut();
+            (ptr.flush)(ptr)
+        }
+    }
+}
+```
+
+## Downcasting
+
+A useful feature of Object Oriented languages is *downcasting*, the ability
+to convert from a parent class back to a child class; in this case we want a
+way to access the `W` from our `Repr<W>` when we know what type it is.
+
+Rust provides a mechanism called [`std::any::TypeId`][type-id] for uniquely
+identifying different types. It's deliberately basic, providing nothing more
+than equality, but that's perfectly fine for our cases.
+
+First we need a way to check if the item inside an `OwnedFileHandle` has a
+particular type. We'll use the `TypeId` added to the `FileHandle` vtable earlier.
+
+```rust
+// src/owned.rs
+
+impl OwnedFileHandle {
+    /// Check if the object pointed to by a [`OwnedFileHandle`] has type `W`.
+    pub fn is<W: 'static>(&self) -> bool {
+        unsafe { self.0.as_ref().type_id == TypeId::of::<W>() }
+    }
+}
+```
+
+Using this new `is()` method we can now provide access to the `W` by doing a
+type check followed by an `unsafe` pointer cast.
+
+```rust
+// src/owned.rs
+
+impl OwnedFileHandle {
+    /// Returns a reference to the boxed value if it is of type `T`, or
+    /// `None` if it isn't.
+    pub fn downcast_ref<W: 'static>(&self) -> Option<&W> {
+        if self.is::<W>() {
+            unsafe {
+                // SAFETY: We just did a type check
+                let repr = self.0.as_ptr() as *const Repr<W>;
+                Some(&(*repr).writer)
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Returns a mutable reference to the boxed value if it is of type `T`, or
+    /// `None` if it isn't.
+    pub fn downcast_mut<W: 'static>(&mut self) -> Option<&mut W> {
+        if self.is::<W>() {
+            unsafe {
+                // SAFETY: We just did a type check
+                let repr = self.0.as_ptr() as *mut Repr<W>;
+                Some(&mut (*repr).writer)
+            }
+        } else {
+            None
+        }
+    }
+}
+```
+
+We also need a method which consumes `self`, unboxes the `Repr<W>`, and gives
+the original `W` back to the caller.
+
+However, what happens if the type check fails? If we follow `downcast_ref()`
+and return an `Option<W>` we'd be throwing the `OwnedFileHandle` away with no
+way to try again or fall back to something else. Most APIs in the standard
+library will return a `Result<W, OwnedFileHandle>` here, returning ownership
+of the file handle in the error case.
+
+```rust
+// src/owned.rs
+
+impl OwnedFileHandle {
+    /// Attempt to downcast the [`OwnedFileHandle`] to a concrete type and
+    /// extract it.
+    pub fn downcast<W: 'static>(self) -> Result<W, Self> {
+        if self.is::<W>() {
+            unsafe {
+                let ptr = self.into_raw();
+                // SAFETY: We just did a type check
+                let repr: *mut Repr<W> = ptr.cast();
+
+                let unboxed = Box::from_raw(repr);
+                Ok(unboxed.writer)
+            }
+        } else {
+            Err(self)
+        }
+    }
+}
+```
+
+With the addition of downcasting our `OwnedFileHandle` has pretty much reached
+feature parity with most `Box<dyn Write>` solutions.
+
 # Conclusions
 
 While it's not something I'd use to replace normal generics or dynamic
@@ -575,3 +778,4 @@ your arsenal.
 [callbacks]: {{< ref "/posts/rust-closures-in-ffi.md#introducing-closures" >}}
 [fish]: https://turbo.fish/
 [miri]: https://github.com/rust-lang/miri
+[type-id]: https://doc.rust-lang.org/std/any/struct.TypeId.html
