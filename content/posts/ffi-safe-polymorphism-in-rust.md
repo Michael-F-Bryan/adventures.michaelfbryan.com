@@ -8,14 +8,20 @@ tags:
 - FFI
 ---
 
-- two native mechanisms for polymorphism
+{{% notice warning %}}
+**TODO: Actually write an intro**
+
+- Rust has two native mechanisms for polymorphism
   - Compile time
   - Runtime
 - Neither are FFI-safe
 - Trait objects take up 2x `usize` on the stack
-  - Use niche optimisation so things like `Result<(), Error>` are only the size
-    of a pointer
+  - Lets you make use of niche optimisation so things like
+    `Result<(), Error>` are only the size of a pointer
+  - Layout is unspecified
 - My primary focus is enabling FFI-safe polymorphism
+- Use `Box<dyn Write>` as the primary use case
+{{% /notice %}}
 
 {{% notice note %}}
 The code written in this article is available [on GitHub][repo]. Feel free to
@@ -764,9 +770,26 @@ feature parity with most `Box<dyn Write>` solutions.
 
 # Conclusions
 
-While it's not something I'd use to replace normal generics or dynamic
-dispatch in Rust, *Thin Trait Objects* are another useful tool to have in
-your arsenal.
+While it's not something you'll be using every day, *Thin Trait Objects* are
+a technique that you may find a use for some day. If nothing else,
+understanding them should give you a better appreciation for how much work
+our compilers do to implement nice things like Polymorphism and inheritance.
+
+It also reinforces the idea that all Turing-complete languages are
+equivalent. Just because you start with a non-OO language doesn't mean you
+can't have inheritance, it just requires a bit more work.
+
+Another nice thing is that, apart from the `ffi` module, this code is just a
+mechanical transformation based on a trait definition. I'm sure a suitably
+motivated person could create a procedural macro which lets you add a
+`#[thin_trait_object]` attribute on top of a trait definition and
+automatically generate the corresponding `FileHandle`, `OwnedFileHandle`, and
+`Repr<W>` types.
+
+If you noticed anything unsound (or just plain incorrect) in my code, please
+[get in contact][email] because I want to hear from you! I'm also curious to
+hear if from people who create Rust products which use FFI, and if you've had
+to do something similar in production.
 
 [forum-post]: https://users.rust-lang.org/t/ffi-c-file-and-good-rust-wrapper-equivalent-type/52050
 [poly]: https://blog.rcook.org/blog/2020/traits-and-polymorphism-rust/
@@ -779,3 +802,4 @@ your arsenal.
 [fish]: https://turbo.fish/
 [miri]: https://github.com/rust-lang/miri
 [type-id]: https://doc.rust-lang.org/std/any/struct.TypeId.html
+[email]: mailto:michaelfbryan@gmail.com
