@@ -25,7 +25,7 @@ If you found this useful or spotted a bug, let me know on the blog's
 [issue tracker][issue]!
 
 [repo]: https://github.com/Michael-F-Bryan/thin-trait-objects
-[issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
+[issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues
 {{% /notice %}}
 
 # Possible Solutions
@@ -138,8 +138,8 @@ void main()
 The `set_name` and `get_name` members are called *virtual methods* in
 traditional Object-Oriented parlance.
 
-This technique is equally valid in Rust as long as each struct is marked as
-`#[repr(C)]`.
+**This technique is equally valid in Rust when each struct is marked as
+`#[repr(C)]`.**
 
 The benefit of using C-style inheritance is that a `Base *` pointer is *just*
 a pointer, with the vtable being kept alongside the data being pointed to.
@@ -179,11 +179,391 @@ struct CppChild {
 
 # Creating the FileHandle
 
-# An Owned Wrapper
+Returning to our original goal of creating a FFI-safe version of
+`Box<dyn std::io::Write>`, let's create a struct representing our base "class".
+
+I'm going to call this a `FileHandle` because that's how it was being used in
+the [urlo thread][forum-post] that inspired this article.
+
+```rust
+// src/file_handle.rs
+
+use std::{ alloc::Layout, any::TypeId, io::{Error, Write}};
+
+#[repr(C)]
+pub struct FileHandle {
+    pub(crate) type_id: TypeId,
+    pub(crate) destroy: unsafe fn(*mut FileHandle),
+    pub(crate) write: unsafe fn(*mut FileHandle, &[u8]) -> Result<usize, Error>,
+    pub(crate) flush: unsafe fn(*mut FileHandle) -> Result<(), Error>,
+}
+```
+
+I've added a couple extra fields alongside the `write()` and `flush()`
+methods from [`std::io::Write`][write],
+
+- `type_id` to allow downcasting (more on that later)
+- `destroy()`, our object's destructor
+
+I don't particularly want have to create a new type which inherits from
+`FileHandle` for every possible `std::io::Write` implementation I need.
+
+Instead it'd be nice to have some generic function like
+`FileHandle::for_writer()` which accepts *any* writer and returns a pointer
+to an appropriate child class.
+
+```rust
+impl FileHandle {
+    pub fn for_writer<W>(writer: W) -> *mut FileHandle
+    where
+        W: Write + 'static,
+    {
+        ...
+    }
+}
+```
+
+To do this we just need a normal generic struct.
+
+```rust
+// src/file_handle.rs
+
+#[repr(C)]
+pub(crate) struct Repr<W> {
+    // Safety: The FileHandle must be the first field so we can cast between
+    // *mut Repr<W> and *mut FileHandle
+    pub(crate) base: FileHandle,
+    pub(crate) writer: W,
+}
+```
+
+Our `FileHandle::for_writer()` function can then be implemented by creating a
+`Repr<W>` on the heap and returning a pointer to it, cast to `*mut FileHandle`.
+
+```rust
+// src/file_handle.rs
+
+impl FileHandle {
+    pub fn for_writer<W>(writer: W) -> *mut FileHandle
+    where
+        W: Write + 'static,
+    {
+        let repr = Repr {
+            base: FileHandle::vtable::<W>(),
+            writer,
+        };
+
+        let boxed = Box::into_raw(Box::new(repr));
+
+        // Safety: A pointer to the first field on a #[repr(C)] struct has the
+        // same address as the struct itself
+        boxed as *mut _
+    }
+
+    fn vtable<W: Write + 'static>() -> FileHandle {
+        let layout = Layout::new​::<W>();
+        let type_id = TypeId::of::<W>();
+
+        FileHandle {
+            layout,
+            type_id,
+            destroy: destroy::<W>,
+            write: write::<W>,
+            flush: flush::<W>,
+        }
+    }
+}
+```
+
+For the `destroy`, `write`, and `flush` fields we can use a trick taken from
+[*Rust Closures in FFI*][callbacks], using [*turbofish*][fish] to get a
+concrete function pointer to a generic function.
+
+The functions themselves are almost trivial, they just cast a `*mut FileHandle`
+to `*mut Repr<W>` then invoke the corresponding method. The destructor uses
+`Box::from_raw()` to turn the `*mut Repr<W>` back into a `Box<Repr<W>>` so it
+can be destroyed properly.
+
+```rust
+// src/file_handle.rs
+
+// SAFETY: The following functions can only be used when `handle` is actually a
+// `*mut Repr<W>`.
+
+unsafe fn destroy<W>(handle: *mut FileHandle) {
+    let repr = handle as *mut Repr<W>;
+    let _ = Box::from_raw(repr);
+}
+
+unsafe fn write<W: Write>(handle: *mut FileHandle, data: &[u8]) -> Result<usize, Error> {
+    let repr = &mut *(handle as *mut Repr<W>);
+    repr.writer.write(data)
+}
+
+unsafe fn flush<W: Write>(handle: *mut FileHandle) -> Result<(), Error> {
+    let repr = &mut *(handle as *mut Repr<W>);
+    repr.writer.flush()
+}
+```
+
+It only took about 50 lines, but we've
+
+1. Created an abstract base class
+2. Created a child class inheriting from the base class
+3. Made a `FileHandle::for_writer()` constructor which will create a new child
+   and populate the vtable in the base class with child-specific methods
 
 # Using the FileHandle from C
 
+Now, to actually be usable from C code we'll need to define `extern "C"`
+functions for interacting with our `*mut FileHandle`.
+
+Let's start with a couple common constructors.
+
+```rust
+// src/ffi.rs
+
+use crate::FileHandle;
+
+/// Create a new [`FileHandle`] which throws away all data written to it.
+#[no_mangle]
+pub unsafe extern "C" fn new_null_file_handle() -> *mut FileHandle {
+    FileHandle::for_writer(std::io::sink())
+}
+
+/// Create a new [`FileHandle`] which writes directly to stdout.
+#[no_mangle]
+pub unsafe extern "C" fn new_stdout_file_handle() -> *mut FileHandle {
+    FileHandle::for_writer(std::io::stdout())
+}
+```
+
+It'd be nice to construct a `FileHandle` which actually writes to a file, so
+let's create a `new_file_handle_from_path()` constructor which takes a
+`*const c_char` containing the path.
+
+This constructor is a bit more complex than the previous two in that we need
+to use `CStr` to turn the `*const c_char` into a Rust `&str` that can be
+passed to `File::create()`. Both `CStr::to_str()` and `File::create()` can
+fail, in which case we'll let the caller know by returning a null pointer.
+
+```rust
+// src/ffi.rs
+
+use std::{os::raw::c_char, ffi::CStr, fs::File};
+
+/// Create a new [`FileHandle`] which will write to a file on disk.
+#[no_mangle]
+pub unsafe extern "C" fn new_file_handle_from_path(path: *const c_char) -> *mut FileHandle {
+    let path = match CStr::from_ptr(path).to_str() {
+        Ok(p) => p,
+        Err(_) => return ptr::null_mut(),
+    };
+
+    let f = match File::create(path) {
+        Ok(f) => f,
+        Err(_) => return ptr::null_mut(),
+    };
+
+    FileHandle::for_writer(f)
+}
+```
+
+Now callers can create a `*mut FileHandle`, let's give them a way to destroy it.
+
+The implementation is pretty simple in this case, load the destructor from our
+vtable then call it with the `*mut FileHandle`.
+
+```rust
+// src/ffi.rs
+
+#[no_mangle]
+pub unsafe extern "C" fn file_handle_destroy(handle: *mut FileHandle) {
+    let destructor = (*handle).destroy;
+    destructor(handle);
+}
+```
+
+Next we need a way to call the `write()` and `flush()` methods. This gets a bit
+trickier because we need to translate arguments from C types to Rust types and
+follow C conventions for notifying the caller of failure.
+
+In this case the convention we use is to return a negative error code on
+failure, which aligns with `errno` on most *nix platforms.
+
+```rust
+// src/ffi.rs
+
+/// Write some data to the file handle, returning the number of bytes written.
+///
+/// The return value is negative when writing fails.
+#[no_mangle]
+pub unsafe extern "C" fn file_handle_write(
+    handle: *mut FileHandle,
+    data: *const c_char,
+    len: c_int,
+) -> c_int {
+    let write = (*handle).write;
+    let data = std::slice::from_raw_parts(data as *const u8, len as usize);
+
+    match write(handle, data) {
+        Ok(bytes_written) => bytes_written as c_int,
+        Err(e) => -e.raw_os_error().unwrap_or(1),
+    }
+}
+
+/// Flush this output stream, ensuring that all intermediately buffered contents
+/// reach their destination.
+///
+/// Returns `0` on success or a negative value on failure.
+#[no_mangle]
+pub unsafe extern "C" fn file_handle_flush(handle: *mut FileHandle) -> c_int {
+    let flush = (*handle).flush;
+
+    match flush(handle) {
+        Ok(_) => 0,
+        Err(e) => -e.raw_os_error().unwrap_or(1),
+    }
+}
+```
+
+## Tests
+
+Now we have some code for interacting with `FileHandle`, let's make sure it
+actually works and is sound.
+
+The first thing I want to test is that destructors are called by
+`file_handle_destroy()`.
+
+To do this let's create a dummy type which implements `Write` and will set a
+flag when it gets destroyed.
+
+```rust
+// src/ffi.rs
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+
+    struct NotifyOnDrop(Arc<AtomicBool>);
+
+    impl Drop for NotifyOnDrop {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::SeqCst);
+        }
+    }
+
+    impl Write for NotifyOnDrop {
+        fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
+            todo!()
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            todo!()
+        }
+    }
+}
+```
+
+Now we can use `FileHandle::for_writer()` to create a new `*mut FileHandle`,
+then immediately call `file_handle_destroy()` to destroy it.
+
+```rust
+// src/ffi.rs
+
+mod tests {
+    ...
+
+    #[test]
+    fn writer_destructor_is_always_called() {
+        let was_dropped = Arc::new(AtomicBool::new(false));
+        let file_handle = FileHandle::for_writer(NotifyOnDrop(Arc::clone(&was_dropped)));
+        assert!(!file_handle.is_null());
+
+        unsafe {
+            file_handle_destroy(file_handle);
+        }
+
+        assert!(was_dropped.load(Ordering::SeqCst));
+    }
+}
+```
+
+Normally you can run this test with `cargo test` but when working with
+`unsafe` code it's a good idea to run tests with [Miri][miri], a Rust
+interpreter which executes code and will detect instances of *Undefined
+Behaviour* and memory leaks.
+
+```console
+$ cargo miri test
+    Finished test [unoptimized + debuginfo] target(s) in 0.00s
+     Running target/x86_64-unknown-linux-gnu/debug/deps/thin_trait_objects-3a5d6200958baa20
+
+running 1 test
+test ffi::tests::writer_destructor_is_always_called ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+```
+
+The test passed and Miri seems happy with our code so that gives me a lot of
+confidence 🙂
+
+{{% notice tip %}}
+If our test did something wrong like forgetting to call `file_handle_destroy()`
+we'd be greeted with a message like this:
+
+```console
+$ cargo miri test
+    Finished test [unoptimized + debuginfo] target(s) in 0.00s
+     Running target/x86_64-unknown-linux-gnu/debug/deps/thin_trait_objects-3a5d6200958baa20
+
+running 1 test
+test ffi::tests::writer_destructor_is_always_called ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out
+
+The following memory was leaked: alloc77819 (Rust heap, size: 24, align: 8) {
+    0x00 │ 01 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 │ ................
+    0x10 │ 00 __ __ __ __ __ __ __                         │ .░░░░░░░
+}
+alloc77918 (Rust heap, size: 58, align: 8) {
+    0x00 │ 1d 71 55 22 f5 a8 92 81 ╾alloc77896[<191016>]─╼ │ .qU"....╾──────╼
+    0x10 │ ╾alloc77897[<191017>]─╼ ╾alloc77898[<191018>]─╼ │ ╾──────╼╾──────╼
+    0x20 │ ╾─a77819[<untagged>]──╼                         │ ╾──────╼
+}
+alloc77896 (fn: file_handle::destroy::<ffi::tests::NotifyOnDrop>)
+alloc77897 (fn: file_handle::write::<ffi::tests::NotifyOnDrop>)
+alloc77898 (fn: file_handle::flush::<ffi::tests::NotifyOnDrop>)
+```
+
+In this case you can see two items were leaked, the first is a block of 24
+bytes for the `Arc<AtomicBool>`. If you look carefully, you'll see the
+allocation contains 2x `1_usize` values followed by a single `0` and a bunch
+of padding (the underscores). They are the strong count, the weak count, and
+the `false`, respectively.
+
+In the second allocation you can see 8 bytes followed by a bunch of items
+like `alloc77896`, which we see further down is actually a pointer to the
+`file_handle::destroy::<ffi::tests::NotifyOnDrop>` function.
+
+That indicates we've leaked the `Repr<NotifyOnDrop>` behind our `*mut
+FileHandle`, which would hopefully be enough information to start tracking down
+a memory leak.
+{{% /notice %}}
+
+Most of the other `ffi` module tests look the same, create a dummy type which
+will behave in a particular way (e.g. by returning an error from `write()` or
+writing to a buffer that can be inspected later) then exercise the code,
+running tests with `cargo miri test`.
+
+# An Owned Wrapper
+
 # Conclusions
+
+While it's not something I'd use to replace normal generics or dynamic
+dispatch in Rust, *Thin Trait Objects* are another useful tool to have in
+your arsenal.
 
 [forum-post]: https://users.rust-lang.org/t/ffi-c-file-and-good-rust-wrapper-equivalent-type/52050
 [poly]: https://blog.rcook.org/blog/2020/traits-and-polymorphism-rust/
@@ -191,3 +571,7 @@ struct CppChild {
 [trait-objects]: https://doc.rust-lang.org/reference/types/trait-object.html
 [vtable]: https://en.wikipedia.org/wiki/Virtual_method_table
 [c99-first-element]: http://www.coding-guidelines.com/C99/html/6.7.2.1.html#1413
+[write]: https://doc.rust-lang.org/std/io/trait.Write.html
+[callbacks]: {{< ref "/posts/rust-closures-in-ffi.md#introducing-closures" >}}
+[fish]: https://turbo.fish/
+[miri]: https://github.com/rust-lang/miri
