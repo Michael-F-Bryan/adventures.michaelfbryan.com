@@ -33,4 +33,4 @@ jobs:
           export_default_credentials: true
 
       - name: Upload Website
-        run: gsutil rsync -R -d public gs://staging.adventures.michaelfbryan.com
+        run: gsutil rsync -R -d -m public gs://staging.adventures.michaelfbryan.com
