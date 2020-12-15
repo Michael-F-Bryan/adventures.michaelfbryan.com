@@ -268,7 +268,7 @@ Our `FileHandle::for_writer()` function can then be implemented by creating a
 impl FileHandle {
     pub fn for_writer<W>(writer: W) -> *mut FileHandle
     where
-        W: Write + 'static,
+        W: Write + Send + Sync + 'static,
     {
         let repr = Repr {
             base: FileHandle::vtable::<W>(),
@@ -294,6 +294,15 @@ impl FileHandle {
     }
 }
 ```
+
+{{% notice note %}}
+I've also added the requirement that the `W` type is `Send + Sync`. That
+means it should be possible to move the object between threads and refer to
+it (immutably) concurrently.
+
+We need to be conservative here because when working with FFI there's no way
+of knowing what the code on the other end will do.
+{{% /notice %}}
 
 For the `destroy`, `write`, and `flush` fields we can use a trick taken from
 [*Rust Closures in FFI*][callbacks], using [*turbofish*][fish] to get a
@@ -634,7 +643,10 @@ form or constructing it with `FileHandle::for_writer()` directly.
 
 impl OwnedFileHandle {
     /// Create a new [`OwnedFileHandle`] which wraps some [`Write`]r.
-    pub fn new<W: Write + 'static>(writer: W) -> Self {
+    pub fn new<W>(writer: W) -> Self
+    where
+        W: Write + Send + Sync + 'static,
+    {
         unsafe {
             let handle = FileHandle::for_writer(writer);
             assert!(!handle.is_null());
@@ -689,6 +701,17 @@ impl Write for OwnedFileHandle {
         }
     }
 }
+```
+
+Thanks to our `Send + Sync` requirements on `FileHandle::for_writer()` we can
+guarantee `*mut FileHandle` is also `Send + Sync` and can implement the two
+traits on our `OwnedFileHandle`.
+
+```rust
+// SAFETY: The FileHandle::for_writer() method ensure by construction that our
+// object is Send + Sync.
+unsafe impl Send for OwnedFileHandle {}
+unsafe impl Sync for OwnedFileHandle {}
 ```
 
 ### Downcasting
@@ -789,6 +812,29 @@ impl OwnedFileHandle {
 
 With the addition of downcasting our `OwnedFileHandle` has pretty much reached
 feature parity with most `Box<dyn Write>` solutions.
+
+{{% notice warning %}}
+You may have noticed that throughout the implementation of `OwnedFileHandle`
+I was very careful to *only* do operations using raw pointers. While a
+`*mut FileHandle` can be freely interchanged with a `*mut Repr<W>`, **it
+absolutely cannot be turned into a `&mut FileHandle`** (i.e. a normal Rust
+reference).
+
+This is to do with a concept called *Provenance*. The idea is that a pointer
+can "remember" what allocation it came from (e.g. if we created it from a
+`Box<Repr<std::fs::File>`) and it's not okay to cast Rust references into
+something   they aren't.
+
+Ralf Jung does a much better job of explaining the subtleties of provenance so
+I'll just defer to his articles on the topic,
+
+- [*Pointers Are Complicated II, or: We need better language
+  specs*][pointers-2], and
+- [*Pointers Are Complicated, or: What's in a Byte?*][pointers-1]
+
+[pointers-1]: https://www.ralfj.de/blog/2018/07/24/pointers-and-bytes.html
+[pointers-2]: https://www.ralfj.de/blog/2020/12/14/provenance.html
+{{% /notice %}}
 
 ## Conclusions
 
