@@ -1,11 +1,12 @@
 ---
-title: "Thin Trait Objects in Rust"
+title: "FFI-Safe Polymorphism: Thin Trait Objects"
 date: "2020-12-03T14:03:24+08:00"
 draft: true
 tags:
 - Rust
 - Unsafe Rust
 - FFI
+toc: true
 ---
 
 A while ago someone [posted a question][forum-post] on the Rust User Forums
@@ -25,7 +26,7 @@ needs in normal Rust code, they both have one drawback... The actual
 mechanisms used are (deliberately) unspecified and not safe for FFI.
 
 The concrete use case is looking for a FFI-safe equivalent of C's `FILE*`;
-some sort of handle which doesn't care if it is backed by a real file on
+some writeable thing which doesn't care if it is backed by a real file on
 disk, a network socket, an OS pipe, or an arbitrary piece of code that
 consumes bytes. This `FILE*`-like type could then be instantiated by C and
 used to initialise the logger in a Rust library.
@@ -34,25 +35,10 @@ Normally you'd just reach for a `Box<dyn std::io::Write>` here, but as we've
 already mentioned Rust's trait objects aren't FFI-safe, meaning we need to be
 a little more creative.
 
-My solution is something I first discovered while browsing the source code
-for [`anyhow::Error`][anyhow]. I wasn't able to find a proper name for it, so
-I'm referring to this technique as *Thin Trait Objects*.
-
-{{% notice warning %}}
-**TODO: Possibly rewrite the intro to mention**
-
-- Rust has two native mechanisms for polymorphism
-  - Compile time
-  - Runtime
-- Neither are FFI-safe
-- Trait objects take up 2x `usize` on the stack
-  - Lets you make use of niche optimisation so things like
-    `Result<(), Error>` are only the size of a pointer
-  - Layout is unspecified
-- My primary focus is enabling FFI-safe polymorphism
-- Use `Box<dyn Write>` as the primary use case
-- Original inspiration was [this u.rl.o thread][forum-post]
-{{% /notice %}}
+My solution takes inspiration from something I first discovered while
+browsing the source code for [`anyhow::Error`][anyhow]. I wasn't able to find
+a proper name for it, so I'm referring to this technique as *Thin Trait
+Objects*.
 
 {{% notice note %}}
 The code written in this article is available [on GitHub][repo]. Feel free to
@@ -65,7 +51,7 @@ If you found this useful or spotted a bug, let me know on the blog's
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues
 {{% /notice %}}
 
-# Possible Solutions
+## Alternate Solutions
 
 Now before we go any further it is important to ask the question, *"do we
 actually **need** to come up with a fancy solution here?"* This is especially
@@ -74,7 +60,7 @@ important if your solution will require writing `unsafe` code.
 9 times out of 10 taking the more complicated option will require you to do
 extra work that wasn't needed in the first place.
 
-## Don't Allow Polymorphism
+### Don't Allow Polymorphism
 
 This is probably the simplest option. If you want to avoid complexity,
 especially when already writing a Foreign Function Interface, don't do
@@ -89,7 +75,7 @@ inject it into someone else's.
 
 After all, the simplest code is no code.
 
-## Pointer to Enum
+### Pointer to Enum
 
 If you have a finite set of possible implementations you can pass around a
 pointer to an enum.
@@ -97,7 +83,7 @@ pointer to an enum.
 While more complex than the previous option, we're all familiar with the Rust
 enum and how it enables a limited form of polymorphism.
 
-## Double Indirection
+### Double Indirection
 
 The problem with passing around a normal trait object (e.g. `Box<dyn Trait>`
 or `*mut dyn Trait`) is that you need space for two pointers, one for the
@@ -116,7 +102,7 @@ doesn't matter in the grand scheme of things (your performance bottlenecks will
 almost certainly be elsewhere), using double indirection feels like a pretty
 weak solution.
 
-## Pointer to VTable + Object
+### Pointer to VTable + Object
 
 Believe it or not, but you can implement inheritance-based polymorphism in
 plain C with just a couple function pointers and some casting.
@@ -215,13 +201,13 @@ struct CppChild {
 [c++]: http://www.vishalchovatiya.com/memory-layout-of-cpp-object/
 {{% /notice %}}
 
-# Creating the FileHandle
+## Creating the FileHandle
 
 Returning to our original goal of creating a FFI-safe version of
 `Box<dyn std::io::Write>`, let's create a struct representing our base "class".
 
 I'm going to call this a `FileHandle` because that's how it was being used in
-the [urlo thread][forum-post] that inspired this article.
+the [user forum thread][forum-post] that inspired this article.
 
 ```rust
 // src/file_handle.rs
@@ -349,7 +335,7 @@ It only took about 50 lines, but we've
 3. Made a `FileHandle::for_writer()` constructor which will create a new child
    and populate the vtable in the base class with child-specific methods
 
-# Using the FileHandle from C
+## Using the FileHandle from C
 
 Now, to actually be usable from C code we'll need to define `extern "C"`
 functions for interacting with our `*mut FileHandle`.
@@ -463,7 +449,7 @@ pub unsafe extern "C" fn file_handle_flush(handle: *mut FileHandle) -> c_int {
 }
 ```
 
-## Tests
+### Tests
 
 Now we have some code for interacting with `FileHandle`, let's make sure it
 actually works and is sound.
@@ -593,7 +579,7 @@ will behave in a particular way (e.g. by returning an error from `write()` or
 writing to a buffer that can be inspected later) then exercise the code,
 running tests with `cargo miri test`.
 
-# An Owned Wrapper
+## An Owned Wrapper
 
 Now our hypothetical C caller has the ability to create a `*mut FileHandle`,
 but we don't want to be using `unsafe` and raw pointers when the file handle
@@ -707,7 +693,7 @@ impl Write for OwnedFileHandle {
 }
 ```
 
-## Downcasting
+### Downcasting
 
 A useful feature of Object Oriented languages is *downcasting*, the ability
 to convert from a parent class back to a child class; in this case we want a
@@ -806,7 +792,7 @@ impl OwnedFileHandle {
 With the addition of downcasting our `OwnedFileHandle` has pretty much reached
 feature parity with most `Box<dyn Write>` solutions.
 
-# Conclusions
+## Conclusions
 
 While it's not something you'll be using every day, *Thin Trait Objects* are
 a technique that you may find a use for some day. If nothing else,

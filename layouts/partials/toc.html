@@ -1,4 +1,4 @@
-{{ if gt .Page.ReadingTime (default .Site.Params.toc_reading_time_threshold 15)  }}
+{{ if gt .Page.ReadingTime .Site.Params.toc_reading_time_threshold }}
 <div class="notices tip">
     <p>
         I often like exploring a topic in great depth and writing about my
