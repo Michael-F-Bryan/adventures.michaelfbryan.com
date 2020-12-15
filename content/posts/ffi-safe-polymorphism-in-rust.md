@@ -633,8 +633,9 @@ destructor from its `Drop` impl.
 impl Drop for OwnedFileHandle {
     fn drop(&mut self) {
         unsafe {
-            let ptr = self.0.as_mut();
-            (ptr.destroy)(ptr);
+            let ptr = self.0.as_ptr();
+            let destroy = (*ptr).destroy;
+            (destroy)(ptr)
         }
     }
 }
@@ -690,15 +691,17 @@ We can also implement `std::io::Write` by directly calling the vtable methods.
 impl Write for OwnedFileHandle {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         unsafe {
-            let ptr = self.0.as_mut();
-            (ptr.write)(ptr, buf)
+            let ptr = self.0.as_ptr();
+            let write = (*ptr).write;
+            (write)(ptr, buf)
         }
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
         unsafe {
-            let ptr = self.0.as_mut();
-            (ptr.flush)(ptr)
+            let ptr = self.0.as_ptr();
+            let flush = (*ptr).flush;
+            (flush)(ptr)
         }
     }
 }
@@ -723,7 +726,10 @@ particular type. We'll use the `TypeId` added to the `FileHandle` vtable earlier
 impl OwnedFileHandle {
     /// Check if the object pointed to by a [`OwnedFileHandle`] has type `W`.
     pub fn is<W: 'static>(&self) -> bool {
-        unsafe { self.0.as_ref().type_id == TypeId::of::<W>() }
+        unsafe {
+            let ptr = self.0.as_ptr();
+            (*ptr).type_id == TypeId::of::<W>()
+        }
     }
 }
 ```
