@@ -8,8 +8,38 @@ tags:
 - FFI
 ---
 
+A while ago someone [posted a question][forum-post] on the Rust User Forums
+asking how to achieve polymorphism in a C API and while lots of good
+suggestions were made, I'd like to explore my take on things.
+
+As a recap, Rust provides two mechanisms for letting you write code which will
+work with multiple types. These are
+
+- **Static Dispatch**, where the compiler will generate multiple copies of the
+  function, tailor-made for each type and resolved at compile time, and
+- **Dynamic Dispatch**, where we use an extra level of indirection to only
+  resolve the actual implementation at runtime
+
+While both mechanisms are extremely powerful and can cover almost all of your
+needs in normal Rust code, they both have one drawback... The actual
+mechanisms used are (deliberately) unspecified and not safe for FFI.
+
+The concrete use case is looking for a FFI-safe equivalent of C's `FILE*`;
+some sort of handle which doesn't care if it is backed by a real file on
+disk, a network socket, an OS pipe, or an arbitrary piece of code that
+consumes bytes. This `FILE*`-like type could then be instantiated by C and
+used to initialise the logger in a Rust library.
+
+Normally you'd just reach for a `Box<dyn std::io::Write>` here, but as we've
+already mentioned Rust's trait objects aren't FFI-safe, meaning we need to be
+a little more creative.
+
+My solution is something I first discovered while browsing the source code
+for [`anyhow::Error`][anyhow]. I wasn't able to find a proper name for it, so
+I'm referring to this technique as *Thin Trait Objects*.
+
 {{% notice warning %}}
-**TODO: Actually write an intro**
+**TODO: Possibly rewrite the intro to mention**
 
 - Rust has two native mechanisms for polymorphism
   - Compile time
@@ -21,6 +51,7 @@ tags:
   - Layout is unspecified
 - My primary focus is enabling FFI-safe polymorphism
 - Use `Box<dyn Write>` as the primary use case
+- Original inspiration was [this u.rl.o thread][forum-post]
 {{% /notice %}}
 
 {{% notice note %}}
@@ -37,7 +68,8 @@ If you found this useful or spotted a bug, let me know on the blog's
 # Possible Solutions
 
 Now before we go any further it is important to ask the question, *"do we
-actually **need** to come up with a fancy, `unsafe` solution here?"*
+actually **need** to come up with a fancy solution here?"* This is especially
+important if your solution will require writing `unsafe` code.
 
 9 times out of 10 taking the more complicated option will require you to do
 extra work that wasn't needed in the first place.
@@ -55,7 +87,7 @@ Another option would be to design your API to be more data-oriented. That way
 the caller can write the custom logic in their own code instead of trying to
 inject it into someone else's.
 
-After all, no code is simpler than no code.
+After all, the simplest code is no code.
 
 ## Pointer to Enum
 
@@ -803,3 +835,4 @@ to do something similar in production.
 [miri]: https://github.com/rust-lang/miri
 [type-id]: https://doc.rust-lang.org/std/any/struct.TypeId.html
 [email]: mailto:michaelfbryan@gmail.com
+[anyhow]: https://github.com/dtolnay/anyhow/blob/2a82468b07751485552a7c1123007ad90e842b24/src/error.rs
