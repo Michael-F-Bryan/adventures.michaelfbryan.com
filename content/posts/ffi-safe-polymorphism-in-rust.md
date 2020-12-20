@@ -168,14 +168,15 @@ a pointer, with the vtable being kept alongside the data being pointed to.
 
 {{% notice note %}}
 This isn't a novel technique. It's actually already used by frameworks like
-Gnome's [*GObject*][g] and Microsoft's [*COM*][c].
+Microsoft's [*COM*][c].
 
-Most C++ implementations use [a slight variation][c++] where the virtual
-methods are stored behind another level of indirection. This extra level of
-indirection makes different trade-offs with respect to memory use, cache, and
-performance, but it's much the same idea.
+Gnome's [*GObject][g] and most C++ implementations use [a slight
+variation][c++] where the virtual methods are stored behind another level of
+indirection. This extra level of indirection makes different trade-offs with
+respect to memory use, cache, and performance, but it's much the same idea
+(see [this Reddit comment][r] from [`u/matthieum`][m]).
 
-In code, the C++ implementation might look something like this:
+In code, the extra level of indirection might look something like this:
 
 ```c
 struct VTable {
@@ -194,9 +195,14 @@ struct CppChild {
 }
 ```
 
+The C++ implementation gets a bit more interesting when multiple inheritance
+is involved.
+
 [g]: https://en.wikipedia.org/wiki/GObject
 [c]: https://en.wikipedia.org/wiki/Component_Object_Model
 [c++]: http://www.vishalchovatiya.com/memory-layout-of-cpp-object/
+[r]: https://www.reddit.com/r/rust/comments/kdt5qs/ffisafe_polymorphism_thin_trait_objects/gg1wb3n?utm_source=share&utm_medium=web2x&context=3
+[m]: https://www.reddit.com/user/matthieum/
 {{% /notice %}}
 
 ## Creating the FileHandle
