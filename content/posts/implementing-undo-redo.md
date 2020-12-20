@@ -2,6 +2,7 @@
 title: "Implementing an Undo/Redo Mechanism"
 date: "2019-12-29T20:11:44+08:00"
 draft: true
+math: true
 ---
 
 Alongside copy and paste, being able to undo and redo changes is one of those
@@ -203,12 +204,12 @@ Imagine a contrived example where the user opens a 100 line document then
 adds another 100 lines to the end of a document, one line at a time. The
 application's memory usage would look something like this:
 
-{{< latex >}}
-    memory\_usage_0 = 100 * line\_cost \\
-    memory\_usage_{N+1} = memory\_usage_N + (memory\_usage_N + line\_cost) \\
-    \therefore memory\_usage(n) \approx O \large( n^2 \large) \\
-    where ~ n: \text{Depth of Undo/Redo buffer}
-{{< /latex >}}
+{{% latex %}}
+    memory\_usage_0 &= 100 * line\_cost \\
+    memory\_usage_{N+1} &= memory\_usage_N + (memory\_usage_N + line\_cost) \\
+    \therefore memory\_usage(n) &\approx O \large( n^2 \large) \\
+    where ~ n&: \text{Depth of Undo/Redo buffer}
+{{% /latex %}}
 
 To make matters worse, when study common usage patterns (i.e. watch over
 someone's shoulder as they use your software) you'll see the vast majority

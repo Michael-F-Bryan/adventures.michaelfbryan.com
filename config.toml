@@ -23,10 +23,11 @@ author = "Michael-F-Bryan"
 info = "I like making things and solving cool problems"
 description = "A place to document my thoughts and experiments"
 keywords = "blog,developer,personal"
-custom_css = ["css/master.css"]
-custom_js = ["js/mermaid.min.js", "js/index.js"]
+customCSS = ["css/master.css"]
+customJS = ["js/mermaid.min.js", "js/index.js"]
 commit = "https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree"
 toc_reading_time_threshold = 15
+math = true
 
 [markup.goldmark.renderer]
 unsafe= true

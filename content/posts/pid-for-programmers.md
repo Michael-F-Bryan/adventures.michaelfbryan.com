@@ -4,6 +4,7 @@ date: "2019-09-16T20:42:04+08:00"
 draft: true
 tags:
   - algorithms
+math: true
 ---
 
 PID, short for *proportional-integral-derivative* is a mathematical tool for
@@ -28,7 +29,7 @@ The textbook description for a PID controller is done using math:
 Output = K_P e(t) + K_I \int e(t) dt + K_D \frac{d}{dt} e(t)
 {{% /latex %}}
 
-This article will be building on top of Brett Beauregard's 
+This article will be building on top of Brett Beauregard's
 [Improving the Beginner’s PID][intro]. If we translate the above equations into
 Rust we'll get something like [this][pid-1]:
 
