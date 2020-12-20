@@ -33,23 +33,23 @@ unsafe= true
 
 [[params.social]]
 name = "Github"
-icon = "fab fa-github fa-2x"
+icon = "fa fa-github fa-2x"
 weight = 1
 url = "https://github.com/Michael-F-Bryan"
 [[params.social]]
 name = "GitLab"
-icon = "fab fa-gitlab fa-2x"
+icon = "fa fa-gitlab fa-2x"
 weight = 2
 url = "https://gitlab.com/Michael-F-Bryan"
 [[params.social]]
 name = "Contact Me"
-icon = "fas fa-envelope fa-2x"
+icon = "fa fa-envelope fa-2x"
 weight = 3
 url = "mailto:michaelfbryan@gmail.com"
 
 [[params.social]]
 name = "RSS"
-icon = "fas fa-rss"
+icon = "fa fa-rss"
 weight = 6
 url = "https://adventures.michaelfbryan.com/index.xml"
 rel = "alternate"
