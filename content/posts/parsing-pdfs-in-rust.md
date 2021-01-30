@@ -624,9 +624,9 @@ helper really simplified things, though. Instead of needing half a weekend I
 was able to hack my way from nothing to 50+ new contacts in under 90 minutes
 and 400 lines of code.
 
-Let me know if you find these sorts of *"programming Rust in the real world"*
-articles interesting. I always enjoy hearing war stories from fellow
-programmers!
+Let me know if you find these sorts of [*"programming Rust in the real
+world"*][youtube] articles interesting. I always enjoy hearing war stories from
+fellow programmers!
 
 [bodge]: https://www.youtube.com/watch?v=lIFE7h3m40U
 [crate]: https://crates.io/crates/pdf
@@ -641,3 +641,4 @@ programmers!
 [csv-template]: https://storage.googleapis.com/support-kms-prod/ItcoC4pjx2kK5azWNE4zeEWEckt4W5GkSnLN
 [structopt]: https://crates.io/crates/structopt
 [importing]: https://support.google.com/contacts/answer/1069522?co=GENIE.Platform%3DDesktop&hl=en&oco=1#zippy=%2Ccant-import-my-contacts%2Cfrom-a-file
+[youtube]: https://www.youtube.com/watch?v=hmMbHB0zYrM&t=9097s
