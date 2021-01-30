@@ -127,6 +127,8 @@ which we can take a stream of `Operation`s and turn them into a stream of
 `TextObject`s.
 
 ```rust
+// src/lib.rs
+
 fn text_objects(operations: &[Operation]) -> impl Iterator<Item = TextObject<'_>> + '_ {
     TextObjectParser {
         ops: operations.iter(),
@@ -154,6 +156,8 @@ we'll keep consuming `Operation`s, updating some temporary state, until we see
 an `"ET"` operation.
 
 ```rust
+// src/lib.rs
+
 impl<'src> Iterator for TextObjectParser<'src> {
     type Item = TextObject<'src>;
 
@@ -213,6 +217,8 @@ Don't be intimidated by the number of generics and the complicated `where`-claus
 all will be explained in a sec.
 
 ```rust
+// src/lib.rs
+
 use std::{iter::Peekable, marker::PhantimData};
 
 pub fn group_by<I, F, K>(iterator: I, grouper: F) -> impl Iterator<Item = Vec<I::Item>>
@@ -243,6 +249,8 @@ item with a different key (or run out of items). That tells us we've found
 all items in the group and can yield the group to the caller.
 
 ```rust
+// src/lib.rs
+
 impl<I, F, K> Iterator for GroupBy<I, F, K>
 where
     I: Iterator,
@@ -293,6 +301,8 @@ I've decided to represent the parsed data as a `ContactList` which contains a
 list of `MemberInfo`s.
 
 ```rust
+// src/lib.rs
+
 pub struct ContactList {
     pub members: Vec<MemberInfo>,
 }
@@ -309,6 +319,8 @@ Using the `text_objects()` and `group_by()` helpers from before, we get a
 `parse_members_on_page()` function which looks something like this.
 
 ```rust
+// src/lib.rs
+
 fn parse_members_on_page(page: &Page) -> Result<Vec<MemberInfo>, Error> {
     let content = match &page.contents {
         Some(c) => c,
@@ -346,6 +358,8 @@ Parsing a single row and copying the individual cell text into the
 `MemberInfo` is pretty easy to do with slice patterns.
 
 ```rust
+// src/lib.rs
+
 use heck::TitleCase;
 
 fn parse_row(row: Vec<TextObject<'_>>) -> Result<MemberInfo, Error> {
@@ -385,6 +399,8 @@ each page in a `pdf::file::File` and appending the parsed `MemberInfo` to a
 list.
 
 ```rust
+// src/lib.rs
+
 use std::anyhow::{Context, Error};
 use pdf::file::File;
 
@@ -421,6 +437,197 @@ Caused by:
 
 ... Instead of something useless like *"Unable to parse the file"*.
 
+## Exporting to Google Contacts
+
+The final part of our task is exporting the parsed data in a form that *Google
+Contacts* can handle.
+
+Rust has a lot of useful libraries for writing command-line utilities, but for
+this application we'll only need [the `structopt` crate][structopt] for
+declaring something our command-line arguments can be parsed into.
+
+```rust
+// src/bin/export-to-google-contacts.rs
+
+use structopt::StructOpt;
+use std::path::PathBuf;
+
+#[derive(Debug, Clone, StructOpt)]
+pub struct Args {
+    #[structopt(short, long, parse(from_os_str),
+                help = "The file to parse, or STDIN if not provided.")]
+    input: Option<PathBuf>,
+    #[structopt(short, long, parse(from_os_str), default_value = "contacts.csv",
+                help = "The file to save the contacts to")]
+    output: PathBuf,
+}
+```
+
+We'll also give it a utility method for parsing the input, correctly switching
+between a file or `stdin` depending on whether a `--input` argument was
+provided.
+
+```rust
+// src/bin/export-to-google-contacts.rs
+
+use std::io::Read;
+use anyhow::{Context, Error};
+
+impl Args {
+    fn input(&self) -> Result<Vec<u8>, Error> {
+        match &self.input {
+            Some(filename) => std::fs::read(filename)
+                .with_context(|| format!("Couldn't read \"{}\"", filename.display())),
+            None => {
+                let mut buffer = Vec::new();
+                io::stdin()
+                    .read_to_end(&mut buffer)
+                    .context("Unable to read from STDIN")?;
+                Ok(buffer)
+            }
+        }
+    }
+}
+```
+
+According to their docs, *Google Contacts* can import contacts from
+[vCards][vcard] or a CSV file. They've provided [a CSV template][csv-template]
+so that's what I've decided to export my data as.
+
+Inspecting the `contacts.csv` file shows we've got quite a lot of fields to
+choose from.
+
+```console
+$ cat ~/Downloads/contacts.csv | sed -e 's/,/\n/g'
+Name
+Given Name
+Additional Name
+Family Name
+Yomi Name
+Given Name Yomi
+Additional Name Yomi
+Family Name Yomi
+Name Prefix
+Name Suffix
+Initials
+Nickname
+Short Name
+Maiden Name
+Birthday
+Gender
+Location
+Billing Information
+Directory Server
+Mileage
+Occupation
+Hobby
+Sensitivity
+Priority
+Subject
+Notes
+Language
+Photo
+Group Membership
+E-mail 1 - Type
+E-mail 1 - Value
+IM 1 - Type
+IM 1 - Service
+IM 1 - Value
+Website 1 - Type
+Website 1 - Value
+```
+
+In this case we only have data for a couple fields so all the others can be
+skipped.
+
+- `Given Name`
+- `Family Name`
+- `E-mail 1 - Value`
+- `Phone 1 - Type` (will always be `"Mobile"`)
+- `Phone 1 - Value`
+
+Because the `export-to-google-contacts` executable is so simple, we can throw
+the argument parsing, contact list parsing, and CSV generation all into a single
+`main()` function and call it a day.
+
+```rust
+// src/bin/export-to-google-contacts.rs
+
+use csv::Writer;
+use std::fs::File;
+
+fn main() -> Result<(), Error> {
+    let args = Args::from_args();
+
+    let raw = args.input()?;
+    let contacts = contacts_parser::parse(&raw)
+        .context("Unable to parse the contacts list")?;
+
+    let w = File::create(&args.output)
+        .with_context(|| format!("Unable to open \"{}\"", args.output.display()))?;
+    let mut csv_writer = Writer::from_writer(w);
+
+    csv_writer.write_record(&[
+            "Given Name", "Family Name", "E-mail 1 - Value",
+            "Phone 1 - Type", "Phone 1 - Value",
+        ])
+        .context("Unable to write the header")?;
+
+    for member in &contacts.members {
+        let MemberInfo { surname, first_name, email, mobile, .. } = member;
+
+        let row = &[
+            first_name.as_str(),
+            surname.as_str(),
+            email.as_str(),
+            "Mobile",
+            mobile.as_str(),
+        ];
+
+        csv_writer
+            .write_record(row)
+            .with_context(|| format!("Unable to write \"{} {}\"", first_name, surname))?;
+    }
+
+    Ok(())
+}
+```
+
+Once that is done, we can use `cargo run` to run the program and convert the
+contact list PDF to a CSV.
+
+```console
+$ cargo run -- -i ~/Downloads/contact-list.pdf
+  Finished dev [unoptimized + debuginfo] target(s) in 0.03s
+   Running `target/debug/export-to-google-contacts -i /home/michael/Downloads/contact-list.pdf`
+$ ls
+  Cargo.lock  Cargo.toml  LICENSE_APACHE.md  LICENSE_MIT.md  README.md  src
+  target tests contacts.csv
+               ^^^^^^^^^^^^
+$ wc contacts.csv
+  57   70 3196 contacts.csv
+```
+
+Now it's just a case of [importing the `contacts.csv`][importing] on a computer
+and letting your phone pick it up next time it does a sync.
+
+## Conclusions
+
+This was a fun little experiment!
+
+Honestly, I was expecting it to be a massive pain and that I'd need to
+traverse some sort of DOM to extract data, something that tends to be a quite
+verbose in statically typed languages.
+
+Taking the time to understand the PDF spec and writing that `text_objects()`
+helper really simplified things, though. Instead of needing half a weekend I
+was able to hack my way from nothing to 50+ new contacts in under 90 minutes
+and 400 lines of code.
+
+Let me know if you find these sorts of *"programming Rust in the real world"*
+articles interesting. I always enjoy hearing war stories from fellow
+programmers!
+
 [bodge]: https://www.youtube.com/watch?v=lIFE7h3m40U
 [crate]: https://crates.io/crates/pdf
 [online-docs]: https://docs.rs/pdf/
@@ -430,3 +637,7 @@ Caused by:
 [operation]: https://docs.rs/pdf/0.7.1/pdf/content/struct.Operation.html
 [reference]: https://www.adobe.com/content/dam/acom/en/devnet/pdf/pdfs/pdf_reference_archives/PDFReference.pdf
 [itertools]: https://docs.rs/itertools/
+[vcard]: https://en.wikipedia.org/wiki/VCard
+[csv-template]: https://storage.googleapis.com/support-kms-prod/ItcoC4pjx2kK5azWNE4zeEWEckt4W5GkSnLN
+[structopt]: https://crates.io/crates/structopt
+[importing]: https://support.google.com/contacts/answer/1069522?co=GENIE.Platform%3DDesktop&hl=en&oco=1#zippy=%2Ccant-import-my-contacts%2Cfrom-a-file
