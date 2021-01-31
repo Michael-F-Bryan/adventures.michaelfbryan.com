@@ -1,7 +1,6 @@
 ---
 title: "Parsing PDF Documents in Rust"
-date: "2021-01-30T21:52:10+08:00"
-draft: true
+date: "2021-01-31T21:00:00+08:00"
 tags:
 - Rust
 ---
