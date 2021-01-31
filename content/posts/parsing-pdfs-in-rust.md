@@ -8,19 +8,24 @@ tags:
 
 In my spare time I'm a volunteer with my state's emergency services and we
 have our own web app for managing unit-specific things like attendance, vehicle
-checks, newsletters, and so on.
+checks, newsletters, on-call rosters, and so on.
 
 It's actually a really useful tool, but there is one feature that really
 annoys me... The list of member contact details is only available as a PDF
-and not a form that can be imported into your phone's contacts. This means if
-you need to contact someone, you first need to download the contact list to
-your phone, zoom in so you can read the table's rows, find the person's name,
-then pan over to their phone number.
+and not a format that can be imported into your phone's contacts.
+
+This means if you need to contact someone you first need to:
+
+1. download the contact list to your phone
+2. zoom in so you can read the table's rows
+3. find the person's name
+4. pan over to their phone number
+5. Copy the number and paste it into your messaging app
 
 I need to do this infrequently enough that it's not worth manually creating a
-new contact, but just often enough to be annoying. It'd be *really* nice if I
+new contact, yet just often enough to be annoying. It'd be *really* nice if I
 just needed to download the contact list once and have all the information
-available on my phone.
+available on my phone... There must be a better way!
 
 I've contacted one of the developers to see if we can get a better solution
 but in the meantime figured that, as a programmer, I should be able to
@@ -48,9 +53,9 @@ So our first job is to take a PDF document like this...
 That's easy enough, there is already a Rust crate (unsurprisingly called
 [`pdf`][crate]) for parsing PDF documents so we can reuse that.
 
-For these sorts of jobs, it's just a case of reading
-[the crate's API docs][online-docs] and using the provided functionality to
-get at the information you want.
+For these sorts of jobs I won't do much planning up-front, instead I'll click
+around [the crate's API docs][online-docs] and figure out how to use the
+provided functionality to do what I want.
 
 After a bit of clicking through I figured out that [`pdf::file::File`][file]
 represented the overall document and was just a fancy list of
@@ -59,17 +64,17 @@ list of [`Operation`s][operation]... And that's where my understanding of PDF
 documents was completely turned on its head.
 
 You see, I used to believe that a PDF was a declarative format containing a
-bunch of high-level objects like `Table` and `Heading` and so on, almost like
-HTML... However, after skimming through [the PDF format spec][reference] from
-Adobe (which is itself a PDF - how meta!) it was evident that PDF is more
-like an interpreted language where you'll go through each `Operation` in a
-page executing draw calls and updating the renderer's state as you go.
+bunch of high-level objects like `Table` and `Heading` and so on (almost like
+HTML)... However, after skimming through [the PDF format spec][reference]
+from Adobe (which is itself a PDF - how meta!) it was evident that PDF is
+more like an interpreted programming language where you'll go through each
+`Operation` in a page executing draw calls and updating the renderer's state
+as you go.
 
-That makes things interesting.
-
-It means I can't just look for a (hypothetical) `Table` object and iterate
-over its `cells` field. Instead I'll need to iterate over every instruction
-and keep track of the current state.
+That makes things interesting. It means I can't just look for a
+(hypothetical) `Table` object in the DOM and iterate over its `cells` field.
+Instead I'll need to iterate over every instruction and keep track of the
+current state.
 
 These instructions are pretty low-level, too. Here are (as best I can tell) the
 instructions for drawing the *"Surname"* and *"First Name"* cells.
@@ -118,8 +123,8 @@ op-codes.
 
 So PDF documents don't even contain tables, it's all just a lie!
 
-That means to identify the rows and cells in a document I'll need to find
-each of the text objects (everything between `BT` and `ET` operations) and do
+To identify the rows and cells in a document I'll need to find each of the
+text objects (everything between `BT` and `ET` operations) and do probably
 something funky with their coordinates.
 
 First, I'll create something to represent text objects and stub out a type
@@ -149,11 +154,16 @@ struct TextObjectParser<'src> {
 ```
 
 Turning `TextObjectParser` into an `Iterator` turned out to be pretty easy
-thanks to pattern matching.
+thanks to pattern matching. I know ahead of time *exactly* which operations
+I'm looking for and what their operands will be so each pattern can be its
+own branch in a big `match` statement. Then the language will automatically
+make sure I've got the correct number of operands with the correct types, and
+bind the information I want to extract to local variables.
 
-The idea is that every time someone calls `TextObjectParser`'s `next()` method
-we'll keep consuming `Operation`s, updating some temporary state, until we see
-an `"ET"` operation.
+The idea is that every time someone calls `TextObjectParser`'s `next()`
+method we'll keep consuming `Operation`s, matching on their operator and
+operands while updating some temporary state, then when we see an `"ET"`
+operation we yield what we've seen to the caller.
 
 ```rust
 // src/lib.rs
@@ -219,7 +229,7 @@ all will be explained in a sec.
 ```rust
 // src/lib.rs
 
-use std::{iter::Peekable, marker::PhantimData};
+use std::{iter::Peekable, marker::PhantomData};
 
 pub fn group_by<I, F, K>(iterator: I, grouper: F) -> impl Iterator<Item = Vec<I::Item>>
 where
@@ -432,7 +442,7 @@ Error: Unable to parse the contacts list
 
 Caused by:
     0: Unable to parse the members on page 1
-    1: Found a row containg "Michael"
+    1: Found a row containing "Michael"
 ```
 
 ... Instead of something useless like *"Unable to parse the file"*.
