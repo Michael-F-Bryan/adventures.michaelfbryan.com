@@ -20,7 +20,7 @@ tag = "tags"
 
 [params]
 author = "Michael-F-Bryan"
-info = "I like making things and solving cool problems"
+info = "Rustacean, Freelancer, and Open-Source Enthusiast"
 description = "A place to document my thoughts and experiments"
 keywords = "blog,developer,personal"
 customCSS = ["css/master.css"]
