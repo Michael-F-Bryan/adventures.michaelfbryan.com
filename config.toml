@@ -28,6 +28,7 @@ customJS = ["js/mermaid.min.js", "js/index.js"]
 commit = "https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree"
 toc_reading_time_threshold = 15
 math = true
+colorscheme = "auto"
 
 [markup.goldmark.renderer]
 unsafe= true
