@@ -3,7 +3,7 @@ title: "PID for Programmers"
 date: "2019-09-16T20:42:04+08:00"
 draft: true
 tags:
-  - algorithms
+  - Algorithms
 math: true
 ---
 
