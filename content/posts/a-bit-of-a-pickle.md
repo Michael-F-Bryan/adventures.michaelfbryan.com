@@ -76,3 +76,64 @@ freelancing gig with a startup in San Francisco. This job ticked all my boxes,
 - Taking on the project would take my career in a direction I wanted it to go
 
 The contrast between the two was like night and day.
+
+I guess the root problem is that:
+
+- I've committed myself to do something which I don't think I want to do
+- I've committed myself to do something I really want to do
+- I over-promised on the less desirable thing, and
+- I'm not sure I will have the time or motivation to do both
+
+## The Greater Context
+
+Of course nothing happens in a vacuum and all of this was going on within the
+greater context of me running my life.
+
+### Goals and Aspirations
+
+My core goals are to
+
+- Work with a team of like-minded individuals on something I'm deeply passionate
+  about
+- Have a partner I can share my life with and always depend on
+- Always be expanding my knowledge and tackling intellectually stimulating
+  challenges
+- Do things in the present which won't make future Michael sad/regretful
+
+Something I've identified is that throughout my life I haven't really
+followed things through to the end, and instead quit midway or taken the easy
+way out.
+
+Look at my unfinished engineering degree, the myriad of incomplete projects
+on my GitHub, **Profiler 9**, the telemetry system I did for Curtin
+Motorsport Team, the list goes on.
+
+I don't really have anything I can point to and say *"I made that"*... and
+that's a big thing to me.
+
+If I want to be recognised for my intelligence and skill then I need to give
+them tangible examples, and not just rely on my ability to make people think
+I am intelligent through what I tell them.
+
+### Mortality
+
+Another thing that's been really weighing on my mind over the last 5 months or
+so is that I only have a limited life span. Entropy always marches on and
+everyone knows they'll die some day, but how many *know* know?
+
+I've been alive for as long as I can remember, and contemplating the fact
+that the day *will* come where I can no longer experience or interact with
+the world fills me with pure terror. There's also nothing anyone can do to
+prevent it, and that helplessness really sucks.
+
+At least if there was a solution you'd have a small glimmer of hope and could
+go through life without the helplessness and terror... Ah, ignorance is
+bliss.
+
+However, the thing I *can* control is how I go about my life today and the
+experiences and memories I make along the way.
+
+I really want my life to have meaning and a positive impact on everyone
+around me. Some form of immortality through recognition wouldn't be bad,
+either; I don't want to just fade into obscurity.
+
