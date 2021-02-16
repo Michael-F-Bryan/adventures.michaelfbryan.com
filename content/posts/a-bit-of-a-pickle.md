@@ -137,3 +137,63 @@ I really want my life to have meaning and a positive impact on everyone
 around me. Some form of immortality through recognition wouldn't be bad,
 either; I don't want to just fade into obscurity.
 
+## Options
+
+As I see it, there are only really two options here:
+
+1. Keep going with the project, renegotiating the scope or timeline to come
+   up with something more achievable
+3. Walk away
+
+{{< figure
+    src="/img/brainstorm.jpeg"
+    link="/img/brainstorm.jpeg"
+    target="blank_"
+    caption="Brain Dump"
+    alt="Whiteboard split into two sections, &quot;Renegotiate&quot; and &quot;Quit&quot;, listing pros and cons"
+>}}
+
+### Renegotiate
+
+The first option is to continue on with the project and just renegotiate the
+scope or timeline. It's also the easiest in the short term because I won't
+need to have any hard conversations.
+
+It'll be a bit embarrassing that I misjudged the amount of work required, but
+the project manager has already given me a way to deal with that by keeping
+track of roadblocks I encounter along the way.
+
+One thing about working for yourself is that you spend large amounts of time
+at home with nobody but yourself for company. This means you aren't
+distracted by others, but it also means that you don't have anyone to bounce
+ideas off and lack the routine that comes with a normal 9-5 office job. Not
+having the constant threat of a co-worker looking over to see you playing
+games or wasting time makes it a lot easier to get distracted, even if they
+wouldn't care or nobody ever looks.
+
+The issue that really kicked off my doubts and triggered my despair was how
+much I'd underestimated the menu task. I've since figured out a solution to one
+of the tricky problems, so that should help unblock me... Now I've just got to
+finish it off.
+
+Continuing with the project would also be a pretty big deal for me. It'd mean
+I've overcome my knee-jerk reaction to quit the moment things start getting
+tough and am following through with something I've committed to.
+
+This project has three main priorities:
+
+1. The resulting application should be functionally identical to Profiler 8
+2. The project needs to be completed ASAP
+3. The codebase needs to be maintainable
+
+We've kinda got one of those *"you have 3 options, choose 2"* situations, here.
+
+If I were to take this path I would:
+
+- Ask to revisit the timeline and re-evaluate how much work is required now
+  that I have access to Profiler 8 and its source code
+- Come in 3 days a week (Monday/Wednesday/Friday) under the pretence of
+  addressing roadblocks early, having someone to bounce ideas off and
+  establishing a bit of routine
+- Work on the second project during my evenings and weekends
+
