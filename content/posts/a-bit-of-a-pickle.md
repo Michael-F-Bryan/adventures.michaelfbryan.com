@@ -77,6 +77,14 @@ freelancing gig with a startup in San Francisco. This job ticked all my boxes,
 
 The contrast between the two was like night and day.
 
+The entire first week of the wintech job I was really struggling with the
+scale of the project. Even though I'd written down a timeline and estimated
+how much time each task would take, I just couldn't shake off that feeling of
+drowning in the sheer amount of work that needed to be done... Especially
+given Wintech use the *"must be functionally identical to Profiler 8"*
+requirement to go over everything I do with a fine-toothed comb, so there
+will be no room for error or no opportunities to cut corners.
+
 I guess the root problem is that:
 
 - I've committed myself to do something which I don't think I want to do
@@ -197,3 +205,6 @@ If I were to take this path I would:
   establishing a bit of routine
 - Work on the second project during my evenings and weekends
 
+### Quit
+
+## Conclusions
