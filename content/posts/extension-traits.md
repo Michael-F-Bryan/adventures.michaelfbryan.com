@@ -7,7 +7,7 @@ tags:
 ---
 
 A nice consequence of the way Rust's type system works is a pattern called
-the *Extension Trait*.
+the *Extension Trait*. This
 
 {{% notice note %}}
 Most of the examples developed in this article are also linked to on the
@@ -16,7 +16,6 @@ Most of the examples developed in this article are also linked to on the
 If you found this useful or spotted a bug, let me know on the blog's
 [issue tracker][issue]!
 
-[repo]: https://github.com/Michael-F-Bryan/💩🔥🦀
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues
 {{% /notice %}}
 
@@ -42,3 +41,8 @@ If you found this useful or spotted a bug, let me know on the blog's
 - `std::os::windows::ffi::OsStrExt`
 
 ## Conclusion
+
+See also:
+
+- [RFC - 445 Extension Trait Conventions](https://rust-lang.github.io/rfcs/0445-extension-trait-conventions.html)
+- [Extension traits in Rust](http://xion.io/post/code/rust-extension-traits.html)
