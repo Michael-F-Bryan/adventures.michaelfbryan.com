@@ -1,4 +1,6 @@
-{{ if gt .Page.ReadingTime .Site.Params.toc_reading_time_threshold }}
+{{ if or (and (not (isset .Params "toc"))
+              (gt .Page.ReadingTime .Site.Params.toc_reading_time_threshold))
+         .Params.toc }}
 <div class="notices tip">
     <p>
         I often like exploring a topic in great depth and writing about my
