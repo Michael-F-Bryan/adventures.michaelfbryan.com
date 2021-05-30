@@ -4,7 +4,7 @@ date: "2021-05-30T18:12:29+08:00"
 draft: true
 tags:
 - Rust
-toc: true
+- GitHub Actions
 ---
 
 I'm currently working with [Hammer of the Gods][hotg] on a project [Rune][rune],
@@ -19,15 +19,15 @@ languages and the `rune` CLI is just one piece of it.
 Developers working on other projects like the mobile app won't necessarily want
 to be compiling `rune` from scratch every time (or maybe won't even know how to
 compile Rust code), yet they'll still need to use `rune` and want access to all
-the latest features and bugfixes. Additionally, you might have users who want to
-live on the bleeding edge and don't want to be manually cutting a new release
+the latest features and bug-fixes. Additionally, you might have users who want
+to live on the bleeding edge and don't want to be manually cutting a new release
 every day or to for these people to consume.
 
 However, we're developers who write software, and if there is anything
 developers are good at it's spending 10 hours to automate away a 5 minute job.
 
-In this case we want to develop a Continuous Integration/Continuous Deployment
-system which will:
+In this case we want to develop system for Continuous Integration (automated
+testing) and Continuous Deployment (automated releases) which will:
 
 - Compile and run the test suite for every change that gets pushed to GitHub
 - Generate API docs and deploy them to GitHub Pages when merging into `master`
@@ -62,7 +62,7 @@ This project has 3 core elements:
 3. Python bindings which expose the core library's functionality for use
    while prototyping
 
-First, let's create a new git repository and initialize the three `cargo`
+First, let's create a new git repository and initialise the three `cargo`
 projects, using [a workspace][workspace] to make sure they share the same
 dependencies and build directory.
 
@@ -200,7 +200,125 @@ $ cargo run -- 2 2
 
 ### The `cdir-python` Crate
 
+Now that we've got some functionality, we'll need to create some Python bindings
+so our Python users can access it.
+
+The easiest way to write Python bindings is with [the `pyo3` crate][pyo3] so
+let's add the `pyo3` crate as a dependency and enable the `extension-module`
+feature. Don't forget to add `cdir-core` as a dependency.
+
+```console
+$ cargo add pyo3 --features extension-module
+$ cargo add ../core
+```
+
+We also need to make sure `rustc` generates a `cdylib` (i.e. a `*.dll` or `*.so`
+file depending in the OS). This results in the following `Cargo.toml` file:
+
+```toml
+# python/Cargo.toml
+[package]
+name = "cdir-python"
+version = "0.1.0"
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.13.2", features = ["extension-module"] }
+```
+
+For the next part we can copy the initial example from `pyo3`'s user guide and
+tweak it to wrap our `cdir_core::add()` function instead.
+
+All we do is create a function with the `#[pymodule]` attribute that will be
+called when CPython initialises our module and make sure it adds a function
+wrapping `cdir_core::add()` to the new module.
+
+```rust
+// python/src/lib.rs
+use pyo3::prelude::*;
+
+/// Add two unsigned integers together.
+#[pyfunction]
+fn add(first: u32, second: u32) -> PyResult<u32> {
+    Ok(cdir_core::add(first, second))
+}
+
+/// A Python module implemented in Rust.
+#[pymodule]
+fn cdir_python(_py: Python, m: &PyModule) -> PyResult<()> {
+    let wrapped = pyo3::wrap_pyfunction!(add, m)?;
+    m.add_function(wrapped)?;
+
+    Ok(())
+}
+```
+
+There is a tool called [`maturin`][maturin] which helps build and package
+Python extension modules, and it's got a handy `maturin develop` command which
+lets you play around with your code in a virtual environment without needing to
+install it.
+
+```console
+# Create the virtual environment
+$ python3 -m venv env
+$ source env/bin/activate
+
+$ maturin develop
+🔗 Found pyo3 bindings
+🐍 Found CPython 3.9 at python
+   Compiling pyo3 v0.13.2
+   Compiling cdir_python v0.1.0 (/home/michael/Documents/cdir/python)
+    Finished dev [unoptimized + debuginfo] target(s) in 3.33s
+
+$ python3
+Python 3.9.5 (default, May 24 2021, 12:50:35)
+[GCC 11.1.0] on linux
+Type "help", "copyright", "credits" or "license" for more information.
+>>> import cdir_python
+>>> cdir_python.add(1, "asdf")
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+TypeError: argument 'second': 'str' object cannot be interpreted as an integer
+>>> cdir_python.add(2, 2)
+4
+```
+
+This is nice, but our end goal is to set up a CI/CD system for our project and
+a CI/CD system needs tests. In this case, we just care that our bindings "work"
+so we'll create a smoke test which tries uses some basic functionality and
+makes sure it doesn't blow up.
+
+```python
+# python/tests/smoke_test.py
+import cdir_python
+
+def test_two_plus_two():
+    assert cdir_python.add(2, 2) == 4
+```
+
+We can now use [the `pytest` testing framework][pytest] to run the test and make
+sure it passes.
+
+```console
+$ pip install pytest
+$ env/bin/pytest
+========================== test session starts ==========================
+platform linux -- Python 3.9.5, pytest-6.2.4, py-1.10.0, pluggy-0.13.1
+rootdir: /home/michael/Documents/cdir/python
+collected 1 item
+
+tests/smoke_test.py .                                             [100%]
+
+=========================== 1 passed in 0.01s ===========================
+```
+
 [rune]: https://github.com/hotg-ai/rune
 [hotg]: https://hotg.ai/
 [workspace]: https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html
-[cargo-edit]: crates.io/crates/cargo-edit
+[cargo-edit]: https:/crates.io/crates/cargo-edit
+[pyo3]: https://crates.io/crates/pyo3
+[maturin]: https://github.com/PyO3/maturin
+[pytest]: https://pytest.org/
