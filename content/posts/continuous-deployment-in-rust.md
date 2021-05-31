@@ -5,6 +5,8 @@ draft: true
 tags:
 - Rust
 - GitHub Actions
+- CI/CD
+toc: true
 ---
 
 I'm currently working with [Hammer of the Gods][hotg] on a project [Rune][rune],
@@ -24,9 +26,10 @@ to live on the bleeding edge and don't want to be manually cutting a new release
 every day or to for these people to consume.
 
 However, we're developers who write software, and if there is anything
-developers are good at it's spending 10 hours to automate away a 5 minute job.
+developers are good at it's spending dozens of hours to automate away a 5 minute
+job 😉
 
-In this case we want to develop system for Continuous Integration (automated
+In this case we want to develop a system for Continuous Integration (automated
 testing) and Continuous Deployment (automated releases) which will:
 
 - Compile and run the test suite for every change that gets pushed to GitHub
@@ -315,6 +318,333 @@ tests/smoke_test.py .                                             [100%]
 =========================== 1 passed in 0.01s ===========================
 ```
 
+The [*Using Rust from Python*][pyo3-user-guide] section of the pyo3 user guide
+also contains a note for MacOS users. Apparently how the MacOS linker looks up
+symbols is different to Linux and Windows so we need to pass some extra flags to
+`rustc`.
+
+```toml
+# .cargo/config.toml
+
+[target.x86_64-apple-darwin]
+rustflags = [
+  "-C", "link-arg=-undefined",
+  "-C", "link-arg=dynamic_lookup",
+]
+
+[target.aarch64-apple-darwin]
+rustflags = [
+  "-C", "link-arg=-undefined",
+  "-C", "link-arg=dynamic_lookup",
+]
+```
+
+Of course, in `rune` I only figured this out after one of our developers
+complained that the project no longer compiled on his Mac and we spent hours
+trying to debug the problem.
+
+## A Basic CI System
+
+The first piece in our CI/CD system is being able to run the test suite every
+time code gets pushed up to our GitHub repository.
+
+We'll primarily be using GitHub Actions for CI/CD as (in my experience) it tends
+to be easier to work with than Travis or Appveyor. As a component of the wider
+GitHub platform, jumping back and forth between PRs, issues, and CI also feels
+smoother.
+
+To get started with GitHub Actions you need to define a workflow, a series of
+"jobs" which will be triggered every time an event happens (e.g. new code is
+pushed up or you created a tag). Each job is executed on its own machine and
+will go through a series of tasks before competing with a
+successful/unsuccessful status.
+
+For a Rust project, the basic workflow will check out the repository, set up the
+Rust toolchain, then run `cargo check`, `cargo build`, and `cargo test`. This
+should be done every time code is pushed to GitHub or when a Pull Request is
+created.
+
+```yml
+# .github/workflow/main.yml
+
+name: Continuous Integration
+on:
+- push
+- pull_request
+jobs:
+  compile-and-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Initialize the Rust Toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+    - name: Type Checking
+      uses: actions-rs/cargo@v1
+      with:
+        command: check
+        args: --workspace --verbose
+    - name: Compile
+      uses: actions-rs/cargo@v1
+      with:
+        command: build
+        args: --workspace --verbose
+    - name: Test
+      uses: actions-rs/cargo@v1
+      with:
+        command: test
+        args: --workspace --verbose
+```
+
+{{% notice tip %}}
+When running a command in CI it's always a good idea to use the `--verbose`
+flag, if one is available.
+
+The most annoying part of setting up a CI/CD system is that you'll often need to
+wait 5-10 minutes to see the effect of any change. That includes any debug
+prints you might need to add before you can even get started fixing a broken
+build.
+
+Making sure you log all the information you'll need *before* you need to start
+troubleshooting CI problems can often save you 2 or 3 extra runs (i.e. half an
+hour of waiting).
+{{% /notice %}}
+
+To help speed up a build, we can run the [`actions/cache`][cache] action after
+the repository is checked out to cache build artefacts. Instead of rebuilding
+our entire project from scratch every time we'll hopefully be able to reuse the
+result of the last the last successful CI run.
+
+For larger projects this can be the difference between a 25 minute CI run and a
+7 minute run and can really help improve the developer experience.
+
+Caching is only effective when build artefacts *can* be reused though. That
+means we'll need to use a "key" which is unique for each OS, job, and set of
+dependencies involved because changing any of those will often invalidate the
+entire cache.
+
+```yml
+# .github/workflow/main.yml
+
+jobs:
+  compile-and-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      with:
+          path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+          key: ${{ runner.os }}-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/Cargo.lock') }}
+    - ...
+```
+
+At the moment our `compile-and-test` job is only running on Ubuntu (the
+`runs-on: ubuntu-latest` line), but to ensure good coverage we'd also like to
+run the test suite on Windows and Mac.
+
+You can tell GitHub actions to run the same job using different configurations
+(in this case, on 3 different OSes) with [a job matrix][matrix].
+
+```yaml
+# .github/workflow/main.yml
+
+jobs:
+  compile-and-test:
+    strategy:
+      matrix:
+        os:
+        - ubuntu-latest
+        - macos-latest
+        - windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+    - ...
+```
+
+While we're at it, let's update the matrix to also test against different
+versions of Rust.
+
+```yaml
+# .github/workflow/main.yml
+
+jobs:
+  compile-and-test:
+    strategy:
+      matrix:
+        ...
+        rust:
+        - stable
+        - nightly
+       - 1.52 # Minimum Supported Rust Version
+    steps:
+    - ...
+    - name: Initialize the Rust Toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: ${{ matrix.rust }}
+    - ...
+```
+
+You'll also want to add `${{ matrix.rust }}` to the cache key so we don't try
+using the `stable` cache on a `nightly` build.
+
+## API Docs
+
+You can access the API docs for any released crates by going to the crate's page
+on https://docs.rs/, but that won't work for people wanting to make use of new
+features that haven't been released yet.
+
+Luckily GitHub Pages is free for all public projects, so let's take the pages
+generated by `cargo doc` and host the API docs there.
+
+The core thing we need is a GitHub Action which uploads the contents of a folder
+to GitHub Pages. There are a bunch of these available and you can even do it
+manually using just `git`, but I've had a decent amount of success with
+[`JamesIves/github-pages-deploy-action`][pages].
+
+Next we'll add a second job to our `main.yml` workflow file. Unlike the normal
+integration tests we only need to generate API docs for one OS, so that
+simplifies things.
+
+```yml
+# .github/workflow/main.yml
+
+  api-docs:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ matrix.rust }}-${{ runner.os }}-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/Cargo.lock') }}
+    - name: Initialize the Rust Toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: ${{ matrix.rust }}
+    - name: Generate API Docs
+      uses: actions-rs/cargo@v1
+      with:
+        command: test
+        args: doc --workspace --verbose
+```
+
+You'll see that most of the steps are the same; we check out the repo, load the
+cache, and initialise Rust, The main difference is that instead of using the
+`actions-rs/cargo` action to build the workspace, we just call to `cargo doc`.
+
+This will just generate the API docs, though, and when the run ends all docs
+will be thrown away. We still need to use the
+`JamesIves/github-pages-deploy-action` action to upload the docs, but we'll need
+to be smart and make sure they only get deployed for code on the `master`
+branch. We don't particularly want someone to make a PR to the repo and find
+that they've hijacked our docs. Not limiting the GitHub Pages deploy action to
+`master` also opens you up to the much more likely scenario that you'll upload
+docs for functionality that doesn't exist in `master` yet and confuse a bunch of
+your users.
+
+The `if` property on a step can be used to enable/disable that
+step [based on a condition][yml-if].
+
+```yml
+# .github/workflow/main.yml
+
+  api-docs:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - ...
+    - name: Upload API Docs
+      uses: JamesIves/github-pages-deploy-action@4.1.1
+      if: github.ref == 'refs/heads/master'
+      with:
+        branch: gh-pages
+        folder: target/doc
+```
+
+There's no point providing API docs that people don't know about, so let's
+update the project's README with a link. While we're at it we'll also add a
+badge indicating whether CI is passing for `master` or not (hint: this should
+always be green).
+
+```md
+# Continuous Deployment in Rust
+
+[![Continuous Integration](https://github.com/Michael-F-Bryan/cdir/actions/workflows/main.yml/badge.svg)](https://github.com/Michael-F-Bryan/cdir/actions/workflows/main.yml)
+
+([API Docs](https://michael-f-bryan.github.io/cdir))
+```
+
+## Generating a Release Bundle
+
+Now we've set up the CI part of our CI/CD system let's figure out how to
+generate releases (i.e. the deployment bit). To do this we need something which
+will compile our project and package it up into something someone can download
+and install on their machine.
+
+A common pattern when you need to do non-trivial internal tasks on a Rust
+project is that of [the `cargo xtask`][xtask], first popularised by
+[matklad][matklad] in his work on `rust-analyzer`.
+
+The idea is that you'll create a small Rust program which does your task instead
+of relying on a shell script.
+
+The distinguishing features of `cargo xtask` are:
+
+- It doesn't require any other binaries besides `cargo` and `rustc`, it fully
+  bootstraps from them
+- Unlike `bash`, it can more easily be cross platform, as it doesn't use the
+  shell.
+- You can do tasks which involve a fair amount of complexity or use more than
+  just strings (vectors, hash maps, generics, etc.) without it turning into an
+  unreadable mess
+
+The first step is to add a `xtask` binary to our workspace.
+
+```console
+$ cargo new --bin xtask
+$ cat Cargo.toml
+[workspace]
+members = ["cli", "core", "python", "xtask"]
+```
+
+We also need to add some dependencies, namely `zip` for generating zip archives,
+`structopt` for parsing command-line arguments, and `anyhow` to give us more
+usable error messages.
+
+```console
+$ cd xtask
+$ cargo add zip structopt anyhow
+    Updating 'https://github.com/rust-lang/crates.io-index' index
+      Adding zip v0.5.12 to dependencies
+      Adding structopt v0.3.21 to dependencies
+      Adding anyhow v1.0.40 to dependencies
+```
+
+{{% notice note %}}
+Often your use case will be simple enough that a shell script will suffice for
+this task. If your project falls into this category and you don't feel the extra
+hassle of making a `cargo xtask` is worth it then that's awesome, go with
+whatever makes your life easier.
+
+Unfortunately, `rune` didn't really have this luxury because we wanted to
+include a bunch of extra stuff which required non-trivial preparation or worked
+around subtle platform differences (e.g. the `find` on MacOS behaves differently
+to GNU `find` and MacOS `strip` seemed to choke on our `librune.a`). For us it
+was just nicer to write some Rust which did the work and use crates from
+crates.io instead of system dependencies.
+{{% /notice %}}
+
+
 [rune]: https://github.com/hotg-ai/rune
 [hotg]: https://hotg.ai/
 [workspace]: https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html
@@ -322,3 +652,10 @@ tests/smoke_test.py .                                             [100%]
 [pyo3]: https://crates.io/crates/pyo3
 [maturin]: https://github.com/PyO3/maturin
 [pytest]: https://pytest.org/
+[cache]: https://github.com/actions/cache
+[matrix]: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idstrategy
+[pyo3-user-guide]: https://pyo3.rs/master/index.html#using-rust-from-python
+[pages]: https://github.com/JamesIves/github-pages-deploy-action
+[yml-if]: https://docs.github.com/en/actions/reference/context-and-expression-syntax-for-github-actions
+[matklad]: https://github.com/matklad/
+[xtask]: https://github.com/matklad/cargo-xtask
