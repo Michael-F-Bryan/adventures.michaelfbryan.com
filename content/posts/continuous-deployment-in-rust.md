@@ -6,7 +6,6 @@ tags:
 - Rust
 - GitHub Actions
 - CI/CD
-toc: true
 ---
 
 I'm currently working with [Hammer of the Gods][hotg] on a project [Rune][rune],
@@ -530,12 +529,12 @@ simplifies things.
       uses: actions-rs/toolchain@v1
       with:
         profile: minimal
-        toolchain: ${{ matrix.rust }}
+        toolchain: stable
     - name: Generate API Docs
       uses: actions-rs/cargo@v1
       with:
-        command: test
-        args: doc --workspace --verbose
+        command: doc
+        args: --workspace --verbose
 ```
 
 You'll see that most of the steps are the same; we check out the repo, load the
@@ -618,8 +617,9 @@ members = ["cli", "core", "python", "xtask"]
 ```
 
 We also need to add some dependencies, namely `zip` for generating zip archives,
-`structopt` for parsing command-line arguments, and `anyhow` to give us more
-usable error messages.
+`structopt` for parsing command-line arguments, `once_cell` for lazily computed
+constants, and `anyhow` to give us more usable error messages. While we're at
+it, let's also throw in `log` and `env_logger` so we can see what is happening.
 
 ```console
 $ cd xtask
@@ -627,7 +627,311 @@ $ cargo add zip structopt anyhow
     Updating 'https://github.com/rust-lang/crates.io-index' index
       Adding zip v0.5.12 to dependencies
       Adding structopt v0.3.21 to dependencies
+      Adding once_cell v1.7.2 to dependencies
       Adding anyhow v1.0.40 to dependencies
+      Adding log v0.4.14 to dependencies
+      Adding env_logger v0.8.3 to dependencies
+```
+
+Now we've pulled in some dependencies, let's have a think about what sorts of
+things a release bundle should include. At the bare minimum we'll need to
+include the executable itself, our `README.md` so people know what it does, and
+the license files because copyright is important.
+
+The `xtask` binary is designed to support multiple subcommands so we'll start
+off defining an `enum` and deriving `StructOpt` so it can be automatically
+parsed from the command line arguments.
+
+```rust
+// xtask/src/main.rs
+
+#[derive(Debug, StructOpt)]
+pub enum Cmd {
+    /// Create a release archive.
+    Dist {
+        /// The `cdir` project's root directory.
+        #[structopt(short, long, parse(from_os_str), default_value = &*DEFAULT_PROJECT_ROOT)]
+        project_root: PathBuf,
+    },
+}
+```
+
+We need to know where the project's root directory is because that'll tell us
+the `target/` directory's location and where we should be running commands from.
+However, making users pass that in manually or forcing them to only ever run
+`xtask` from the root directory can be annoying, so we provide a default that
+uses `git` to find the project root for us.
+
+```console
+$ git rev-parse --show-toplevel
+/home/michael/Documents/cdir
+```
+
+This is fairly straightforward to translate to use `std::process::Command`.
+
+```rust
+// xtask/src/main.rs
+
+use anyhow::{Context, Error};
+use std:process::{Command, Stdio};
+use once_cell::sync::Lazy;
+
+static DEFAULT_PROJECT_ROOT: Lazy<String> =
+    Lazy::new(|| git_repo_root().unwrap_or_else(|_| String::from(".")));
+
+fn git_repo_root() -> Result<String, Error> {
+    let output = Command::new("git")
+        .arg("rev-parse")
+        .arg("--show-toplevel")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .context("Unable to execute `git`")?;
+
+    let output = std::str::from_utf8(&output.stdout).context("git returned invalid UTF-8")?;
+
+    Ok(output.trim().to_string())
+}
+```
+
+We are now ready to write our `main()` function
+
+```rust
+// xtask/src/main.rs
+
+fn main() -> Result<(), Error> {
+    env_logger::init();
+    let cmd = Cmd::from_args();
+
+    match cmd {
+        Cmd::Dist { project_root } => dist(project_root)?,
+    }
+
+    Ok(())
+}
+```
+
+The `dist()` function is composed of two phases, compiling the binary and adding
+all the files to a zip archive.
+
+```rust
+// xtask/src/main.rs
+
+use std::path::PathBuf;
+
+fn dist(project_root: PathBuf) -> Result<(), Error> {
+    log::info!("Generating a release bundle");
+
+    compile_cdir_cli(&project_root)?;
+    generate_release_bundle(&project_root)?;
+
+    Ok(())
+}
+```
+
+Compiling the `cdir` CLI tool is handled almost the same way as
+`git rev-parse --show-toplevel`, except we want all the output to print to the
+terminal instead of being captured.
+
+```rust
+// xtask/src/main.rs
+
+use std::path::Path;
+
+fn compile_cdir_cli(project_root: &Path) -> Result<(), Error> {
+    log::debug!("Compiling `cdir-cli`");
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| String::from("cargo"));
+
+    let status = Command::new(cargo)
+        .arg("build")
+        .arg("--release")
+        .arg("--package=cdir-cli")
+        .current_dir(project_root)
+        .status()
+        .context("Unable to start `cargo`")?;
+
+    anyhow::ensure!(status.success(), "Compiling `cdir-cli` failed");
+
+    Ok(())
+}
+```
+
+{{% notice tip %}}
+When writing a program that is intended to be run as a `cargo` subcommand (our
+end goal is to make it usable as `cargo xtask dist`) it's a good idea to check
+the `CARGO` environment variable for the path to the `cargo` binary performing
+the build. I believe that's so you always use the same version of `cargo`
+regardless of where the subcommand runs (e.g. you may have told `rustup` to
+override the version of `cargo` used within a certain directory).
+
+See [*The Cargo Book*][book] for more info.
+
+[book]: https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-3rd-party-subcommands
+{{% /notice %}}
+
+Ideally, when we generate a release bundle it will also include [the target
+triple][triple] it was compiled for. That way users will be able to figure out
+which release bundle to download for their OS.
+
+There are crates which will figure this out for you (e.g.
+[`guess_host_triple`][guess-host]), but the most reliable method is to just use
+[the `TARGET` environment variable][build-env] that `cargo` passes to build
+scripts when they run. From there we can pass it through to the `xtask` crate
+by printing a special `"cargo:rustc-env=TARGET=..."` message.
+
+```rust
+// xtask/build.rs
+
+fn main() {
+    let target = std::env::var("TARGET").unwrap();
+    println!("cargo:rustc-env=TARGET={}", target);
+}
+```
+
+Now we've got the target triple, generating a release bundle is fairly
+straightforward too. First we figure out where to write the bundle to.
+
+```rust
+// xtask/src/main.rs
+
+fn filename(target_dir: &Path) -> PathBuf {
+    target_dir.join(format!("cdir.{}.zip", env!("TARGET")))
+}
+
+fn generate_release_bundle(project_root: &Path) -> Result<(), Error> {
+    let target = project_root.join("target");
+    let filename = filename(&target);
+    log::debug!("Generating a release bundle");
+
+    ...
+}
+```
+
+Then we create a new `ZipWriter` and use a `add_file()` helper to add files to
+our archive.
+
+```rust
+// xtask/src/main.rs
+
+fn generate_release_bundle(project_root: &Path) -> Result<(), Error> {
+    ...
+
+    let f = File::create(&filename)
+        .with_context(|| format!("Unable to open \"{}\" for writing", filename.display()))?;
+
+    let mut writer = ZipWriter::new(f);
+
+    let cdir_cli = target.join("release").join(CDIR_CLI_BINARY);
+    add_file(&mut writer, &cdir_cli)?;
+    add_file(&mut writer, project_root.join("README.md"))?;
+    add_file(&mut writer, project_root.join("LICENSE_MIT.md"))?;
+    add_file(&mut writer, project_root.join("LICENSE_APACHE.md"))?;
+
+    ...
+}
+```
+
+And finally we tell the writer to write out any trailing metadata and flush to
+disk.
+
+```rust
+// xtask/src/main.rs
+
+fn generate_release_bundle(project_root: &Path) -> Result<(), Error> {
+    ...
+
+    writer
+        .finish()
+        .context("Unable to finalize the zipfile")?
+        .flush()
+        .context("Unable to flush to disk")?;
+
+    log::debug!(
+        "The release bundle was written to \"{}\"",
+        filename.display()
+    );
+
+    Ok(())
+}
+```
+
+The `add_file()` helper just copies a file from disk into the `ZipWriter`.
+
+```rust
+// xtask/src/main.rs
+
+fn add_file<W>(w: &mut ZipWriter<W>, filename: impl AsRef<Path>) -> Result<(), Error>
+where
+    W: Write + Seek,
+{
+    let filename = filename.as_ref();
+    let name = filename
+        .file_name()
+        .and_then(|n| n.to_str())
+        .context("The file has no name")?;
+
+    let mut f = File::open(filename)
+        .with_context(|| format!("Unable to open \"{}\" for reading", filename.display()))?;
+
+    w.start_file(name, FileOptions::default())?;
+    let bytes_written = std::io::copy(&mut f, w)?;
+    w.flush()?;
+
+    log::debug!( "Added \"{}\" to the bundle ({} bytes)", filename.display(), bytes_written);
+
+    Ok(())
+}
+```
+
+That should finish off our `xtask dist` subcommand, let's run it in a terminal
+and check out the results.
+
+```console
+$ RUST_LOG=debug cargo run --package xtask -- dist
+   Compiling xtask v0.1.0 (/home/michael/Documents/cdir/xtask)
+    Finished dev [unoptimized + debuginfo] target(s) in 0.48s
+     Running `/home/michael/Documents/cdir/target/debug/xtask dist`
+[2021-06-02T18:23:42Z INFO  xtask] Generating a release bundle
+[2021-06-02T18:23:42Z DEBUG xtask] Compiling `cdir-cli`
+    Finished release [optimized] target(s) in 0.02s
+[2021-06-02T18:23:42Z DEBUG xtask] Generating a release bundle
+[2021-06-02T18:23:44Z DEBUG xtask] Added "/home/michael/Documents/cdir/target/release/cdir-cli" to the bundle (3918968 bytes)
+[2021-06-02T18:23:44Z DEBUG xtask] Added "/home/michael/Documents/cdir/README.md" to the bundle (1315 bytes)
+[2021-06-02T18:23:44Z DEBUG xtask] Added "/home/michael/Documents/cdir/LICENSE_MIT.md" to the bundle (1075 bytes)
+[2021-06-02T18:23:44Z DEBUG xtask] Added "/home/michael/Documents/cdir/LICENSE_APACHE.md" to the bundle (9723 bytes)
+[2021-06-02T18:23:44Z DEBUG xtask] The release bundle was written to "/home/michael/Documents/cdir/target/cdir.x86_64-unknown-linux-gnu.zip"
+```
+
+The `zipinfo` command is also quite handy for inspecting zip archives.
+
+```console
+$ zipinfo target/cdir.x86_64-unknown-linux-gnu.zip
+Archive:  target/cdir.x86_64-unknown-linux-gnu.zip
+Zip file size: 1100780 bytes, number of entries: 4
+-rw-r--r--  4.6 unx  3918968 b- defN 21-Jun-03 02:23 cdir-cli
+-rw-r--r--  4.6 unx     1315 b- defN 21-Jun-03 02:23 README.md
+-rw-r--r--  4.6 unx     1075 b- defN 21-Jun-03 02:23 LICENSE_MIT.md
+-rw-r--r--  4.6 unx     9723 b- defN 21-Jun-03 02:23 LICENSE_APACHE.md
+4 files, 3931081 bytes uncompressed, 1100358 bytes compressed:  72.0%
+```
+
+{{% notice tip %}}
+You may also want to `strip` the generated binary to help decrease the archive
+size even more. I'll leave that as an exercise for the reader.
+{{% /notice %}}
+
+We can make the `xtask` binary even easier to use by creating [a `cargo`
+"alias"][alias].  This will let us run `cargo xtask dist` instead of needing to
+use `cargo run` inside the `xtask/` directory or manually specify which package
+it belongs to (`cargo run --package xtask -- dist`).
+
+All we need to do is add it to our `config.toml`.
+
+```toml
+# .cargo/config.toml
+
+[alias]
+xtask = "run --package xtask --"
 ```
 
 {{% notice note %}}
@@ -659,3 +963,7 @@ crates.io instead of system dependencies.
 [yml-if]: https://docs.github.com/en/actions/reference/context-and-expression-syntax-for-github-actions
 [matklad]: https://github.com/matklad/
 [xtask]: https://github.com/matklad/cargo-xtask
+[guess-host]: https://crates.io/crates/guess_host_triple
+[triple]: https://doc.rust-lang.org/cargo/appendix/glossary.html#target
+[build-env]: https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-build-scripts
+[alias]: https://doc.rust-lang.org/cargo/reference/config.html#alias
