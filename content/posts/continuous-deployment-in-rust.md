@@ -40,6 +40,14 @@ testing) and Continuous Deployment (automated releases) which will:
 - Publish new releases to GitHub Actions with pre-compiled binaries whenever
   a new tag is created
 
+Normally you'll create a template repository for this (or more likely, find one
+online) and not make anything other than a couple tweaks. I'm not a big fan of
+throwing code at someone and expecting them to blindly use it, so I'll be
+walking you through the thought process that goes into building a
+production-ready CI/CD system. It takes a bit longer and requires the reader to
+do some thinking, but that way you come out of it with a better understanding of
+how these things work.
+
 {{% notice note %}}
 The code written in this article is available [on GitHub][repo]. Feel free to
 browse through and steal code or inspiration.
@@ -948,6 +956,33 @@ was just nicer to write some Rust which did the work and use crates from
 crates.io instead of system dependencies.
 {{% /notice %}}
 
+## Nightly Builds
+
+Okay, so we've got this cool new `cargo xtask dist` command for generating
+release bundles, but you don't want to be manually running that every time and
+uploading the generated files to GitHub. That's where automation comes in.
+
+GitHub Actions has a feature called [*Scheduled Events*][scheduled] which will
+run a workflow based on a set interval. If we combine this with an action which
+creates and updates a GitHub Release we should be able to get "nightly" builds
+for free.
+
+```yml
+
+```
+
+<!--
+    - Generate nightly builds of the CLI tool and Python bindings
+    - Use GitHub Actions to push the nightly builds to GitHub Releases whenever
+      the code changed
+-->
+
+## Published Releases
+
+<!-- Publish new releases to GitHub Actions with pre-compiled binaries whenever
+  a new tag is created -->
+
+## Conclusions
 
 [rune]: https://github.com/hotg-ai/rune
 [hotg]: https://hotg.ai/
@@ -967,3 +1002,4 @@ crates.io instead of system dependencies.
 [triple]: https://doc.rust-lang.org/cargo/appendix/glossary.html#target
 [build-env]: https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-build-scripts
 [alias]: https://doc.rust-lang.org/cargo/reference/config.html#alias
+[scheduled]: https://docs.github.com/en/actions/reference/events-that-trigger-workflows#scheduled-events
