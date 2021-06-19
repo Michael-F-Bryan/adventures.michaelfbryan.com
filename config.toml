@@ -10,7 +10,7 @@ googleAnalytics = "UA-78714693-3"
 enableGitInfo = true
 enableEmoji = true
 
-pygmentsstyle = "friendly"
+pygmentsStyle = "monokai"
 pygmentscodefences = true
 pygmentscodefencesguesssyntax = true
 
