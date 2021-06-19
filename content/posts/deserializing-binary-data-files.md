@@ -15,10 +15,10 @@ instead they just got the definition for a C struct.
 A common method for "serializing" data in C is to create a struct and directly
 write its bytes into a file, the "deserializing" is just a case of reading the
 data out of the file and interpreting it as your type. This technique is
-actually kinda genius when you think about it, it's the definition of zero-copy
-because the OS's `read()` function will literally write your data to its
-destination, and there are no extra dependencies or complicated serialization
-frameworks involved.
+actually kinda genius when you think about it, it makes no intermediate copies
+or heap allocations because the OS's `read()` function will literally write your
+data to its destination, and there are no extra dependencies or complicated
+serialization frameworks involved.
 
 I'm not going to go into this technique's drawbacks (of which there are many...
 there *is* a reason we use things like [JSON][json] and [Protocol Buffers][pb]
