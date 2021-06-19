@@ -1,5 +1,5 @@
 ---
-title: "Deserialising Binary Data Files in Rust"
+title: "Deserializing Binary Data Files in Rust"
 date: "2021-06-20T00:30:00+08:00"
 tags:
 - Rust
@@ -12,12 +12,12 @@ wanting to load it into a Rust program, but when asked what format the data was
 in the author didn't provide some something like a JSON schema or Protobuf file,
 instead they just got the definition for a C struct.
 
-A common method for "serialising" data in C is to create a struct and directly
+A common method for "serializing" data in C is to create a struct and directly
 write its bytes into a file, the "deserializing" is just a case of reading the
 data out of the file and interpreting it as your type. This technique is
 actually kinda genius when you think about it, it's the definition of zero-copy
 because the OS's `read()` function will literally write your data to its
-destination, and there are no extra dependencies or complicated serialisation
+destination, and there are no extra dependencies or complicated serialization
 frameworks involved.
 
 I'm not going to go into this format's drawbacks (there *is* a reason we use
@@ -32,7 +32,7 @@ I'll be approaching the problem from the perspective of someone who:
   (i.e. we know the files are in the right format and people won't be providing
   malicious input)
 - It's okay if the tool crashes - nobody will die, your servers won't be hacked,
-  and if push comes to shove we can always open a hex editor and deserialise the
+  and if push comes to shove we can always open a hex editor and deserialize the
   data by hand
 - Just wants a quick-and-dirty solution to their problem
 
@@ -424,7 +424,7 @@ mod tests {
 }
 ```
 
-Now we can write a test which deserialises our *Joseph Blogs* speaker's
+Now we can write a test which deserializes our *Joseph Blogs* speaker's
 information and compares it to what the C code generated.
 
 ```rust
@@ -485,7 +485,7 @@ Most binary formats don't care about these padding bytes because they want files
 to be as compact as possible, so it's not uncommon to see a `#[repr(packed)]`
 (or its C cousin, `__attribute__((__packed__))` on GCC and
 `__attribute__((packed))` on Clang) next to struct definitions when they are
-using this direct reading/writing method of serialising data.
+using this direct reading/writing method of serializing data.
 
 We get lucky here because the `flags` field is at offset 202 (which is a
 multiple of 2 bytes) so we didn't need to do anything special, but it's still
@@ -496,7 +496,7 @@ good to know. It may also help explain why you'll often see random fields named
 
 It's not something you'll need to (or want to) use too often, but knowing how to
 read/write data directly to some file without needing any complicated
-serialisation frameworks might be something you'll use some day.
+serialization frameworks might be something you'll use some day.
 
 That said, there are a lot of better alternatives out there, with most of them
 allowing you to write code that has similar performance characteristics with no
