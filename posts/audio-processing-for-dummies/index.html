@@ -1,0 +1,519 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta http-equiv=content-language content="en"><meta name=author content="Michael-F-Bryan"><meta name=description content="In my spare time I&rsquo;m an emergency services volunteer, and one of the tasks our unit has is to run the radio network and keep track of what&rsquo;s happening. This can be a pretty stressful job, especially when there&rsquo;s lots of radio traffic, and it&rsquo;s not unusual to miss words or entire transmissions.
+To help with a personal project that could make the job easier I&rsquo;d like to implement a basic component of audio processing, the Noise Gate."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="Audio Processing for Dummies"><meta name=twitter:description content="In my spare time I&rsquo;m an emergency services volunteer, and one of the tasks our unit has is to run the radio network and keep track of what&rsquo;s happening. This can be a pretty stressful job, especially when there&rsquo;s lots of radio traffic, and it&rsquo;s not unusual to miss words or entire transmissions.
+To help with a personal project that could make the job easier I&rsquo;d like to implement a basic component of audio processing, the Noise Gate."><meta property="og:title" content="Audio Processing for Dummies"><meta property="og:description" content="In my spare time I&rsquo;m an emergency services volunteer, and one of the tasks our unit has is to run the radio network and keep track of what&rsquo;s happening. This can be a pretty stressful job, especially when there&rsquo;s lots of radio traffic, and it&rsquo;s not unusual to miss words or entire transmissions.
+To help with a personal project that could make the job easier I&rsquo;d like to implement a basic component of audio processing, the Noise Gate."><meta property="og:type" content="article"><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/audio-processing-for-dummies/"><meta property="article:section" content="posts"><meta property="article:published_time" content="2019-10-27T23:34:00+08:00"><meta property="article:modified_time" content="2021-06-20T07:54:53+08:00"><title>Audio Processing for Dummies · Michael-F-Bryan</title><link rel=canonical href=https://adventures.michaelfbryan.com/posts/audio-processing-for-dummies/><link rel=preload href="/fonts/forkawesome-webfont.woff2?v=1.1.7" as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.ec198d25949ddd79a670b1ead43ca88e0bc2c1343266d0df0a9eeb7f3f207777.css integrity="sha256-7BmNJZSd3XmmcLHq1DyojgvCwTQyZtDfCp7rfz8gd3c=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.89c82b6022b96f77aeb521b240daec4f87ea029d84d1c78b8acd0735b91b3c92.css integrity="sha256-icgrYCK5b3eutSGyQNrsT4fqAp2E0ceLis0HNbkbPJI=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.css><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><meta name=generator content="Hugo 0.84.0"></head><body class=colorscheme-auto><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=/>Michael-F-Bryan</a>
+<input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title>Audio Processing for Dummies</h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa fa-calendar" aria-hidden=true></i>
+<time datetime=2019-10-27T23:34:00+08:00>October 27, 2019</time></span>
+<span class=reading-time><i class="fa fa-clock-o" aria-hidden=true></i>
+13-minute read</span></div><div class=tags><i class="fa fa-tag" aria-hidden=true></i>
+<a href=/tags/rust/>Rust</a>
+<span class=separator>•</span>
+<a href=/tags/audio/>audio</a></div></div></header><div><p>In my spare time I&rsquo;m an emergency services volunteer, and one of the tasks our
+unit has is to run the radio network and keep track of what&rsquo;s happening. This
+can be a pretty stressful job, especially when there&rsquo;s lots of radio traffic,
+and it&rsquo;s not unusual to miss words or entire transmissions.</p><p>To help with a personal project that could make the job easier I&rsquo;d like to
+implement a basic component of audio processing, the <a href=https://en.wikipedia.org/wiki/Noise_gate>Noise Gate</a>.</p><p>The basic idea is to scan through an audio stream and split it into individual
+clips based on volume, similar to the algorithm mentioned <a href="https://rust-audio.discourse.group/t/splitting-an-audio-stream-based-on-volume-silence/171?u=michael-f-bryan">on this Rust Audio
+discourse thread</a>.</p><div class="notices note"><p>The code written in this article is available <a href=https://github.com/Michael-F-Bryan/noise-gate>on GitHub</a>. Feel free to
+browse through and steal code or inspiration. It&rsquo;s also been published as a
+crate <a href=crates.io/crates/noise-gate>on crates.io</a>.</p><p>If you found this useful or spotted a bug, let me know on the blog&rsquo;s
+<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com>issue tracker</a>!</p></div><h2 id=what-even-is-audio>What Even Is Audio?
+<a class=heading-link href=#what-even-is-audio><i class="fa fa-link" aria-hidden=true></i></a></h2><p>We&rsquo;ve all consumed audio media at some point, but have you ever stopped and
+wondered how it works under the hood?</p><p>At its core, audio works by rapidly reading the volume level (a &ldquo;sample&rdquo;),
+typically 44,100 times per second (44.1 kHz is called the <a href=https://en.wikipedia.org/wiki/Sampling_(signal_processing)#Sampling_rate><em>Sample
+Rate</em></a>). These samples are then encoded using <a href=https://en.wikipedia.org/wiki/Pulse-code_modulation><em>Pulse Code
+Modulation</em></a>.</p><p>According to Wikipedia:</p><blockquote><p>Pulse-code modulation (PCM) is a method used to digitally represent sampled
+analog signals. It is the standard form of digital audio in computers,
+compact discs, digital telephony and other digital audio applications. In a
+PCM stream, the amplitude of the analog signal is sampled regularly at
+uniform intervals, and each sample is quantized to the nearest value within a
+range of digital steps.</p></blockquote><div class="notices tip"><p>If it helps, a sample can be thought of as how far a speaker/microphone&rsquo;s
+membrane is deflected at a particular point in time.</p></div><p>It&rsquo;s not uncommon to record multiple audio tracks at a time, for example
+imagine multiple microphones were used to provide a sense of
+direction/perspective (see <a href=https://en.wikipedia.org/wiki/Sound_localization>Sound Localisation</a> for more). These multiple
+tracks are usually referred to as <em>Channels</em>.</p><p><strong>TL;DR:</strong> In Rust lingo, you can think of an audio stream as:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#66d9ef>type</span> <span style=color:#a6e22e>AudioStream</span> <span style=color:#f92672>=</span> Vec<span style=color:#f92672>&lt;</span>Frame<span style=color:#f92672>&gt;</span>;
+<span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Frame</span> <span style=color:#f92672>=</span> [Sample; N]; <span style=color:#75715e>// where `N` is the number of channels in the stream
+</span><span style=color:#75715e></span><span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Sample</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>i16</span> <span style=color:#f92672>|</span> <span style=color:#66d9ef>f32</span>;
+</code></pre></div><p>The audio formats you are used to (MP3, WAV, OGG) are just different ways to
+store an <code>AudioStream</code> on disk, along with some metadata describing the audio
+(artist, year, etc.), typically using tricks like compression or <a href=https://en.wikipedia.org/wiki/Delta_encoding>Delta
+Encoding</a> to make the resulting file as small as possible.</p><p>If you&rsquo;re wondering why compression is important, these are the numbers for a
+simple uncompressed audio stream with:</p><ul><li>30 seconds of audio</li><li>44.1 kHz sample rate</li><li>2 channels (e.g. left and right speaker)</li><li>bit depth of 16 (i.e. the samples are <code>i16</code>)</li></ul><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-text data-lang=text>sizeof(Sample) = 2 bytes
+sizeof(Frame) = 2 * sizeof(Sample) = 4 bytes
+sizeof(1 second) = sizeof(Frame) * 44100 = 176400 bytes
+full clip = 30 * sizeof(1 second) = 5292000 bytes = 5.3 MB
+</code></pre></div><p>&mldr; That&rsquo;s a lot of data!</p><h2 id=finding-sample-data>Finding Sample Data
+<a class=heading-link href=#finding-sample-data><i class="fa fa-link" aria-hidden=true></i></a></h2><p>If we want to implement a noise gate we&rsquo;re going to need some sample clips to
+test it on.</p><p>I&rsquo;ve found the Air Traffic Controller recordings from <a href=https://www.liveatc.net/recordings.php>LiveATC.net</a> are
+reasonably similar to my target, with the added bonus that they&rsquo;re publicly
+available.</p><p>One example:</p><audio controls><source src=a-turtle-of-an-issue.mp3 type=audio/mp3>Your browser does not support the audio tag.</audio><p>Our end goal is to create a library that can break audio streams up into
+chunks based on volume without caring where the audio originally came from
+(MP3 file, microphone, another function, etc.). We&rsquo;ll start by using <a href=https://en.wikipedia.org/wiki/WAV>the WAV
+format</a> because it&rsquo;s simple and a really good crate (<a href=https://crates.io/crates/hound>hound</a>)
+already exists for working with WAV files.</p><p>You can download the sample clip and convert it to WAV using <code>ffmpeg</code>:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ mkdir -p tests/data
+$ curl &#34;https://forums.liveatc.net/index.php?action=dlattach;topic=15455.0;attach=10441&#34; &gt; a-turtle-of-an-issue.mp3
+$ ffmpeg -i a-turtle-of-an-issue.mp3 -ac 1 a-turtle-of-an-issue.wav
+</code></pre></div><h2 id=implementing-the-noise-gate-algorithm>Implementing the Noise Gate Algorithm
+<a class=heading-link href=#implementing-the-noise-gate-algorithm><i class="fa fa-link" aria-hidden=true></i></a></h2><p>For now, our <em>Noise Gate</em> will have two knobs for tweaking its behaviour:</p><ul><li><code>open_threshold</code> - the (absolute) noise value above which the gate should open</li><li><code>release_time</code> - how long to hold the gate open after dropping below the
+<code>open_threshold</code>. This will manifest itself as the gate being in a sort of
+half-open state for the next <code>release_time</code> samples, where new samples
+above the <code>open_threshold</code> will re-open the gate.</li></ul><p>The awesome thing about this algorithm is that it can be represented using a
+simple state machine.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>State</span> {
+    Open,
+    Closing { remaining_samples: <span style=color:#66d9ef>usize</span> },
+    Closed,
+}
+</code></pre></div><p>Our state machine diagram looks roughly like this:</p><div class=mermaid align=center>graph TD;
+linkStyle default interpolate basis;
+Open[Open];
+Closing(Closing);
+Open-- below threshold -->Closing;
+Open-- above threshold -->Open;
+Closing-- above threshold -->Open;
+Closing-- remaining_samples = 0 -->Closed;
+Closing-- remaining_samples > 0 -->Closing;
+Closed-- above threshold -->Open;
+Closed-- below threshold -->Closed;</div><p>We&rsquo;ll be using some abstractions, namely <a href=https://docs.rs/sample/latest/sample/frame/trait.Frame.html><code>Frame</code></a> and
+<a href=https://docs.rs/sample/latest/sample/trait.Sample.html><code>Sample</code></a> from the <a href=https://crates.io/crates/sample><code>sample</code> crate</a>, to make the
+<em>Noise Gate</em> work with multiple channels and any type of audio input.</p><p>Let&rsquo;s define a helper which will take a <code>Frame</code> of audio input and tell us
+whether all audio channels are below a certain threshold.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>use</span> sample::{Frame, SignedSample};
+
+<span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>below_threshold</span><span style=color:#f92672>&lt;</span>F<span style=color:#f92672>&gt;</span>(frame: <span style=color:#a6e22e>F</span>, threshold: <span style=color:#a6e22e>F</span>::Sample) -&gt; <span style=color:#66d9ef>bool</span>
+<span style=color:#a6e22e>where</span>
+    F: <span style=color:#a6e22e>Frame</span>,
+{
+    <span style=color:#66d9ef>let</span> threshold <span style=color:#f92672>=</span> abs(threshold.to_signed_sample());
+
+    frame
+        .channels()
+        .map(<span style=color:#f92672>|</span>sample<span style=color:#f92672>|</span> sample.to_signed_sample())
+        .map(abs)
+        .all(<span style=color:#f92672>|</span>sample<span style=color:#f92672>|</span> sample <span style=color:#f92672>&lt;</span> threshold)
+}
+
+<span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>abs</span><span style=color:#f92672>&lt;</span>S: <span style=color:#a6e22e>SignedSample</span><span style=color:#f92672>&gt;</span>(sample: <span style=color:#a6e22e>S</span>) -&gt; <span style=color:#a6e22e>S</span> {
+    <span style=color:#66d9ef>let</span> zero <span style=color:#f92672>=</span> S::equilibrium();
+    <span style=color:#66d9ef>if</span> sample <span style=color:#f92672>&gt;=</span> zero {
+        sample
+    } <span style=color:#66d9ef>else</span> {
+        <span style=color:#f92672>-</span>sample
+    }
+}
+</code></pre></div><p>The <code>State</code> transitions are done using one big <code>match</code> statement and are almost
+a direct translation of the previous state machine diagram.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>next_state</span><span style=color:#f92672>&lt;</span>F: <span style=color:#a6e22e>Frame</span><span style=color:#f92672>&gt;</span>(
+    state: <span style=color:#a6e22e>State</span>,
+    frame: <span style=color:#a6e22e>F</span>,
+    open_threshold: <span style=color:#a6e22e>F</span>::Sample,
+    release_time: <span style=color:#66d9ef>usize</span>,
+) -&gt; <span style=color:#a6e22e>State</span> {
+    <span style=color:#66d9ef>match</span> state {
+        State::Open <span style=color:#f92672>=&gt;</span> {
+            <span style=color:#66d9ef>if</span> below_threshold(frame, open_threshold) {
+                State::Closing {
+                    remaining_samples: <span style=color:#a6e22e>release_time</span>,
+                }
+            } <span style=color:#66d9ef>else</span> {
+                State::Open
+            }
+        }
+
+        State::Closing { remaining_samples } <span style=color:#f92672>=&gt;</span> {
+            <span style=color:#66d9ef>if</span> below_threshold(frame, open_threshold) {
+                <span style=color:#66d9ef>if</span> remaining_samples <span style=color:#f92672>==</span> <span style=color:#ae81ff>0</span> {
+                    State::Closed
+                } <span style=color:#66d9ef>else</span> {
+                    State::Closing {
+                        remaining_samples: <span style=color:#a6e22e>remaining_samples</span> <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>,
+                    }
+                }
+            } <span style=color:#66d9ef>else</span> {
+                State::Open
+            }
+        }
+
+        State::Closed <span style=color:#f92672>=&gt;</span> {
+            <span style=color:#66d9ef>if</span> below_threshold(frame, open_threshold) {
+                State::Closed
+            } <span style=color:#66d9ef>else</span> {
+                State::Open
+            }
+        }
+    }
+}
+</code></pre></div><p>There&rsquo;s a bit more rightward drift here than I&rsquo;d like, but the function itself
+is quite self-contained and readable enough.</p><p>That said, as a sanity check it&rsquo;s a good idea to write some tests exercising
+each state machine transition.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#[cfg(test)]</span>
+<span style=color:#66d9ef>mod</span> tests {
+    <span style=color:#66d9ef>use</span> <span style=color:#66d9ef>super</span>::<span style=color:#f92672>*</span>;
+
+    <span style=color:#66d9ef>const</span> OPEN_THRESHOLD: <span style=color:#66d9ef>i16</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>100</span>;
+    <span style=color:#66d9ef>const</span> RELEASE_TIME: <span style=color:#66d9ef>usize</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>5</span>;
+
+    test_state_transition<span style=color:#f92672>!</span>(open_to_open: <span style=color:#a6e22e>State</span>::Open, <span style=color:#ae81ff>101</span> <span style=color:#f92672>=&gt;</span> State::Open);
+    test_state_transition<span style=color:#f92672>!</span>(open_to_closing: <span style=color:#a6e22e>State</span>::Open, <span style=color:#ae81ff>40</span> <span style=color:#f92672>=&gt;</span> State::Closing { remaining_samples: <span style=color:#a6e22e>RELEASE_TIME</span> });
+    test_state_transition<span style=color:#f92672>!</span>(closing_to_closed: <span style=color:#a6e22e>State</span>::Closing { remaining_samples: <span style=color:#ae81ff>0</span> }, <span style=color:#ae81ff>40</span> <span style=color:#f92672>=&gt;</span> State::Closed);
+    test_state_transition<span style=color:#f92672>!</span>(closing_to_closing: <span style=color:#a6e22e>State</span>::Closing { remaining_samples: <span style=color:#ae81ff>1</span> }, <span style=color:#ae81ff>40</span> <span style=color:#f92672>=&gt;</span> State::Closing { remaining_samples: <span style=color:#ae81ff>0</span> });
+    test_state_transition<span style=color:#f92672>!</span>(reopen_when_closing: <span style=color:#a6e22e>State</span>::Closing { remaining_samples: <span style=color:#ae81ff>1</span> }, <span style=color:#ae81ff>101</span> <span style=color:#f92672>=&gt;</span> State::Open);
+    test_state_transition<span style=color:#f92672>!</span>(closed_to_closed: <span style=color:#a6e22e>State</span>::Closed, <span style=color:#ae81ff>40</span> <span style=color:#f92672>=&gt;</span> State::Closed);
+    test_state_transition<span style=color:#f92672>!</span>(closed_to_open: <span style=color:#a6e22e>State</span>::Closed, <span style=color:#ae81ff>101</span> <span style=color:#f92672>=&gt;</span> State::Open);
+}
+</code></pre></div><div class="notices tip"><p>When writing these sorts of tests you&rsquo;ll probably want to minimise boilerplate
+by pulling the testing code out into a macro. That way you just need to write
+to case being tested, inputs, and expected outputs, and the macro will do the
+rest.</p><p>This is the definition for <code>test_state_transition!()</code>:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust>macro_rules<span style=color:#f92672>!</span> test_state_transition {
+    (<span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span>, <span style=color:#75715e>$from</span>:<span style=color:#a6e22e>expr</span>, <span style=color:#75715e>$sample</span>:<span style=color:#a6e22e>expr</span> <span style=color:#f92672>=&gt;</span> <span style=color:#75715e>$expected</span>:<span style=color:#a6e22e>expr</span>) <span style=color:#f92672>=&gt;</span> {
+        <span style=color:#75715e>#[test]</span>
+        <span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>() {
+            <span style=color:#66d9ef>let</span> start: <span style=color:#a6e22e>State</span> <span style=color:#f92672>=</span> <span style=color:#75715e>$from</span>;
+            <span style=color:#66d9ef>let</span> expected: <span style=color:#a6e22e>State</span> <span style=color:#f92672>=</span> <span style=color:#75715e>$expected</span>;
+            <span style=color:#66d9ef>let</span> frame: [<span style=color:#66d9ef>i16</span>; <span style=color:#ae81ff>1</span>] <span style=color:#f92672>=</span> [<span style=color:#75715e>$sample</span>];
+
+            <span style=color:#66d9ef>let</span> got <span style=color:#f92672>=</span> next_state(start, frame, OPEN_THRESHOLD, RELEASE_TIME);
+
+            assert_eq<span style=color:#f92672>!</span>(got, expected);
+        }
+    };
+}
+</code></pre></div></div><p>To implement the <em>Noise Gate</em>, we&rsquo;ll wrap our state and configuration into a
+single <code>NoiseGate</code> struct.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>NoiseGate</span><span style=color:#f92672>&lt;</span>S<span style=color:#f92672>&gt;</span> {
+    <span style=color:#e6db74>/// The volume level at which the gate will open (begin recording).
+</span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> open_threshold: <span style=color:#a6e22e>S</span>,
+    <span style=color:#e6db74>/// The amount of time (in samples) the gate takes to go from open to fully
+</span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// closed.
+</span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> release_time: <span style=color:#66d9ef>usize</span>,
+    state: <span style=color:#a6e22e>State</span>,
+}
+
+<span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>S<span style=color:#f92672>&gt;</span> NoiseGate<span style=color:#f92672>&lt;</span>S<span style=color:#f92672>&gt;</span> {
+    <span style=color:#e6db74>/// Create a new [`NoiseGate`].
+</span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new</span>(open_threshold: <span style=color:#a6e22e>S</span>, release_time: <span style=color:#66d9ef>usize</span>) -&gt; <span style=color:#a6e22e>Self</span> {
+        NoiseGate {
+            open_threshold,
+            release_time,
+            state: <span style=color:#a6e22e>State</span>::Closed,
+        }
+    }
+
+    <span style=color:#e6db74>/// Is the gate currently passing samples through to the [`Sink`]?
+</span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>is_open</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>bool</span> {
+        <span style=color:#66d9ef>match</span> self.state {
+            State::Open <span style=color:#f92672>|</span> State::Closing { .. } <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>true</span>,
+            State::Closed <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>false</span>,
+        }
+    }
+
+    <span style=color:#e6db74>/// Is the gate currently ignoring silence?
+</span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>is_closed</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>bool</span> {
+        <span style=color:#f92672>!</span>self.is_open()
+    }
+}
+</code></pre></div><p>We&rsquo;ll need to declare a <code>Sink</code> trait that can be implemented by consumers of
+our <em>Noise Gate</em> in the next step.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> Sink<span style=color:#f92672>&lt;</span>F<span style=color:#f92672>&gt;</span> {
+    <span style=color:#e6db74>/// Add a frame to the current recording, starting a new recording if
+</span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// necessary.
+</span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>record</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, frame: <span style=color:#a6e22e>F</span>);
+    <span style=color:#e6db74>/// Reached the end of the samples, do necessary cleanup (e.g. flush to disk).
+</span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>end_of_transmission</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self);
+}
+</code></pre></div><p>Processing frames is just a case of iterating over each frame, updating the
+state, and checking whether we need to pass the frame through to the <code>Sink</code> or
+detect an <code>end_of_transmission</code>.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>S: <span style=color:#a6e22e>Sample</span><span style=color:#f92672>&gt;</span> NoiseGate<span style=color:#f92672>&lt;</span>S<span style=color:#f92672>&gt;</span> {
+    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>process_frames</span><span style=color:#f92672>&lt;</span>K, F<span style=color:#f92672>&gt;</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, frames: <span style=color:#66d9ef>&amp;</span>[F], sink: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> K)
+    <span style=color:#66d9ef>where</span>
+        F: <span style=color:#a6e22e>Frame</span><span style=color:#f92672>&lt;</span>Sample <span style=color:#f92672>=</span> S<span style=color:#f92672>&gt;</span>,
+        K: <span style=color:#a6e22e>Sink</span><span style=color:#f92672>&lt;</span>F<span style=color:#f92672>&gt;</span>,
+    {
+        <span style=color:#66d9ef>for</span> <span style=color:#f92672>&amp;</span>frame <span style=color:#66d9ef>in</span> frames {
+            <span style=color:#66d9ef>let</span> previously_open <span style=color:#f92672>=</span> self.is_open();
+
+            self.state <span style=color:#f92672>=</span> next_state(self.state, frame, self.open_threshold, self.release_time);
+
+            <span style=color:#66d9ef>if</span> self.is_open() {
+                sink.record(frame);
+            } <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span> previously_open {
+                <span style=color:#75715e>// the gate was previously open and has just closed
+</span><span style=color:#75715e></span>                sink.end_of_transmission();
+            }
+        }
+    }
+}
+</code></pre></div><h2 id=measuring-performance>Measuring Performance
+<a class=heading-link href=#measuring-performance><i class="fa fa-link" aria-hidden=true></i></a></h2><p>If we want to use the <code>NoiseGate</code> in realtime applications we&rsquo;ll need to make
+sure it can handle typical sample rates.</p><p>I don&rsquo;t expect our algorithm to add much in terms of a performance overhead, but
+it&rsquo;s always a good idea to check.</p><p>The gold standard for benchmarking in Rust is <a href=https://github.com/bheisler/criterion.rs>criterion</a>, so let&rsquo;s
+add that as a dev dependency.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-toml data-lang=toml><span style=color:#75715e># Cargo.toml</span>
+
+[<span style=color:#a6e22e>dev-dependencies</span>]
+<span style=color:#a6e22e>criterion</span> = <span style=color:#e6db74>&#34;0.3&#34;</span>
+
+[[<span style=color:#a6e22e>bench</span>]]
+<span style=color:#a6e22e>name</span> = <span style=color:#e6db74>&#34;throughput&#34;</span>
+<span style=color:#a6e22e>harness</span> = <span style=color:#66d9ef>false</span>
+</code></pre></div><p>We&rsquo;ll need a <code>Sink</code> implementation which will add as little overhead as
+possible without being completely optimised out by the compiler.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// benches/throughput.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Counter</span> {
+    samples: <span style=color:#66d9ef>usize</span>,
+    chunks: <span style=color:#66d9ef>usize</span>,
+}
+
+<span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>F<span style=color:#f92672>&gt;</span> Sink<span style=color:#f92672>&lt;</span>F<span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> Counter {
+    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>record</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, _: <span style=color:#a6e22e>F</span>) {
+        self.samples <span style=color:#f92672>+=</span> criterion::black_box(<span style=color:#ae81ff>1</span>);
+    }
+
+    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>end_of_transmission</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) {
+        self.chunks <span style=color:#f92672>+=</span> criterion::black_box(<span style=color:#ae81ff>1</span>);
+    }
+}
+</code></pre></div><p>We&rsquo;ve already downloaded a handful of example WAV files to the <code>data/</code>
+directory, so we can register a new benchmark group (a group of related
+benchmarks which should be graphed together) and register a benchmark for every
+WAV file in the <code>data/</code> directory.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// benches/throughput.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>const</span> DATA_DIR: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span> <span style=color:#f92672>=</span> concat<span style=color:#f92672>!</span>(env<span style=color:#f92672>!</span>(<span style=color:#e6db74>&#34;CARGO_MANIFEST_DIR&#34;</span>), <span style=color:#e6db74>&#34;/data/&#34;</span>);
+
+<span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>bench_throughput</span>(c: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Criterion) {
+    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> group <span style=color:#f92672>=</span> c.benchmark_group(<span style=color:#e6db74>&#34;throughput&#34;</span>);
+
+    <span style=color:#66d9ef>for</span> entry <span style=color:#66d9ef>in</span> fs::read_dir(DATA_DIR).unwrap() {
+        <span style=color:#66d9ef>let</span> entry <span style=color:#f92672>=</span> entry.unwrap();
+        <span style=color:#66d9ef>let</span> path <span style=color:#f92672>=</span> entry.path();
+
+        <span style=color:#66d9ef>if</span> path.is_file() {
+            <span style=color:#66d9ef>let</span> name <span style=color:#f92672>=</span> path.file_stem().unwrap().to_str().unwrap();
+            add_benchmark(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> group, name, <span style=color:#f92672>&amp;</span>path);
+        }
+    }
+}
+</code></pre></div><p>The setup work for each WAV file benchmark is non-trivial, so we&rsquo;ve pulled it
+out into its own function. To set things up we&rsquo;ll use <a href=https://crates.io/crates/hound><code>hound</code></a> to read
+the entire audio clip into a <code>Vec&lt;[i16; 1]></code> in memory and guess a reasonable
+<code>release_time</code> and <code>noise_threshold</code>.</p><p>Then it&rsquo;s just a case of telling the <code>BenchmarkGroup</code> how many samples we&rsquo;re
+working with (throughput) and processing the frames.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// benches/throughput.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>add_benchmark</span>(
+    group: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> BenchmarkGroup<span style=color:#f92672>&lt;</span>WallTime<span style=color:#f92672>&gt;</span>,
+    name: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>,
+    path: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Path</span>,
+) {
+    <span style=color:#66d9ef>let</span> reader <span style=color:#f92672>=</span> WavReader::open(path).unwrap();
+
+    <span style=color:#66d9ef>let</span> desc <span style=color:#f92672>=</span> reader.spec();
+    assert_eq<span style=color:#f92672>!</span>(desc.channels, <span style=color:#ae81ff>1</span>, <span style=color:#e6db74>&#34;We&#39;ve hard-coded frames to be [i16; 1]&#34;</span>);
+    <span style=color:#66d9ef>let</span> release_time <span style=color:#f92672>=</span> <span style=color:#ae81ff>2</span> <span style=color:#f92672>*</span> desc.sample_rate <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>usize</span>;
+
+    <span style=color:#66d9ef>let</span> samples <span style=color:#f92672>=</span> reader
+        .into_samples::<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>i16</span><span style=color:#f92672>&gt;</span>()
+        .map(<span style=color:#f92672>|</span>s<span style=color:#f92672>|</span> [s.unwrap()])
+        .collect::<span style=color:#f92672>&lt;</span>Vec<span style=color:#f92672>&lt;</span>_<span style=color:#f92672>&gt;&gt;</span>();
+
+    <span style=color:#66d9ef>let</span> noise_threshold <span style=color:#f92672>=</span> average(<span style=color:#f92672>&amp;</span>samples);
+
+    group
+        .throughput(Throughput::Elements(samples.len() <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>u64</span>))
+        .bench_function(name, <span style=color:#f92672>|</span>b<span style=color:#f92672>|</span> {
+            b.iter(<span style=color:#f92672>||</span> {
+                <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> counter <span style=color:#f92672>=</span> Counter::default();
+                <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> gate <span style=color:#f92672>=</span> NoiseGate::new(noise_threshold, release_time);
+                gate.process_frames(<span style=color:#f92672>&amp;</span>samples, <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> counter);
+            });
+        });
+}
+
+<span style=color:#e6db74>/// A fancy way to add up all the channels in all the frames and get the average
+</span><span style=color:#e6db74>/// sample value.
+</span><span style=color:#e6db74></span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>average</span><span style=color:#f92672>&lt;</span>F<span style=color:#f92672>&gt;</span>(samples: <span style=color:#66d9ef>&amp;</span>[F]) -&gt; <span style=color:#a6e22e>F</span>::Sample
+<span style=color:#66d9ef>where</span>
+    F: <span style=color:#a6e22e>Frame</span>,
+    F::Sample: <span style=color:#a6e22e>FromSample</span><span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f32</span><span style=color:#f92672>&gt;</span>,
+    F::Sample: <span style=color:#a6e22e>ToSample</span><span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f32</span><span style=color:#f92672>&gt;</span>,
+{
+    <span style=color:#66d9ef>let</span> sum: <span style=color:#66d9ef>f32</span> <span style=color:#f92672>=</span> samples.iter().fold(<span style=color:#ae81ff>0.0</span>, <span style=color:#f92672>|</span>sum, frame<span style=color:#f92672>|</span> {
+        sum <span style=color:#f92672>+</span> frame.channels().map(<span style=color:#f92672>|</span>s<span style=color:#f92672>|</span> s.to_sample()).sum::<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f32</span><span style=color:#f92672>&gt;</span>()
+    });
+    (sum <span style=color:#f92672>/</span> samples.len() <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>f32</span>).round().to_sample()
+}
+</code></pre></div><p>Finally, we need to invoke a couple macros to register the <code>"throughput"</code>
+benchmark group and create a <code>main</code> function (remember when declaring the
+<code>[[bench]]</code> table we told <code>rustc</code> not to write <code>main()</code> for us with <code>harness = false</code>).</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// benches/throughput.rs
+</span><span style=color:#75715e></span>
+criterion_group<span style=color:#f92672>!</span>(benches, bench_throughput);
+criterion_main<span style=color:#f92672>!</span>(benches);
+</code></pre></div><p>These are the WAV files I&rsquo;ve downloaded to the <code>data/</code> directory:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ ls -l data
+.rw-r--r-- 1.6M michael 27 Oct 21:21 a-turtle-of-an-issue.wav
+.rw-r--r-- 4.2M michael 27 Oct 21:17 KBDL-B17-Tribute-20191005.wav
+.rw-r--r-- 7.6M michael 27 Oct 21:17 N11379_KSCK.wav
+.rw-r--r--  12M michael 27 Oct 21:26 tornado-warning-ground.wav
+$ file data/*
+data/a-turtle-of-an-issue.wav:      RIFF (little-endian) data, WAVE audio, Microsoft PCM, 16 bit, mono 22050 Hz
+data/KBDL-B17-Tribute-20191005.wav: RIFF (little-endian) data, WAVE audio, Microsoft PCM, 16 bit, mono 24000 Hz
+data/N11379_KSCK.wav:               RIFF (little-endian) data, WAVE audio, Microsoft PCM, 16 bit, mono 22050 Hz
+data/tornado-warning-ground.wav:    RIFF (little-endian) data, WAVE audio, Microsoft PCM, 16 bit, mono 44100 Hz
+</code></pre></div><p>Now let&rsquo;s run the benchmarks.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ cargo bench
+     Running target/release/deps/throughput-dbdb305fc8a0e002
+Benchmarking throughput/a-turtle-of-an-issue: Warming up for 3.0000 s
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 37.5s or reduce sample count to 20
+throughput/a-turtle-of-an-issue
+                        time:   [7.0509 ms 7.1617 ms 7.2892 ms]
+                        thrpt:  [113.14 Melem/s 115.15 Melem/s 116.96 Melem/s]
+                 change:
+                        time:   [-6.5194% -3.2691% -0.1646%] (p = 0.07 &gt; 0.05)
+                        thrpt:  [+0.1648% +3.3796% +6.9740%]
+                        No change in performance detected.
+Found 9 outliers among 100 measurements (9.00%)
+  8 (8.00%) high mild
+  1 (1.00%) high severe
+
+...
+</code></pre></div><p>If you&rsquo;ve got <code>gnuplot</code> installed, this also generates <a href=/criterion/report/index.html>a report</a>
+under <code>target/criterion</code>.</p><p>On my machine the report says our <code>NoiseFilter</code> can process 103.47 million
+samples per second. This is about 2000 times faster than we need, so it gives us
+hope that the <em>algorithm</em> won&rsquo;t add any unnecessary overhead&mldr; Of course
+that just moves the bottleneck from <code>NoiseFilter</code> to the caller&rsquo;s <code>Sink</code>
+implementation.</p><h2 id=experimenting-with-our-sample-data>Experimenting With Our Sample Data
+<a class=heading-link href=#experimenting-with-our-sample-data><i class="fa fa-link" aria-hidden=true></i></a></h2><p>We&rsquo;re now at the point where we have a fully implemented <em>Noise Gate</em>. Let&rsquo;s
+create an example program for splitting WAV files and see what happens when
+we point it at our sample data!</p><p>Even though it&rsquo;s an example, we should probably implement proper command-line
+argument handling to make experimentation easier. By far the easiest way to
+do this is with <a href=https://crates.io/crates/structopt>the structopt crate</a>.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// examples/wav-splitter.rs
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#[derive(Debug, Clone, StructOpt)]</span>
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Args</span> {
+    <span style=color:#75715e>#[structopt(help = </span><span style=color:#e6db74>&#34;The WAV file to read&#34;</span><span style=color:#75715e>)]</span>
+    <span style=color:#66d9ef>pub</span> input_file: <span style=color:#a6e22e>PathBuf</span>,
+    <span style=color:#75715e>#[structopt(short = </span><span style=color:#e6db74>&#34;t&#34;</span><span style=color:#75715e>, long = </span><span style=color:#e6db74>&#34;threshold&#34;</span><span style=color:#75715e>, help = </span><span style=color:#e6db74>&#34;The noise threshold&#34;</span><span style=color:#75715e>)]</span>
+    <span style=color:#66d9ef>pub</span> noise_threshold: <span style=color:#66d9ef>i16</span>,
+    <span style=color:#75715e>#[structopt(
+</span><span style=color:#75715e>        short = </span><span style=color:#e6db74>&#34;r&#34;</span><span style=color:#75715e>,
+</span><span style=color:#75715e>        long = </span><span style=color:#e6db74>&#34;release-time&#34;</span><span style=color:#75715e>,
+</span><span style=color:#75715e>        help = </span><span style=color:#e6db74>&#34;The release time in seconds&#34;</span><span style=color:#75715e>,
+</span><span style=color:#75715e>        default_value = </span><span style=color:#e6db74>&#34;0.25&#34;</span><span style=color:#75715e>
+</span><span style=color:#75715e>    )]</span>
+    <span style=color:#66d9ef>pub</span> release_time: <span style=color:#66d9ef>f32</span>,
+    <span style=color:#75715e>#[structopt(
+</span><span style=color:#75715e>        short = </span><span style=color:#e6db74>&#34;o&#34;</span><span style=color:#75715e>,
+</span><span style=color:#75715e>        long = </span><span style=color:#e6db74>&#34;output-dir&#34;</span><span style=color:#75715e>,
+</span><span style=color:#75715e>        help = </span><span style=color:#e6db74>&#34;Where to write the split files&#34;</span><span style=color:#75715e>,
+</span><span style=color:#75715e>        default_value = </span><span style=color:#e6db74>&#34;.&#34;</span><span style=color:#75715e>
+</span><span style=color:#75715e>    )]</span>
+    <span style=color:#66d9ef>pub</span> output_dir: <span style=color:#a6e22e>PathBuf</span>,
+    <span style=color:#75715e>#[structopt(
+</span><span style=color:#75715e>        short = </span><span style=color:#e6db74>&#34;p&#34;</span><span style=color:#75715e>,
+</span><span style=color:#75715e>        long = </span><span style=color:#e6db74>&#34;prefix&#34;</span><span style=color:#75715e>,
+</span><span style=color:#75715e>        help = </span><span style=color:#e6db74>&#34;A prefix to insert before each clip&#34;</span><span style=color:#75715e>,
+</span><span style=color:#75715e>        default_value = </span><span style=color:#e6db74>&#34;clip_&#34;</span><span style=color:#75715e>
+</span><span style=color:#75715e>    )]</span>
+    <span style=color:#66d9ef>pub</span> prefix: String,
+}
+</code></pre></div><p>Now we&rsquo;ll need a <code>Sink</code> type. The general idea is every time the <code>record()</code>
+method is called we&rsquo;ll write another frame to a cached <code>hound::WavWriter</code>. If
+the <code>WavWriter</code> doesn&rsquo;t exist we&rsquo;ll need to create a new one which writes to
+a file named like <code>output_dir/clip_1.wav</code>. An <code>end_of_transmission()</code> tells
+us to <code>finalize()</code> the <code>WavWriter</code> and remove it from our cache.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// examples/wav-splitter.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Sink</span> {
+    output_dir: <span style=color:#a6e22e>PathBuf</span>,
+    clip_number: <span style=color:#66d9ef>usize</span>,
+    prefix: String,
+    spec: <span style=color:#a6e22e>WavSpec</span>,
+    writer: Option<span style=color:#f92672>&lt;</span>WavWriter<span style=color:#f92672>&lt;</span>BufWriter<span style=color:#f92672>&lt;</span>File<span style=color:#f92672>&gt;&gt;&gt;</span>,
+}
+
+<span style=color:#66d9ef>impl</span> Sink {
+    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new</span>(output_dir: <span style=color:#a6e22e>PathBuf</span>, prefix: String, spec: <span style=color:#a6e22e>WavSpec</span>) -&gt; <span style=color:#a6e22e>Self</span> {
+        Sink {
+            output_dir,
+            prefix,
+            spec,
+            clip_number: <span style=color:#ae81ff>0</span>,
+            writer: None,
+        }
+    }
+
+    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_writer</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> WavWriter<span style=color:#f92672>&lt;</span>BufWriter<span style=color:#f92672>&lt;</span>File<span style=color:#f92672>&gt;&gt;</span> {
+        <span style=color:#66d9ef>if</span> self.writer.is_none() {
+            <span style=color:#66d9ef>let</span> filename <span style=color:#f92672>=</span> self
+                .output_dir
+                .join(format<span style=color:#f92672>!</span>(<span style=color:#e6db74>&#34;{}{}.wav&#34;</span>, self.prefix, self.clip_number));
+            self.clip_number <span style=color:#f92672>+=</span> <span style=color:#ae81ff>1</span>;
+            self.writer <span style=color:#f92672>=</span> Some(WavWriter::create(filename, self.spec).unwrap());
+        }
+
+        self.writer.as_mut().unwrap()
+    }
+}
+
+<span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>F<span style=color:#f92672>&gt;</span> noise_gate::Sink<span style=color:#f92672>&lt;</span>F<span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> Sink
+<span style=color:#66d9ef>where</span>
+    F: <span style=color:#a6e22e>Frame</span>,
+    F::Sample: <span style=color:#a6e22e>hound</span>::Sample,
+{
+    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>record</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, frame: <span style=color:#a6e22e>F</span>) {
+        <span style=color:#66d9ef>let</span> writer <span style=color:#f92672>=</span> self.get_writer();
+
+        <span style=color:#66d9ef>for</span> channel <span style=color:#66d9ef>in</span> frame.channels() {
+            writer.write_sample(channel).unwrap();
+        }
+    }
+
+    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>end_of_transmission</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) {
+        <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> Some(writer) <span style=color:#f92672>=</span> self.writer.take() {
+            writer.finalize().unwrap();
+        }
+    }
+}
+</code></pre></div><p>From there the <code>main</code> function is quite simple. It parses some arguments, reads
+the WAV file into memory, then throws it at our <code>NoiseGate</code> so the <code>Sink</code> can
+write the clips to the <code>output/</code> directory.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// examples/wav-splitter.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>main</span>() -&gt; Result<span style=color:#f92672>&lt;</span>(), Box<span style=color:#f92672>&lt;</span>dyn Error<span style=color:#f92672>&gt;&gt;</span> {
+    <span style=color:#66d9ef>let</span> args <span style=color:#f92672>=</span> Args::from_args();
+
+    <span style=color:#66d9ef>let</span> reader <span style=color:#f92672>=</span> WavReader::open(<span style=color:#f92672>&amp;</span>args.input_file)<span style=color:#f92672>?</span>;
+    <span style=color:#66d9ef>let</span> header <span style=color:#f92672>=</span> reader.spec();
+    <span style=color:#66d9ef>let</span> samples <span style=color:#f92672>=</span> reader
+        .into_samples::<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>i16</span><span style=color:#f92672>&gt;</span>()
+        .map(<span style=color:#f92672>|</span>result<span style=color:#f92672>|</span> result.map(<span style=color:#f92672>|</span>sample<span style=color:#f92672>|</span> [sample]))
+        .collect::<span style=color:#f92672>&lt;</span>Result<span style=color:#f92672>&lt;</span>Vec<span style=color:#f92672>&lt;</span>_<span style=color:#f92672>&gt;</span>, _<span style=color:#f92672>&gt;&gt;</span>()<span style=color:#f92672>?</span>;
+
+    <span style=color:#66d9ef>let</span> release_time <span style=color:#f92672>=</span> (header.sample_rate <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>f32</span> <span style=color:#f92672>*</span> args.release_time).round();
+
+    fs::create_dir_all(<span style=color:#f92672>&amp;</span>args.output_dir)<span style=color:#f92672>?</span>;
+    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> sink <span style=color:#f92672>=</span> Sink::new(args.output_dir, args.prefix, header);
+
+    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> gate <span style=color:#f92672>=</span> NoiseGate::new(args.noise_threshold, release_time <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>usize</span>);
+    gate.process_frames(<span style=color:#f92672>&amp;</span>samples, <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> sink);
+
+    Ok(())
+}
+</code></pre></div><p>Let&rsquo;s take this for a test-run.</p><p>The original clip:</p><audio controls><source src=N11379_KSCK.mp3 type=audio/mp3>Your browser does not support the audio tag.</audio><p>Now let&rsquo;s split it into pieces with our <code>wav-splitter</code> program. At this point
+I don&rsquo;t really know what values of <code>noise_threshold</code> or <code>release_time</code> are
+acceptible for this audio, but I figure <code>50</code> and <code>0.3s</code> should be usable?</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ ./target/release/examples/wav-splitter -o output --threshold 50 --release-time 0.3 data/N11379_KSCK.wav
+$ ls output
+clip_0.wav clip_3.wav clip_6.wav clip_9.wav clip_12.wav clip_15.wav
+clip_18.wav clip_21.wav clip_1.wav clip_4.wav clip_7.wav clip_10.wav
+clip_13.wav clip_16.wav clip_19.wav clip_22.wav clip_2.wav clip_5.wav
+clip_8.wav clip_11.wav clip_14.wav clip_17.wav clip_20.wav
+</code></pre></div><audio controls><source src=split/clip_0.wav type=audio/wav></audio><audio controls><source src=split/clip_1.wav type=audio/wav></audio><audio controls><source src=split/clip_2.wav type=audio/wav></audio><audio controls><source src=split/clip_3.wav type=audio/wav></audio><audio controls><source src=split/clip_4.wav type=audio/wav></audio><audio controls><source src=split/clip_5.wav type=audio/wav></audio><audio controls><source src=split/clip_6.wav type=audio/wav></audio><audio controls><source src=split/clip_7.wav type=audio/wav></audio><audio controls><source src=split/clip_8.wav type=audio/wav></audio><audio controls><source src=split/clip_9.wav type=audio/wav></audio><audio controls><source src=split/clip_10.wav type=audio/wav></audio><audio controls><source src=split/clip_11.wav type=audio/wav></audio><audio controls><source src=split/clip_12.wav type=audio/wav></audio><audio controls><source src=split/clip_13.wav type=audio/wav></audio><audio controls><source src=split/clip_14.wav type=audio/wav></audio><audio controls><source src=split/clip_15.wav type=audio/wav></audio><audio controls><source src=split/clip_16.wav type=audio/wav></audio><audio controls><source src=split/clip_17.wav type=audio/wav></audio><audio controls><source src=split/clip_18.wav type=audio/wav></audio><audio controls><source src=split/clip_19.wav type=audio/wav></audio><audio controls><source src=split/clip_20.wav type=audio/wav></audio><audio controls><source src=split/clip_21.wav type=audio/wav></audio><audio controls><source src=split/clip_22.wav type=audio/wav></audio><audio controls><source src=split/clip_23.wav type=audio/wav></audio><audio controls><source src=split/clip_24.wav type=audio/wav></audio><audio controls><source src=split/clip_25.wav type=audio/wav></audio><p>Wow it actually worked on the first try. Now that&rsquo;s something you don&rsquo;t see
+every day.</p></div><footer></footer></article><script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script><script id=MathJax-script async src=https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js></script><script>MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']],processEscapes:!0,processEnvironments:!0},options:{skipHtmlTags:['script','noscript','style','textarea','pre']}}</script></section></div><footer class=footer><section class=container>©
+2021
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/eb2d656975ffbaee2955396af8291207b810384d>eb2d656</a>]</section></footer></main><script src=/js/dark-mode.min.aee9c8a464eb7b3534c7110f7c5e169e7039e2fd92710e0626d451d6725af137.js></script><script src=/js/mermaid.min.js></script><script src=/js/index.js></script><script type=application/javascript>var doNotTrack=!1;doNotTrack||(function(a,e,f,g,b,c,d){a.GoogleAnalyticsObject=b,a[b]=a[b]||function(){(a[b].q=a[b].q||[]).push(arguments)},a[b].l=1*new Date,c=e.createElement(f),d=e.getElementsByTagName(f)[0],c.async=1,c.src=g,d.parentNode.insertBefore(c,d)}(window,document,'script','https://www.google-analytics.com/analytics.js','ga'),ga('create','UA-78714693-3','auto'),ga('send','pageview'))</script></body></html>

@@ -1,0 +1,1386 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta http-equiv=content-language content="en"><meta name=author content="Michael-F-Bryan"><meta name=description content="One of the first things I learned when programming professionally is that global variables are bad. We all take it for granted that it&rsquo;s bad practice to write code that relies heavily on global state but the other day I was working with a 3rd party native library, and it reminded why these best practices come about.
+There are a couple factors which made this particular library&rsquo;s use of global mutable state rather ugly to work with,"><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="A Pragmatic Approach To Global State"><meta name=twitter:description content="One of the first things I learned when programming professionally is that global variables are bad. We all take it for granted that it&rsquo;s bad practice to write code that relies heavily on global state but the other day I was working with a 3rd party native library, and it reminded why these best practices come about.
+There are a couple factors which made this particular library&rsquo;s use of global mutable state rather ugly to work with,"><meta property="og:title" content="A Pragmatic Approach To Global State"><meta property="og:description" content="One of the first things I learned when programming professionally is that global variables are bad. We all take it for granted that it&rsquo;s bad practice to write code that relies heavily on global state but the other day I was working with a 3rd party native library, and it reminded why these best practices come about.
+There are a couple factors which made this particular library&rsquo;s use of global mutable state rather ugly to work with,"><meta property="og:type" content="article"><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/pragmatic-global-state/"><meta property="article:section" content="posts"><meta property="article:published_time" content="2020-02-17T22:22:47+08:00"><meta property="article:modified_time" content="2021-06-20T07:54:53+08:00"><title>A Pragmatic Approach To Global State · Michael-F-Bryan</title><link rel=canonical href=https://adventures.michaelfbryan.com/posts/pragmatic-global-state/><link rel=preload href="/fonts/forkawesome-webfont.woff2?v=1.1.7" as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.ec198d25949ddd79a670b1ead43ca88e0bc2c1343266d0df0a9eeb7f3f207777.css integrity="sha256-7BmNJZSd3XmmcLHq1DyojgvCwTQyZtDfCp7rfz8gd3c=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.89c82b6022b96f77aeb521b240daec4f87ea029d84d1c78b8acd0735b91b3c92.css integrity="sha256-icgrYCK5b3eutSGyQNrsT4fqAp2E0ceLis0HNbkbPJI=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.css><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><meta name=generator content="Hugo 0.84.0"></head><body class=colorscheme-auto><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=/>Michael-F-Bryan</a>
+<input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title>A Pragmatic Approach To Global State</h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa fa-calendar" aria-hidden=true></i>
+<time datetime=2020-02-17T22:22:47+08:00>February 17, 2020</time></span>
+<span class=reading-time><i class="fa fa-clock-o" aria-hidden=true></i>
+32-minute read</span></div><div class=tags><i class="fa fa-tag" aria-hidden=true></i>
+<a href=/tags/rust/>Rust</a>
+<span class=separator>•</span>
+<a href=/tags/architecture/>Architecture</a></div></div></header><div><div class="notices tip"><p>I often like exploring a topic in great depth and writing about my
+thoughts and experiences as I go along.</p><p>This is more of an extended essay than an article to be read in a
+single sitting. Feel free to read it one piece at a time, or just
+skip to the bits that look interesting.</p><p>Here, have a <em>Table of Contents</em>:</p><nav id=TableOfContents><ul><li><a href=#getting-acquainted>Getting Acquainted</a></li><li><a href=#our-high-level-approach>Our High-Level Approach</a></li><li><a href=#creating-ffi-bindings>Creating FFI Bindings</a></li><li><a href=#writing-a-safe-interface-to-libstateful>Writing a Safe Interface to libstateful</a><ul><li><a href=#proper-raii>Proper RAII</a></li><li><a href=#finishing-it-off>Finishing It Off</a></li></ul></li><li><a href=#making-sure-it-works>Making Sure It Works</a></li><li><a href=#conclusions>Conclusions</a></li></ul></nav></div><p>One of the first things I learned when programming professionally is that
+<em>global variables are bad</em>. We all take it for granted that it&rsquo;s bad practice
+to write code that relies heavily on global state but the other day I was
+working with a 3rd party native library, and it reminded <em>why</em> these best
+practices come about.</p><p>There are a couple factors which made this particular library&rsquo;s use of global
+mutable state rather ugly to work with,</p><ul><li>Thread safety - mutating something from two concurrent threads of execution
+without proper synchronisation is a <a href=https://doc.rust-lang.org/nomicon/races.html>data race</a>, a common form of
+<em>Undefined Behaviour</em>. This means the library can only ever be used from one
+place at a time.</li><li>Brittle code - Relying on global state often means the code expects to be
+run in a very specific order. Failing to invoke functions in the correct
+order can lead to memory issues (e.g. leaks or double-frees) and
+accidentally corrupting the library&rsquo;s state</li><li>Poor testability - when code is mutating global variables there&rsquo;s no way to
+inject mocks (e.g. to <code>assert!()</code> specific conditions) or make sure
+individual chunks of functionality work. You are often reduced to writing
+one or two high-level integration tests which execute the &ldquo;happy path&rdquo;, and
+when an error occurs it&rsquo;s hard to narrow it down to just one function</li></ul><div class="notices info"><p>To be clear, when I refer to <em>&ldquo;global state&rdquo;</em> I am referring to variables in
+a program (typically declared with the keyword <code>static</code> in languages like C#,
+Java, and Rust) which live for the lifetime of the program, only ever have
+one instance, and where all uses of the variable are hard-coded to use that
+instance (i.e. code refers to the variable by name instead of via a reference).</p><p>These variables don&rsquo;t necessarily need to be publicly accessible. All of
+these problems occur when using <a href=https://en.wikipedia.org/wiki/Local_variable#Static_local_variables>static local variables</a> inside a
+function or class. The core problems related to having static lifetime and
+code directly referencing the variable are still there.</p></div><p>For my use case it&rsquo;s not really viable to use a different library because the
+alternatives don&rsquo;t necessarily have the features we need. We also can&rsquo;t
+rewrite the code to not use global mutable state because it&rsquo;s closed-source,
+and even then would require tens of developer-years of effort. Which is tens of
+developer-years more than I have to spare.</p><p>This necessitates a more pragmatic solution. In short, we needed to find a
+way to use this 3rd party library without it polluting the rest of the
+application too much.</p><p>I&rsquo;ll be implementing this in Rust primarily because it&rsquo;s quite good at
+enforcing guarantees via the type system, but the general ideas aren&rsquo;t really
+language-specific. It may just require more runtime checks.</p><div class="notices note"><p>The code written in this article is available <a href=https://github.com/Michael-F-Bryan/stateful-native-library>on GitHub</a>. Feel free to
+browse through and steal code or inspiration.</p><p>If you found this useful or spotted a bug, let me know on the blog&rsquo;s
+<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com>issue tracker</a>!</p></div><h2 id=getting-acquainted>Getting Acquainted
+<a class=heading-link href=#getting-acquainted><i class="fa fa-link" aria-hidden=true></i></a></h2><p>It would be a bit overwhelming to show you the full code, so I&rsquo;ve prepared a
+rough example we can play around with.</p><p>Another important point to emphasize is the 3rd party library which initially
+inspired this experiment is native code (I think it&rsquo;s written in C++). The
+reason this is important is because it works touches memory directly and a
+bug doesn&rsquo;t just mean an exception gets thrown, we could segfault and tear
+down the entire process.</p><p>My decision to write use it from Rust also means we&rsquo;ll need to write some
+<code>unsafe</code> code when crossing the language boundary and enforcing invariants.
+This is actually <em>a good thing</em>! It gives us several easy-to-find places to
+start from when troubleshooting a crash.</p><p>Without further ado, here&rsquo;s a header file defining the high-level interface of
+the library we&rsquo;ll be working with.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c><span style=color:#75715e>// native/stateful.h
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#if !defined(STATEFUL_H)
+</span><span style=color:#75715e>#define STATEFUL_H
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;stdbool.h&gt;</span><span style=color:#75715e>
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#ifdef __cplusplus
+</span><span style=color:#75715e></span><span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span>
+{
+<span style=color:#75715e>#endif
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>// The various possible return codes.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>enum</span>
+{
+    <span style=color:#75715e>// The function completed successfully.
+</span><span style=color:#75715e></span>    RESULT_OK,
+    <span style=color:#75715e>// A function was called out of order.
+</span><span style=color:#75715e></span>    RESULT_BAD_STATE,
+    <span style=color:#75715e>// One of the provided arguments is invalid.
+</span><span style=color:#75715e></span>    RESULT_INVALID_ARGUMENT,
+};
+
+<span style=color:#75715e>// Initialize the library. MUST be run before any other function.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_open</span>();
+
+<span style=color:#75715e>// Clean up any state associated with this library.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_close</span>();
+
+<span style=color:#75715e>// Begin setting parameters. MUST be run before any parameters can be set.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_start_setting_parameters</span>();
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_set_bool_var</span>(<span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>name, <span style=color:#66d9ef>bool</span> value);
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_set_int_var</span>(<span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>name, <span style=color:#66d9ef>int</span> value);
+<span style=color:#75715e>// Finish setting parameters.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_end_setting_parameters</span>();
+
+<span style=color:#75715e>// Start adding input items.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_start_adding_items</span>();
+<span style=color:#75715e>// Add a single item as an input.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_add_item</span>(<span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>name, <span style=color:#66d9ef>int</span> value);
+<span style=color:#75715e>// Start adding a group of items.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_start_adding_group</span>(<span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>name);
+<span style=color:#75715e>// Add an item to the current group. stateful_start_adding_group MUST be called
+</span><span style=color:#75715e>// beforehand.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_add_group_item</span>(<span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>name, <span style=color:#66d9ef>int</span> value);
+<span style=color:#75715e>// Finish adding items to the current group, adding the overall group to the
+</span><span style=color:#75715e>// list of inputs.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_end_adding_group</span>();
+<span style=color:#75715e>// Finish setting up the list of inputs.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_end_adding_items</span>();
+
+<span style=color:#75715e>// A callback used to notify the caller when progress is made.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>typedef</span> <span style=color:#a6e22e>int</span> (<span style=color:#f92672>*</span>progress_cb)(<span style=color:#66d9ef>int</span> percent);
+<span style=color:#75715e>// A callback used to let the user retrieve results.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>typedef</span> <span style=color:#a6e22e>int</span> (<span style=color:#f92672>*</span>result_cb)(<span style=color:#66d9ef>int</span> number_of_results);
+
+<span style=color:#75715e>// Run the code.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_execute</span>(progress_cb progress, result_cb result);
+
+<span style=color:#75715e>// Try to get the number of outputs in the result.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_get_num_outputs</span>(<span style=color:#66d9ef>int</span> <span style=color:#f92672>*</span>value);
+<span style=color:#75715e>// Tries to retrieve a particular output.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_get_output_by_index</span>(<span style=color:#66d9ef>int</span> index, <span style=color:#66d9ef>int</span> <span style=color:#f92672>*</span>value);
+
+<span style=color:#75715e>#ifdef __cplusplus
+</span><span style=color:#75715e></span>}
+<span style=color:#75715e>#endif
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#endif </span><span style=color:#75715e>// STATEFUL_H
+</span><span style=color:#75715e></span>
+</code></pre></div><div class="notices note"><p>The difficulty with trying to explain complex architecture is to find the
+sweet spot between simplifying so much that people miss the point or the
+example feels contrived, and providing so much detail that the reader loses
+track of what&rsquo;s going on amongst the various moving parts.</p><p>Unfortunately, that means our <code>stateful.h</code> needs to be more than a couple
+functions long to do this topic justice.</p></div><p>There&rsquo;s quite a lot going on here, so let&rsquo;s unpack it a bit.</p><p>Fortunately, this library does a pretty decent job of handling errors and most
+of the time functions will give you some sort of return code.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c><span style=color:#75715e>// The various possible return codes.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>enum</span>
+{
+    <span style=color:#75715e>// The function completed successfully.
+</span><span style=color:#75715e></span>    RESULT_OK,
+    <span style=color:#75715e>// A function was called out of order.
+</span><span style=color:#75715e></span>    RESULT_BAD_STATE,
+    <span style=color:#75715e>// One of the provided arguments is invalid.
+</span><span style=color:#75715e></span>    RESULT_INVALID_ARGUMENT,
+};
+</code></pre></div><p>In reality there are going to be a lot more error cases, but you get the gist.</p><p>The library needs to initialize some global state before first use and do
+cleanup at the end, so our <code>stateful</code> library has <code>open()</code> and <code>close()</code>
+functions.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c><span style=color:#75715e>// Initialize the library. MUST be run before any other function.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_open</span>();
+
+<span style=color:#75715e>// Clean up any state associated with this library.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_close</span>();
+</code></pre></div><p>(I don&rsquo;t know about you, but usually when I see this sort of code I&rsquo;ll start
+thinking of using <a href=https://en.wikipedia.org/wiki/Resource_acquisition_is_initialization>RAII</a>)</p><p>After initializing the library we need to set some global parameters. These are
+various knobs and levers that are used to alter how the input is processed.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c><span style=color:#75715e>// Begin setting parameters. MUST be run before any parameters can be set.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_start_setting_parameters</span>();
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_set_bool_var</span>(<span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>name, <span style=color:#66d9ef>bool</span> value);
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_set_int_var</span>(<span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>name, <span style=color:#66d9ef>int</span> value);
+<span style=color:#75715e>// Finish setting parameters.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_end_setting_parameters</span>();
+</code></pre></div><p>You can see that we need to explicitly start and stop setting parameters. The
+functions themselves take no arguments, which is a big give-away that the code
+mutates global state under the hood.</p><p>Next we&rsquo;ve got functions for setting up the input.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c><span style=color:#75715e>// Start adding input items.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_start_adding_items</span>();
+<span style=color:#75715e>// Add a single item as an input.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_add_item</span>(<span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>name, <span style=color:#66d9ef>int</span> value);
+<span style=color:#75715e>// Start adding a group of items.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_start_adding_group</span>(<span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>name);
+<span style=color:#75715e>// Add an item to the current group. stateful_start_adding_group MUST be called
+</span><span style=color:#75715e>// beforehand.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_add_group_item</span>(<span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>name, <span style=color:#66d9ef>int</span> value);
+<span style=color:#75715e>// Finish adding items to the current group, adding the overall group to the
+</span><span style=color:#75715e>// list of inputs.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_end_adding_group</span>();
+<span style=color:#75715e>// Finish setting up the list of inputs.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_end_adding_items</span>();
+</code></pre></div><p>If you squint, you&rsquo;ll see that the input is a list of individual named items
+or groups of items. The <code>Input</code> that we&rsquo;re building procedurally might look
+something like this (if written in Rust):</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>ItemValue</span> {
+  Single(<span style=color:#66d9ef>i32</span>),
+  Group(HashMap<span style=color:#f92672>&lt;</span>String, <span style=color:#66d9ef>i32</span><span style=color:#f92672>&gt;</span>),
+}
+
+<span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Item</span> {
+    name: String,
+    value: <span style=color:#a6e22e>ItemValue</span>,
+}
+
+<span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Inputs</span> <span style=color:#f92672>=</span> Vec<span style=color:#f92672>&lt;</span>Item<span style=color:#f92672>&gt;</span>;
+
+<span style=color:#e6db74>/// The global we&#39;re initializing between `stateful_start_adding_items()` and
+</span><span style=color:#e6db74>/// `stateful_send_adding_items()`.
+</span><span style=color:#e6db74></span><span style=color:#66d9ef>static</span> <span style=color:#66d9ef>mut</span> TEMP_INPUTS: <span style=color:#a6e22e>Inputs</span> <span style=color:#f92672>=</span> ...;
+</code></pre></div><p>Now we&rsquo;ve set the algorithm&rsquo;s parameters and created our input, we can execute
+the code.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c><span style=color:#75715e>// A callback used to notify the caller when progress is made.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>typedef</span> <span style=color:#a6e22e>int</span> (<span style=color:#f92672>*</span>progress_cb)(<span style=color:#66d9ef>int</span> percent);
+<span style=color:#75715e>// A callback used to let the user retrieve results.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>typedef</span> <span style=color:#a6e22e>int</span> (<span style=color:#f92672>*</span>result_cb)(<span style=color:#66d9ef>int</span> number_of_results);
+
+<span style=color:#75715e>// Run the code.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_execute</span>(progress_cb progress, result_cb result);
+</code></pre></div><p>You&rsquo;ll notice this uses callback functions to notify the caller of progress and
+when the results are ready. This wouldn&rsquo;t normally be a problem, except the
+code doesn&rsquo;t let us provide some sort of <code>void *</code> pointer to user-provided data.
+That means the only way our callbacks will be able to pass information to the
+caller is by itself using static variables.</p><p>Finally, we get a couple functions for inspecting the output.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c><span style=color:#75715e>// Try to get the number of outputs in the result.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_get_num_outputs</span>(<span style=color:#66d9ef>int</span> <span style=color:#f92672>*</span>value);
+<span style=color:#75715e>// Tries to retrieve a particular output.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_get_output_by_index</span>(<span style=color:#66d9ef>int</span> index, <span style=color:#66d9ef>int</span> <span style=color:#f92672>*</span>value);
+</code></pre></div><p>Something to keep in mind is they can only be called from inside our
+<code>result_cb</code> callback. Other than that, the functions are pretty ordinary.</p><div class="notices info"><p>I&rsquo;m going to be deliberately vague about what <code>stateful_execute()</code> actually
+does. For our purposes the computation isn&rsquo;t actually relevant, we&rsquo;re mainly
+concerned about <em>how</em> you can make use of such a &ldquo;stateful&rdquo; library while
+maintaining nice things like,</p><ul><li>thread-safety</li><li>memory-safety</li><li>statically ensuring at compile time that it is impossible to do things out
+of order</li></ul></div><p>If it helps, think of <code>stateful_execute()</code> as something like this:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>stateful_execute</span>(
+    parameters: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>HashMap</span><span style=color:#f92672>&lt;</span>String, Value<span style=color:#f92672>&gt;</span>,
+    items: Vec<span style=color:#f92672>&lt;</span>Input<span style=color:#f92672>&gt;</span>,
+    on_progress: <span style=color:#a6e22e>impl</span> FnMut(percent: <span style=color:#66d9ef>i32</span>),
+) -&gt; Vec<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>i32</span><span style=color:#f92672>&gt;</span> {
+    <span style=color:#75715e>// magic
+</span><span style=color:#75715e></span>}
+</code></pre></div><p>We take a set of parameters and list of inputs and return a list of integers.</p><h2 id=our-high-level-approach>Our High-Level Approach
+<a class=heading-link href=#our-high-level-approach><i class="fa fa-link" aria-hidden=true></i></a></h2><p>We have two main goals for this exercise,</p><ul><li>Create a safe wrapper which lets us use this library while maintaining memory
+and thread-safety</li><li>Use the type system to <em>make illegal states unrepresentable</em></li></ul><p>The first goal can be fulfilled fairly easily, because this library can only be
+used by one bit of code at a time (<code>static</code> variables aren&rsquo;t thread-safe) we
+can make a type which represents a &ldquo;handle&rdquo; to the library.</p><p>We can then write our code in such a way that calling a function from our
+<code>stateful</code> library <em>needs</em> you to have a valid handle.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>use</span> std::marker::PhantomData;
+
+<span style=color:#e6db74>/// A handle to the `stateful` library.
+</span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Library</span> {
+    _not_send: <span style=color:#a6e22e>PhantomData</span><span style=color:#f92672>&lt;*</span><span style=color:#66d9ef>const</span> ()<span style=color:#f92672>&gt;</span>,
+}
+</code></pre></div><p>Something to note is the use of <code>PhantomData&lt;*const ()></code> here. This makes sure
+<code>Library</code> is <code>!Send</code> and <code>!Sync</code> (i.e. it can&rsquo;t be used from another thread).</p><p>We can double-check that <code>Library</code> can&rsquo;t be used from other threads by adding
+the <a href=https://crates.io/crates/static_assertions><code>static_assertions</code> crate</a> as a dev-dependency&mldr;</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ cargo add --dev static_assertions
+    Updating &#39;https://github.com/rust-lang/crates.io-index&#39; index
+      Adding static_assertions v1.1.0 to dev-dependencies
+</code></pre></div><p>&mldr; And then writing a new test.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#[cfg(test)]</span>
+<span style=color:#66d9ef>mod</span> tests {
+    <span style=color:#66d9ef>use</span> <span style=color:#66d9ef>super</span>::<span style=color:#f92672>*</span>;
+
+    static_assertions::assert_not_impl_any<span style=color:#f92672>!</span>(Library: Send, Sync);
+}
+</code></pre></div><p>If we add an impl for <code>Send</code>, running <code>cargo test</code> will show a build failure.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-diff data-lang=diff> /// A handle to the `stateful` library.
+ pub struct Library {
+     _not_send: PhantomData&lt;*const ()&gt;,
+ }
+
+<span style=color:#a6e22e>+unsafe impl Send for Library {}
+</span></code></pre></div><p>The error message leaves a lot to be desired, but this is what you&rsquo;d see if
+<code>Library</code> were <code>Send</code>.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ cargo test
+   Compiling stateful-native-library v0.1.0 (/home/michael/Documents/stateful-native-library)
+error[E0282]: type annotations needed for `fn() {&lt;Library as tests::_::{{closure}}#0::AmbiguousIfImpl&lt;_&gt;&gt;::some_item}`
+  --&gt; src/lib.rs:14:5
+   |
+14 |     static_assertions::assert_not_impl_any!(Library: Send, Sync);
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |     |
+   |     consider giving this pattern the explicit type `fn() {&lt;Library as tests::_::{{closure}}#0::AmbiguousIfImpl&lt;_&gt;&gt;::some_item}`, with the type parameters specified
+   |     cannot infer type
+   |
+   = note: this error originates in a macro outside of the current crate (in Nightly builds, run with -Z external-macro-backtrace for more info)
+
+error: aborting due to previous error
+</code></pre></div><p>Now we have a thread-safe <code>Library</code> type, we also need to make sure it&rsquo;s not
+possible to create more than one <code>Library</code> at a time. This can be done easily
+enough using a flag (<code>AtomicBool</code>) which is set to <code>true</code> when <code>Library</code> is
+created and <code>false</code> when it is destroyed.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>use</span> sync::atomic::{AtomicBool, Ordering};
+
+<span style=color:#66d9ef>static</span> LIBRARY_IN_USE: <span style=color:#a6e22e>AtomicBool</span> <span style=color:#f92672>=</span> AtomicBool::new(<span style=color:#66d9ef>false</span>);
+
+<span style=color:#66d9ef>impl</span> Library {
+    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new</span>() -&gt; Result<span style=color:#f92672>&lt;</span>Library, Error<span style=color:#f92672>&gt;</span> {
+        <span style=color:#66d9ef>if</span> LIBRARY_IN_USE.compare_and_swap(<span style=color:#66d9ef>false</span>, <span style=color:#66d9ef>true</span>, Ordering::SeqCst)
+            <span style=color:#f92672>==</span> <span style=color:#66d9ef>false</span>
+        {
+            Ok(Library { _not_send: <span style=color:#a6e22e>PhantomData</span> })
+        } <span style=color:#66d9ef>else</span> {
+            Err(Error::AlreadyInUse)
+        }
+    }
+}
+
+<span style=color:#66d9ef>impl</span> Drop <span style=color:#66d9ef>for</span> Library {
+    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>drop</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) { LIBRARY_IN_USE.store(<span style=color:#66d9ef>false</span>, Ordering::SeqCst); }
+}
+
+<span style=color:#e6db74>/// The various error cases that may be encountered while using this library.
+</span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug, Copy, Clone, PartialEq, thiserror::Error)]</span>
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>Error</span> {
+    <span style=color:#75715e>#[error(</span><span style=color:#e6db74>&#34;The library is already in use&#34;</span><span style=color:#75715e>)]</span>
+    AlreadyInUse,
+}
+</code></pre></div><p>Yes I know the irony in using a <code>static</code> variable to workaround another
+library&rsquo;s zealous use of <code>static</code> variables, but sometimes you&rsquo;ve got to
+break a couple eggs to make an omelette 🤷‍</p><p>To make sure we&rsquo;ve implemented this correctly, let&rsquo;s write a test which
+deliberately tries to create multiple <code>Library</code> handles at the same time.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// lib/src.rs
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#[cfg(test)]</span>
+<span style=color:#66d9ef>mod</span> tests {
+    <span style=color:#66d9ef>use</span> <span style=color:#66d9ef>super</span>::<span style=color:#f92672>*</span>;
+
+    ...
+
+    <span style=color:#75715e>#[test]</span>
+    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>cant_create_multiple_library_handles_at_the_same_time</span>() {
+        <span style=color:#66d9ef>let</span> first_library <span style=color:#f92672>=</span> Library::new().unwrap();
+
+        <span style=color:#75715e>// make sure the flag is set
+</span><span style=color:#75715e></span>        assert<span style=color:#f92672>!</span>(LIBRARY_IN_USE.load(Ordering::SeqCst));
+
+        <span style=color:#75715e>// then try to create another handle
+</span><span style=color:#75715e></span>        assert<span style=color:#f92672>!</span>(Library::new().is_err());
+
+        <span style=color:#75715e>// explicitly drop the first library so we know it clears the flag
+</span><span style=color:#75715e></span>        drop(first_library);
+
+        assert<span style=color:#f92672>!</span>(<span style=color:#f92672>!</span>LIBRARY_IN_USE.load(Ordering::SeqCst));
+
+        <span style=color:#75715e>// now the old handle is destroyed, we can create another
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>let</span> _another <span style=color:#f92672>=</span> Library::new().unwrap();
+    }
+}
+</code></pre></div><p>Next, to ensure functions aren&rsquo;t called out of order we can create some sort
+of type-level state machine.</p><p>This idea was originally taken from <a href=https://users.rust-lang.org/t/common-strategies-for-wrapping-a-library-that-uses-globals-everywhere/37944>a thread on the Rust users
+forum</a>. You&rsquo;ll notice the approach we&rsquo;re taking is uncannily similar
+to the solution proposed by <a href=https://users.rust-lang.org/u/yandros/summary>@Yandros</a>,</p><blockquote><p>I would wrap the library using a type-level state machine to make misusage
+simply not compile; If necessary, you can even use the singleton pattern to
+enforce no concurrency problems (which would be the only part checked at
+runtime).</p></blockquote><p>One of the invariants we&rsquo;d like to maintain is that when setting parameters
+it should be impossible to use any non-parameter-setting functionality.</p><p>This is where lifetimes really show their power. Using a <code>&mut Library</code>
+reference, the compiler can statically ensure some <code>SettingParameters</code> type
+(which we&rsquo;re about to create) has unique access to our <code>Library</code>.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>impl</span> Library {
+    ...
+
+    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>set_parameters</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; <span style=color:#a6e22e>SettingParameters</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;_</span><span style=color:#f92672>&gt;</span> {
+        SettingParameters { _library: <span style=color:#a6e22e>self</span> }
+    }
+}
+
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>SettingParameters</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> {
+    _library: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;lib</span> <span style=color:#66d9ef>mut</span> Library,
+}
+
+<span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> SettingParameters<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> {
+    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>boolean</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, _name: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>, _value: <span style=color:#66d9ef>bool</span>) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Self {
+        unimplemented<span style=color:#f92672>!</span>()
+    }
+
+    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>integer</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, _name: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>, _value: <span style=color:#66d9ef>i32</span>) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Self {
+        unimplemented<span style=color:#f92672>!</span>()
+    }
+}
+</code></pre></div><p>You&rsquo;ll notice I&rsquo;m deliberately leaving the body for <code>boolean()</code> and
+<code>integer()</code> as <code>unimplemented!()</code>. We&rsquo;re just setting up the infrastructure
+for this &ldquo;type-level state machine&rdquo; for now and will execute the actual FFI
+calls in a bit.</p><p>Once we&rsquo;ve set the various parameters we need to start constructing our inputs.
+This can be done using some sort of <code>RecipeBuilder</code> which leverages the
+<code>&mut Library</code> trick from <code>SettingParameters</code>.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>impl</span> Library {
+    ...
+
+    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>create_recipe</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; <span style=color:#a6e22e>RecipeBuilder</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;_</span><span style=color:#f92672>&gt;</span> {
+        RecipeBuilder { _library: <span style=color:#a6e22e>self</span> }
+    }
+}
+
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>RecipeBuilder</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> {
+    _library: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;lib</span> <span style=color:#66d9ef>mut</span> Library,
+}
+
+<span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> RecipeBuilder<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> {
+    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>add_item</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, _name: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>, _value: <span style=color:#66d9ef>i32</span>) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Self {
+        unimplemented<span style=color:#f92672>!</span>()
+    }
+}
+</code></pre></div><p>Now we&rsquo;ve got a problem, how can you add a group of items to the &ldquo;recipe&rdquo;? We
+need to make sure it&rsquo;s not possible to call <code>RecipeBuilder::add_item()</code> while
+in the middle of constructing a group because it could mess up the library&rsquo;s
+internals.</p><div class="notices tip"><p>This may seem a bit extreme, but it&rsquo;s quite possible that adding a new item
+triggers a resize in our <code>TEMP_INPUTS</code> vector which invalidates any references
+that may have been used when constructing the group.</p><p>I <em>really</em> don&rsquo;t want something like this to happen because it&rsquo;s one of those
+bugs that will be almost impossible to pinpoint in the wild. It&rsquo;s better to
+take the conservative approach here and just outlaw things like
+<code>RecipeBuilder::add_item()</code> when building a group.</p></div><p>If you think for a moment, that&rsquo;s the same problem we had with <code>Library</code> when
+we wanted to make sure you can <em>either</em> be creating a recipe using the
+<code>RecipeBuilder</code>, or setting parameters with <code>SettingParameters</code>. We just need to
+add another layer of <code>&mut</code>s!</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> RecipeBuilder<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> {
+    ...
+
+    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>add_group</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;r</span><span style=color:#f92672>&gt;</span>(<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>&#39;r</span> <span style=color:#66d9ef>mut</span> self, _name: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>) -&gt; <span style=color:#a6e22e>GroupBuilder</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;r</span>, <span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> {
+        GroupBuilder {
+            _recipe_builder: <span style=color:#a6e22e>self</span>,
+        }
+    }
+}
+
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>GroupBuilder</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;r</span>, <span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> {
+    _recipe_builder: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;r</span> <span style=color:#66d9ef>mut</span> RecipeBuilder<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span>,
+}
+
+<span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;r</span>, <span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> GroupBuilder<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;r</span>, <span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> {
+    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>add_item</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, _name: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>, _value: <span style=color:#66d9ef>i32</span>) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Self { unimplemented<span style=color:#f92672>!</span>() }
+
+    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>finish</span>(self) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;r</span> <span style=color:#66d9ef>mut</span> RecipeBuilder<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> { self._recipe_builder }
+}
+</code></pre></div><p>Next, I&rsquo;m going to continue with this builder pattern theme and give
+<code>RecipeBuilder</code> a <code>build()</code> method which returns a <code>Recipe</code>. Here our
+<code>Recipe</code> will just be an empty type indicating we&rsquo;ve fully assembled the
+inputs.</p><p>It acts as a &ldquo;token&rdquo; indicating all inputs are constructed and we&rsquo;re ready to
+call <code>stateful_execute()</code>.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> RecipeBuilder<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> {
+    ...
+
+    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>build</span>(self) -&gt; <span style=color:#a6e22e>Recipe</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> {
+        Recipe {
+            _library: <span style=color:#a6e22e>self</span>._library,
+        }
+    }
+}
+
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Recipe</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> {
+    _library: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;lib</span> <span style=color:#66d9ef>mut</span> Library,
+}
+</code></pre></div><p>If you&rsquo;ve been keeping up, we&rsquo;re now at the point where everything is
+initialized and we&rsquo;re ready to consume this <code>Recipe</code> to get the output.</p><p>It seems odd for a <code>Recipe</code> to know how to execute itself, so we&rsquo;ll create
+some sort of top-level <code>execute()</code> function instead of adding it as a method.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>execute</span><span style=color:#f92672>&lt;</span>P<span style=color:#f92672>&gt;</span>(_recipe: <span style=color:#a6e22e>Recipe</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;_</span><span style=color:#f92672>&gt;</span>, _progress: <span style=color:#a6e22e>P</span>) -&gt; Result<span style=color:#f92672>&lt;</span>Output, Error<span style=color:#f92672>&gt;</span>
+<span style=color:#66d9ef>where</span>
+    P: FnMut(<span style=color:#66d9ef>i32</span>),
+{
+    unimplemented<span style=color:#f92672>!</span>()
+}
+
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Output</span> {
+    <span style=color:#66d9ef>pub</span> items: Vec<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>i32</span><span style=color:#f92672>&gt;</span>,
+}
+</code></pre></div><p>To make sure the code we&rsquo;ve written prevents invalid uses of <code>Library</code>, let&rsquo;s
+use Rustdoc&rsquo;s <code>compile_fail</code> feature to document our functions with examples
+we expect <code>rustc</code> to reject.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>impl</span> Library {
+    ...
+
+    <span style=color:#e6db74>/// Start creating the inputs for [`execute()`].
+</span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// The [`RecipeBuilder`] uses lifetimes to make sure you can&#39;t do anything
+</span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// else while creating a [`Recipe`].
+</span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// ```rust,compile_fail
+</span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// # use stateful_native_library::Library;
+</span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// let mut library = Library::new().unwrap();
+</span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// // start creating the recipe
+</span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// let mut recipe_builder = library.create_recipe();
+</span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// // trying to set parameters while recipe_builder is alive is an error
+</span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// library.set_parameters();
+</span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// // recipe_builder is still alive until here
+</span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// drop(recipe_builder);
+</span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// ```
+</span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>create_recipe</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; <span style=color:#a6e22e>RecipeBuilder</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;_</span><span style=color:#f92672>&gt;</span> {
+        ...
+    }
+}
+</code></pre></div><p>Looking back, you can see that fulfilling the <code>!Send</code> and <code>!Sync</code> goal was
+quite easy to do. By making sure <code>Library: !Send + !Sync</code>, anything
+referencing <code>Library</code> is also <code>!Send + !Sync</code>.</p><p>On the other hand, ensuring functions can only be called in the correct order
+is a lot more invasive. We needed to restructure our entire API using complex
+concepts like lifetimes and RAII to encode the logical equivalent of a
+type-level state machine.</p><p>Here&rsquo;s a more detailed example showing the error messages a user would get if
+they tried to do things in the wrong order.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>#[test]</span>
+<span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>this_should_not_compile</span>() {
+    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> library <span style=color:#f92672>=</span> Library::new().unwrap();
+
+    {
+        <span style=color:#66d9ef>let</span> _sp <span style=color:#f92672>=</span> library.set_parameters();
+        library.create_recipe(); <span style=color:#75715e>// ERROR
+</span><span style=color:#75715e></span>    }
+
+    <span style=color:#66d9ef>let</span> recipe <span style=color:#f92672>=</span> {
+        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> recipe_builder <span style=color:#f92672>=</span> library.create_recipe();
+        <span style=color:#66d9ef>let</span> group_builder <span style=color:#f92672>=</span> recipe_builder.add_group(<span style=color:#e6db74>&#34;Group&#34;</span>);
+
+        <span style=color:#75715e>// try to add an item to the recipe while building a group
+</span><span style=color:#75715e></span>        recipe_builder.add_item(<span style=color:#e6db74>&#34;asdf&#34;</span>, <span style=color:#ae81ff>123</span>); <span style=color:#75715e>// ERROR
+</span><span style=color:#75715e></span>
+        <span style=color:#75715e>// finish building the group
+</span><span style=color:#75715e></span>        group_builder.finish();
+
+        <span style=color:#75715e>// we can now add items
+</span><span style=color:#75715e></span>        recipe_builder.add_item(<span style=color:#e6db74>&#34;asdf&#34;</span>, <span style=color:#ae81ff>123</span>);
+
+        <span style=color:#75715e>// you can&#39;t set parameters while building the recipe
+</span><span style=color:#75715e></span>        library.set_parameters(); <span style=color:#75715e>// ERROR
+</span><span style=color:#75715e></span>
+        recipe_builder.build()
+    };
+
+    <span style=color:#66d9ef>let</span> got <span style=color:#f92672>=</span> execute(recipe, <span style=color:#f92672>|</span>percent<span style=color:#f92672>|</span> println<span style=color:#f92672>!</span>(<span style=color:#e6db74>&#34;Progress: {}%&#34;</span>, percent));
+
+    assert<span style=color:#f92672>!</span>(got.is_ok());
+}
+</code></pre></div><p>And this is what <code>rustc</code> will emit:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-mysql data-lang=mysql><span style=color:#960050;background-color:#1e0010>$</span> cargo test
+   Compiling stateful<span style=color:#f92672>-</span>native<span style=color:#f92672>-</span>library v0.<span style=color:#ae81ff>1</span>.<span style=color:#ae81ff>0</span> (<span style=color:#f92672>/</span>home<span style=color:#f92672>/</span>michael<span style=color:#f92672>/</span>Documents<span style=color:#f92672>/</span>stateful<span style=color:#f92672>-</span>native<span style=color:#f92672>-</span>library)
+error[E0499]: cannot borrow <span style=color:#f92672>`</span>library<span style=color:#f92672>`</span> <span style=color:#66d9ef>as</span> mutable more than once at a <span style=color:#66d9ef>time</span>
+   <span style=color:#f92672>--&gt;</span> src<span style=color:#f92672>/</span>lib.rs:<span style=color:#ae81ff>284</span>:<span style=color:#ae81ff>13</span>
+    <span style=color:#f92672>|</span>
+<span style=color:#ae81ff>283</span> <span style=color:#f92672>|</span>             let _sp <span style=color:#f92672>=</span> library.<span style=color:#a6e22e>set_parameters</span>();
+    <span style=color:#f92672>|</span>                       <span style=color:#f92672>-----</span><span style=color:#75715e>-- first mutable borrow occurs here
+</span><span style=color:#75715e></span><span style=color:#ae81ff>284</span> <span style=color:#f92672>|</span>             library.<span style=color:#a6e22e>create_recipe</span>(); <span style=color:#f92672>//</span> ERROR
+    <span style=color:#f92672>|</span>             <span style=color:#f92672>^^^^^^^</span> second mutable borrow occurs here
+<span style=color:#ae81ff>285</span> <span style=color:#f92672>|</span>         <span style=color:#960050;background-color:#1e0010>}</span>
+    <span style=color:#f92672>|</span>         <span style=color:#f92672>-</span> first borrow might be used here, <span style=color:#66d9ef>when</span> <span style=color:#f92672>`</span>_sp<span style=color:#f92672>`</span> <span style=color:#66d9ef>is</span> dropped <span style=color:#66d9ef>and</span> runs the <span style=color:#f92672>`</span><span style=color:#66d9ef>Drop</span><span style=color:#f92672>`</span> code <span style=color:#66d9ef>for</span> type <span style=color:#f92672>`</span>SettingParameters<span style=color:#f92672>`</span>
+
+error[E0499]: cannot borrow <span style=color:#f92672>`</span>recipe_builder<span style=color:#f92672>`</span> <span style=color:#66d9ef>as</span> mutable more than once at a <span style=color:#66d9ef>time</span>
+   <span style=color:#f92672>--&gt;</span> src<span style=color:#f92672>/</span>lib.rs:<span style=color:#ae81ff>292</span>:<span style=color:#ae81ff>13</span>
+    <span style=color:#f92672>|</span>
+<span style=color:#ae81ff>289</span> <span style=color:#f92672>|</span>             let group_builder <span style=color:#f92672>=</span> recipe_builder.<span style=color:#a6e22e>add_group</span>(<span style=color:#e6db74>&#34;Group&#34;</span>);
+    <span style=color:#f92672>|</span>                                 <span style=color:#f92672>------------</span><span style=color:#75715e>-- first mutable borrow occurs here
+</span><span style=color:#75715e></span>...
+<span style=color:#ae81ff>292</span> <span style=color:#f92672>|</span>             recipe_builder.<span style=color:#a6e22e>add_item</span>(<span style=color:#e6db74>&#34;asdf&#34;</span>, <span style=color:#ae81ff>123</span>); <span style=color:#f92672>//</span> ERROR
+    <span style=color:#f92672>|</span>             <span style=color:#f92672>^^^^^^^^^^^^^^</span> second mutable borrow occurs here
+...
+<span style=color:#ae81ff>295</span> <span style=color:#f92672>|</span>             group_builder.<span style=color:#a6e22e>finish</span>();
+    <span style=color:#f92672>|</span>             <span style=color:#f92672>-----------</span><span style=color:#75715e>-- first borrow later used here
+</span><span style=color:#75715e></span>
+error[E0499]: cannot borrow <span style=color:#f92672>`</span>library<span style=color:#f92672>`</span> <span style=color:#66d9ef>as</span> mutable more than once at a <span style=color:#66d9ef>time</span>
+   <span style=color:#f92672>--&gt;</span> src<span style=color:#f92672>/</span>lib.rs:<span style=color:#ae81ff>301</span>:<span style=color:#ae81ff>13</span>
+    <span style=color:#f92672>|</span>
+<span style=color:#ae81ff>288</span> <span style=color:#f92672>|</span>             let mut recipe_builder <span style=color:#f92672>=</span> library.<span style=color:#a6e22e>create_recipe</span>();
+    <span style=color:#f92672>|</span>                                      <span style=color:#f92672>-----</span><span style=color:#75715e>-- first mutable borrow occurs here
+</span><span style=color:#75715e></span>...
+<span style=color:#ae81ff>301</span> <span style=color:#f92672>|</span>             library.<span style=color:#a6e22e>set_parameters</span>(); <span style=color:#f92672>//</span> ERROR
+    <span style=color:#f92672>|</span>             <span style=color:#f92672>^^^^^^^</span> second mutable borrow occurs here
+<span style=color:#ae81ff>302</span> <span style=color:#f92672>|</span>
+<span style=color:#ae81ff>303</span> <span style=color:#f92672>|</span>             recipe_builder.<span style=color:#a6e22e>build</span>()
+    <span style=color:#f92672>|</span>             <span style=color:#f92672>------------</span><span style=color:#75715e>-- first borrow later used here
+</span><span style=color:#75715e></span>
+error: aborting due <span style=color:#66d9ef>to</span> <span style=color:#ae81ff>3</span> previous errors
+
+<span style=color:#66d9ef>For</span> more information about this error, try <span style=color:#f92672>`</span>rustc <span style=color:#f92672>--</span><span style=color:#66d9ef>explain</span> E0499<span style=color:#f92672>`</span>.
+error: could <span style=color:#66d9ef>not</span> compile <span style=color:#f92672>`</span>stateful<span style=color:#f92672>-</span>native<span style=color:#f92672>-</span>library<span style=color:#f92672>`</span>.
+
+<span style=color:#66d9ef>To</span> learn more, run the command again <span style=color:#66d9ef>with</span> <span style=color:#f92672>--</span>verbose.
+</code></pre></div><p>It&rsquo;s moments like these that make you appreciate how useful the concept of
+lifetimes can be, and just how readable <code>rustc</code>&rsquo;s error messages are 🙂</p><h2 id=creating-ffi-bindings>Creating FFI Bindings
+<a class=heading-link href=#creating-ffi-bindings><i class="fa fa-link" aria-hidden=true></i></a></h2><p>While you were reading through that previous section I took the liberty of
+preparing some C++ code which satisfies the <code>stateful.h</code> interface.</p><p>The code isn&rsquo;t entirely relevant, but it&rsquo;s all <a href=https://github.com/Michael-F-Bryan/stateful-native-library/tree/master/native>on GitHub</a> if you&rsquo;re
+curious. I don&rsquo;t write C++ full time, so let me know if you spot any bugs or
+code which could have been written better.</p><details><summary>a big wall of code</summary><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-cpp data-lang=cpp><span style=color:#75715e>// native/stateful.cpp
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#include</span> <span style=color:#75715e>&#34;stateful.h&#34;</span><span style=color:#75715e>
+</span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;vector&gt;</span><span style=color:#75715e>
+</span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;unordered_map&gt;</span><span style=color:#75715e>
+</span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;string&gt;</span><span style=color:#75715e>
+</span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;variant&gt;</span><span style=color:#75715e>
+</span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;stdint.h&gt;</span><span style=color:#75715e>
+</span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;memory&gt;</span><span style=color:#75715e>
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>enum</span> <span style=color:#66d9ef>class</span> <span style=color:#a6e22e>State</span>
+{
+    Uninitialized,
+    Initialized,
+    SettingParameters,
+    AddingInputs,
+    AddingGroup,
+    Executing,
+};
+
+<span style=color:#66d9ef>class</span> <span style=color:#a6e22e>Item</span>
+{
+<span style=color:#66d9ef>public</span><span style=color:#f92672>:</span>
+    <span style=color:#66d9ef>virtual</span> <span style=color:#66d9ef>void</span> flatten(std<span style=color:#f92672>::</span>vector<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>int32_t</span><span style=color:#f92672>&gt;</span> <span style=color:#f92672>&amp;</span>dest) <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+    <span style=color:#66d9ef>virtual</span> <span style=color:#f92672>~</span>Item() {}
+};
+
+<span style=color:#66d9ef>class</span> <span style=color:#a6e22e>Group</span> <span style=color:#f92672>:</span> <span style=color:#66d9ef>public</span> Item
+{
+<span style=color:#66d9ef>private</span><span style=color:#f92672>:</span>
+    std<span style=color:#f92672>::</span>unordered_map<span style=color:#f92672>&lt;</span>std<span style=color:#f92672>::</span>string, <span style=color:#66d9ef>int32_t</span><span style=color:#f92672>&gt;</span> items;
+
+<span style=color:#66d9ef>public</span><span style=color:#f92672>:</span>
+    <span style=color:#66d9ef>void</span> insert(std<span style=color:#f92672>::</span>string key, <span style=color:#66d9ef>int32_t</span> value)
+    {
+        items.insert(std<span style=color:#f92672>::</span>make_pair(key, value));
+    }
+
+    <span style=color:#66d9ef>void</span> <span style=color:#a6e22e>flatten</span>(std<span style=color:#f92672>::</span>vector<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>int32_t</span><span style=color:#f92672>&gt;</span> <span style=color:#f92672>&amp;</span>dest)
+    {
+        <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>auto</span> <span style=color:#f92672>&amp;&amp;</span>pair : items)
+        {
+            dest.push_back(pair.second);
+        }
+    }
+};
+
+<span style=color:#66d9ef>class</span> <span style=color:#a6e22e>SingleItem</span> <span style=color:#f92672>:</span> <span style=color:#66d9ef>public</span> Item
+{
+<span style=color:#66d9ef>private</span><span style=color:#f92672>:</span>
+    <span style=color:#66d9ef>int32_t</span> value;
+
+<span style=color:#66d9ef>public</span><span style=color:#f92672>:</span>
+    SingleItem(<span style=color:#66d9ef>int32_t</span> v) <span style=color:#f92672>:</span> value(v) {}
+
+    <span style=color:#66d9ef>void</span> <span style=color:#a6e22e>flatten</span>(std<span style=color:#f92672>::</span>vector<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>int32_t</span><span style=color:#f92672>&gt;</span> <span style=color:#f92672>&amp;</span>dest)
+    {
+        dest.push_back(value);
+    }
+};
+
+<span style=color:#66d9ef>using</span> Parameter <span style=color:#f92672>=</span> std<span style=color:#f92672>::</span>variant<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>int32_t</span>, <span style=color:#66d9ef>bool</span><span style=color:#f92672>&gt;</span>;
+
+<span style=color:#75715e>// our actual global variables
+</span><span style=color:#75715e></span>
+State current_state <span style=color:#f92672>=</span> State<span style=color:#f92672>::</span>Uninitialized;
+std<span style=color:#f92672>::</span>unordered_map<span style=color:#f92672>&lt;</span>std<span style=color:#f92672>::</span>string, std<span style=color:#f92672>::</span>unique_ptr<span style=color:#f92672>&lt;</span>Item<span style=color:#f92672>&gt;&gt;</span> <span style=color:#f92672>*</span>inputs;
+std<span style=color:#f92672>::</span>unordered_map<span style=color:#f92672>&lt;</span>std<span style=color:#f92672>::</span>string, Parameter<span style=color:#f92672>&gt;</span> <span style=color:#f92672>*</span>parameters;
+
+std<span style=color:#f92672>::</span>vector<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>int32_t</span><span style=color:#f92672>&gt;</span> <span style=color:#f92672>*</span>temp_results;
+std<span style=color:#f92672>::</span>string <span style=color:#f92672>*</span>temp_group_name;
+Group <span style=color:#f92672>*</span>temp_group;
+
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_open</span>()
+{
+    <span style=color:#66d9ef>if</span> (current_state <span style=color:#f92672>!=</span> State<span style=color:#f92672>::</span>Uninitialized)
+    {
+        <span style=color:#66d9ef>return</span> RESULT_BAD_STATE;
+    }
+
+    inputs <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> std<span style=color:#f92672>::</span>unordered_map<span style=color:#f92672>&lt;</span>std<span style=color:#f92672>::</span>string, std<span style=color:#f92672>::</span>unique_ptr<span style=color:#f92672>&lt;</span>Item<span style=color:#f92672>&gt;&gt;</span>();
+    parameters <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> std<span style=color:#f92672>::</span>unordered_map<span style=color:#f92672>&lt;</span>std<span style=color:#f92672>::</span>string, Parameter<span style=color:#f92672>&gt;</span>();
+    current_state <span style=color:#f92672>=</span> State<span style=color:#f92672>::</span>Initialized;
+
+    <span style=color:#66d9ef>return</span> RESULT_OK;
+}
+
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_close</span>()
+{
+    <span style=color:#66d9ef>if</span> (inputs)
+    {
+        <span style=color:#66d9ef>delete</span> inputs;
+        inputs <span style=color:#f92672>=</span> <span style=color:#66d9ef>nullptr</span>;
+    }
+    <span style=color:#66d9ef>if</span> (parameters)
+    {
+        <span style=color:#66d9ef>delete</span> parameters;
+        parameters <span style=color:#f92672>=</span> <span style=color:#66d9ef>nullptr</span>;
+    }
+    current_state <span style=color:#f92672>=</span> State<span style=color:#f92672>::</span>Uninitialized;
+    <span style=color:#66d9ef>return</span> RESULT_OK;
+}
+
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_start_setting_parameters</span>()
+{
+    <span style=color:#66d9ef>if</span> (current_state <span style=color:#f92672>!=</span> State<span style=color:#f92672>::</span>Initialized)
+    {
+        <span style=color:#66d9ef>return</span> RESULT_BAD_STATE;
+    }
+
+    current_state <span style=color:#f92672>=</span> State<span style=color:#f92672>::</span>SettingParameters;
+    <span style=color:#66d9ef>return</span> RESULT_OK;
+}
+
+<span style=color:#66d9ef>template</span> <span style=color:#f92672>&lt;</span><span style=color:#66d9ef>typename</span> T<span style=color:#f92672>&gt;</span>
+<span style=color:#66d9ef>static</span> <span style=color:#66d9ef>int</span> set_parameter(<span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>name, T value)
+{
+    <span style=color:#66d9ef>if</span> (current_state <span style=color:#f92672>!=</span> State<span style=color:#f92672>::</span>SettingParameters)
+    {
+        <span style=color:#66d9ef>return</span> RESULT_BAD_STATE;
+    }
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>name)
+    {
+        <span style=color:#66d9ef>return</span> RESULT_INVALID_ARGUMENT;
+    }
+
+    parameters<span style=color:#f92672>-&gt;</span>insert(std<span style=color:#f92672>::</span>make_pair(name, value));
+
+    <span style=color:#66d9ef>return</span> RESULT_OK;
+}
+
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_set_bool_var</span>(<span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>name, <span style=color:#66d9ef>bool</span> value)
+{
+    <span style=color:#66d9ef>return</span> set_parameter(name, value);
+}
+
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_set_int_var</span>(<span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>name, <span style=color:#66d9ef>int</span> value)
+{
+    <span style=color:#66d9ef>return</span> set_parameter(name, value);
+}
+
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_end_setting_parameters</span>()
+{
+    <span style=color:#66d9ef>if</span> (current_state <span style=color:#f92672>!=</span> State<span style=color:#f92672>::</span>SettingParameters)
+    {
+        <span style=color:#66d9ef>return</span> RESULT_BAD_STATE;
+    }
+
+    current_state <span style=color:#f92672>=</span> State<span style=color:#f92672>::</span>Initialized;
+    <span style=color:#66d9ef>return</span> RESULT_OK;
+}
+
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_start_adding_items</span>()
+{
+    <span style=color:#66d9ef>if</span> (current_state <span style=color:#f92672>!=</span> State<span style=color:#f92672>::</span>Initialized)
+    {
+        <span style=color:#66d9ef>return</span> RESULT_BAD_STATE;
+    }
+
+    current_state <span style=color:#f92672>=</span> State<span style=color:#f92672>::</span>AddingInputs;
+    <span style=color:#66d9ef>return</span> RESULT_OK;
+}
+
+<span style=color:#66d9ef>template</span> <span style=color:#f92672>&lt;</span><span style=color:#66d9ef>typename</span> T<span style=color:#f92672>&gt;</span>
+<span style=color:#66d9ef>int</span> add_input(std<span style=color:#f92672>::</span>string name, <span style=color:#66d9ef>const</span> T value)
+{
+    <span style=color:#66d9ef>if</span> (current_state <span style=color:#f92672>!=</span> State<span style=color:#f92672>::</span>AddingInputs)
+    {
+        <span style=color:#66d9ef>return</span> RESULT_BAD_STATE;
+    }
+
+    inputs<span style=color:#f92672>-&gt;</span>insert(std<span style=color:#f92672>::</span>pair(name, std<span style=color:#f92672>::</span>make_unique<span style=color:#f92672>&lt;</span>T<span style=color:#f92672>&gt;</span>(value)));
+    <span style=color:#66d9ef>return</span> RESULT_OK;
+}
+
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_add_item</span>(<span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>name, <span style=color:#66d9ef>int</span> value)
+{
+    <span style=color:#66d9ef>return</span> add_input(name, SingleItem(value));
+}
+
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_start_adding_group</span>(<span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>name)
+{
+    <span style=color:#66d9ef>if</span> (current_state <span style=color:#f92672>!=</span> State<span style=color:#f92672>::</span>AddingInputs)
+    {
+        <span style=color:#66d9ef>return</span> RESULT_BAD_STATE;
+    }
+
+    temp_group_name <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> std<span style=color:#f92672>::</span>string(name);
+    temp_group <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> Group();
+
+    current_state <span style=color:#f92672>=</span> State<span style=color:#f92672>::</span>AddingGroup;
+    <span style=color:#66d9ef>return</span> RESULT_OK;
+}
+
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_add_group_item</span>(<span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>name, <span style=color:#66d9ef>int</span> value)
+{
+    <span style=color:#66d9ef>if</span> (current_state <span style=color:#f92672>!=</span> State<span style=color:#f92672>::</span>AddingGroup)
+    {
+        <span style=color:#66d9ef>return</span> RESULT_BAD_STATE;
+    }
+
+    temp_group<span style=color:#f92672>-&gt;</span>insert(name, value);
+    <span style=color:#66d9ef>return</span> RESULT_OK;
+}
+
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_end_adding_group</span>()
+{
+    <span style=color:#66d9ef>if</span> (current_state <span style=color:#f92672>!=</span> State<span style=color:#f92672>::</span>AddingGroup)
+    {
+        <span style=color:#66d9ef>return</span> RESULT_BAD_STATE;
+    }
+    current_state <span style=color:#f92672>=</span> State<span style=color:#f92672>::</span>AddingInputs;
+
+    add_input(<span style=color:#f92672>*</span>temp_group_name, <span style=color:#f92672>*</span>temp_group);
+
+    <span style=color:#66d9ef>delete</span> temp_group;
+    temp_group <span style=color:#f92672>=</span> <span style=color:#66d9ef>nullptr</span>;
+    <span style=color:#66d9ef>delete</span> temp_group_name;
+    temp_group_name <span style=color:#f92672>=</span> <span style=color:#66d9ef>nullptr</span>;
+
+    <span style=color:#66d9ef>return</span> RESULT_OK;
+}
+
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_end_adding_items</span>()
+{
+    <span style=color:#66d9ef>if</span> (current_state <span style=color:#f92672>!=</span> State<span style=color:#f92672>::</span>AddingInputs)
+    {
+        <span style=color:#66d9ef>return</span> RESULT_BAD_STATE;
+    }
+
+    current_state <span style=color:#f92672>=</span> State<span style=color:#f92672>::</span>Initialized;
+    <span style=color:#66d9ef>return</span> RESULT_OK;
+}
+
+<span style=color:#75715e>// This overload stuff legitimately feels like magic...
+</span><span style=color:#75715e>// https://www.bfilipek.com/2018/06/variant.html#visitors-for-stdvariant
+</span><span style=color:#75715e></span><span style=color:#66d9ef>template</span> <span style=color:#f92672>&lt;</span><span style=color:#66d9ef>class</span><span style=color:#960050;background-color:#1e0010>... </span><span style=color:#a6e22e>Ts</span><span style=color:#f92672>&gt;</span>
+<span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>overload</span> <span style=color:#f92672>:</span> Ts...
+{
+    <span style=color:#66d9ef>using</span> Ts<span style=color:#f92672>::</span><span style=color:#66d9ef>operator</span>()...;
+};
+<span style=color:#66d9ef>template</span> <span style=color:#f92672>&lt;</span><span style=color:#66d9ef>class</span><span style=color:#960050;background-color:#1e0010>... </span><span style=color:#a6e22e>Ts</span><span style=color:#f92672>&gt;</span>
+overload(Ts...)<span style=color:#f92672>-&gt;</span>overload<span style=color:#f92672>&lt;</span>Ts...<span style=color:#f92672>&gt;</span>;
+
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_execute</span>(progress_cb progress, result_cb result)
+{
+    <span style=color:#66d9ef>if</span> (current_state <span style=color:#f92672>!=</span> State<span style=color:#f92672>::</span>Initialized)
+    {
+        <span style=color:#66d9ef>return</span> RESULT_BAD_STATE;
+    }
+    current_state <span style=color:#f92672>=</span> State<span style=color:#f92672>::</span>Executing;
+
+    std<span style=color:#f92672>::</span>vector<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>int32_t</span><span style=color:#f92672>&gt;</span> results;
+    <span style=color:#66d9ef>int</span> i <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+
+    <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>auto</span> <span style=color:#f92672>&amp;</span>pair : <span style=color:#f92672>*</span>inputs)
+    {
+        pair.second<span style=color:#f92672>-&gt;</span>flatten(results);
+
+        <span style=color:#66d9ef>double</span> percent <span style=color:#f92672>=</span> <span style=color:#ae81ff>100.0</span> <span style=color:#f92672>*</span> i <span style=color:#f92672>/</span> inputs<span style=color:#f92672>-&gt;</span>size();
+        progress((<span style=color:#66d9ef>int</span>)percent);
+
+        i<span style=color:#f92672>++</span>;
+    }
+    progress(<span style=color:#ae81ff>100</span>);
+
+    temp_results <span style=color:#f92672>=</span> <span style=color:#f92672>&amp;</span>results;
+    result(results.size());
+    temp_results <span style=color:#f92672>=</span> <span style=color:#66d9ef>nullptr</span>;
+
+    current_state <span style=color:#f92672>=</span> State<span style=color:#f92672>::</span>Initialized;
+    <span style=color:#66d9ef>return</span> RESULT_OK;
+}
+
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_get_num_outputs</span>(<span style=color:#66d9ef>int</span> <span style=color:#f92672>*</span>value)
+{
+    <span style=color:#66d9ef>if</span> (current_state <span style=color:#f92672>!=</span> State<span style=color:#f92672>::</span>Executing)
+    {
+        <span style=color:#66d9ef>return</span> RESULT_BAD_STATE;
+    }
+
+    <span style=color:#f92672>*</span>value <span style=color:#f92672>=</span> temp_results<span style=color:#f92672>-&gt;</span>size();
+    <span style=color:#66d9ef>return</span> RESULT_OK;
+}
+
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>stateful_get_output_by_index</span>(<span style=color:#66d9ef>int</span> index, <span style=color:#66d9ef>int</span> <span style=color:#f92672>*</span>value)
+{
+    <span style=color:#66d9ef>if</span> (current_state <span style=color:#f92672>!=</span> State<span style=color:#f92672>::</span>Executing)
+    {
+        <span style=color:#66d9ef>return</span> RESULT_BAD_STATE;
+    }
+
+    <span style=color:#66d9ef>auto</span> <span style=color:#f92672>&amp;</span>results <span style=color:#f92672>=</span> <span style=color:#f92672>*</span>temp_results;
+
+    <span style=color:#66d9ef>if</span> (index <span style=color:#f92672>&gt;=</span> results.size())
+    {
+        <span style=color:#66d9ef>return</span> RESULT_INVALID_ARGUMENT;
+    }
+
+    <span style=color:#f92672>*</span>value <span style=color:#f92672>=</span> results[index];
+    <span style=color:#66d9ef>return</span> RESULT_OK;
+}
+</code></pre></div></details><p>The first step in using our stateful library from Rust is to make sure <code>cargo</code>
+automatically compiles the code for us. Luckily <a href=https://crates.io/crates/cc>the <code>cc</code> crate</a> was
+designed for exactly this purpose.</p><p>First we need to add <code>cc</code> as a <code>build </code>dependency.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ cargo add --build cc
+    Updating &#39;https://github.com/rust-lang/crates.io-index&#39; index
+      Adding cc v1.0.50 to build-dependencies
+</code></pre></div><p>Then we can create a <a href=https://doc.rust-lang.org/cargo/reference/build-scripts.html>build script</a>.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// build.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>use</span> cc::Build;
+<span style=color:#66d9ef>use</span> std::{env, path::PathBuf};
+
+<span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>main</span>() {
+    <span style=color:#66d9ef>let</span> project_dir <span style=color:#f92672>=</span> PathBuf::from(env::var(<span style=color:#e6db74>&#34;CARGO_MANIFEST_DIR&#34;</span>).unwrap());
+    <span style=color:#66d9ef>let</span> native <span style=color:#f92672>=</span> project_dir.join(<span style=color:#e6db74>&#34;native&#34;</span>);
+
+    Build::new()
+        .include(<span style=color:#f92672>&amp;</span>native)
+        .file(native.join(<span style=color:#e6db74>&#34;stateful.cpp&#34;</span>))
+        .cpp(<span style=color:#66d9ef>true</span>)
+        .flag_if_supported(<span style=color:#e6db74>&#34;-std=c++17&#34;</span>)
+        .compile(<span style=color:#e6db74>&#34;stateful&#34;</span>);
+}
+</code></pre></div><p>Next we need declarations that for the functions in <code>stateful.h</code> that can be
+called from Rust. These sorts of things are a pain to do by hand, so I almost
+always use <a href=https://github.com/rust-lang/rust-bindgen><code>bindgen</code></a> for this.</p><p>I ended up using this particular set of incantations:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ bindgen native/stateful.h  \
+    --whitelist-function &#39;stateful_.*&#39; \
+    --whitelist-var &#39;RESULT_.*&#39; \
+    --output src/bindings.rs \
+    --raw-line &#39;#![allow(bad_style, dead_code)]&#39;
+$ head src/bindings.rs
+/* automatically generated by rust-bindgen */
+
+#![allow(bad_style, dead_code)]
+
+extern &#34;C&#34; {
+    pub fn stateful_open() -&gt; ::std::os::raw::c_int;
+}
+extern &#34;C&#34; {
+    pub fn stateful_close() -&gt; ::std::os::raw::c_int;
+}
+</code></pre></div><p>We also need to update <code>lib.rs</code> to include <code>src/bindings.rs</code> as a sub-module.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>mod</span> bindings;
+</code></pre></div><p>Before going any further I&rsquo;d like to double-check the <code>stateful</code> native library
+is linked with our Rust code properly. The easiest way to do that is with a
+simple <a href=https://en.wikipedia.org/wiki/Smoke_testing_(software)>smoke test</a>.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#[cfg(test)]</span>
+<span style=color:#66d9ef>mod</span> tests {
+    <span style=color:#66d9ef>use</span> <span style=color:#66d9ef>super</span>::<span style=color:#f92672>*</span>;
+    <span style=color:#66d9ef>use</span> std::os::raw::c_int;
+
+    ...
+
+    <span style=color:#75715e>#[test]</span>
+    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>ffi_bindings_smoke_test</span>() {
+        <span style=color:#66d9ef>unsafe</span> {
+            assert_eq<span style=color:#f92672>!</span>(bindings::stateful_open(), bindings::RESULT_OK <span style=color:#66d9ef>as</span> c_int);
+            assert_eq<span style=color:#f92672>!</span>(bindings::stateful_close(), bindings::RESULT_OK <span style=color:#66d9ef>as</span> c_int);
+        }
+    }
+}
+</code></pre></div><div class="notices tip"><p>It&rsquo;s always a good idea to do these sorts of sanity checks. For one, you&rsquo;ve
+added a test that verifies you can always link with the native library, plus it
+also lets you identify other build problems early on.</p><p>Ironically, while writing that smoke test and saying how important it is to
+have them, I kept having compilation errors because the linker wasn&rsquo;t able to
+find <code>stateful_open()</code> and <code>stateful_close()</code>.</p><p>It turns out I forgot to add a <code>#ifdef __cplusplus extern "C" {</code> line to
+<code>stateful.h</code> to prevent the compiler from mangling the symbols for our
+<code>stateful_*</code>. It took a couple minutes of staring at linker errors, but after
+compiling <code>stateful.cpp</code> manually and using <code>nm stateful.o | grep ' T '</code> I
+noticed the mangled names and figured out what was going on.</p></div><h2 id=writing-a-safe-interface-to-libstateful>Writing a Safe Interface to libstateful
+<a class=heading-link href=#writing-a-safe-interface-to-libstateful><i class="fa fa-link" aria-hidden=true></i></a></h2><p>We&rsquo;re now ready to go from declaring our type-level state machine to giving it
+some behaviour to execute when transitioning from state to state.</p><p>To make things easier we&rsquo;re going to define a helper trait for converting from
+a return code to a <code>Result&lt;(), Error></code>.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>use</span> std::convert::TryFrom;
+
+<span style=color:#66d9ef>trait</span> IntoResult {
+    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>into_result</span>(self) -&gt; Result<span style=color:#f92672>&lt;</span>(), Error<span style=color:#f92672>&gt;</span>;
+}
+
+<span style=color:#66d9ef>impl</span> IntoResult <span style=color:#66d9ef>for</span> c_int {
+    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>into_result</span>(self) -&gt; Result<span style=color:#f92672>&lt;</span>(), Error<span style=color:#f92672>&gt;</span> {
+        <span style=color:#66d9ef>let</span> code <span style=color:#f92672>=</span> <span style=color:#66d9ef>u32</span>::try_from(self).map_err(<span style=color:#f92672>|</span>_<span style=color:#f92672>|</span> Error::Other(self))<span style=color:#f92672>?</span>;
+
+        <span style=color:#66d9ef>match</span> code {
+            bindings::RESULT_OK <span style=color:#f92672>=&gt;</span> Ok(()),
+            bindings::RESULT_BAD_STATE <span style=color:#f92672>=&gt;</span> Err(Error::InvalidState),
+            bindings::RESULT_INVALID_ARGUMENT <span style=color:#f92672>=&gt;</span> Err(Error::InvalidArgument),
+            _ <span style=color:#f92672>=&gt;</span> Err(Error::Other(self)),
+        }
+    }
+}
+</code></pre></div><p>By itself this trait isn&rsquo;t overly interesting, but we can leverage it to enable
+<code>?</code> for error handling.</p><p>This also gives us a chance to flesh out the <code>Error</code> enum.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#[derive(Debug, Copy, Clone, PartialEq, thiserror::Error)]</span>
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>Error</span> {
+    <span style=color:#75715e>#[error(</span><span style=color:#e6db74>&#34;The library is already in use&#34;</span><span style=color:#75715e>)]</span>
+    AlreadyInUse,
+    <span style=color:#75715e>#[error(</span><span style=color:#e6db74>&#34;The underlying library is in an invalid state&#34;</span><span style=color:#75715e>)]</span>
+    InvalidState,
+    <span style=color:#75715e>#[error(</span><span style=color:#e6db74>&#34;An argument was invalid&#34;</span><span style=color:#75715e>)]</span>
+    InvalidArgument,
+    <span style=color:#75715e>#[error(</span><span style=color:#e6db74>&#34;Unknown error code: {}&#34;</span><span style=color:#75715e>, _0)]</span>
+    Other(c_int),
+}
+</code></pre></div><h3 id=proper-raii>Proper RAII
+<a class=heading-link href=#proper-raii><i class="fa fa-link" aria-hidden=true></i></a></h3><p>Now that&rsquo;s out of the way, the first part to address is our <code>Library</code> type.
+At the moment we&rsquo;re just setting a flag to <code>true</code> and returning a <code>Library</code>
+handle, but we aren&rsquo;t actually initializing the underlying library.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-diff data-lang=diff> // src/lib.rs
+
+ impl Library {
+     pub fn new() -&gt; Result&lt;Library, Error&gt; {
+         if LIBRARY_IN_USE.compare_and_swap(false, true, Ordering::SeqCst)
+             == false
+         {
+<span style=color:#a6e22e>+            unsafe {
+</span><span style=color:#a6e22e>+                bindings::stateful_open().into_result()?;
+</span><span style=color:#a6e22e>+            }
+</span><span style=color:#a6e22e>+
+</span><span style=color:#a6e22e></span>             Ok(Library { _not_send: PhantomData })
+         } else {
+             Err(Error::AlreadyInUse)
+         }
+     }
+</code></pre></div><p>You can also see how that <code>IntoResult</code> trait helps to remove the visual noise
+associated with constant error checks.</p><p>When the <code>Library</code> gets destroyed we need to make sure everything gets cleaned
+up.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-diff data-lang=diff> // src/lib.rs
+
+ impl Drop for Library {
+<span style=color:#f92672>-    fn drop(&amp;mut self) { LIBRARY_IN_USE.store(false, Ordering::SeqCst); }
+</span><span style=color:#f92672></span><span style=color:#a6e22e>+    fn drop(&amp;mut self) {
+</span><span style=color:#a6e22e>+        unsafe {
+</span><span style=color:#a6e22e>+            let _ = bindings::stateful_close().into_result();
+</span><span style=color:#a6e22e>+        }
+</span><span style=color:#a6e22e>+        LIBRARY_IN_USE.store(false, Ordering::SeqCst);
+</span><span style=color:#a6e22e>+    }
+</span><span style=color:#a6e22e></span> }
+</code></pre></div><div class="notices note"><p>The ordering of operations is important here. We want to make sure the
+<code>LIBRARY_IN_USE</code> flag is set to <code>true</code> for the entire time we&rsquo;re interacting
+with the underlying code.</p></div><p>Our <code>SettingParameters</code> and <code>RecipeBuilder</code> types use RAII to represent when
+the library is in a certain state. We&rsquo;ll need to call the corresponding
+<code>*_start_*</code> and <code>*_end_*</code> functions when constructing and destroying them to
+make sure their lifetimes align with the state of the native library.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-diff data-lang=diff> // src/lib.rs
+
+ impl Library {
+     ...
+
+     pub fn set_parameters(&amp;mut self) -&gt; SettingParameters&lt;&#39;_&gt; {
+<span style=color:#a6e22e>+        cant_fail!(unsafe { bindings::stateful_start_setting_parameters() });
+</span><span style=color:#a6e22e></span>         SettingParameters { _library: self }
+     }
+
+     pub fn create_recipe(&amp;mut self) -&gt; RecipeBuilder&lt;&#39;_&gt; {
+<span style=color:#a6e22e>+        cant_fail!(unsafe { bindings::stateful_start_adding_items() });
+</span><span style=color:#a6e22e></span>         RecipeBuilder {
+             _library: ManuallyDrop::new(self),
+         }
+     }
+ }
+
+ ...
+
+<span style=color:#a6e22e>+impl&lt;&#39;lib&gt; Drop for SettingParameters&lt;&#39;lib&gt; {
+</span><span style=color:#a6e22e>+    fn drop(&amp;mut self) {
+</span><span style=color:#a6e22e>+        unsafe {
+</span><span style=color:#a6e22e>+            let _ = bindings::stateful_end_setting_parameters().into_result();
+</span><span style=color:#a6e22e>+        }
+</span><span style=color:#a6e22e>+    }
+</span><span style=color:#a6e22e>+}
+</span><span style=color:#a6e22e></span>
+ ...
+
+<span style=color:#a6e22e>+impl&lt;&#39;lib&gt; Drop for RecipeBuilder&lt;&#39;lib&gt; {
+</span><span style=color:#a6e22e>+    fn drop(&amp;mut self) {
+</span><span style=color:#a6e22e>+        unsafe {
+</span><span style=color:#a6e22e>+            let _ = bindings::stateful_end_adding_items().into_result();
+</span><span style=color:#a6e22e>+        }
+</span><span style=color:#a6e22e>+    }
+</span><span style=color:#a6e22e>+}
+</span></code></pre></div><p>You&rsquo;ll notice that I&rsquo;ve introduced a <code>cant_fail!()</code> macro here. I&rsquo;ve
+introduced an assertion which will blow up loudly if that assumption isn&rsquo;t
+valid. Because we&rsquo;re using the type system to statically guarantee code can&rsquo;t
+be executed out of order and that the arguments we provide are always valid,
+these otherwise infallible functions should fail quickly and loudly to
+indicate a possible programming error.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#e6db74>/// A macro you can use when you *know* a function has been statically proven to
+</span><span style=color:#e6db74>/// not fail.
+</span><span style=color:#e6db74></span>macro_rules<span style=color:#f92672>!</span> cant_fail {
+    (<span style=color:#75715e>$return_code</span>:<span style=color:#a6e22e>expr</span>) <span style=color:#f92672>=&gt;</span> {
+        <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> Err(e) <span style=color:#f92672>=</span> <span style=color:#75715e>$return_code</span>.into_result() {
+            unreachable<span style=color:#f92672>!</span>(
+                <span style=color:#e6db74>&#34;The type system should ensure this function can&#39;t fail: {}&#34;</span>,
+                e
+            );
+        }
+    };
+}
+</code></pre></div><p>We need to do a bit more work when adding calls to
+<code>stateful_start_adding_group()</code> and <code>stateful_end_adding_group()</code> for our
+<code>GroupBuilder</code> because it is the first proper function that we need to
+provide arguments for.</p><p>To help convert between a Rust <code>&str</code> and <code>const char *</code> we can use the
+<a href=https://doc.rust-lang.org/std/ffi/struct.CString.html><code>std::ffi::CString</code></a> type. The constructor can fail with a <code>NulError</code>
+if a string contains an internal <code>null</code> byte, but considering most &ldquo;proper&rdquo;
+strings in Rust won&rsquo;t ever contain <code>null</code> it seems fair to simplify the API by
+panicking instead of propagating the error.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>const</span> NUL_MSG: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;a valid Rust string shouldn&#39;t contain null characters&#34;</span>;
+
+<span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> RecipeBuilder<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> {
+    ...
+
+    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>add_group</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;r</span><span style=color:#f92672>&gt;</span>(<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>&#39;r</span> <span style=color:#66d9ef>mut</span> self, name: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>) -&gt; <span style=color:#a6e22e>GroupBuilder</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;r</span>, <span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> {
+        <span style=color:#66d9ef>let</span> name <span style=color:#f92672>=</span> CString::new(name).expect(NUL_MSG);
+        cant_fail<span style=color:#f92672>!</span>(<span style=color:#66d9ef>unsafe</span> {
+            bindings::stateful_start_adding_group(name.as_ptr())
+        });
+        GroupBuilder { _recipe_builder: <span style=color:#a6e22e>ManuallyDrop</span>::new(self) }
+    }
+}
+
+<span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;r</span>, <span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> Drop <span style=color:#66d9ef>for</span> GroupBuilder<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;r</span>, <span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> {
+    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>drop</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) {
+        <span style=color:#66d9ef>unsafe</span> {
+            <span style=color:#66d9ef>let</span> _ <span style=color:#f92672>=</span> bindings::stateful_end_adding_group().into_result();
+        }
+    }
+}
+</code></pre></div><h3 id=finishing-it-off>Finishing It Off
+<a class=heading-link href=#finishing-it-off><i class="fa fa-link" aria-hidden=true></i></a></h3><p>At this point it&rsquo;s just a case of grepping for any remaining functions
+containing <code>unimplemented!()</code> and translating the arguments so they can be
+passed to the corresponding functions in our <code>stateful</code> library.</p><p>First up are the methods on <code>SettingParameters</code>.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> SettingParameters<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> {
+    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>boolean</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, name: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>, value: <span style=color:#66d9ef>bool</span>) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Self {
+        <span style=color:#66d9ef>let</span> name <span style=color:#f92672>=</span> CString::new(name).expect(NUL_MSG);
+
+        <span style=color:#66d9ef>unsafe</span> {
+            cant_fail<span style=color:#f92672>!</span>(bindings::stateful_set_bool_var(name.as_ptr(), value));
+        }
+
+        self
+    }
+
+    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>integer</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, name: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>, value: <span style=color:#66d9ef>i32</span>) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Self {
+        <span style=color:#66d9ef>let</span> name <span style=color:#f92672>=</span> CString::new(name).expect(NUL_MSG);
+
+        <span style=color:#66d9ef>unsafe</span> {
+            cant_fail<span style=color:#f92672>!</span>(bindings::stateful_set_int_var(name.as_ptr(), value));
+        }
+
+        self
+    }
+}
+</code></pre></div><p>Then <code>RecipeBuilder</code>.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> RecipeBuilder<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> {
+    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>add_item</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, name: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>, value: <span style=color:#66d9ef>i32</span>) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Self {
+        <span style=color:#66d9ef>let</span> name <span style=color:#f92672>=</span> CString::new(name).expect(NUL_MSG);
+        cant_fail<span style=color:#f92672>!</span>(<span style=color:#66d9ef>unsafe</span> {
+            bindings::stateful_add_item(name.as_ptr(), value)
+        });
+
+        self
+    }
+
+    ...
+}
+</code></pre></div><p>Our <code>GroupBuilder</code> also has an <code>unimplemented!()</code> method that needs
+implementing.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;r</span>, <span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> GroupBuilder<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;r</span>, <span style=color:#a6e22e>&#39;lib</span><span style=color:#f92672>&gt;</span> {
+    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>add_item</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, name: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>, value: <span style=color:#66d9ef>i32</span>) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Self {
+        <span style=color:#66d9ef>let</span> name <span style=color:#f92672>=</span> CString::new(name).expect(NUL_MSG);
+        cant_fail<span style=color:#f92672>!</span>(<span style=color:#66d9ef>unsafe</span> {
+            bindings::stateful_add_group_item(name.as_ptr(), value)
+        });
+
+        self
+    }
+
+    ...
+}
+</code></pre></div><p>The only remaining <code>unimplemented!()</code> is in our <code>execute()</code> function.</p><p>This one is a little tricky because we somehow need to pass results from the
+&ldquo;finished&rdquo; callback back to our <code>execute()</code> function so they can be returned to
+the caller.</p><p>Unfortunately, we don&rsquo;t have the option of passing a pointer to some state
+we can put the result in, so we&rsquo;ll need to stash it in a temporary <code>static</code>
+variable.</p><div class="notices tip"><p>If you are ever designing a C API, the <em>correct</em> way to implement non-trivial
+callbacks is by accepting a <code>void *</code> user data pointer.</p><p>I would highly recommend checking out <a href=https://stackoverflow.com/questions/50874154/what-is-the-use-of-userdata-in-callback-register-function-in-c>this question on StackOverflow</a> for
+more!</p></div><p>Because this function is pretty long, I&rsquo;m going to break it up into a couple
+chunks.</p><p>First we have our temporary variables. This is a place to store our temporary
+result and a pointer to the data attached to the <code>progress</code> closure.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>execute</span><span style=color:#f92672>&lt;</span>P<span style=color:#f92672>&gt;</span>(_recipe: <span style=color:#a6e22e>Recipe</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;_</span><span style=color:#f92672>&gt;</span>, <span style=color:#66d9ef>mut</span> progress: <span style=color:#a6e22e>P</span>) -&gt; Result<span style=color:#f92672>&lt;</span>Output, Error<span style=color:#f92672>&gt;</span>
+<span style=color:#66d9ef>where</span>
+    P: FnMut(<span style=color:#66d9ef>i32</span>),
+{
+    <span style=color:#75715e>// Safety: Accepting a `Recipe` means we prove at compile time that setting
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// these variables can&#39;t result in any data races.
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>static</span> <span style=color:#66d9ef>mut</span> ON_PROGRESS_USER_DATA: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> c_void <span style=color:#f92672>=</span> ptr::null_mut();
+    <span style=color:#66d9ef>static</span> <span style=color:#66d9ef>mut</span> TEMPORARY_RESULT: Option<span style=color:#f92672>&lt;</span>Output<span style=color:#f92672>&gt;</span> <span style=color:#f92672>=</span> None;
+
+    ...
+}
+</code></pre></div><p>Next we&rsquo;ve got a definition for the actual <code>on_progress()</code> function we&rsquo;ll be
+passing to <code>stateful_execute()</code>. This uses a trick where you instantiate the
+generic <code>on_progress&lt;F>()</code> function with a particular type, turning it into a
+non-generic function which is specialised for the closure type passed to
+<code>execute()</code>.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>execute</span><span style=color:#f92672>&lt;</span>P<span style=color:#f92672>&gt;</span>(_recipe: <span style=color:#a6e22e>Recipe</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;_</span><span style=color:#f92672>&gt;</span>, <span style=color:#66d9ef>mut</span> progress: <span style=color:#a6e22e>P</span>) -&gt; Result<span style=color:#f92672>&lt;</span>Output, Error<span style=color:#f92672>&gt;</span>
+<span style=color:#66d9ef>where</span>
+    P: FnMut(<span style=color:#66d9ef>i32</span>),
+{
+    ...
+
+    <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_progress</span><span style=color:#f92672>&lt;</span>F<span style=color:#f92672>&gt;</span>(percent: <span style=color:#a6e22e>c_int</span>) -&gt; <span style=color:#a6e22e>c_int</span>
+    <span style=color:#66d9ef>where</span>
+        F: FnMut(<span style=color:#66d9ef>i32</span>),
+    {
+        <span style=color:#75715e>// Safety: This requires us to store a pointer to `progress` when
+</span><span style=color:#75715e></span>        <span style=color:#75715e>// `execute()` is called and make sure the `F` type variable
+</span><span style=color:#75715e></span>        <span style=color:#75715e>// `on_progress()` is instantiated with is the same as `execute()`&#39;s `P`
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>let</span> actual_progress_callback <span style=color:#f92672>=</span> <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> <span style=color:#f92672>*</span>(ON_PROGRESS_USER_DATA <span style=color:#66d9ef>as</span> <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> F);
+
+        actual_progress_callback(percent);
+        bindings::RESULT_OK <span style=color:#66d9ef>as</span> c_int
+    }
+
+    ...
+}
+</code></pre></div><p>If that explanation makes your head hurt a little, just hang in there, it should
+get a bit clearer once we see how it gets used.</p><p>Next we define an <code>on_finished()</code> function to pass to <code>stateful_execute()</code>. This
+keeps reading outputs until there are no more, and saves them to the
+<code>TEMPORARY_RESULT</code> static variable.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>execute</span><span style=color:#f92672>&lt;</span>P<span style=color:#f92672>&gt;</span>(_recipe: <span style=color:#a6e22e>Recipe</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;_</span><span style=color:#f92672>&gt;</span>, <span style=color:#66d9ef>mut</span> progress: <span style=color:#a6e22e>P</span>) -&gt; Result<span style=color:#f92672>&lt;</span>Output, Error<span style=color:#f92672>&gt;</span>
+<span style=color:#66d9ef>where</span>
+    P: FnMut(<span style=color:#66d9ef>i32</span>),
+{
+    ...
+
+    <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_finished</span>(_num_items: <span style=color:#a6e22e>c_int</span>) -&gt; <span style=color:#a6e22e>c_int</span> {
+        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> output <span style=color:#f92672>=</span> Output::default();
+
+        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> item <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+
+        <span style=color:#66d9ef>while</span> bindings::stateful_get_output_by_index(
+            output.items.len() <span style=color:#66d9ef>as</span> c_int,
+            <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> item,
+        ) <span style=color:#f92672>==</span> bindings::RESULT_OK <span style=color:#66d9ef>as</span> c_int
+        {
+            output.items.push(item);
+        }
+
+        <span style=color:#75715e>// Safety: Accepting a `Recipe` means this can only be set by one thread
+</span><span style=color:#75715e></span>        <span style=color:#75715e>// at a time
+</span><span style=color:#75715e></span>        TEMPORARY_RESULT <span style=color:#f92672>=</span> Some(output);
+
+        bindings::RESULT_OK <span style=color:#66d9ef>as</span> c_int
+    }
+
+    ...
+}
+</code></pre></div><p>Finally we can actually call <code>stateful_execute()</code> and process the results.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>execute</span><span style=color:#f92672>&lt;</span>P<span style=color:#f92672>&gt;</span>(_recipe: <span style=color:#a6e22e>Recipe</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;_</span><span style=color:#f92672>&gt;</span>, <span style=color:#66d9ef>mut</span> progress: <span style=color:#a6e22e>P</span>) -&gt; Result<span style=color:#f92672>&lt;</span>Output, Error<span style=color:#f92672>&gt;</span>
+<span style=color:#66d9ef>where</span>
+    P: FnMut(<span style=color:#66d9ef>i32</span>),
+{
+    ...
+
+    <span style=color:#66d9ef>unsafe</span> {
+        ON_PROGRESS_USER_DATA <span style=color:#f92672>=</span> <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> progress <span style=color:#66d9ef>as</span> <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> P <span style=color:#66d9ef>as</span> <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> c_void;
+
+        <span style=color:#66d9ef>let</span> ret <span style=color:#f92672>=</span> bindings::stateful_execute(
+            Some(on_progress::<span style=color:#f92672>&lt;</span>P<span style=color:#f92672>&gt;</span>),
+            Some(on_finished),
+        )
+        .into_result();
+
+        <span style=color:#75715e>// We need to take the temporary result before handling
+</span><span style=color:#75715e></span>        <span style=color:#75715e>// stateful_execute()&#39;s return code so we don&#39;t leak an `Output`.
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>let</span> output <span style=color:#f92672>=</span> TEMPORARY_RESULT.take();
+
+        <span style=color:#75715e>// just bail if something went wrong
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> Err(e) <span style=color:#f92672>=</span> ret {
+            <span style=color:#66d9ef>return</span> Err(e);
+        }
+
+        <span style=color:#75715e>// We need to make sure we actually set the temporary result. The only
+</span><span style=color:#75715e></span>        <span style=color:#75715e>// way this could possibly happen is if `stateful_execute()` ran to
+</span><span style=color:#75715e></span>        <span style=color:#75715e>// completion and said it finished successfully without actually
+</span><span style=color:#75715e></span>        <span style=color:#75715e>// invoking our `on_finished` callback... If so, that&#39;s a programming
+</span><span style=color:#75715e></span>        <span style=color:#75715e>// error in the underlying library and nothing the caller can reasonably
+</span><span style=color:#75715e></span>        <span style=color:#75715e>// be expected to handle
+</span><span style=color:#75715e></span>
+        <span style=color:#66d9ef>match</span> output {
+            Some(output) <span style=color:#f92672>=&gt;</span> Ok(output),
+            None <span style=color:#f92672>=&gt;</span> panic<span style=color:#f92672>!</span>(<span style=color:#e6db74>&#34;The stateful_execute function said it returned
+</span><span style=color:#e6db74>            successfully without calling our on_finished callback. This is a
+</span><span style=color:#e6db74>            bug.&#34;</span>)
+        }
+    }
+}
+</code></pre></div><p>I&rsquo;m not going to explain this in much detail because it should hopefully be
+fairly readable and well commented. Plus, reading the source code is always a
+more accurate explanation of what is going on than several paragraphs of
+English.</p><p>The most important thing to note is the liberal sprinkling of comments
+starting with <code>// Safety</code>. These are hints to other developers (or myself 6
+months from now) about the various invariants which need to be upheld, and the
+reason I believe this <code>unsafe</code> code is sound.</p><div class="notices note"><p>This <code>execute()</code> function contains about 80 lines of <code>unsafe</code> code. If you
+see something that looks a bit funny, please let me know either in the
+<a href=https://github.com/Michael-F-Bryan/stateful-native-library><code>stateful-native-library</code> repository</a> or <a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com>this blog&rsquo;s issue
+tracker</a>.</p><p>Writing correct code is very important to me, especially when it is being
+read or used by others!</p></div><h2 id=making-sure-it-works>Making Sure It Works
+<a class=heading-link href=#making-sure-it-works><i class="fa fa-link" aria-hidden=true></i></a></h2><p>Now we&rsquo;ve gone to all the effort of binding to our <code>stateful</code> native library,
+let&rsquo;s write a small program which uses it.</p><p>To that end, I&rsquo;ve created the following contrived example,</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// examples/basic-usage.rs
+</span><span style=color:#75715e></span>
+<span style=color:#e6db74>//! A contrived example showing how you can use the `stateful_native_library`
+</span><span style=color:#e6db74>//! bindings.
+</span><span style=color:#e6db74></span>
+<span style=color:#66d9ef>use</span> stateful_native_library::{Error, Library};
+
+<span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>main</span>() -&gt; Result<span style=color:#f92672>&lt;</span>(), Error<span style=color:#f92672>&gt;</span> {
+    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> library <span style=color:#f92672>=</span> Library::new()<span style=color:#f92672>?</span>;
+
+    <span style=color:#75715e>// set some parameters
+</span><span style=color:#75715e></span>    library
+        .set_parameters()
+        .boolean(<span style=color:#e6db74>&#34;foo&#34;</span>, <span style=color:#66d9ef>false</span>)
+        .integer(<span style=color:#e6db74>&#34;some-number&#34;</span>, <span style=color:#ae81ff>42</span>);
+
+    <span style=color:#75715e>// start building the recipe
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> recipe_builder <span style=color:#f92672>=</span> library.create_recipe();
+    recipe_builder.add_item(<span style=color:#e6db74>&#34;first&#34;</span>, <span style=color:#ae81ff>1</span>).add_item(<span style=color:#e6db74>&#34;second&#34;</span>, <span style=color:#ae81ff>2</span>);
+
+    <span style=color:#75715e>// we can add several groups using a loop
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>for</span> i <span style=color:#66d9ef>in</span> <span style=color:#ae81ff>0</span>..<span style=color:#ae81ff>5</span> {
+        <span style=color:#66d9ef>let</span> name <span style=color:#f92672>=</span> format<span style=color:#f92672>!</span>(<span style=color:#e6db74>&#34;group_{}&#34;</span>, i);
+        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> group_builder <span style=color:#f92672>=</span> recipe_builder.add_group(<span style=color:#f92672>&amp;</span>name);
+
+        <span style=color:#66d9ef>for</span> j <span style=color:#66d9ef>in</span> <span style=color:#ae81ff>0</span>..i {
+            <span style=color:#66d9ef>let</span> name <span style=color:#f92672>=</span> format<span style=color:#f92672>!</span>(<span style=color:#e6db74>&#34;group_{}_item_{}&#34;</span>, i, j);
+            group_builder.add_item(<span style=color:#f92672>&amp;</span>name, i <span style=color:#f92672>+</span> j);
+        }
+
+        group_builder.finish();
+    }
+
+    <span style=color:#75715e>// or use normal builder methods
+</span><span style=color:#75715e></span>    recipe_builder
+        .add_group(<span style=color:#e6db74>&#34;another group&#34;</span>)
+        .add_item(<span style=color:#e6db74>&#34;another nested item&#34;</span>, <span style=color:#ae81ff>5</span>)
+        .add_item(<span style=color:#e6db74>&#34;MOAR items&#34;</span>, <span style=color:#ae81ff>6</span>);
+
+    <span style=color:#75715e>// finish building the recipe
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> recipe <span style=color:#f92672>=</span> recipe_builder.build();
+
+    <span style=color:#75715e>// then get the outcome, periodically printing out progress messages
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> outcome <span style=color:#f92672>=</span> stateful_native_library::execute(recipe, <span style=color:#f92672>|</span>percent<span style=color:#f92672>|</span> {
+        println<span style=color:#f92672>!</span>(<span style=color:#e6db74>&#34;{}%&#34;</span>, percent)
+    })<span style=color:#f92672>?</span>;
+
+    println<span style=color:#f92672>!</span>(<span style=color:#e6db74>&#34;Got {:?}&#34;</span>, outcome);
+
+    Ok(())
+}
+</code></pre></div><p>And this is what you get when you run it:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ cargo run --example basic-usage
+   Compiling stateful-native-library v0.1.0 (/home/michael/Documents/stateful-native-library)
+    Finished dev [unoptimized + debuginfo] target(s) in 4.72s
+     Running `target/debug/examples/basic-usage`
+0%
+12%
+25%
+37%
+50%
+62%
+75%
+87%
+100%
+Got Output { items: [6, 4, 7, 5, 5, 3, 4, 2, 6, 5, 1, 1, 3, 2] }
+</code></pre></div><p>Running the <code>basic-usage</code> example compiled with optimisations (which I would
+expect to be more likely to show UB) under <code>valgrind</code> seems to show no obvious
+problems.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ valgrind target/release/examples/basic-usage
+==9668== Memcheck, a memory error detector
+==9668== Copyright (C) 2002-2017, and GNU GPL&#39;d, by Julian Seward et al.
+==9668== Using Valgrind-3.15.0 and LibVEX; rerun with -h for copyright info
+==9668== Command: target/release/examples/basic-usage
+==9668==
+0%
+12%
+25%
+37%
+50%
+62%
+75%
+87%
+100%
+Got Output { items: [6, 4, 7, 5, 5, 3, 4, 2, 6, 5, 1, 1, 3, 2] }
+==9668==
+==9668== HEAP SUMMARY:
+==9668==     in use at exit: 0 bytes in 0 blocks
+==9668==   total heap usage: 160 allocs, 160 frees, 81,197 bytes allocated
+==9668==
+==9668== All heap blocks were freed -- no leaks are possible
+==9668==
+==9668== For lists of detected and suppressed errors, rerun with: -s
+==9668== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+</code></pre></div><h2 id=conclusions>Conclusions
+<a class=heading-link href=#conclusions><i class="fa fa-link" aria-hidden=true></i></a></h2><p>In an ideal world all code would be perfect and we&rsquo;d never need to worry about
+data races or accidentally putting a system in an invalid state.</p><p>Unfortunately, this <em>isn&rsquo;t</em> an ideal world so we need to develop techniques
+that allow us to keep working under less than ideal conditions while limiting
+the negative effects they can have on the rest of a codebase.</p><p>As it turns out, Rust&rsquo;s type system and its concept of lifetimes are really
+powerful tools for taking errors that other languages could only detect at
+runtime and promoting them to compilation failures. That&rsquo;s one of the things
+I really like about the language, more often than not <em>if it compiles, it
+works</em>.</p></div><footer></footer></article><script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script><script id=MathJax-script async src=https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js></script><script>MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']],processEscapes:!0,processEnvironments:!0},options:{skipHtmlTags:['script','noscript','style','textarea','pre']}}</script></section></div><footer class=footer><section class=container>©
+2021
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/eb2d656975ffbaee2955396af8291207b810384d>eb2d656</a>]</section></footer></main><script src=/js/dark-mode.min.aee9c8a464eb7b3534c7110f7c5e169e7039e2fd92710e0626d451d6725af137.js></script><script src=/js/mermaid.min.js></script><script src=/js/index.js></script><script type=application/javascript>var doNotTrack=!1;doNotTrack||(function(a,e,f,g,b,c,d){a.GoogleAnalyticsObject=b,a[b]=a[b]||function(){(a[b].q=a[b].q||[]).push(arguments)},a[b].l=1*new Date,c=e.createElement(f),d=e.getElementsByTagName(f)[0],c.async=1,c.src=g,d.parentNode.insertBefore(c,d)}(window,document,'script','https://www.google-analytics.com/analytics.js','ga'),ga('create','UA-78714693-3','auto'),ga('send','pageview'))</script></body></html>

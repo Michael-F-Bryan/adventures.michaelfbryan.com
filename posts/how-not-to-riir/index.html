@@ -1,0 +1,1265 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta http-equiv=content-language content="en"><meta name=author content="Michael-F-Bryan"><meta name=description content="Once you get past the growing pains of the Borrow Checker and realise Rust gives you the power to do things which would be unheard of (or just plain dangerous) in other languages, the temptation to Rewrite it in Rust can be quite strong. However at best, the temptation to RiiR is unproductive (unnecessary duplication of effort), and at worst it can promote the creation of buggy software (why would you be better equipped to write a library for some domain-specific purpose than the original author?"><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="How to not RiiR"><meta name=twitter:description content="Once you get past the growing pains of the Borrow Checker and realise Rust gives you the power to do things which would be unheard of (or just plain dangerous) in other languages, the temptation to Rewrite it in Rust can be quite strong. However at best, the temptation to RiiR is unproductive (unnecessary duplication of effort), and at worst it can promote the creation of buggy software (why would you be better equipped to write a library for some domain-specific purpose than the original author?"><meta property="og:title" content="How to not RiiR"><meta property="og:description" content="Once you get past the growing pains of the Borrow Checker and realise Rust gives you the power to do things which would be unheard of (or just plain dangerous) in other languages, the temptation to Rewrite it in Rust can be quite strong. However at best, the temptation to RiiR is unproductive (unnecessary duplication of effort), and at worst it can promote the creation of buggy software (why would you be better equipped to write a library for some domain-specific purpose than the original author?"><meta property="og:type" content="article"><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/how-not-to-riir/"><meta property="article:section" content="posts"><meta property="article:published_time" content="2019-10-20T19:45:00+08:00"><meta property="article:modified_time" content="2021-06-20T07:54:53+08:00"><title>How to not RiiR · Michael-F-Bryan</title><link rel=canonical href=https://adventures.michaelfbryan.com/posts/how-not-to-riir/><link rel=preload href="/fonts/forkawesome-webfont.woff2?v=1.1.7" as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.ec198d25949ddd79a670b1ead43ca88e0bc2c1343266d0df0a9eeb7f3f207777.css integrity="sha256-7BmNJZSd3XmmcLHq1DyojgvCwTQyZtDfCp7rfz8gd3c=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.89c82b6022b96f77aeb521b240daec4f87ea029d84d1c78b8acd0735b91b3c92.css integrity="sha256-icgrYCK5b3eutSGyQNrsT4fqAp2E0ceLis0HNbkbPJI=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.css><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><meta name=generator content="Hugo 0.84.0"></head><body class=colorscheme-auto><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=/>Michael-F-Bryan</a>
+<input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title>How to not RiiR</h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa fa-calendar" aria-hidden=true></i>
+<time datetime=2019-10-20T19:45:00+08:00>October 20, 2019</time></span>
+<span class=reading-time><i class="fa fa-clock-o" aria-hidden=true></i>
+28-minute read</span></div><div class=tags><i class="fa fa-tag" aria-hidden=true></i>
+<a href=/tags/rust/>Rust</a>
+<span class=separator>•</span>
+<a href=/tags/ffi/>FFI</a></div></div></header><div><div class="notices tip"><p>I often like exploring a topic in great depth and writing about my
+thoughts and experiences as I go along.</p><p>This is more of an extended essay than an article to be read in a
+single sitting. Feel free to read it one piece at a time, or just
+skip to the bits that look interesting.</p><p>Here, have a <em>Table of Contents</em>:</p><nav id=TableOfContents><ul><li><a href=#getting-started>Getting Started</a></li><li><a href=#building-chmlib-sys>Building <code>chmlib-sys</code></a></li><li><a href=#writing-a-safe-rust-wrapper>Writing a Safe Rust Wrapper</a><ul><li><a href=#finding-an-item-by-name>Finding an Item by Name</a></li><li><a href=#enumerating-items-in-a-chm-file>Enumerating Items in a CHM File</a></li><li><a href=#reading-file-contents>Reading File Contents</a></li></ul></li><li><a href=#implementing-the-examples>Implementing the Examples</a><ul><li><a href=#enumerating-all-items>Enumerating All Items</a></li><li><a href=#extracting-a-chm-file-to-disk>Extracting A CHM File To Disk</a></li></ul></li><li><a href=#where-to-from-here>Where To From Here?</a></li></ul></nav></div><p>Once you get past the growing pains of the <em>Borrow Checker</em> and realise Rust
+gives you the power to do things which would be unheard of (or just plain
+dangerous) in other languages, the temptation to <a href=https://transitiontech.ca/random/RIIR><em>Rewrite it in Rust</em></a>
+can be quite strong. However at best, the temptation to <em>RiiR</em> is unproductive
+(unnecessary duplication of effort), and at worst it can promote the creation
+of buggy software (why would <em>you</em> be better equipped to write a library for
+some domain-specific purpose than the original author?).</p><p>A much better alternative is to reuse the original library and just publish a
+safe interface to it.</p><ul><li><a href=#getting-started>Getting Started</a></li><li><a href=#building-chmlib-sys>Building <code>chmlib-sys</code></a></li><li><a href=#writing-a-safe-rust-wrapper>Writing a Safe Rust Wrapper</a><ul><li><a href=#finding-an-item-by-name>Finding an Item by Name</a></li><li><a href=#enumerating-items-in-a-chm-file>Enumerating Items in a CHM File</a></li><li><a href=#reading-file-contents>Reading File Contents</a></li></ul></li><li><a href=#implementing-the-examples>Implementing the Examples</a><ul><li><a href=#enumerating-all-items>Enumerating All Items</a></li><li><a href=#extracting-a-chm-file-to-disk>Extracting A CHM File To Disk</a></li></ul></li><li><a href=#where-to-from-here>Where To From Here?</a></li></ul><div class="notices note"><p>This article actually works towards a real-world project, I want to extract
+some information from existing CHM files without doing all the hard work
+myself. I&rsquo;m lazy like that.</p><p>The <a href=https://crate.io/crates/chmlib>chmlib crate is published on crates.io</a>,
+and the source code is <a href=https://github.com/Michael-F-Bryan/chmlib>available on GitHub</a>. If you found this useful
+or spotted a bug, let me know on the blog&rsquo;s <a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com>issue tracker</a>!</p></div><h2 id=getting-started>Getting Started
+<a class=heading-link href=#getting-started><i class="fa fa-link" aria-hidden=true></i></a></h2><p>The first step in interfacing with a native library is to understand how it was
+originally intended to work.</p><div class="notices info"><p>Not only does this show us how to use the library, it also acts as a sanity
+check to make sure it builds, as well as providing build instructions and
+potential tests or examples.</p><p><strong>Do not skip this step!</strong></p></div><p>The library we&rsquo;ll be binding to is <a href=https://github.com/jedwing/CHMLib>CHMLib</a>, a C library for reading
+<em>Microsoft HTML Help Files</em> (<code>.chm</code>).</p><p>First, we&rsquo;ll make a new project and vendor <code>CHMLib</code> using git submodules.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-mysql data-lang=mysql><span style=color:#960050;background-color:#1e0010>$</span> git init chmlib <span style=color:#f92672>&amp;&amp;</span> cd chmlib
+  Initialized empty Git repository <span style=color:#66d9ef>in</span> <span style=color:#f92672>/</span>home<span style=color:#f92672>/</span>michael<span style=color:#f92672>/</span>Documents<span style=color:#f92672>/</span>chmlib<span style=color:#f92672>/</span>.git<span style=color:#f92672>/</span>
+<span style=color:#960050;background-color:#1e0010>$</span> touch README.md Cargo.toml
+<span style=color:#960050;background-color:#1e0010>$</span> cargo new <span style=color:#f92672>--</span>lib chmlib
+  Created library <span style=color:#f92672>`</span>chmlib<span style=color:#f92672>`</span> package
+<span style=color:#960050;background-color:#1e0010>$</span> cargo new <span style=color:#f92672>--</span>lib chmlib<span style=color:#f92672>-</span>sys
+  Created library <span style=color:#f92672>`</span>chmlib<span style=color:#f92672>-</span>sys<span style=color:#f92672>`</span> package
+<span style=color:#960050;background-color:#1e0010>$</span> cat Cargo.toml
+  [workspace]
+  members <span style=color:#f92672>=</span> [<span style=color:#e6db74>&#34;chmlib&#34;</span>, <span style=color:#e6db74>&#34;chmlib-sys&#34;</span>]
+<span style=color:#960050;background-color:#1e0010>$</span> git submodule <span style=color:#66d9ef>add</span> git<span style=color:#f92672>@</span>github.com:jedwing<span style=color:#f92672>/</span>CHMLib.git vendor<span style=color:#f92672>/</span>CHMLib
+  Cloning <span style=color:#66d9ef>into</span> <span style=color:#e6db74>&#39;/home/michael/Documents/chmlib/vendor/CHMLib&#39;</span>...
+  remote: Enumerating objects: <span style=color:#ae81ff>99</span>, done.
+  remote: Total <span style=color:#ae81ff>99</span> (delta <span style=color:#ae81ff>0</span>), reused <span style=color:#ae81ff>0</span> (delta <span style=color:#ae81ff>0</span>), pack<span style=color:#f92672>-</span>reused <span style=color:#ae81ff>99</span>
+  Receiving objects: <span style=color:#ae81ff>100</span><span style=color:#f92672>%</span> (<span style=color:#ae81ff>99</span><span style=color:#f92672>/</span><span style=color:#ae81ff>99</span>), <span style=color:#ae81ff>375</span>.<span style=color:#ae81ff>51</span> KiB <span style=color:#f92672>|</span> <span style=color:#ae81ff>430</span>.<span style=color:#ae81ff>00</span> KiB<span style=color:#f92672>/</span>s, done.
+  Resolving deltas: <span style=color:#ae81ff>100</span><span style=color:#f92672>%</span> (<span style=color:#ae81ff>45</span><span style=color:#f92672>/</span><span style=color:#ae81ff>45</span>), done.
+</code></pre></div><p>We can then use the <code>tree</code> command to see what files are contained in the
+repository.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ tree vendor/CHMLib
+vendor/CHMLib
+├── acinclude.m4
+├── AUTHORS
+├── ChangeLog
+├── ChmLib-ce.zip
+├── ChmLib-ds6.zip
+├── configure.in
+├── contrib
+│   └── mozilla_helper.sh
+├── COPYING
+├── Makefile.am
+├── NEWS
+├── NOTES
+├── README
+└── src
+    ├── chm_http.c
+    ├── chm_lib.c
+    ├── chm_lib.h
+    ├── enum_chmLib.c
+    ├── enumdir_chmLib.c
+    ├── extract_chmLib.c
+    ├── lzx.c
+    ├── lzx.h
+    ├── Makefile.am
+    ├── Makefile.simple
+    └── test_chmLib.c
+
+2 directories, 23 files
+</code></pre></div><p>It looks like the original library uses <a href=https://en.wikipedia.org/wiki/GNU_Autotools>GNU Autotools</a> as a build system.
+This may be problematic because it&rsquo;ll require all users of our <code>chmlib</code> crate
+(and their users) to have Autotools installed.</p><div class="notices note"><p>If possible we&rsquo;ll try to avoid this &ldquo;viral&rdquo; need to install a dependency
+system-wide by invoking the C compiler manually, but file that thought away
+for later.</p></div><p>Upon further inspection, the <code>lzx.h</code> and <code>lzx.c</code> files are vendored copies of
+code for decompression using the <a href=https://en.wikipedia.org/wiki/LZX>LZX</a> compression algorithm. Normally it&rsquo;d
+be better to link with whatever <code>lzx</code> library is installed on the user&rsquo;s
+machine so we receive updates, but it&rsquo;ll be a lot easier to compile it into
+<code>chmlib</code>.</p><p>The <code>enum_chmLib.c</code>, <code>enumdir_chmLib.c</code>, and <code>extract_chmLib.c</code> appear to be
+examples displaying the usage of <code>chm_enumerate()</code>, <code>chm_enumerate_dir()</code>, and
+<code>chm_retrieve_object()</code> respectively. These should be useful&mldr;</p><p>The <code>test_chmLib.c</code> file appears to be another example, this time showing how
+to find a single document from the CHM file and extract it to disk.</p><p><code>chm_http.c</code> appears to be a simple HTTP server which serves the contents of a
+CHM file online. Let&rsquo;s ignore it for now.</p><p>Now we&rsquo;ve had a look around the various files under <code>vendor/CHMLib/src/</code>, let&rsquo;s
+try to build the library.</p><p>To be perfectly honest, this library is small enough that I can kinda stumble my
+way through until one of the examples runs.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ clang chm_lib.c enum_chmLib.c -o enum_chmLib
+  /usr/bin/ld: /tmp/chm_lib-537dfe.o: in function `chm_close&#39;:
+  chm_lib.c:(.text+0x8fa): undefined reference to `LZXteardown&#39;
+  /usr/bin/ld: /tmp/chm_lib-537dfe.o: in function `_chm_decompress_region&#39;:
+  chm_lib.c:(.text+0x18ca): undefined reference to `LZXinit&#39;
+  /usr/bin/ld: /tmp/chm_lib-537dfe.o: in function `_chm_decompress_block&#39;:
+  chm_lib.c:(.text+0x2900): undefined reference to `LZXreset&#39;
+  /usr/bin/ld: chm_lib.c:(.text+0x2a4b): undefined reference to `LZXdecompress&#39;
+  /usr/bin/ld: chm_lib.c:(.text+0x2abe): undefined reference to `LZXreset&#39;
+  /usr/bin/ld: chm_lib.c:(.text+0x2bf4): undefined reference to `LZXdecompress&#39;
+  clang: error: linker command failed with exit code 1 (use -v to see invocation)
+</code></pre></div><p>Okay, the linker can&rsquo;t find some <code>LZX*</code> routines&mldr;</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ clang chm_lib.c enum_chmLib.c lzx.c -o enum_chmLib
+</code></pre></div><p>Well&mldr; that worked?</p><p>To make sure it works I&rsquo;ve downloaded a sample help file from the internet.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ curl http://www.innovasys.com/static/hs/samples/topics.classic.chm.zip -o topics.classic.chm.zip
+$ unzip topics.classic.chm.zip
+Archive:  topics.classic.chm.zip
+  inflating: output/compiled/topics.classic.chm
+$ file output/compiled/topics.classic.chm
+output/compiled/topics.classic.chm: MS Windows HtmlHelp Data
+</code></pre></div><p>Let&rsquo;s see what <code>enum_chLib</code> makes of it.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ ./enum_chmLib output/compiled/topics.classic.chm
+output/compiled/topics.classic.chm:
+ spc    start   length   type			name
+ ===    =====   ======   ====			====
+   0        0        0   normal dir		/
+   1  5125797     4096   special file		/#IDXHDR
+   ...
+   1  4944434    11234   normal file		/BrowserView.html
+   ...
+   0        0        0   normal dir		/flash/
+   1   532689      727   normal file		/flash/expressinstall.swf
+   0        0        0   normal dir		/Images/Commands/RealWorld/
+   1    24363     1254   normal file		/Images/Commands/RealWorld/BrowserBack.bmp
+   ...
+   1    35672     1021   normal file		/Images/Employees24.gif
+   ...
+   1  3630715   200143   normal file		/template/packages/jquery-mobile/script/jquery.mobile-1.4.5.min.js
+   ...
+   0      134     1296   meta file		::DataSpace/Storage/MSCompressed/Transform/{7FC28940-9D31-11D0-9B27-00A0C91E9C7C}/InstanceData/ResetTable
+</code></pre></div><p>Hmm, looks like even help files pull in jQuery ¯\_(ツ)_/¯</p><h2 id=building-chmlib-sys>Building <code>chmlib-sys</code>
+<a class=heading-link href=#building-chmlib-sys><i class="fa fa-link" aria-hidden=true></i></a></h2><p>Now we can kinda use CHMLib we need to write a <code>chmlib-sys</code> crate which will
+manage building the native library so it can be linked by <code>rustc</code>, and declare
+the various functions it exposes.</p><p>To build the library we&rsquo;ll need to write a <code>build.rs</code> file. This will invoke the
+C compiler using the <a href=https://docs.rs/cc><code>cc</code></a> crate and send various messages to <code>rust</code> to
+make sure everything links properly.</p><div class="notices info"><p>For our purposes we can pass all the hard work off to the <a href=https://docs.rs/cc><code>cc</code></a> crate, but
+normally it&rsquo;s not that simple. Check out the <a href=https://doc.rust-lang.org/cargo/reference/build-scripts.html>docs on build scripts</a>
+for more detailed information.</p></div><p>First, add the <code>cc</code> crate as a build dependency for <code>chmlib-sys</code>.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ cd chmlib-sys
+$ cargo add --build cc
+    Updating &#39;https://github.com/rust-lang/crates.io-index&#39; index
+      Adding cc v1.0.46 to build-dependencies
+</code></pre></div><p>Then add a <code>build.rs</code> file.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// chmlib-sys/build.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>use</span> cc::Build;
+<span style=color:#66d9ef>use</span> std::{env, path::PathBuf};
+
+<span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>main</span>() {
+    <span style=color:#66d9ef>let</span> project_dir <span style=color:#f92672>=</span> PathBuf::from(env::var(<span style=color:#e6db74>&#34;CARGO_MANIFEST_DIR&#34;</span>).unwrap())
+        .canonicalize()
+        .unwrap();
+    <span style=color:#66d9ef>let</span> root_dir <span style=color:#f92672>=</span> project_dir.parent().unwrap();
+    <span style=color:#66d9ef>let</span> src <span style=color:#f92672>=</span> root_dir.join(<span style=color:#e6db74>&#34;vendor&#34;</span>).join(<span style=color:#e6db74>&#34;CHMLib&#34;</span>).join(<span style=color:#e6db74>&#34;src&#34;</span>);
+
+    Build::new()
+        .file(src.join(<span style=color:#e6db74>&#34;chm_lib.c&#34;</span>))
+        .file(src.join(<span style=color:#e6db74>&#34;lzx.c&#34;</span>))
+        .include(<span style=color:#f92672>&amp;</span>src)
+        .warnings(<span style=color:#66d9ef>false</span>)
+        .compile(<span style=color:#e6db74>&#34;chmlib&#34;</span>);
+}
+</code></pre></div><p>We also need to tell <code>cargo</code> that <code>chmlib-sys</code> links to the <code>chmlib</code> native
+library. Cargo will make sure only one crate in a dependency graph can link to
+a particular native library, this helps prevent undecipherable linker errors
+due to duplicate symbols or accidentally using incompatible C libraries.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-diff data-lang=diff><span style=color:#f92672>--- a/chmlib-sys/Cargo.toml
+</span><span style=color:#f92672></span><span style=color:#a6e22e>+++ b/chmlib-sys/Cargo.toml
+</span><span style=color:#a6e22e></span><span style=color:#75715e>@@ -3,7 +3,13 @@ name = &#34;chmlib-sys&#34;
+</span><span style=color:#75715e></span> version = &#34;0.1.0&#34;
+ authors = [&#34;Michael Bryan &lt;michaelfbryan@gmail.com&gt;&#34;]
+ edition = &#34;2018&#34;
+ description = &#34;Raw bindings to the CHMLib C library&#34;
+ license = &#34;LGPL&#34;
+ repository = &#34;https://github.com/Michael-F-Bryan/chmlib&#34;
+<span style=color:#a6e22e>+links = &#34;chmlib&#34;
+</span><span style=color:#a6e22e>+build = &#34;build.rs&#34;
+</span><span style=color:#a6e22e></span>
+ [dependencies]
+
+ [build-dependencies]
+ cc = { version = &#34;1.0&#34; }
+</code></pre></div><p>Next we need to declare the various functions exposed by the <code>chmlib</code> C library
+so they can be called from Rust.</p><p>There&rsquo;s a project called <a href=https://github.com/rust-lang/rust-bindgen>bindgen</a> which does exactly this. You give it a
+header file and it&rsquo;ll automatically generate FFI bindings.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ cargo install bindgen
+$ bindgen ../vendor/CHMLib/src/chm_lib.h \
+    -o src/lib.rs \
+    --raw-line &#39;#![allow(non_snake_case, non_camel_case_types)]&#39;
+$ head src/lib.rs
+  /* automatically generated by rust-bindgen */
+
+  #![allow(non_snake_case, non_camel_case_types)]
+
+  pub const CHM_UNCOMPRESSED: u32 = 0;
+  pub const CHM_COMPRESSED: u32 = 1;
+  pub const CHM_MAX_PATHLEN: u32 = 512;
+  pub const CHM_PARAM_MAX_BLOCKS_CACHED: u32 = 0;
+  pub const CHM_RESOLVE_SUCCESS: u32 = 0;
+  pub const CHM_RESOLVE_FAILURE: u32 = 1;
+$ tail src/lib.rs
+  extern &#34;C&#34; {
+      pub fn chm_enumerate_dir(
+          h: *mut chmFile,
+          prefix: *const ::std::os::raw::c_char,
+          what: ::std::os::raw::c_int,
+          e: CHM_ENUMERATOR,
+          context: *mut ::std::os::raw::c_void,
+      ) -&gt; ::std::os::raw::c_int;
+  }
+</code></pre></div><div class="notices tip"><p>I would highly recommend browsing the <a href=https://rust-lang.github.io/rust-bindgen/>Bindgen User
+Guide</a> If you want to know how to
+tweak the output.</p></div><p>At this point it&rsquo;s worth writing a small <a href=http://softwaretestingfundamentals.com/smoke-testing/><em>Smoke Test</em></a> to make sure things
+link properly and we can call functions from the C library.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// chmlib-sys/tests/smoke_test.rs
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>// we need to convert the Path to a char* with trailing NULL. Unfortunately on
+</span><span style=color:#75715e>// Windows OsStr (and therefore Path) is a [u16] under the hood and can&#39;t be
+</span><span style=color:#75715e>// properly passed in as a char* string.
+</span><span style=color:#75715e></span><span style=color:#75715e>#![cfg(unix)]</span>
+
+<span style=color:#66d9ef>use</span> std::{ffi::CString, os::unix::ffi::OsStrExt, path::Path};
+
+<span style=color:#75715e>#[test]</span>
+<span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>open_example_file</span>() {
+    <span style=color:#66d9ef>let</span> project_dir <span style=color:#f92672>=</span> Path::new(env<span style=color:#f92672>!</span>(<span style=color:#e6db74>&#34;CARGO_MANIFEST_DIR&#34;</span>));
+    <span style=color:#66d9ef>let</span> sample_chm <span style=color:#f92672>=</span> project_dir.parent().unwrap().join(<span style=color:#e6db74>&#34;topics.classic.chm&#34;</span>);
+    <span style=color:#66d9ef>let</span> c_str <span style=color:#f92672>=</span> CString::new(sample_chm.as_os_str().as_bytes()).unwrap();
+
+    <span style=color:#66d9ef>unsafe</span> {
+        <span style=color:#66d9ef>let</span> handle <span style=color:#f92672>=</span> chmlib_sys::chm_open(c_str.as_ptr());
+        assert<span style=color:#f92672>!</span>(<span style=color:#f92672>!</span>handle.is_null());
+        chmlib_sys::chm_close(handle);
+    }
+}
+</code></pre></div><p>Running <code>cargo test</code> shows that everything seems to be working okay.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ cargo test
+    Finished test [unoptimized + debuginfo] target(s) in 0.03s
+     Running /home/michael/Documents/chmlib/target/debug/deps/chmlib_sys-2ffd7b11a9fd8437
+
+running 1 test
+test bindgen_test_layout_chmUnitInfo ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+     Running /home/michael/Documents/chmlib/target/debug/deps/smoke_test-f7be9810412559dc
+
+running 1 test
+test open_example_file ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+   Doc-tests chmlib-sys
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+</code></pre></div><h2 id=writing-a-safe-rust-wrapper>Writing a Safe Rust Wrapper
+<a class=heading-link href=#writing-a-safe-rust-wrapper><i class="fa fa-link" aria-hidden=true></i></a></h2><p>We can now <em>technically</em> use the CHMLib from Rust, but it requires a lot of
+<code>unsafe</code> to call library functions. That&rsquo;s okay for a quick&rsquo;n&rsquo;dirty
+implementation, but if this is going to be published to crates.io it&rsquo;s worth
+writing a safe wrapper around the <code>unsafe</code> code.</p><p>Looking at the <code>chmlib-sys</code> crate with <code>cargo doc --open</code> shows it exposes half
+a dozen functions, most of which accept a <code>*mut ChmFile</code> as the first parameter.
+This maps quite nicely to object methods.</p><details><summary>CHMLib Header File</summary><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c><span style=color:#75715e>/* $Id: chm_lib.h,v 1.10 2002/10/09 01:16:33 jedwin Exp $ */</span>
+<span style=color:#75715e>/***************************************************************************
+</span><span style=color:#75715e> *             chm_lib.h - CHM archive manipulation routines               *
+</span><span style=color:#75715e> *                           -------------------                           *
+</span><span style=color:#75715e> *                                                                         *
+</span><span style=color:#75715e> *  author:     Jed Wing &lt;jedwin@ugcs.caltech.edu&gt;                         *
+</span><span style=color:#75715e> *  version:    0.3                                                        *
+</span><span style=color:#75715e> *  notes:      These routines are meant for the manipulation of microsoft *
+</span><span style=color:#75715e> *              .chm (compiled html help) files, but may likely be used    *
+</span><span style=color:#75715e> *              for the manipulation of any ITSS archive, if ever ITSS     *
+</span><span style=color:#75715e> *              archives are used for any other purpose.                   *
+</span><span style=color:#75715e> *                                                                         *
+</span><span style=color:#75715e> *              Note also that the section names are statically handled.   *
+</span><span style=color:#75715e> *              To be entirely correct, the section names should be read   *
+</span><span style=color:#75715e> *              from the section names meta-file, and then the various     *
+</span><span style=color:#75715e> *              content sections and the &#34;transforms&#34; to apply to the data *
+</span><span style=color:#75715e> *              they contain should be inferred from the section name and  *
+</span><span style=color:#75715e> *              the meta-files referenced using that name; however, all of *
+</span><span style=color:#75715e> *              the files I&#39;ve been able to get my hands on appear to have *
+</span><span style=color:#75715e> *              only two sections: Uncompressed and MSCompressed.          *
+</span><span style=color:#75715e> *              Additionally, the ITSS.DLL file included with Windows does *
+</span><span style=color:#75715e> *              not appear to handle any different transforms than the     *
+</span><span style=color:#75715e> *              simple LZX-transform.  Furthermore, the list of transforms *
+</span><span style=color:#75715e> *              to apply is broken, in that only half the required space   *
+</span><span style=color:#75715e> *              is allocated for the list.  (It appears as though the      *
+</span><span style=color:#75715e> *              space is allocated for ASCII strings, but the strings are  *
+</span><span style=color:#75715e> *              written as unicode.  As a result, only the first half of   *
+</span><span style=color:#75715e> *              the string appears.)  So this is probably not too big of   *
+</span><span style=color:#75715e> *              a deal, at least until CHM v4 (MS .lit files), which also  *
+</span><span style=color:#75715e> *              incorporate encryption, of some description.               *
+</span><span style=color:#75715e> ***************************************************************************/</span>
+
+<span style=color:#75715e>/***************************************************************************
+</span><span style=color:#75715e> *                                                                         *
+</span><span style=color:#75715e> *   This program is free software; you can redistribute it and/or modify  *
+</span><span style=color:#75715e> *   it under the terms of the GNU Lesser General Public License as        *
+</span><span style=color:#75715e> *   published by the Free Software Foundation; either version 2.1 of the  *
+</span><span style=color:#75715e> *   License, or (at your option) any later version.                       *
+</span><span style=color:#75715e> *                                                                         *
+</span><span style=color:#75715e> ***************************************************************************/</span>
+
+<span style=color:#75715e>#ifndef INCLUDED_CHMLIB_H
+</span><span style=color:#75715e>#define INCLUDED_CHMLIB_H
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#ifdef __cplusplus
+</span><span style=color:#75715e></span><span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> {
+<span style=color:#75715e>#endif
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>/* RWE 6/12/1002 */</span>
+<span style=color:#75715e>#ifdef PPC_BSTR
+</span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;wtypes.h&gt;</span><span style=color:#75715e>
+</span><span style=color:#75715e>#endif
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#ifdef WIN32
+</span><span style=color:#75715e>#ifdef __MINGW32__
+</span><span style=color:#75715e>#define __int64 long long
+</span><span style=color:#75715e>#endif
+</span><span style=color:#75715e></span><span style=color:#66d9ef>typedef</span> <span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>__int64</span> LONGUINT64;
+<span style=color:#66d9ef>typedef</span> <span style=color:#66d9ef>__int64</span>          LONGINT64;
+<span style=color:#75715e>#else
+</span><span style=color:#75715e></span><span style=color:#66d9ef>typedef</span> <span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>long</span> <span style=color:#66d9ef>long</span> LONGUINT64;
+<span style=color:#66d9ef>typedef</span> <span style=color:#66d9ef>long</span> <span style=color:#66d9ef>long</span>          LONGINT64;
+<span style=color:#75715e>#endif
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>/* the two available spaces in a CHM file                      */</span>
+<span style=color:#75715e>/* N.B.: The format supports arbitrarily many spaces, but only */</span>
+<span style=color:#75715e>/*       two appear to be used at present.                     */</span>
+<span style=color:#75715e>#define CHM_UNCOMPRESSED (0)
+</span><span style=color:#75715e>#define CHM_COMPRESSED   (1)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>/* structure representing an ITS (CHM) file stream             */</span>
+<span style=color:#66d9ef>struct</span> chmFile;
+
+<span style=color:#75715e>/* structure representing an element from an ITS file stream   */</span>
+<span style=color:#75715e>#define CHM_MAX_PATHLEN  (512)
+</span><span style=color:#75715e></span><span style=color:#66d9ef>struct</span> chmUnitInfo
+{
+    LONGUINT64         start;
+    LONGUINT64         length;
+    <span style=color:#66d9ef>int</span>                space;
+    <span style=color:#66d9ef>int</span>                flags;
+    <span style=color:#66d9ef>char</span>               path[CHM_MAX_PATHLEN<span style=color:#f92672>+</span><span style=color:#ae81ff>1</span>];
+};
+
+<span style=color:#75715e>/* open an ITS archive */</span>
+<span style=color:#75715e>#ifdef PPC_BSTR
+</span><span style=color:#75715e></span><span style=color:#75715e>/* RWE 6/12/2003 */</span>
+<span style=color:#66d9ef>struct</span> chmFile<span style=color:#f92672>*</span> <span style=color:#a6e22e>chm_open</span>(BSTR filename);
+<span style=color:#75715e>#else
+</span><span style=color:#75715e></span><span style=color:#66d9ef>struct</span> chmFile<span style=color:#f92672>*</span> <span style=color:#a6e22e>chm_open</span>(<span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>filename);
+<span style=color:#75715e>#endif
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>/* close an ITS archive */</span>
+<span style=color:#66d9ef>void</span> <span style=color:#a6e22e>chm_close</span>(<span style=color:#66d9ef>struct</span> chmFile <span style=color:#f92672>*</span>h);
+
+<span style=color:#75715e>/* methods for ssetting tuning parameters for particular file */</span>
+<span style=color:#75715e>#define CHM_PARAM_MAX_BLOCKS_CACHED 0
+</span><span style=color:#75715e></span><span style=color:#66d9ef>void</span> <span style=color:#a6e22e>chm_set_param</span>(<span style=color:#66d9ef>struct</span> chmFile <span style=color:#f92672>*</span>h,
+                   <span style=color:#66d9ef>int</span> paramType,
+                   <span style=color:#66d9ef>int</span> paramVal);
+
+<span style=color:#75715e>/* resolve a particular object from the archive */</span>
+<span style=color:#75715e>#define CHM_RESOLVE_SUCCESS (0)
+</span><span style=color:#75715e>#define CHM_RESOLVE_FAILURE (1)
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>chm_resolve_object</span>(<span style=color:#66d9ef>struct</span> chmFile <span style=color:#f92672>*</span>h,
+                       <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>objPath,
+                       <span style=color:#66d9ef>struct</span> chmUnitInfo <span style=color:#f92672>*</span>ui);
+
+<span style=color:#75715e>/* retrieve part of an object from the archive */</span>
+LONGINT64 <span style=color:#a6e22e>chm_retrieve_object</span>(<span style=color:#66d9ef>struct</span> chmFile <span style=color:#f92672>*</span>h,
+                              <span style=color:#66d9ef>struct</span> chmUnitInfo <span style=color:#f92672>*</span>ui,
+                              <span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>buf,
+                              LONGUINT64 addr,
+                              LONGINT64 len);
+
+<span style=color:#75715e>/* enumerate the objects in the .chm archive */</span>
+<span style=color:#66d9ef>typedef</span> <span style=color:#a6e22e>int</span> (<span style=color:#f92672>*</span>CHM_ENUMERATOR)(<span style=color:#66d9ef>struct</span> chmFile <span style=color:#f92672>*</span>h,
+                              <span style=color:#66d9ef>struct</span> chmUnitInfo <span style=color:#f92672>*</span>ui,
+                              <span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>context);
+<span style=color:#75715e>#define CHM_ENUMERATE_NORMAL    (1)
+</span><span style=color:#75715e>#define CHM_ENUMERATE_META      (2)
+</span><span style=color:#75715e>#define CHM_ENUMERATE_SPECIAL   (4)
+</span><span style=color:#75715e>#define CHM_ENUMERATE_FILES     (8)
+</span><span style=color:#75715e>#define CHM_ENUMERATE_DIRS      (16)
+</span><span style=color:#75715e>#define CHM_ENUMERATE_ALL       (31)
+</span><span style=color:#75715e>#define CHM_ENUMERATOR_FAILURE  (0)
+</span><span style=color:#75715e>#define CHM_ENUMERATOR_CONTINUE (1)
+</span><span style=color:#75715e>#define CHM_ENUMERATOR_SUCCESS  (2)
+</span><span style=color:#75715e></span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>chm_enumerate</span>(<span style=color:#66d9ef>struct</span> chmFile <span style=color:#f92672>*</span>h,
+                  <span style=color:#66d9ef>int</span> what,
+                  CHM_ENUMERATOR e,
+                  <span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>context);
+
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>chm_enumerate_dir</span>(<span style=color:#66d9ef>struct</span> chmFile <span style=color:#f92672>*</span>h,
+                      <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>prefix,
+                      <span style=color:#66d9ef>int</span> what,
+                      CHM_ENUMERATOR e,
+                      <span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>context);
+
+<span style=color:#75715e>#ifdef __cplusplus
+</span><span style=color:#75715e></span>}
+<span style=color:#75715e>#endif
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#endif </span><span style=color:#75715e>/* INCLUDED_CHMLIB_H */</span><span style=color:#75715e>
+</span></code></pre></div></details><p>Let&rsquo;s start off by creating a type that uses <code>chm_open()</code> in its constructor and
+calls <code>chm_close()</code> in its destructor.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>chm_open</span>(filename: <span style=color:#f92672>*</span><span style=color:#66d9ef>const</span> c_char) -&gt; <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> chmFile;
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>chm_close</span>(h: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> chmFile);
+</code></pre></div><p>To make error handling easier we&rsquo;ll pull in the <a href=https://github.com/dtolnay/thiserror><code>thiserror</code></a> crate to
+automatically derive <code>std::error::Error</code>.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ cd chmlib
+$ cargo add thiserror
+</code></pre></div><p>We now need some way to convert from a <code>std::path::Path</code> to a <code>*const c_char</code>.
+Unfortunately, due to various OS-specific quirks <a href=https://stackoverflow.com/questions/38948669/whats-the-most-direct-way-to-convert-a-path-to-a-c-char title="Whats the most direct way to convert a Path to a *c_char?">this</a> <a href=https://stackoverflow.com/questions/29590943/how-to-convert-a-path-into-a-const-char-for-ffi title="How to convert a Path into a const char* for FFI?">isn&rsquo;t</a>
+<a href=https://stackoverflow.com/questions/46342644/how-can-i-get-a-path-from-a-raw-c-string-cstr-or-const-u8 title="How can I get a Path from a raw C string (CStr or *const u8)?">simple</a>.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// chmlib/src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>use</span> thiserror::Error;
+<span style=color:#66d9ef>use</span> std::{ffi::CString, path::Path};
+
+<span style=color:#75715e>#[cfg(unix)]</span>
+<span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>path_to_cstring</span>(path: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Path</span>) -&gt; Result<span style=color:#f92672>&lt;</span>CString, InvalidPath<span style=color:#f92672>&gt;</span> {
+    <span style=color:#66d9ef>use</span> std::os::unix::ffi::OsStrExt;
+    <span style=color:#66d9ef>let</span> bytes <span style=color:#f92672>=</span> path.as_os_str().as_bytes();
+    CString::new(bytes).map_err(<span style=color:#f92672>|</span>_<span style=color:#f92672>|</span> InvalidPath)
+}
+
+<span style=color:#75715e>#[cfg(not(unix))]</span>
+<span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>path_to_cstring</span>(path: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Path</span>) -&gt; Result<span style=color:#f92672>&lt;</span>CString, InvalidPath<span style=color:#f92672>&gt;</span> {
+    <span style=color:#75715e>// Unfortunately, on Windows CHMLib uses CreateFileA() which means all
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// paths will need to be ascii. This can get quite messy, so let&#39;s just
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// cross our fingers and hope for the best?
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> rust_str <span style=color:#f92672>=</span> path.as_os_str().as_str().ok_or(InvalidPath)<span style=color:#f92672>?</span>;
+    CString::new(rust_str).map_err(<span style=color:#f92672>|</span>_<span style=color:#f92672>|</span> InvalidPath)
+}
+
+<span style=color:#75715e>#[derive(Error, Debug, Copy, Clone, PartialEq)]</span>
+<span style=color:#75715e>#[error(</span><span style=color:#e6db74>&#34;Invalid Path&#34;</span><span style=color:#75715e>)]</span>
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>InvalidPath</span>;
+</code></pre></div><p>Next we&rsquo;ll create a <code>ChmFile</code> which contains a non-null pointer to a
+<code>chmlib_sys::chmFile</code>. If <code>chm_open()</code> returns a null pointer we&rsquo;ll know that
+opening the file failed and some sort of error occurred.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// chmlib/src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>use</span> std::{ffi::CString, path::Path, ptr::NonNull};
+
+<span style=color:#75715e>#[derive(Debug)]</span>
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>ChmFile</span> {
+    raw: <span style=color:#a6e22e>NonNull</span><span style=color:#f92672>&lt;</span>chmlib_sys::chmFile<span style=color:#f92672>&gt;</span>,
+}
+
+<span style=color:#66d9ef>impl</span> ChmFile {
+    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>open</span><span style=color:#f92672>&lt;</span>P: AsRef<span style=color:#f92672>&lt;</span>Path<span style=color:#f92672>&gt;&gt;</span>(path: <span style=color:#a6e22e>P</span>) -&gt; Result<span style=color:#f92672>&lt;</span>ChmFile, OpenError<span style=color:#f92672>&gt;</span> {
+        <span style=color:#66d9ef>let</span> c_path <span style=color:#f92672>=</span> path_to_cstring(path.as_ref())<span style=color:#f92672>?</span>;
+
+        <span style=color:#75715e>// safe because we know c_path is valid
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>unsafe</span> {
+            <span style=color:#66d9ef>let</span> raw <span style=color:#f92672>=</span> chmlib_sys::chm_open(c_path.as_ptr());
+
+            <span style=color:#66d9ef>match</span> NonNull::new(raw) {
+                Some(raw) <span style=color:#f92672>=&gt;</span> Ok(ChmFile { raw }),
+                None <span style=color:#f92672>=&gt;</span> Err(OpenError::Other),
+            }
+        }
+    }
+}
+
+<span style=color:#66d9ef>impl</span> Drop <span style=color:#66d9ef>for</span> ChmFile {
+    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>drop</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) {
+        <span style=color:#66d9ef>unsafe</span> {
+            chmlib_sys::chm_close(self.raw.as_ptr());
+        }
+    }
+}
+
+<span style=color:#e6db74>/// The error returned when we are unable to open a [`ChmFile`].
+</span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Error, Debug, Copy, Clone, PartialEq)]</span>
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>OpenError</span> {
+    <span style=color:#75715e>#[error(</span><span style=color:#e6db74>&#34;Invalid path&#34;</span><span style=color:#75715e>)]</span>
+    InvalidPath(<span style=color:#75715e>#[from]</span> InvalidPath),
+    <span style=color:#75715e>#[error(</span><span style=color:#e6db74>&#34;Unable to open the ChmFile&#34;</span><span style=color:#75715e>)]</span>
+    Other,
+}
+</code></pre></div><p>To make sure we&rsquo;re not leaking memory, we can use <code>valgrind</code> to run a test that
+constructs a <code>ChmFile</code> then immediately drops it.</p><p>The test:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// chmlib/src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#[test]</span>
+<span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>open_valid_chm_file</span>() {
+    <span style=color:#66d9ef>let</span> sample <span style=color:#f92672>=</span> sample_path();
+
+    <span style=color:#75715e>// open the file
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> chm_file <span style=color:#f92672>=</span> ChmFile::open(<span style=color:#f92672>&amp;</span>sample).unwrap();
+    <span style=color:#75715e>// then immediately close it
+</span><span style=color:#75715e></span>    drop(chm_file);
+}
+
+<span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>sample_path</span>() -&gt; <span style=color:#a6e22e>PathBuf</span> {
+    <span style=color:#66d9ef>let</span> project_dir <span style=color:#f92672>=</span> Path::new(env<span style=color:#f92672>!</span>(<span style=color:#e6db74>&#34;CARGO_MANIFEST_DIR&#34;</span>));
+    <span style=color:#66d9ef>let</span> sample <span style=color:#f92672>=</span> project_dir.parent().unwrap().join(<span style=color:#e6db74>&#34;topics.classic.chm&#34;</span>);
+    assert<span style=color:#f92672>!</span>(sample.exists());
+
+    sample
+}
+</code></pre></div><p>And the output from <code>valgrind</code> shows nothing is amiss.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ valgrind ../target/debug/deps/chmlib-8d8c740d57832498 open_valid_chm_file
+==8953== Memcheck, a memory error detector
+==8953== Copyright (C) 2002-2017, and GNU GPL&#39;d, by Julian Seward et al.
+==8953== Using Valgrind-3.14.0 and LibVEX; rerun with -h for copyright info
+==8953== Command: /home/michael/Documents/chmlib/target/debug/deps/chmlib-8d8c740d57832498 open_valid_chm_file
+==8953==
+
+running 1 test
+test tests::open_valid_chm_file ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+==8953==
+==8953== HEAP SUMMARY:
+==8953==     in use at exit: 0 bytes in 0 blocks
+==8953==   total heap usage: 249 allocs, 249 frees, 43,273 bytes allocated
+==8953==
+==8953== All heap blocks were freed -- no leaks are possible
+==8953==
+==8953== For counts of detected and suppressed errors, rerun with: -v
+==8953== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+</code></pre></div><h3 id=finding-an-item-by-name>Finding an Item by Name
+<a class=heading-link href=#finding-an-item-by-name><i class="fa fa-link" aria-hidden=true></i></a></h3><p>Next, we&rsquo;ll implement the <code>chm_resolve_object()</code> function.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>const</span> CHM_RESOLVE_SUCCESS : <span style=color:#66d9ef>u32</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>const</span> CHM_RESOLVE_FAILURE: <span style=color:#66d9ef>u32</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>1</span>;
+<span style=color:#75715e>/* resolve a particular object from the archive */</span>
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>chm_resolve_object</span>(
+    h: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> chmFile,
+    objPath: <span style=color:#f92672>*</span><span style=color:#66d9ef>const</span> c_char,
+    ui: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> chmUnitInfo
+) -&gt; <span style=color:#a6e22e>c_int</span>;
+</code></pre></div><p>This is a fallible operation, so the <code>chm_resolve_object()</code> function returns a
+status code indicating success or failure and a pointer to some <code>chmUnitInfo</code>
+object which will be populated if something was found.</p><p>The <a href=https://doc.rust-lang.org/std/mem/union.MaybeUninit.html#out-pointers><code>std::mem::MaybeUninit</code></a> type was create for the exact purpose of
+representing the <code>ui</code> &ldquo;out pointer&rdquo;.</p><p>For now we&rsquo;ll create an empty <code>UnitInfo</code> struct to be the Rust equivalent of
+<code>chmUnitInfo</code>. It will be populated when we start reading items out of the
+<code>ChmFile</code>.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// chmlib/src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>impl</span> ChmFile {
+    ...
+
+    <span style=color:#e6db74>/// Find a particular object in the archive.
+</span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>find</span><span style=color:#f92672>&lt;</span>P: AsRef<span style=color:#f92672>&lt;</span>Path<span style=color:#f92672>&gt;&gt;</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, path: <span style=color:#a6e22e>P</span>) -&gt; Option<span style=color:#f92672>&lt;</span>UnitInfo<span style=color:#f92672>&gt;</span> {
+        <span style=color:#66d9ef>let</span> path <span style=color:#f92672>=</span> path_to_cstring(path.as_ref()).ok()<span style=color:#f92672>?</span>;
+
+        <span style=color:#66d9ef>unsafe</span> {
+            <span style=color:#75715e>// put an uninitialized chmUnitInfo on the stack
+</span><span style=color:#75715e></span>            <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> resolved <span style=color:#f92672>=</span> MaybeUninit::<span style=color:#f92672>&lt;</span>chmlib_sys::chmUnitInfo<span style=color:#f92672>&gt;</span>::uninit();
+
+            <span style=color:#75715e>// then try to resolve the unit info
+</span><span style=color:#75715e></span>            <span style=color:#66d9ef>let</span> ret <span style=color:#f92672>=</span> chmlib_sys::chm_resolve_object(
+                self.raw.as_ptr(),
+                path.as_ptr(),
+                resolved.as_mut_ptr(),
+            );
+
+            <span style=color:#66d9ef>if</span> ret <span style=color:#f92672>==</span> chmlib_sys::CHM_RESOLVE_SUCCESS {
+                <span style=color:#75715e>// if successful, &#34;resolved&#34; would have been initialized by C
+</span><span style=color:#75715e></span>                Some(UnitInfo::from_raw(resolved.assume_init()))
+            } <span style=color:#66d9ef>else</span> {
+                None
+            }
+        }
+    }
+}
+
+<span style=color:#75715e>#[derive(Debug)]</span>
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>UnitInfo</span>;
+
+<span style=color:#66d9ef>impl</span> UnitInfo {
+    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>from_raw</span>(ui: <span style=color:#a6e22e>chmlib_sys</span>::chmUnitInfo) -&gt; <span style=color:#a6e22e>UnitInfo</span> { UnitInfo }
+}
+</code></pre></div><div class="notices info"><p>Note that <code>ChmFile::find()</code> takes <code>&mut self</code>, even though none of our Rust code
+seems to do any mutation. This is because under the hood it uses things like
+<code>fseek()</code> to move back and forth around a file&mldr; which mutates internal state.</p></div><p>We can test that <code>ChmFile::find()</code> works using the sample CHM file from before.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// chmlib/src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#[test]</span>
+<span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>find_an_item_in_the_sample</span>() {
+    <span style=color:#66d9ef>let</span> sample <span style=color:#f92672>=</span> sample_path();
+    <span style=color:#66d9ef>let</span> chm <span style=color:#f92672>=</span> ChmFile::open(<span style=color:#f92672>&amp;</span>sample).unwrap();
+
+    assert<span style=color:#f92672>!</span>(chm.find(<span style=color:#e6db74>&#34;/BrowserView.html&#34;</span>).is_some());
+    assert<span style=color:#f92672>!</span>(chm.find(<span style=color:#e6db74>&#34;doesn&#39;t exist.txt&#34;</span>).is_none());
+}
+</code></pre></div><h3 id=enumerating-items-in-a-chm-file>Enumerating Items in a CHM File
+<a class=heading-link href=#enumerating-items-in-a-chm-file><i class="fa fa-link" aria-hidden=true></i></a></h3><p>CHMLib exposes an API for inspecting items in the CHM file filtering the items
+to inspect based on a bitmask.</p><p>We&rsquo;ll be using the <code>bitflags</code> crate.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ cargo add bitflags
+    Updating &#39;https://github.com/rust-lang/crates.io-index&#39; index
+      Adding bitflags v1.2.1 to dependencies
+</code></pre></div><p>The <code>Filter</code> flags are defined straight from the <code>#define</code>s in <code>chm_lib.h</code>.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// chmlib/src/lib.rs
+</span><span style=color:#75715e></span>
+bitflags::bitflags<span style=color:#f92672>!</span> {
+    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Filter</span>: <span style=color:#a6e22e>c_int</span> {
+        <span style=color:#e6db74>/// A normal file.
+</span><span style=color:#e6db74></span>        <span style=color:#66d9ef>const</span> NORMAL <span style=color:#f92672>=</span> chmlib_sys::CHM_ENUMERATE_NORMAL <span style=color:#66d9ef>as</span> c_int;
+        <span style=color:#e6db74>/// A meta file (typically used by the CHM system).
+</span><span style=color:#e6db74></span>        <span style=color:#66d9ef>const</span> META <span style=color:#f92672>=</span> chmlib_sys::CHM_ENUMERATE_META <span style=color:#66d9ef>as</span> c_int;
+        <span style=color:#e6db74>/// A special file (starts with `#` or `$`).
+</span><span style=color:#e6db74></span>        <span style=color:#66d9ef>const</span> SPECIAL <span style=color:#f92672>=</span> chmlib_sys::CHM_ENUMERATE_SPECIAL <span style=color:#66d9ef>as</span> c_int;
+        <span style=color:#e6db74>/// It&#39;s a file.
+</span><span style=color:#e6db74></span>        <span style=color:#66d9ef>const</span> FILES <span style=color:#f92672>=</span> chmlib_sys::CHM_ENUMERATE_FILES <span style=color:#66d9ef>as</span> c_int;
+        <span style=color:#e6db74>/// It&#39;s a directory.
+</span><span style=color:#e6db74></span>        <span style=color:#66d9ef>const</span> DIRS <span style=color:#f92672>=</span> chmlib_sys::CHM_ENUMERATE_DIRS <span style=color:#66d9ef>as</span> c_int;
+    }
+}
+</code></pre></div><p>We also need an <code>extern "C"</code> adaptor to use a Rust closure as a normal
+function pointer.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// chmlib/src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>function_wrapper</span><span style=color:#f92672>&lt;</span>F<span style=color:#f92672>&gt;</span>(
+    file: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> chmlib_sys::chmFile,
+    unit: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> chmlib_sys::chmUnitInfo,
+    state: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> c_void,
+) -&gt; <span style=color:#a6e22e>c_int</span>
+<span style=color:#66d9ef>where</span>
+    F: FnMut(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> ChmFile, UnitInfo) -&gt; <span style=color:#a6e22e>Continuation</span>,
+{
+    <span style=color:#75715e>// we need to make sure panics can&#39;t escape across the FFI boundary.
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> result <span style=color:#f92672>=</span> panic::catch_unwind(<span style=color:#f92672>||</span> {
+        <span style=color:#75715e>// Use ManuallyDrop because we want to give the caller a `&amp;mut ChmFile`
+</span><span style=color:#75715e></span>        <span style=color:#75715e>// but want to make sure the destructor is never called (to
+</span><span style=color:#75715e></span>        <span style=color:#75715e>// prevent double-frees).
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> file <span style=color:#f92672>=</span> ManuallyDrop::new(ChmFile {
+            raw: <span style=color:#a6e22e>NonNull</span>::new_unchecked(file),
+        });
+        <span style=color:#66d9ef>let</span> unit <span style=color:#f92672>=</span> UnitInfo::from_raw(unit.read());
+        <span style=color:#75715e>// the opaque state pointer is guaranteed to point to an instance of our
+</span><span style=color:#75715e></span>        <span style=color:#75715e>// closure
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>let</span> closure <span style=color:#f92672>=</span> <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> <span style=color:#f92672>*</span>(state <span style=color:#66d9ef>as</span> <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> F);
+        closure(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> file, unit)
+    });
+
+    <span style=color:#66d9ef>match</span> result {
+        Ok(Continuation::Continue) <span style=color:#f92672>=&gt;</span> {
+            chmlib_sys::CHM_ENUMERATOR_CONTINUE <span style=color:#66d9ef>as</span> c_int
+        },
+        Ok(Continuation::Stop) <span style=color:#f92672>=&gt;</span> chmlib_sys::CHM_ENUMERATOR_SUCCESS <span style=color:#66d9ef>as</span> c_int,
+        Err(_) <span style=color:#f92672>=&gt;</span> chmlib_sys::CHM_ENUMERATOR_FAILURE <span style=color:#66d9ef>as</span> c_int,
+    }
+}
+</code></pre></div><div class="notices warning"><p>This <code>function_wrapper</code> is a fairly tricky bit of <code>unsafe</code> code and there are
+a couple things to keep in mind:</p><ul><li>The <code>state</code> pointer <strong>must</strong> point to an instance of our <code>F</code> closure</li><li>Unwinding the stack from Rust to C is Undefined behaviour, and our <code>closure</code>
+may trigger a panic. We need to use <code>std::panic::catch_unwind()</code> to prevent
+panics from escaping the <code>function_wrapper</code>.</li><li>The <code>chmlib_sys::chmFile</code> passed to <code>function_wrapper</code> is also pointed to by
+the calling <code>ChmFile</code>. We need to make sure <code>closure</code> is the only thing able
+to mutate the <code>chmlib_sys::chmFile</code> otherwise we&rsquo;ll open ourselves up to
+race conditions</li><li>We want to pass a <code>&mut ChmFile</code> to the closure which means we&rsquo;ll need to
+construct a temporary one on the stack using the <code>file</code> pointer. However if
+it gets dropped then the <code>chmlib_sys::chmFile</code> will be freed prematurely. This
+can be prevented using <code>std::mem::ManuallyDrop</code>.</li></ul></div><p>We can now use <code>function_wrapper</code> to implement <code>ChmFile::for_each()</code>.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// chmlib/src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>impl</span> ChmFile {
+    ...
+
+    <span style=color:#e6db74>/// Inspect each item within the [`ChmFile`].
+</span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>for_each</span><span style=color:#f92672>&lt;</span>F<span style=color:#f92672>&gt;</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, filter: <span style=color:#a6e22e>Filter</span>, <span style=color:#66d9ef>mut</span> cb: <span style=color:#a6e22e>F</span>)
+    <span style=color:#66d9ef>where</span>
+        F: FnMut(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> ChmFile, UnitInfo) -&gt; <span style=color:#a6e22e>Continuation</span>,
+    {
+        <span style=color:#66d9ef>unsafe</span> {
+            chmlib_sys::chm_enumerate(
+                self.raw.as_ptr(),
+                filter.bits(),
+                Some(function_wrapper::<span style=color:#f92672>&lt;</span>F<span style=color:#f92672>&gt;</span>),
+                <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> cb <span style=color:#66d9ef>as</span> <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> _ <span style=color:#66d9ef>as</span> <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> c_void,
+            );
+        }
+    }
+
+    <span style=color:#e6db74>/// Inspect each item within the [`ChmFile`] inside a specified directory.
+</span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>for_each_item_in_dir</span><span style=color:#f92672>&lt;</span>F, P<span style=color:#f92672>&gt;</span>(
+        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+        filter: <span style=color:#a6e22e>Filter</span>,
+        prefix: <span style=color:#a6e22e>P</span>,
+        <span style=color:#66d9ef>mut</span> cb: <span style=color:#a6e22e>F</span>,
+    ) <span style=color:#66d9ef>where</span>
+        P: AsRef<span style=color:#f92672>&lt;</span>Path<span style=color:#f92672>&gt;</span>,
+        F: FnMut(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> ChmFile, UnitInfo) -&gt; <span style=color:#a6e22e>Continuation</span>,
+    {
+        <span style=color:#66d9ef>let</span> path <span style=color:#f92672>=</span> <span style=color:#66d9ef>match</span> path_to_cstring(prefix.as_ref()) {
+            Ok(p) <span style=color:#f92672>=&gt;</span> p,
+            Err(_) <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>return</span>,
+        };
+
+        <span style=color:#66d9ef>unsafe</span> {
+            chmlib_sys::chm_enumerate_dir(
+                self.raw.as_ptr(),
+                path.as_ptr(),
+                filter.bits(),
+                Some(function_wrapper::<span style=color:#f92672>&lt;</span>F<span style=color:#f92672>&gt;</span>),
+                <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> cb <span style=color:#66d9ef>as</span> <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> _ <span style=color:#66d9ef>as</span> <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> c_void,
+            );
+        }
+    }
+}
+</code></pre></div><div class="notices info"><p>This trick works by using the <code>F</code> type parameter to instantiate
+<code>function_wrapper</code> for our closure type. This is a trick that comes up often
+when wanting to pass a Rust closure across the FFI barrier.</p></div><h3 id=reading-file-contents>Reading File Contents
+<a class=heading-link href=#reading-file-contents><i class="fa fa-link" aria-hidden=true></i></a></h3><p>The last function we need to wrap is actually reading the contents of a file
+into memory with <code>chm_retrieve_object()</code>.</p><p>The implementation is almost trivial, and quite similar to the <code>std::io::Read</code>
+trait except with the addition of a starting <code>offset</code>.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// chmlib/src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>impl</span> ChmFile {
+    ...
+
+    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>read</span>(
+        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+        unit: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>UnitInfo</span>,
+        offset: <span style=color:#66d9ef>u64</span>,
+        buffer: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> [<span style=color:#66d9ef>u8</span>],
+    ) -&gt; Result<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>usize</span>, ReadError<span style=color:#f92672>&gt;</span> {
+        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> unit <span style=color:#f92672>=</span> unit.<span style=color:#ae81ff>0.</span>clone();
+
+        <span style=color:#66d9ef>let</span> bytes_written <span style=color:#f92672>=</span> <span style=color:#66d9ef>unsafe</span> {
+            chmlib_sys::chm_retrieve_object(
+                self.raw.as_ptr(),
+                <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> unit,
+                buffer.as_mut_ptr(),
+                offset,
+                buffer.len() <span style=color:#66d9ef>as</span> _,
+            )
+        };
+
+        <span style=color:#66d9ef>if</span> bytes_written <span style=color:#f92672>&gt;=</span> <span style=color:#ae81ff>0</span> {
+            Ok(bytes_written <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>usize</span>)
+        } <span style=color:#66d9ef>else</span> {
+            Err(ReadError)
+        }
+    }
+}
+
+<span style=color:#75715e>#[derive(Error, Debug, Copy, Clone, PartialEq)]</span>
+<span style=color:#75715e>#[error(</span><span style=color:#e6db74>&#34;The read failed&#34;</span><span style=color:#75715e>)]</span>
+<span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>ReadError</span>;
+</code></pre></div><p>It would be nice to provide more useful error messages than <em>&ldquo;the read failed&rdquo;</em>,
+but reading through the source code for <code>chm_retrieve_object()</code> shows it doesn&rsquo;t
+differentiate between:</p><ul><li>Returning <code>0</code> when all data is read</li><li>Invalid arguments - null pointers or out of bounds reads return <code>0</code></li><li>failed file reads - <code>man 2 read</code> says <code>read()</code> may return <code>-1</code> and
+set <code>errno</code></li><li>decompression failure - not being able to <code>malloc()</code> a scratch buffer or
+the decompression algorithm encountering malformed input will return <code>-1</code></li></ul><p>We can also test the <code>ChmFile::read()</code> function by looking for known input.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// chmlib/src/lib.rs
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#[test]</span>
+<span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>read_an_item</span>() {
+    <span style=color:#66d9ef>let</span> sample <span style=color:#f92672>=</span> sample_path();
+    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> chm <span style=color:#f92672>=</span> ChmFile::open(<span style=color:#f92672>&amp;</span>sample).unwrap();
+    <span style=color:#66d9ef>let</span> filename <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;/template/packages/core-web/css/index.responsive.css&#34;</span>;
+
+    <span style=color:#75715e>// look for a known file
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> item <span style=color:#f92672>=</span> chm.find(filename).unwrap();
+
+    <span style=color:#75715e>// then read it into a buffer
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> buffer <span style=color:#f92672>=</span> vec<span style=color:#f92672>!</span>[<span style=color:#ae81ff>0</span>; item.length() <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>usize</span>];
+    <span style=color:#66d9ef>let</span> bytes_written <span style=color:#f92672>=</span> chm.read(<span style=color:#f92672>&amp;</span>item, <span style=color:#ae81ff>0</span>, <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> buffer).unwrap();
+
+    <span style=color:#75715e>// we should have read everything
+</span><span style=color:#75715e></span>    assert_eq<span style=color:#f92672>!</span>(bytes_written, item.length() <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>usize</span>);
+
+    <span style=color:#75715e>// ... and got what we expected
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> got <span style=color:#f92672>=</span> String::from_utf8(buffer).unwrap();
+    assert<span style=color:#f92672>!</span>(got.starts_with(
+        <span style=color:#e6db74>&#34;html, body, div#i-index-container, div#i-index-body&#34;</span>
+    ));
+}
+</code></pre></div><h2 id=implementing-the-examples>Implementing the Examples
+<a class=heading-link href=#implementing-the-examples><i class="fa fa-link" aria-hidden=true></i></a></h2><p>We&rsquo;ve now covered the vast majority of the CHMLib API and by this point most
+people would be happy to call it a day, however it&rsquo;s worth taking the time to
+make the crate more approachable for our users. This is primarily accomplished
+by adding examples and documentation, two things I&rsquo;ve noticed the Rust and Go
+communities tend to put a lot of effort into (probably thanks to <code>rustdoc</code> and
+<code>godoc</code> being first-class citizens in the language toolchain).</p><p>Luckily the underlying CHMLib came with examples, so we should just be able
+to port them to use the <code>chmlib</code> crate.</p><p>It&rsquo;s also useful as a sanity check to make sure the underlying library and our
+wrapper generate the same output.</p><h3 id=enumerating-all-items>Enumerating All Items
+<a class=heading-link href=#enumerating-all-items><i class="fa fa-link" aria-hidden=true></i></a></h3><p>This example opens the provided CHM file and generates a table with information
+about all items inside.</p><details><summary>Original Example</summary><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c><span style=color:#75715e>/* $Id: enum_chmLib.c,v 1.7 2002/10/09 12:38:12 jedwin Exp $ */</span>
+<span style=color:#75715e>/***************************************************************************
+</span><span style=color:#75715e> *          enum_chmLib.c - CHM archive test driver                        *
+</span><span style=color:#75715e> *                           -------------------                           *
+</span><span style=color:#75715e> *                                                                         *
+</span><span style=color:#75715e> *  author:     Jed Wing &lt;jedwin@ugcs.caltech.edu&gt;                         *
+</span><span style=color:#75715e> *  notes:      This is a quick-and-dirty test driver for the chm lib      *
+</span><span style=color:#75715e> *              routines.  The program takes as its input the paths to one *
+</span><span style=color:#75715e> *              or more .chm files.  It attempts to open each .chm file in *
+</span><span style=color:#75715e> *              turn, and display a listing of all of the files in the     *
+</span><span style=color:#75715e> *              archive.                                                   *
+</span><span style=color:#75715e> *                                                                         *
+</span><span style=color:#75715e> *              It is not included as a particularly useful program, but   *
+</span><span style=color:#75715e> *              rather as a sort of &#34;simplest possible&#34; example of how to  *
+</span><span style=color:#75715e> *              use the enumerate portion of the API.                      *
+</span><span style=color:#75715e> ***************************************************************************/</span>
+
+<span style=color:#75715e>/***************************************************************************
+</span><span style=color:#75715e> *                                                                         *
+</span><span style=color:#75715e> *   This program is free software; you can redistribute it and/or modify  *
+</span><span style=color:#75715e> *   it under the terms of the GNU Lesser General Public License as        *
+</span><span style=color:#75715e> *   published by the Free Software Foundation; either version 2.1 of the  *
+</span><span style=color:#75715e> *   License, or (at your option) any later version.                       *
+</span><span style=color:#75715e> *                                                                         *
+</span><span style=color:#75715e> ***************************************************************************/</span>
+
+<span style=color:#75715e>#include</span> <span style=color:#75715e>&#34;chm_lib.h&#34;</span><span style=color:#75715e>
+</span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;stdio.h&gt;</span><span style=color:#75715e>
+</span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;stdlib.h&gt;</span><span style=color:#75715e>
+</span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;string.h&gt;</span><span style=color:#75715e>
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>/*
+</span><span style=color:#75715e> * callback function for enumerate API
+</span><span style=color:#75715e> */</span>
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>_print_ui</span>(<span style=color:#66d9ef>struct</span> chmFile <span style=color:#f92672>*</span>h,
+              <span style=color:#66d9ef>struct</span> chmUnitInfo <span style=color:#f92672>*</span>ui,
+              <span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>context)
+{
+    <span style=color:#66d9ef>static</span> <span style=color:#66d9ef>char</span> szBuf[<span style=color:#ae81ff>128</span>];
+    memset(szBuf, <span style=color:#ae81ff>0</span>, <span style=color:#ae81ff>128</span>);
+    <span style=color:#66d9ef>if</span>(ui<span style=color:#f92672>-&gt;</span>flags <span style=color:#f92672>&amp;</span> CHM_ENUMERATE_NORMAL)
+        strcpy(szBuf, <span style=color:#e6db74>&#34;normal &#34;</span>);
+    <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span>(ui<span style=color:#f92672>-&gt;</span>flags <span style=color:#f92672>&amp;</span> CHM_ENUMERATE_SPECIAL)
+        strcpy(szBuf, <span style=color:#e6db74>&#34;special &#34;</span>);
+    <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span>(ui<span style=color:#f92672>-&gt;</span>flags <span style=color:#f92672>&amp;</span> CHM_ENUMERATE_META)
+        strcpy(szBuf, <span style=color:#e6db74>&#34;meta &#34;</span>);
+
+    <span style=color:#66d9ef>if</span>(ui<span style=color:#f92672>-&gt;</span>flags <span style=color:#f92672>&amp;</span> CHM_ENUMERATE_DIRS)
+        strcat(szBuf, <span style=color:#e6db74>&#34;dir&#34;</span>);
+    <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span>(ui<span style=color:#f92672>-&gt;</span>flags <span style=color:#f92672>&amp;</span> CHM_ENUMERATE_FILES)
+        strcat(szBuf, <span style=color:#e6db74>&#34;file&#34;</span>);
+
+    printf(<span style=color:#e6db74>&#34;   %1d %8d %8d   %s</span><span style=color:#ae81ff>\t\t</span><span style=color:#e6db74>%s</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>,
+           (<span style=color:#66d9ef>int</span>)ui<span style=color:#f92672>-&gt;</span>space,
+           (<span style=color:#66d9ef>int</span>)ui<span style=color:#f92672>-&gt;</span>start,
+           (<span style=color:#66d9ef>int</span>)ui<span style=color:#f92672>-&gt;</span>length,
+           szBuf,
+           ui<span style=color:#f92672>-&gt;</span>path);
+    <span style=color:#66d9ef>return</span> CHM_ENUMERATOR_CONTINUE;
+}
+
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>main</span>(<span style=color:#66d9ef>int</span> c, <span style=color:#66d9ef>char</span> <span style=color:#f92672>**</span>v)
+{
+    <span style=color:#66d9ef>struct</span> chmFile <span style=color:#f92672>*</span>h;
+    <span style=color:#66d9ef>int</span> i;
+
+    <span style=color:#66d9ef>for</span> (i<span style=color:#f92672>=</span><span style=color:#ae81ff>1</span>; i<span style=color:#f92672>&lt;</span>c; i<span style=color:#f92672>++</span>)
+    {
+        h <span style=color:#f92672>=</span> chm_open(v[i]);
+        <span style=color:#66d9ef>if</span> (h <span style=color:#f92672>==</span> NULL)
+        {
+            fprintf(stderr, <span style=color:#e6db74>&#34;failed to open %s</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>, v[i]);
+            exit(<span style=color:#ae81ff>1</span>);
+        }
+
+        printf(<span style=color:#e6db74>&#34;%s:</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>, v[i]);
+        printf(<span style=color:#e6db74>&#34; spc    start   length   type</span><span style=color:#ae81ff>\t\t\t</span><span style=color:#e6db74>name</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>);
+        printf(<span style=color:#e6db74>&#34; ===    =====   ======   ====</span><span style=color:#ae81ff>\t\t\t</span><span style=color:#e6db74>====</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>);
+
+        <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span> chm_enumerate(h,
+                            CHM_ENUMERATE_ALL,
+                            _print_ui,
+                            NULL))
+            printf(<span style=color:#e6db74>&#34;   *** ERROR ***</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>);
+
+        chm_close(h);
+    }
+
+    <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>0</span>;
+}
+
+</code></pre></div></details><p>The <code>_print_ui()</code> function can be translated to Rust quite with ease. It&rsquo;s just
+creating a description based on the <code>UnitInfo</code>&rsquo;s flags and string concatenation,
+then playing around with padding to generate tabulated output.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// chmlib/examples/enumerate-items.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>describe_item</span>(item: <span style=color:#a6e22e>UnitInfo</span>) {
+    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> description <span style=color:#f92672>=</span> String::new();
+
+    <span style=color:#66d9ef>if</span> item.is_normal() {
+        description.push_str(<span style=color:#e6db74>&#34;normal &#34;</span>);
+    } <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span> item.is_special() {
+        description.push_str(<span style=color:#e6db74>&#34;special &#34;</span>);
+    } <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span> item.is_meta() {
+        description.push_str(<span style=color:#e6db74>&#34;meta &#34;</span>);
+    }
+
+    <span style=color:#66d9ef>if</span> item.is_dir() {
+        description.push_str(<span style=color:#e6db74>&#34;dir&#34;</span>);
+    } <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span> item.is_file() {
+        description.push_str(<span style=color:#e6db74>&#34;file&#34;</span>);
+    }
+
+    println<span style=color:#f92672>!</span>(
+        <span style=color:#e6db74>&#34;   {} {:8} {:8}   {}\t\t{}&#34;</span>,
+        item.space(),
+        item.start(),
+        item.length(),
+        description,
+        item.path().unwrap_or(Path::new(<span style=color:#e6db74>&#34;&#34;</span>)).display()
+    );
+}
+</code></pre></div><p>Then the <code>main()</code> function will do some naive command-line argument parsing before
+opening the file and passing <code>describe()</code> to <code>ChmFile::for_each()</code>.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// chmlib/examples/enumerate-items.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>main</span>() {
+    <span style=color:#66d9ef>let</span> filename <span style=color:#f92672>=</span> env::args()
+        .nth(<span style=color:#ae81ff>1</span>)
+        .unwrap_or_else(<span style=color:#f92672>||</span> panic<span style=color:#f92672>!</span>(<span style=color:#e6db74>&#34;Usage: enumerate-items &lt;filename&gt;&#34;</span>));
+
+    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> file <span style=color:#f92672>=</span> ChmFile::open(<span style=color:#f92672>&amp;</span>filename).expect(<span style=color:#e6db74>&#34;Unable to open the file&#34;</span>);
+
+    println<span style=color:#f92672>!</span>(<span style=color:#e6db74>&#34;{}:&#34;</span>, filename);
+    println<span style=color:#f92672>!</span>(<span style=color:#e6db74>&#34; spc    start   length   type\t\t\tname&#34;</span>);
+    println<span style=color:#f92672>!</span>(<span style=color:#e6db74>&#34; ===    =====   ======   ====\t\t\t====&#34;</span>);
+
+    file.for_each(Filter::all(), <span style=color:#f92672>|</span>_file, item<span style=color:#f92672>|</span> {
+        describe_item(item);
+        Continuation::Continue
+    });
+}
+</code></pre></div><p>As a sanity check we&rsquo;ll compare the output from our Rust example with the
+original.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ cargo run --example enumerate-items topics.classic.chm &gt; rust-example.txt
+$ cd vendor/CHMLib/src
+$ clang chm_lib.c enum_chmLib.c lzx.c -o enum_chmLib
+$ cd ../../..
+$ ./vendor/CHMLib/src/enum_chmLib topics.classic.chm &gt; c-example.txt
+$ diff -u rust-example.txt c-example.txt
+$ echo $?
+0
+</code></pre></div><p>The diff indicates both examples generate identical output, but to make sure
+<code>diff</code> is actually doing something let&rsquo;s inject some dodgy output and see the
+<code>diff</code> complain.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-diff data-lang=diff>diff --git a/chmlib/examples/enumerate-items.rs b/chmlib/examples/enumerate-items.rs
+index e68fa58..ef855ac 100644
+<span style=color:#f92672>--- a/chmlib/examples/enumerate-items.rs
+</span><span style=color:#f92672></span><span style=color:#a6e22e>+++ b/chmlib/examples/enumerate-items.rs
+</span><span style=color:#a6e22e></span><span style=color:#75715e>@@ -36,6 +36,10 @@ fn describe_item(item: UnitInfo) {
+</span><span style=color:#75715e></span>         description.push_str(&#34;file&#34;);
+     }
+
+<span style=color:#a6e22e>+    if item.length() % 7 == 0 {
+</span><span style=color:#a6e22e>+        description.push_str(&#34;🦀&#34;);
+</span><span style=color:#a6e22e>+    }
+</span><span style=color:#a6e22e>+
+</span><span style=color:#a6e22e></span>     println!(
+         &#34;   {} {:8} {:8}   {}\t\t{}&#34;,
+         item.space(),
+</code></pre></div><p>And re-running with the new code:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ cargo run --example enumerate-items topics.classic.chm &gt; rust-example.txt
+$ diff -u rust-example.txt c-example.txt
+--- rust-example.txt	2019-10-20 16:51:53.933560892 +0800
++++ c-example.txt	2019-10-20 16:40:42.007053966 +0800
+@@ -1,9 +1,9 @@
+ topics.classic.chm:
+  spc    start   length   type			name
+  ===    =====   ======   ====			====
+-   0        0        0   normal dir🦀		/
++   0        0        0   normal dir		/
+    1  5125797     4096   special file		/#IDXHDR
+-   0        0        0   special file🦀		/#ITBITS
++   0        0        0   special file		/#ITBITS
+    1  5104520      148   special file		/#IVB
+    1  5132009     1227   special file		/#STRINGS
+    0     1430     4283   special file		/#SYSTEM
+@@ -13,9 +13,9 @@
+...
+</code></pre></div><p>Success!</p><h3 id=extracting-a-chm-file-to-disk>Extracting A CHM File To Disk
+<a class=heading-link href=#extracting-a-chm-file-to-disk><i class="fa fa-link" aria-hidden=true></i></a></h3><p>Another example provided with CHMLib is to extract all &ldquo;normal&rdquo; files to disk.</p><details><summary>Original Example</summary><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c><span style=color:#75715e>/* $Id: extract_chmLib.c,v 1.4 2002/10/10 03:24:51 jedwin Exp $ */</span>
+<span style=color:#75715e>/***************************************************************************
+</span><span style=color:#75715e> *          extract_chmLib.c - CHM archive extractor                       *
+</span><span style=color:#75715e> *                           -------------------                           *
+</span><span style=color:#75715e> *                                                                         *
+</span><span style=color:#75715e> *  author:     Jed Wing &lt;jedwin@ugcs.caltech.edu&gt;                         *
+</span><span style=color:#75715e> *  notes:      This is a quick-and-dirty chm archive extractor.           *
+</span><span style=color:#75715e> ***************************************************************************/</span>
+
+<span style=color:#75715e>/***************************************************************************
+</span><span style=color:#75715e> *                                                                         *
+</span><span style=color:#75715e> *   This program is free software; you can redistribute it and/or modify  *
+</span><span style=color:#75715e> *   it under the terms of the GNU Lesser General Public License as        *
+</span><span style=color:#75715e> *   published by the Free Software Foundation; either version 2.1 of the  *
+</span><span style=color:#75715e> *   License, or (at your option) any later version.                       *
+</span><span style=color:#75715e> *                                                                         *
+</span><span style=color:#75715e> ***************************************************************************/</span>
+
+<span style=color:#75715e>#include</span> <span style=color:#75715e>&#34;chm_lib.h&#34;</span><span style=color:#75715e>
+</span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;stdio.h&gt;</span><span style=color:#75715e>
+</span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;stdlib.h&gt;</span><span style=color:#75715e>
+</span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;string.h&gt;</span><span style=color:#75715e>
+</span><span style=color:#75715e>#ifdef WIN32
+</span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;windows.h&gt;</span><span style=color:#75715e>
+</span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;direct.h&gt;</span><span style=color:#75715e>
+</span><span style=color:#75715e>#define mkdir(X, Y) _mkdir(X)
+</span><span style=color:#75715e>#define snprintf _snprintf
+</span><span style=color:#75715e>#else
+</span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;unistd.h&gt;</span><span style=color:#75715e>
+</span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;sys/stat.h&gt;</span><span style=color:#75715e>
+</span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;sys/types.h&gt;</span><span style=color:#75715e>
+</span><span style=color:#75715e>#endif
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>struct</span> extract_context
+{
+    <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>base_path;
+};
+
+<span style=color:#66d9ef>static</span> <span style=color:#66d9ef>int</span> <span style=color:#a6e22e>dir_exists</span>(<span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>path)
+{
+<span style=color:#75715e>#ifdef WIN32
+</span><span style=color:#75715e></span>        <span style=color:#75715e>/* why doesn&#39;t this work?!? */</span>
+        HANDLE hFile;
+
+        hFile <span style=color:#f92672>=</span> CreateFileA(path,
+                        FILE_LIST_DIRECTORY,
+                        <span style=color:#ae81ff>0</span>,
+                        NULL,
+                        OPEN_EXISTING,
+                        FILE_ATTRIBUTE_NORMAL,
+                        NULL);
+        <span style=color:#66d9ef>if</span> (hFile <span style=color:#f92672>!=</span> INVALID_HANDLE_VALUE)
+        {
+        CloseHandle(hFile);
+        <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>1</span>;
+        }
+        <span style=color:#66d9ef>else</span>
+        <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>0</span>;
+<span style=color:#75715e>#else
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>struct</span> stat statbuf;
+        <span style=color:#66d9ef>if</span> (stat(path, <span style=color:#f92672>&amp;</span>statbuf) <span style=color:#f92672>!=</span> <span style=color:#f92672>-</span><span style=color:#ae81ff>1</span>)
+                <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>1</span>;
+        <span style=color:#66d9ef>else</span>
+                <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>0</span>;
+<span style=color:#75715e>#endif
+</span><span style=color:#75715e></span>}
+
+<span style=color:#66d9ef>static</span> <span style=color:#66d9ef>int</span> <span style=color:#a6e22e>rmkdir</span>(<span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>path)
+{
+    <span style=color:#75715e>/*
+</span><span style=color:#75715e>     * strip off trailing components unless we can stat the directory, or we
+</span><span style=color:#75715e>     * have run out of components
+</span><span style=color:#75715e>     */</span>
+
+    <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>i <span style=color:#f92672>=</span> strrchr(path, <span style=color:#e6db74>&#39;/&#39;</span>);
+
+    <span style=color:#66d9ef>if</span>(path[<span style=color:#ae81ff>0</span>] <span style=color:#f92672>==</span> <span style=color:#e6db74>&#39;\0&#39;</span>  <span style=color:#f92672>||</span>  dir_exists(path))
+        <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>0</span>;
+
+    <span style=color:#66d9ef>if</span> (i <span style=color:#f92672>!=</span> NULL)
+    {
+        <span style=color:#f92672>*</span>i <span style=color:#f92672>=</span> <span style=color:#e6db74>&#39;\0&#39;</span>;
+        rmkdir(path);
+        <span style=color:#f92672>*</span>i <span style=color:#f92672>=</span> <span style=color:#e6db74>&#39;/&#39;</span>;
+        mkdir(path, <span style=color:#ae81ff>0777</span>);
+    }
+
+<span style=color:#75715e>#ifdef WIN32
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>0</span>;
+<span style=color:#75715e>#else
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> (dir_exists(path))
+        <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>0</span>;
+    <span style=color:#66d9ef>else</span>
+        <span style=color:#66d9ef>return</span> <span style=color:#f92672>-</span><span style=color:#ae81ff>1</span>;
+<span style=color:#75715e>#endif
+</span><span style=color:#75715e></span>}
+
+<span style=color:#75715e>/*
+</span><span style=color:#75715e> * callback function for enumerate API
+</span><span style=color:#75715e> */</span>
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>_extract_callback</span>(<span style=color:#66d9ef>struct</span> chmFile <span style=color:#f92672>*</span>h,
+              <span style=color:#66d9ef>struct</span> chmUnitInfo <span style=color:#f92672>*</span>ui,
+              <span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>context)
+{
+    LONGUINT64 ui_path_len;
+    <span style=color:#66d9ef>char</span> buffer[<span style=color:#ae81ff>32768</span>];
+    <span style=color:#66d9ef>struct</span> extract_context <span style=color:#f92672>*</span>ctx <span style=color:#f92672>=</span> (<span style=color:#66d9ef>struct</span> extract_context <span style=color:#f92672>*</span>)context;
+    <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>i;
+
+    <span style=color:#66d9ef>if</span> (ui<span style=color:#f92672>-&gt;</span>path[<span style=color:#ae81ff>0</span>] <span style=color:#f92672>!=</span> <span style=color:#e6db74>&#39;/&#39;</span>)
+        <span style=color:#66d9ef>return</span> CHM_ENUMERATOR_CONTINUE;
+
+    <span style=color:#75715e>/* quick hack for security hole mentioned by Sven Tantau */</span>
+    <span style=color:#66d9ef>if</span> (strstr(ui<span style=color:#f92672>-&gt;</span>path, <span style=color:#e6db74>&#34;/../&#34;</span>) <span style=color:#f92672>!=</span> NULL)
+    {
+        <span style=color:#75715e>/* fprintf(stderr, &#34;Not extracting %s (dangerous path)\n&#34;, ui-&gt;path); */</span>
+        <span style=color:#66d9ef>return</span> CHM_ENUMERATOR_CONTINUE;
+    }
+
+    <span style=color:#66d9ef>if</span> (snprintf(buffer, <span style=color:#66d9ef>sizeof</span>(buffer), <span style=color:#e6db74>&#34;%s%s&#34;</span>, ctx<span style=color:#f92672>-&gt;</span>base_path, ui<span style=color:#f92672>-&gt;</span>path) <span style=color:#f92672>&gt;</span> <span style=color:#ae81ff>1024</span>)
+        <span style=color:#66d9ef>return</span> CHM_ENUMERATOR_FAILURE;
+
+    <span style=color:#75715e>/* Get the length of the path */</span>
+    ui_path_len <span style=color:#f92672>=</span> strlen(ui<span style=color:#f92672>-&gt;</span>path)<span style=color:#f92672>-</span><span style=color:#ae81ff>1</span>;
+
+    <span style=color:#75715e>/* Distinguish between files and dirs */</span>
+    <span style=color:#66d9ef>if</span> (ui<span style=color:#f92672>-&gt;</span>path[ui_path_len] <span style=color:#f92672>!=</span> <span style=color:#e6db74>&#39;/&#39;</span> )
+    {
+        FILE <span style=color:#f92672>*</span>fout;
+        LONGINT64 len, remain<span style=color:#f92672>=</span>ui<span style=color:#f92672>-&gt;</span>length;
+        LONGUINT64 offset <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+
+        printf(<span style=color:#e6db74>&#34;--&gt; %s</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>, ui<span style=color:#f92672>-&gt;</span>path);
+        <span style=color:#66d9ef>if</span> ((fout <span style=color:#f92672>=</span> fopen(buffer, <span style=color:#e6db74>&#34;wb&#34;</span>)) <span style=color:#f92672>==</span> NULL)
+    {
+        <span style=color:#75715e>/* make sure that it isn&#39;t just a missing directory before we abort */</span>
+        <span style=color:#66d9ef>char</span> newbuf[<span style=color:#ae81ff>32768</span>];
+        strcpy(newbuf, buffer);
+        i <span style=color:#f92672>=</span> strrchr(newbuf, <span style=color:#e6db74>&#39;/&#39;</span>);
+        <span style=color:#f92672>*</span>i <span style=color:#f92672>=</span> <span style=color:#e6db74>&#39;\0&#39;</span>;
+        rmkdir(newbuf);
+        <span style=color:#66d9ef>if</span> ((fout <span style=color:#f92672>=</span> fopen(buffer, <span style=color:#e6db74>&#34;wb&#34;</span>)) <span style=color:#f92672>==</span> NULL)
+              <span style=color:#66d9ef>return</span> CHM_ENUMERATOR_FAILURE;
+    }
+
+        <span style=color:#66d9ef>while</span> (remain <span style=color:#f92672>!=</span> <span style=color:#ae81ff>0</span>)
+        {
+            len <span style=color:#f92672>=</span> chm_retrieve_object(h, ui, (<span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>)buffer, offset, <span style=color:#ae81ff>32768</span>);
+            <span style=color:#66d9ef>if</span> (len <span style=color:#f92672>&gt;</span> <span style=color:#ae81ff>0</span>)
+            {
+                fwrite(buffer, <span style=color:#ae81ff>1</span>, (size_t)len, fout);
+                offset <span style=color:#f92672>+=</span> len;
+                remain <span style=color:#f92672>-=</span> len;
+            }
+            <span style=color:#66d9ef>else</span>
+            {
+                fprintf(stderr, <span style=color:#e6db74>&#34;incomplete file: %s</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>, ui<span style=color:#f92672>-&gt;</span>path);
+                <span style=color:#66d9ef>break</span>;
+            }
+        }
+
+        fclose(fout);
+    }
+    <span style=color:#66d9ef>else</span>
+    {
+        <span style=color:#66d9ef>if</span> (rmkdir(buffer) <span style=color:#f92672>==</span> <span style=color:#f92672>-</span><span style=color:#ae81ff>1</span>)
+            <span style=color:#66d9ef>return</span> CHM_ENUMERATOR_FAILURE;
+    }
+
+    <span style=color:#66d9ef>return</span> CHM_ENUMERATOR_CONTINUE;
+}
+
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>main</span>(<span style=color:#66d9ef>int</span> c, <span style=color:#66d9ef>char</span> <span style=color:#f92672>**</span>v)
+{
+    <span style=color:#66d9ef>struct</span> chmFile <span style=color:#f92672>*</span>h;
+    <span style=color:#66d9ef>struct</span> extract_context ec;
+
+    <span style=color:#66d9ef>if</span> (c <span style=color:#f92672>&lt;</span> <span style=color:#ae81ff>3</span>)
+    {
+        fprintf(stderr, <span style=color:#e6db74>&#34;usage: %s &lt;chmfile&gt; &lt;outdir&gt;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>, v[<span style=color:#ae81ff>0</span>]);
+        exit(<span style=color:#ae81ff>1</span>);
+    }
+
+    h <span style=color:#f92672>=</span> chm_open(v[<span style=color:#ae81ff>1</span>]);
+    <span style=color:#66d9ef>if</span> (h <span style=color:#f92672>==</span> NULL)
+    {
+        fprintf(stderr, <span style=color:#e6db74>&#34;failed to open %s</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>, v[<span style=color:#ae81ff>1</span>]);
+        exit(<span style=color:#ae81ff>1</span>);
+    }
+
+    printf(<span style=color:#e6db74>&#34;%s:</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>, v[<span style=color:#ae81ff>1</span>]);
+    ec.base_path <span style=color:#f92672>=</span> v[<span style=color:#ae81ff>2</span>];
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span> chm_enumerate(h,
+                        CHM_ENUMERATE_ALL,
+                        _extract_callback,
+                        (<span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>)<span style=color:#f92672>&amp;</span>ec))
+        printf(<span style=color:#e6db74>&#34;   *** ERROR ***</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>);
+
+    chm_close(h);
+
+    <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>0</span>;
+}
+</code></pre></div></details><p>The original example is quite verbose due to C&rsquo;s lack of high-level abstractions
+and crippled standard library, hopefully our example will be much more readable.</p><p>The interesting code lies inside our <code>extract()</code> function. The code is rather
+self-explanatory, so I&rsquo;ll let you read that instead of describing the process
+of extracting items in plain English.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// chmlib/examples/extract.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>extract</span>(
+    root_dir: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Path</span>,
+    file: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> ChmFile,
+    item: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>UnitInfo</span>,
+) -&gt; Result<span style=color:#f92672>&lt;</span>(), Box<span style=color:#f92672>&lt;</span>dyn Error<span style=color:#f92672>&gt;&gt;</span> {
+    <span style=color:#66d9ef>if</span> <span style=color:#f92672>!</span>item.is_file() <span style=color:#f92672>||</span> <span style=color:#f92672>!</span>item.is_normal() {
+        <span style=color:#75715e>// we only care about normal files
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>return</span> Ok(());
+    }
+    <span style=color:#66d9ef>let</span> path <span style=color:#f92672>=</span> <span style=color:#66d9ef>match</span> item.path() {
+        Some(p) <span style=color:#f92672>=&gt;</span> p,
+        <span style=color:#75715e>// if we can&#39;t get the path, ignore it and continue
+</span><span style=color:#75715e></span>        None <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>return</span> Ok(()),
+    };
+
+    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> dest <span style=color:#f92672>=</span> root_dir.to_path_buf();
+    <span style=color:#75715e>// Note: by design, the path for a normal file is absolute (starts with &#34;/&#34;)
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// so when joining it with the root_dir we need to drop the initial &#34;/&#34;.
+</span><span style=color:#75715e></span>    dest.extend(path.components().skip(<span style=color:#ae81ff>1</span>));
+
+    <span style=color:#75715e>// make sure the parent directory exists
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> Some(parent) <span style=color:#f92672>=</span> dest.parent() {
+        fs::create_dir_all(parent)<span style=color:#f92672>?</span>;
+    }
+
+    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> f <span style=color:#f92672>=</span> File::create(dest)<span style=color:#f92672>?</span>;
+    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> start_offset <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+    <span style=color:#75715e>// CHMLib doesn&#39;t give us a &amp;[u8] with the file contents directly (e.g.
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// because it may be compressed) so we need to copy chunks to an
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// intermediate buffer
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> buffer <span style=color:#f92672>=</span> vec<span style=color:#f92672>!</span>[<span style=color:#ae81ff>0</span>; <span style=color:#ae81ff>1</span> <span style=color:#f92672>&lt;&lt;</span> <span style=color:#ae81ff>16</span>];
+
+    <span style=color:#66d9ef>loop</span> {
+        <span style=color:#66d9ef>let</span> bytes_read <span style=color:#f92672>=</span> file.read(item, start_offset, <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> buffer)<span style=color:#f92672>?</span>;
+        <span style=color:#66d9ef>if</span> bytes_read <span style=color:#f92672>==</span> <span style=color:#ae81ff>0</span> {
+            <span style=color:#75715e>// we&#39;ve reached the end of the file
+</span><span style=color:#75715e></span>            <span style=color:#66d9ef>break</span>;
+        } <span style=color:#66d9ef>else</span> {
+            <span style=color:#75715e>// write this chunk to the file and continue
+</span><span style=color:#75715e></span>            start_offset <span style=color:#f92672>+=</span> bytes_read <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>u64</span>;
+            f.write_all(<span style=color:#f92672>&amp;</span>buffer)<span style=color:#f92672>?</span>;
+        }
+    }
+
+    Ok(())
+}
+</code></pre></div><p>Compared to <code>extract()</code>, our <code>main()</code> function is relatively simple, with the
+handling of failures during extraction being the only real difference from the
+previous example.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#75715e>// chmlib/examples/extract.rs
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>main</span>() {
+    <span style=color:#66d9ef>let</span> args: Vec<span style=color:#f92672>&lt;</span>_<span style=color:#f92672>&gt;</span> <span style=color:#f92672>=</span> env::args().skip(<span style=color:#ae81ff>1</span>).collect();
+    <span style=color:#66d9ef>if</span> args.len() <span style=color:#f92672>!=</span> <span style=color:#ae81ff>2</span> <span style=color:#f92672>||</span> args.iter().any(<span style=color:#f92672>|</span>arg<span style=color:#f92672>|</span> arg.contains(<span style=color:#e6db74>&#34;-h&#34;</span>)) {
+        println<span style=color:#f92672>!</span>(<span style=color:#e6db74>&#34;Usage: extract &lt;chm-file&gt; &lt;out-dir&gt;&#34;</span>);
+        <span style=color:#66d9ef>return</span>;
+    }
+
+    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> file <span style=color:#f92672>=</span> ChmFile::open(<span style=color:#f92672>&amp;</span>args[<span style=color:#ae81ff>0</span>]).expect(<span style=color:#e6db74>&#34;Unable to open the file&#34;</span>);
+
+    <span style=color:#66d9ef>let</span> out_dir <span style=color:#f92672>=</span> PathBuf::from(<span style=color:#f92672>&amp;</span>args[<span style=color:#ae81ff>1</span>]);
+
+    file.for_each(Filter::all(), <span style=color:#f92672>|</span>file, item<span style=color:#f92672>|</span> {
+        <span style=color:#66d9ef>match</span> extract(<span style=color:#f92672>&amp;</span>out_dir, file, <span style=color:#f92672>&amp;</span>item) {
+            Ok(_) <span style=color:#f92672>=&gt;</span> Continuation::Continue,
+            Err(e) <span style=color:#f92672>=&gt;</span> {
+                eprintln<span style=color:#f92672>!</span>(<span style=color:#e6db74>&#34;Error: {}&#34;</span>, e);
+                Continuation::Stop
+            },
+        }
+    });
+}
+</code></pre></div><p>Running this example against our sample CHM file gives us a set of files which
+can be opened using a normal web browser.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>$ cargo run --example extract -- ./topics.classic.chm ./extracted
+$ tree ./extracted
+./extracted
+├── default.html
+├── BrowserForward.html
+...
+├── Images
+│   ├── Commands
+│   │   └── RealWorld
+│   │       ├── BrowserBack.bmp
+...
+├── script
+│   ├── _community
+│   │   └── disqus.js
+│   ├── hs-common.js
+...
+└── userinterface.html
+$ firefox topics.classic/default.html
+(opens default.html in firefox)
+</code></pre></div><p>Some of the JavaScript is broken (I&rsquo;m assuming implementation quirks with the
+Microsoft Help viewer?) and there is no search functionality, but overall the
+website is quite usable.</p><h2 id=where-to-from-here>Where To From Here?
+<a class=heading-link href=#where-to-from-here><i class="fa fa-link" aria-hidden=true></i></a></h2><p>The <code>chmlib</code> crate is now essentially feature complete and (with a couple minor
+tweaks) ready to be published to crates.io.</p><p>There are a couple places I&rsquo;ve left as an exercise to the reader, though:</p><ul><li><p>If the <code>closure</code> in <code>ChmFile::for_each()</code> or
+<code>ChmFile::for_each_item_in_dir()</code> panic, we should resume unwinding after
+returning from C to Rust instead of swallowing the error.</p></li><li><p>It&rsquo;d be nice if the simple case of iterating over every item in a <code>ChmFile</code>
+didn&rsquo;t need to return <code>Continuation::Continue</code> for the closure passed to
+<code>ChmFile::for_each()</code> and friends. This could probably be implemented by
+accepting <code>F: FnMut(&mut ChmFile, UnitInfo) -> C</code> where <code>C: Into&lt;Continuation></code>
+and then adding an <code>impl From&lt;()> for Continuation</code>.</p></li><li><p>Errors encountered during iteration (e.g. like our <code>extract()</code> example) should
+also be passed back to the caller of <code>ChmFile::for_each()</code> and abort iteration
+early. This could tie in with the previous point by adding an implementation
+of <code>impl&lt;E> From&lt;Result&lt;(), E>> for Continuation where E: Error + 'static</code></p></li><li><p>Having to manually copy chunks into an intermediate buffer before writing them
+to a <code>File</code> in the <code>extract()</code> example is annoying. We may want to add a
+convenience function which will call <code>ChmFile:read()</code> in a loop and write the
+entire item into some <code>std::io::Write</code>r.</p></li></ul></div><footer></footer></article><script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script><script id=MathJax-script async src=https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js></script><script>MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']],processEscapes:!0,processEnvironments:!0},options:{skipHtmlTags:['script','noscript','style','textarea','pre']}}</script></section></div><footer class=footer><section class=container>©
+2021
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/eb2d656975ffbaee2955396af8291207b810384d>eb2d656</a>]</section></footer></main><script src=/js/dark-mode.min.aee9c8a464eb7b3534c7110f7c5e169e7039e2fd92710e0626d451d6725af137.js></script><script src=/js/mermaid.min.js></script><script src=/js/index.js></script><script type=application/javascript>var doNotTrack=!1;doNotTrack||(function(a,e,f,g,b,c,d){a.GoogleAnalyticsObject=b,a[b]=a[b]||function(){(a[b].q=a[b].q||[]).push(arguments)},a[b].l=1*new Date,c=e.createElement(f),d=e.getElementsByTagName(f)[0],c.async=1,c.src=g,d.parentNode.insertBefore(c,d)}(window,document,'script','https://www.google-analytics.com/analytics.js','ga'),ga('create','UA-78714693-3','auto'),ga('send','pageview'))</script></body></html>

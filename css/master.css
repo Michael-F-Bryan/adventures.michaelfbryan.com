@@ -1,0 +1,155 @@
+div.notices {
+    margin: 2rem 0;
+    position: relative;
+}
+
+div.notices>* {
+    padding: 15px;
+    display: block;
+    margin-top: 0rem;
+    margin-bottom: 0rem;
+    color: #666;
+}
+
+div.notices>ul {
+    padding-left: 40px;
+}
+
+div.notices pre {
+    background-color: #FAFAFA !important;
+}
+
+/* The notice "header" */
+
+div.notices p:first-child:before {
+    position: absolute;
+    top: 2px;
+    color: #fff;
+    font-family: "Font Awesome 5 Free";
+    font-weight: 900;
+    content: "\f06a";
+    left: 0.5em;
+}
+
+/* Style the header text */
+
+div.notices p:first-child:after {
+    position: absolute;
+    top: 2px;
+    color: #fff;
+    left: 2em;
+}
+
+/* header text */
+
+div.notices.info p:first-child:after {
+    content: 'Info';
+}
+
+div.notices.warning p:first-child:after {
+    content: 'Warning';
+}
+
+div.notices.note p:first-child:after {
+    content: 'Note';
+}
+
+div.notices.tip p:first-child:after {
+    content: 'Tip';
+}
+
+/* Give the header a background */
+
+div.notices.warning p:first-child {
+    border-top: 30px solid #d9534fcc;
+}
+
+div.notices.note p:first-child {
+    border-top: 30px solid #6ab0de;
+}
+
+div.notices.tip p:first-child {
+    border-top: 30px solid #5cb85ccc;
+}
+
+div.notices.info p:first-child {
+    border-top: 30px solid #F0B37E;
+}
+
+/* Background colour for the notice body */
+
+div.notices.warning {
+    background: #FAE2E2;
+}
+
+div.notices.note {
+    background: #E7F2FA;
+}
+
+div.notices.tip {
+    background: #E6F9E6;
+}
+
+div.notices.info {
+    background: #FFF2DB;
+}
+
+/* Let us link to the playpen */
+
+.playpen {
+    position: relative;
+}
+
+.playpen .buttons {
+    position: absolute;
+    right: 1em;
+    top: 1em;
+}
+
+.playpen .buttons a {
+    text-decoration: none;
+    color: slategray;
+    outline: none;
+}
+
+/* Make sure images are centred */
+
+figure {
+    text-align: center;
+}
+
+/* make quote attributions pretty */
+
+blockquote cite:before {
+    content: "\2014";
+    margin-right: 1em;
+}
+
+blockquote cite {
+    display: block;
+    text-align: right;
+}
+
+/* We don't want headers with permalinks to be coloured differently */
+
+h2 a, h3 a, h4 a {
+    text-decoration: none;
+    color: inherit !important;
+}
+
+/* We want to visually distinguish when some <code> is also a link */
+
+a code {
+    color: inherit;
+}
+
+/*
+ * Make sure SVG images don't make the page wider than the viewport on mobile
+ * devices.
+ *
+ * Fixes https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues/10
+ */
+
+svg {
+    max-width: 100%;
+}
