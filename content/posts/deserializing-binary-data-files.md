@@ -173,7 +173,7 @@ memory identically to what C would do, `#[repr(C)]`.
 ```rust
 // src/main.rs
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 #[repr(C)]
 pub struct Speaker {
     name: [[u8; 20]; 2],
@@ -205,18 +205,19 @@ insists that our programs are type-safe and will only write into a byte buffer
 (`&mut [u8]`).
 
 Instead, when creating a `load()` constructor for loading a `Speaker` from a
-reader, we can make space for a `Speaker` variable on the stack but
-leave it uninitialised...
+reader we'll create a `Speaker` variable where all the fields are set to a
+"sane" default so we avoid passing an uninitialized buffer to our reader...
 
 ```rust
 // src/main.rs
 
-use std::{io::{Error, Read}, mem::{self, MaybeUninit}};
+use std::io::{Error, Read};
 
 impl Speaker {
     pub fn load(mut reader: impl Read) -> Result<Self, Error> {
-        // Create an uninitialized Speaker variable
-        let mut speaker = MaybeUninit::<Speaker>::uninit();
+        // Create a Speaker where all the fields are set to some sane default
+        // (typically all zeroes)
+        let mut speaker = Speaker::default();
         ...
     }
 }
@@ -227,6 +228,8 @@ array that we can data into...
 
 ```rust
 // src/main.rs
+
+use std::mem;
 
 impl Speaker {
     pub fn load(mut reader: impl Read) -> Result<Self, Error> {
@@ -248,7 +251,7 @@ impl Speaker {
 ```
 
 ... then once we know the `speaker` has been completely filled with data from
-the reader we can tell the compiler that it has been initialised and return it.
+the reader we just need to return it.
 
 ```rust
 // src/main.rs
@@ -260,8 +263,8 @@ impl Speaker {
         unsafe {
             ...
 
-            // Our `speaker` has now been initialized
-            Ok(speaker.assume_init())
+            // Our `speaker` has now been updated with data from the reader.
+            Ok(speaker)
         }
     }
 }
@@ -289,8 +292,9 @@ impl Speaker {
 
 The primary reason for this being sound is that a `Speaker` only contains
 integers and arrays of integers, and an integer is valid for all possible bit
-patterns. That means it's impossible for bad inputs to break our
-`Speaker::load()` function, sure it could give us data that doesn't make sense,
+patterns. That means blindly copying bytes from (possibly maliciously crafted)
+input into a `Speaker` can't introduce memory safety issues into our
+`Speaker::load()` function. Sure it could give us data that doesn't make sense,
 but we'd still have valid byte arrays in our byte array fields and a valid `i16`
 in our `flags` field.
 
