@@ -372,7 +372,7 @@ should be done every time code is pushed to GitHub or when a Pull Request is
 created.
 
 ```yml
-# .github/workflow/main.yml
+# .github/workflow/continuous_integration.yml
 
 name: Continuous Integration
 on:
@@ -433,7 +433,7 @@ dependencies involved because changing any of those will often invalidate the
 entire cache.
 
 ```yml
-# .github/workflow/main.yml
+# .github/workflow/continuous_integration.yml
 
 jobs:
   compile-and-test:
@@ -458,7 +458,7 @@ You can tell GitHub actions to run the same job using different configurations
 (in this case, on 3 different OSes) with [a job matrix][matrix].
 
 ```yaml
-# .github/workflow/main.yml
+# .github/workflow/continuous_integration.yml
 
 jobs:
   compile-and-test:
@@ -477,7 +477,7 @@ While we're at it, let's update the matrix to also test against different
 versions of Rust.
 
 ```yaml
-# .github/workflow/main.yml
+# .github/workflow/continuous_integration.yml
 
 jobs:
   compile-and-test:
@@ -515,12 +515,12 @@ to GitHub Pages. There are a bunch of these available and you can even do it
 manually using just `git`, but I've had a decent amount of success with
 [`JamesIves/github-pages-deploy-action`][pages].
 
-Next we'll add a second job to our `main.yml` workflow file. Unlike the normal
+Next we'll add a second job to our `continuous_integration.yml` workflow file. Unlike the normal
 integration tests we only need to generate API docs for one OS, so that
 simplifies things.
 
 ```yml
-# .github/workflow/main.yml
+# .github/workflow/continuous_integration.yml
 
   api-docs:
     runs-on: ubuntu-latest
@@ -563,7 +563,7 @@ The `if` property on a step can be used to enable/disable that
 step [based on a condition][yml-if].
 
 ```yml
-# .github/workflow/main.yml
+# .github/workflow/continuous_integration.yml
 
   api-docs:
     runs-on: ubuntu-latest
@@ -586,7 +586,7 @@ always be green).
 ```md
 # Continuous Deployment in Rust
 
-[![Continuous Integration](https://github.com/Michael-F-Bryan/cdir/actions/workflows/main.yml/badge.svg)](https://github.com/Michael-F-Bryan/cdir/actions/workflows/main.yml)
+[![Continuous Integration](https://github.com/Michael-F-Bryan/cdir/actions/workflows/continuous_integration.yml/badge.svg)](https://github.com/Michael-F-Bryan/cdir/actions/workflows/continuous_integration.yml)
 
 ([API Docs](https://michael-f-bryan.github.io/cdir))
 ```
@@ -967,15 +967,103 @@ run a workflow based on a set interval. If we combine this with an action which
 creates and updates a GitHub Release we should be able to get "nightly" builds
 for free.
 
-```yml
+The CI pipeline we'll build for this is fairly complex, so let's start with
+a simple Linux job which runs `cargo xtask dist` and creates a release from it.
 
+For this new `Releases` workflow we'll create a new workflow file (`.github/workflows/releases.yml`)
+and copy across bits and pieces from our main CI
+For this task we'll be using [`marvinpinto/action-automatic-releases`][auto-release],
+a GitHub Action which will tag the current commit, create a new GitHub Release,
+and attach the provided assets. It also provides a nice change log showing all
+the commits since the last `nightly` release.
+
+```yml
+# .github/workflows/releases.yml
+
+name: Releases
+
+on:
+  schedule:
+  - cron: '0 0 * * *' # midnight UTC
+  workflow_dispatch:  # Lets us trigger the build manually if desired
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/Cargo.lock') }}
+    - name: Initialize the Rust Toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+    - name: Generate Release Bundle
+      uses: actions-rs/cargo@v1
+      with:
+        command: xtask
+        args: dist
+    - uses: "marvinpinto/action-automatic-releases@latest"
+      if: github.ref == 'refs/heads/master'
+      with:
+        repo_token: "${{ secrets.GITHUB_TOKEN }}"
+        automatic_release_tag: "nightly"
+        prerelease: true
+        title: "Nightly Release"
+        files: target/cdir.*.zip
 ```
+
+{{%notice note %}}
+This action is typically only ever run on `master` when the scheduled job fires,
+but because we've added `workflow_dispatch` under the `on` section, you can
+actually use the GitHub UI to trigger the job manually on *any* branch. This is
+particularly useful for troubleshooting a `xtask dist` which fails in the CI
+environment but works fine on your dev machine.
+
+That leaves us with a tricky situation, though. Say you are troubleshooting a
+broken release build in a side branch and everything starts passing again...  At
+the very end, it'll reach the `"marvinpinto/action-automatic-releases@latest"`
+step and you'll accidentally publish a new release when you weren't meaning to.
+
+Often this is harmless, but sometimes it can have business ramifications. Let's
+use [the `if` property][if] to make sure we only cut a release when the
+`Releases` workflow runs on the `master` branch.
+
+```yaml
+jobs:
+  build:
+    steps:
+    - ...
+    - uses: "marvinpinto/action-automatic-releases@latest"
+      if: github.ref == 'refs/heads/master'
+      ...
+```
+
+[if]: https://docs.github.com/en/actions/reference/context-and-expression-syntax-for-github-actions
+{{% /notice %}}
+
+### Improving the Nightly Build
+
+As it stands this is a pretty useful little workflow, but we can improve it a
+bit by a) generating release bundles on multiple platforms (i.e. Windows, Linux,
+and MacOS), and b) only generating a new release when code has actually changed.
+
+We've already done the first part before (it was the stuff with `strategy` and
+`matrix`), so we can just copy that across.
 
 <!--
     - Generate nightly builds of the CLI tool and Python bindings
     - Use GitHub Actions to push the nightly builds to GitHub Releases whenever
       the code changed
 -->
+
+### Python Wheels
 
 ## Published Releases
 
@@ -1003,3 +1091,4 @@ for free.
 [build-env]: https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-build-scripts
 [alias]: https://doc.rust-lang.org/cargo/reference/config.html#alias
 [scheduled]: https://docs.github.com/en/actions/reference/events-that-trigger-workflows#scheduled-events
+[auto-release]: https://github.com/marvinpinto/action-automatic-releases
