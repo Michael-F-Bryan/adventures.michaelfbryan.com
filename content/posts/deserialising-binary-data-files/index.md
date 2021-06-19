@@ -2,6 +2,9 @@
 title: "Deserialising Binary Data Files in Rust"
 date: "2021-06-19T17:51:35+08:00"
 draft: true
+tags:
+- Rust
+- Unsafe Rust
 ---
 
 The other day, someone on the Rust user forums posted [a question][question]
@@ -31,6 +34,7 @@ I'll be approaching the problem from the perspective of someone who:
 - It's okay if the tool crashes - nobody will die, your servers won't be hacked,
   and if push comes to shove we can always open a hex editor and deserialise the
   data by hand
+- Just wants a quick-and-dirty solution to their problem
 
 {{% notice note %}}
 The code written in this article is available [on GitHub][repo]. Feel free to
@@ -286,63 +290,195 @@ unless we had some outside information which makes extra guarantees.
 
 ## Making Things Convenient
 
+Now, C's `printf()` is more than happy to take a pointer to some bytes and
+interpret them as text, but if we tried to print `Speaker`'s fields at the
+moment we'd get something useless like `[0x4a, 0x6f, 0x73, 0x65, 0x70, 0x68,
+0x0a, 0x00, 0x00, 0x00]` instead of the `"Joseph"` that we expect.
 
-## Packing
+This is because Rust treats all arrays of bytes as arrays of bytes and doesn't
+attach any extra meaning to them. If we want to treat them like strings then
+we'll need to use [`std::str::from_utf8()`][string-from-utf8] to convert our
+byte arrays to a UTF-8 `&str`.
 
-## Better Alternatives
+From the way our C is implemented, if a string field isn't completely filled
+with text it will be padded out with zeroes. This is particularly helpful for
+C programs because it means our fields always have trailing null bytes (as
+long as we don't overflow).
 
-## Conclusions
-
----
-
-
-
-
-
-
-
-
-
-## Making Things Convenient
-
-Your next big hurdle will be interpreting the fields as useful string types. Printing a byte array will just show the numeric values for each of the bytes, so let's give `Speaker` some helper methods which will give us access to the various fields as strings if they are valid UTF8.
+In Rust, we don't to include these trailing null bytes in the final output (null
+is a valid UTF-8 character), so let's make a helper function that takes a byte
+array, trims off any trailing nulls, then tries to interpret it as UTf-8.
 
 ```rust
+// src/main.rs
+
+fn c_string(bytes: &[u8]) -> Option<&str> {
+    let bytes_without_null = match bytes.iter().position(|&b| b == 0) {
+        Some(ix) => &bytes[..ix],
+        None => bytes,
+    };
+
+    std::str::from_utf8(bytes_without_null).ok()
+}
+```
+
+With our `c_string()` function in hand we are now ready to give `Speaker` some
+getter methods.
+
+```rust
+// src/main.rs
+
 impl Speaker {
-    pub fn address_line_1(&self) -> Option<&str> {
-        std::str::from_utf8(&self.addr1).ok()
-    }
+    pub fn address_line_1(&self) -> Option<&str> { c_string(&self.addr1) }
+
+    pub fn address_line_2(&self) -> Option<&str> { c_string(&self.addr2) }
+
+    pub fn phone_number(&self) -> Option<&str> { c_string(&self.phone) }
+}
+```
+
+The `name` field is a bit more interesting because it contains two strings,
+presumably the first and last names.
+
+We can use a mixture of destructuring and the `?` operator to create a nice
+method that returns the first and last names when they are both valid.
+
+```rust
+// src/main.rs
+
+impl Speaker {
 
     pub fn name(&self) -> Option<(&str, &str)> {
-        let [first_name, last_name] = &self.name;
+        let [first, last] = &self.name;
+        let first = c_string(first)?;
+        let last = c_string(last)?;
 
-        let first_name = std::str::from_utf8(first_name).ok()?;
-        let last_name = std::str::from_utf8(last_name).ok()?;
-
-        Some((first_name, last_name))
+        Some((first, last))
     }
 }
 ```
 
-(the rest of the helper methods are left as an exercise for the reader)
+## Tests
 
-Note that [`std::str::from_utf8()`](https://doc.rust-lang.org/std/str/fn.from_utf8.html) returns a `Result<&str, Utf8Error>` where the `Utf8Error` contains extra information about where it first encountered invalid UTF8 in the byte array. We don't care about that and only want to see if a valid UTF8 string is valid, so we use the `ok()` method to convert to an `Option<&str>`. We then use the `?` operator to say *"if this `Option` is `None`, return `None`, otherwise extract the wrapped value so it can be assigned to `first_name`"*.
+We've now got a `Speaker::load()` constructor and some convenient getter methods
+for interpreting the fields so I figure it's time to write some tests.
 
-## Packing
+First, we'll take the bytes from the `speaker.dat` generated earlier and save
+them as a byte literal. Conveniently, the `xxd` tool has a flag which prints
+the input in a form that can be included in source code.
 
-There is this concept called ["packing"](https://doc.rust-lang.org/nomicon/other-reprs.html#reprpacked) which is quite important in telling the compiler how to lay out our `Speaker` and `spkr` structs in memory. We are interpreting a bunch of bytes as a `Speaker` it is very important for us that `Speaker` and `spkr` are laid out identically otherwise we'll get garbage.
+```console
+$ cat speaker.dat | xxd -i
+  0x4a, 0x6f, 0x73, 0x65, 0x70, 0x68, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x42, 0x6c, 0x6f, 0x67,
+  0x73, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x31, 0x32, 0x33, 0x20, 0x46, 0x61, 0x6b, 0x65,
+  0x20, 0x53, 0x74, 0x72, 0x65, 0x65, 0x74, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4e, 0x65, 0x77, 0x20,
+  0x59, 0x6f, 0x72, 0x6b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x32, 0x30, 0x32, 0x2d, 0x35, 0x35, 0x35, 0x2d, 0x30, 0x31, 0x31, 0x37,
+  0x00, 0x00, 0x00, 0x00, 0x0f, 0xaa
+```
 
-You see, processors really like it when things are lined up in memory correctly and they often need to do extra work when they aren't lined up (which kills performance) or will just error out altogether (which kills your program). For example, a `u8` can be placed at addresses that are multiples of 1 byte (i.e. anywhere), a `u32` can be placed at multiples of 4 bytes, and so on.
+All we need to do is create a new test module and paste it into a `SPEAKER_DAT`
+constant.
 
-To deal with this alignment issue, compilers will insert spacing between fields to make sure they line up correctly - this is actually what the `#[repr(C)]` attribute does. If we want to tell the compiler *not* to insert this spacing we can use `#[repr(packed)]` to tell the compiler *"this struct's bytes must be **packed** together as closely as possible"*.
+```rust
+// src/main.rs
 
-We get lucky here because the `cng` field is at offset 202, which is a multiple of 2 bytes, but otherwise we would need to use `#[repr(packed)]` instead of `#[repr(C)]`.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
 
-## Better Alternatives
+    const SPEAKER_DAT: [u8; mem::size_of::<Speaker>()] = [ ... ];
+}
+```
 
-There are a lot of better alternatives out there. If I was doing this as part of a commercial product where I didn't have full control over the input I would definitely reach for a better tool.
+Now we can write a test which deserialises our *Joseph Blogs* speaker's
+information and compares it to what the C code generated.
 
-In this case, probably a parsing library like [`nom`](https://crates.io/crates/nom).
+```rust
+// src/main.rs
+
+#[cfg(test)]
+mod tests {
+    ...
+
+    #[test]
+    fn deserialize_joe_bloggs() {
+        let reader = Cursor::new(&SPEAKER_DAT);
+
+        let got = Speaker::load(reader).unwrap();
+
+        assert_eq!(got.name().unwrap(), ("Joseph", "Blogs"));
+        assert_eq!(got.address_line_1().unwrap(), "123 Fake Street");
+        assert_eq!(got.address_line_2().unwrap(), "New York");
+        assert_eq!(got.phone_number().unwrap(), "202-555-0117");
+        assert_eq!(got.flags, 0xAA0F);
+    }
+}
+```
+
+Our test passes, of course.
+
+```console
+$ cargo test
+    Finished test [unoptimized + debuginfo] target(s) in 0.03s
+     Running unittests (/home/michael/Documents/deserializing-binary-data-files/target/debug/deps/reading_data_files-f34629f4e016d364)
+
+running 1 test
+test tests::deserialize_joe_bloggs ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+```
+
+## A Note on Packing
+
+There is this concept called ["packing"][packing] which is quite important in
+telling the compiler how to lay out our `Speaker` and `spkr` structs in memory.
+We are interpreting a bunch of bytes as a `Speaker` it is very important for us
+that `Speaker` and `spkr` are laid out identically otherwise we'll get garbage.
+
+You see, processors really like it when things are lined up in memory correctly
+and they often need to do extra work when they aren't lined up (which kills
+performance) or will just error out altogether (which kills your program). For
+example, a `u8` can be placed at addresses that are multiples of 1 byte (i.e.
+anywhere), a `u32` can be placed at multiples of 4 bytes, and so on.
+
+To deal with this alignment issue, compilers will insert some unused bytes
+(often called "padding") between fields to make sure they line up correctly -
+this is actually what the `#[repr(C)]` attribute does. If we want to tell the
+compiler *not* to insert this spacing we can use `#[repr(packed)]` to tell the
+compiler *"this struct's bytes must be **packed** together as closely as possible"*.
+
+Most binary formats don't care about these padding bytes because they want files
+to be as compact as possible, so it's not uncommon to see a `#[repr(packed)]`
+(or its C cousin, `__attribute__((__packed__))` on GCC and
+`__attribute__((packed))` on Clang) next to struct definitions when they are
+using this direct reading/writing method of serialising data.
+
+We get lucky here because the `flags` field is at offset 202 (which is a
+multiple of 2 bytes) so we didn't need to do anything special, but it's still
+good to know. It may also help explain why you'll often see random fields named
+`spare` or `unused` in a C struct definition.
+
+## Conclusions
+
+It's not something you'll need to (or want to) use too often, but knowing how to
+read/write data directly to some file without needing any complicated
+serialisation frameworks might be something you'll use some day.
+
+That said, there are a lot of better alternatives out there, with most of them
+allowing you to write code that has similar performance characteristics with no
+need for `unsafe`.
+
+Personally, if I was doing this as part of a commercial product, especially one
+where I didn't have full control over the input, I would definitely reach for a
+better tool, probably a parsing library like [`nom`](https://crates.io/crates/nom).
 
 [question]: https://users.rust-lang.org/t/deserializing-a-dat-binary-file-created-in-cpp/61263
 [bincode]: https://github.com/bincode-org/bincode
@@ -351,3 +487,5 @@ In this case, probably a parsing library like [`nom`](https://crates.io/crates/n
 [main.c]: https://github.com/Michael-F-Bryan/deserializing-binary-data-files/blob/master/examples/main.c
 [read]: https://doc.rust-lang.org/std/io/trait.Read.html
 [json]: https://www.json.org/json-en.html
+[string-from-utf8]: https://doc.rust-lang.org/std/str/fn.from_utf8.html
+[packing]: https://doc.rust-lang.org/nomicon/other-reprs.html#reprpacked
