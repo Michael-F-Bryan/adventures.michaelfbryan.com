@@ -71,7 +71,7 @@ so we've already made our job 33% easier.
 
 I'd also consider the HTTP bit a solved problem. The [`reqwest`][reqwest]
 crate provides a robust and fully-featured asynchronous HTTP client, and we
-can leverage [`serde`][serde]'s serialisation superpowers to make sending or
+can leverage [`serde`][serde]'s serialization superpowers to make sending or
 receiving structured data a breeze.
 
 I'm a little worried about the crypto side of things. On one hand, we don't
