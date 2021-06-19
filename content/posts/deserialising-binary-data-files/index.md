@@ -1,7 +1,6 @@
 ---
 title: "Deserialising Binary Data Files in Rust"
-date: "2021-06-20T00:40:00+08:00"
-draft: true
+date: "2021-06-20T00:30:00+08:00"
 tags:
 - Rust
 - Unsafe Rust
