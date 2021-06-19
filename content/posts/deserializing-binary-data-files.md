@@ -20,9 +20,10 @@ because the OS's `read()` function will literally write your data to its
 destination, and there are no extra dependencies or complicated serialization
 frameworks involved.
 
-I'm not going to go into this format's drawbacks (there *is* a reason we use
-things like [JSON][json] and [Protocol Buffers][pb] nowadays, after all) and
-instead let's just focus on how to read these sorts of files.
+I'm not going to go into this technique's drawbacks (of which there are many...
+there *is* a reason we use things like [JSON][json] and [Protocol Buffers][pb]
+nowadays, after all) and instead let's just focus on how to read these sorts of
+files.
 
 I'll be approaching the problem from the perspective of someone who:
 
@@ -502,9 +503,11 @@ That said, there are a lot of better alternatives out there, with most of them
 allowing you to write code that has similar performance characteristics with no
 need for `unsafe`.
 
-Personally, if I was doing this as part of a commercial product, especially one
-where I didn't have full control over the input, I would definitely reach for a
-better tool, probably a parsing library like [`nom`](https://crates.io/crates/nom).
+Personally, I would definitely reach for a better tool (probably a parsing
+library like [`nom`][nom] or [`binread`][binread]) if this was an application I
+cared about or if I didn't have full control over the input. However, for
+quick-and-dirty tools where your primary goal is to *"do whatever C does"*, this
+technique works pretty well.
 
 [question]: https://users.rust-lang.org/t/deserializing-a-dat-binary-file-created-in-cpp/61263
 [write]: https://linux.die.net/man/3/write
@@ -515,3 +518,5 @@ better tool, probably a parsing library like [`nom`](https://crates.io/crates/no
 [string-from-utf8]: https://doc.rust-lang.org/std/str/fn.from_utf8.html
 [packing]: https://doc.rust-lang.org/nomicon/other-reprs.html#reprpacked
 [pb]: https://developers.google.com/protocol-buffers
+[nom]: https://crates.io/crates/nom
+[binread]: https://crates.io/crates/binread
