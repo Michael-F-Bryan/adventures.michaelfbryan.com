@@ -117,7 +117,7 @@ impl ErrorCodeExt for HRESULT {
     }
 }
 
-// (already defined in the winapi crate)
+// (Note: these are already defined in the winapi crate)
 mod winapi {
     mod shared {
         mod winerror {
@@ -129,7 +129,9 @@ mod winapi {
 }
 ```
 
-##
+## In The Real World
+
+<!-- TODO: Find a good, concise example of how this might be used -->
 
 ## Conclusions
 
