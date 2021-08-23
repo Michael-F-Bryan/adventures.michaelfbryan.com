@@ -78,4 +78,3 @@ function initializeMathJax() {
 
 onLoaded(initializeMermaid);
 onLoaded(addPermalinks);
-// onLoaded(initializeMathJax);
