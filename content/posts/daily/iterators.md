@@ -337,9 +337,27 @@ where
 
 {{% notice tip %}}
 You might have noticed we chose to accept a `FnMut` closure for our predicate
-instead of a plain `Fn`. By allowing the closure to have mutable state, it means
-the caller could mutate external state (e.g. some sort of `count` variable from
-the calling function) to determine whether the predicate is satisfied or not.
+instead of a plain `Fn`. This lets our closure carry mutable state across calls
+and enables complex patterns like this:
+
+```rust
+let text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit";
+
+let mut letter_m_threshold = 3;
+
+let everything_before_the_3rd_word_containing_m = filter(
+    text.split_whitespace(),
+    |word| {
+        if word.contains("m") {
+            letter_m_threshold  -= 1;
+        }
+        letter_m_threshold > 0
+    },
+);
+
+let got: Vec<&str> = everything_before_the_3rd_word_containing_m .collect();
+assert_eq!(got, &["Lorem", "ipsum", "dolor", "sit"]);
+```
 
 Similarly, we choose to pass in an `&I::Item` because we want to give the
 predicate access to the item, but it shouldn't be given ownership (because then
