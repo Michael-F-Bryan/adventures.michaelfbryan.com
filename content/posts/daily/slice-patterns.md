@@ -1,5 +1,5 @@
 ---
-title: "Slice Patterns"
+title: "Daily Rust: Slice Patterns"
 publishDate: "2021-08-14T00:00:00+00:00"
 tags:
 - Daily Rust
