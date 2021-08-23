@@ -1,7 +1,6 @@
 ---
 title: "Daily Rust: Iterators"
 publishDate: "2021-08-24T03:55:00+08:00"
-draft: true
 tags:
 - Daily Rust
 - Rust
