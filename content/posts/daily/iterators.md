@@ -1,6 +1,6 @@
 ---
 title: "Daily Rust: Iterators"
-publishDate: "2021-08-17T01:45:41+08:00"
+publishDate: "2021-08-32T16:00:00+08:00"
 draft: true
 tags:
 - Daily Rust
@@ -8,8 +8,8 @@ tags:
 ---
 
 Iterators are one of the core abstractions you'll use in Rust. They drive the
-language's for-loop and the various combinator methods provide a very ergonomic,
-functional way to reason about data.
+language's for-loop and the various [combinator][combinator] methods provide a
+very ergonomic, functional way to reason about data.
 
 That said, they can also feel a bit intimidating because they often touch on
 more "advanced" topics like generics, associated types, and often lifetimes.
@@ -42,13 +42,13 @@ trait Iterator {
 }
 ```
 
-Now you may be wondering why most Rust code isn't scattered with calls to
-`next()`, and that's where the [*Syntactic Sugar*][syntactic-sugar] comes in.
-This is where the compiler will see certain high level constructs in your code
-and transform them into a lower level form.
+Now you may be wondering why most Rust code doesn't have calls to `next()`
+scattered throughout, and that's where [*Syntactic Sugar*][syntactic-sugar]
+comes in. This is where the compiler will see certain high level constructs in
+your code and transform them into a lower level form.
 
-The humble for-loop is probably the most familiar place where Rust uses
-syntactic sugar to let programmers write high-level code.
+ The humble for-loop is probably the most familiar instance of this syntactic
+ sugar.
 
 For example, when the compiler sees this...
 
@@ -76,10 +76,17 @@ keep calling its `next()` method until we get `None`.
 {{% notice note %}}
 
 This `into_iter()` method (backed by the [`std::iter::IntoIterator`][into-iter]
-trait) is a way to transform something into an iterator. Some common types that
-implement `IntoIterator` are [`Vec<T>`][vec-into-iter],
+trait) is a way to transform something into an iterator.
+
+Some common types that implement `IntoIterator` are [`Vec<T>`][vec-into-iter],
 [`Option<T>`][option-into-iter], and most importantly, [anything implementing
 the `Iterator` trait][iter-into-iter] (which will just return itself).
+
+This trait comes in handy because it often means you can use a collection in a
+for-loop without needing to call some `iter()` method, because most collections
+have an `IntoIterator` implementation which will pull items out of the
+collection until there is nothing left (at which point the collection is
+destroyed).
 
 [vec-into-iter]: https://github.com/rust-lang/rust/blob/73d96b090bb68065cd3a469b27cbd568e39bf0e7/library/alloc/src/vec/mod.rs#L2489-L2529
 [option-into-iter]: https://github.com/rust-lang/rust/blob/73d96b090bb68065cd3a469b27cbd568e39bf0e7/library/core/src/option.rs#L1660-L1682
@@ -123,17 +130,17 @@ impl Iterator for Fibonacci {
 
 {{% notice note %}}
 You'll notice we use the [`checked_add()`][checked-add] method here instead of
-the normal `+` operator. This is important because we need a stopping
-condition.
+the normal `+` operator. This is important because we are working with
+fixed-size integers and we need a stopping condition.
 
-Without it we would reach `2_971_215_073` and either panic (in debug mode)
-overflow (in release mode) - Rust's way of telling us that we if we are creating
-bigger and bigger numbers we should handle the situation when our numbers get
-too big for the integer type we are using.
+Without it, we would reach `2_971_215_073` and either panic (in debug mode)
+overflow (in release mode). This is Rust's way of telling us that we if we are
+creating bigger and bigger numbers we should handle the situation when our
+numbers get too big for the integer type we are using.
 
-We actually miss the top two Fibonacci numbers this way, but adding extra logic
-to handle them would complicate the example and you wouldn't actually learn
-anything new about iterators.
+We actually miss the top two Fibonacci numbers using the above `Iterator`
+implementation, but adding extra logic to handle them would complicate the
+example and you wouldn't actually learn anything new about iterators.
 
 [checked-add]: https://doc.rust-lang.org/std/primitive.u32.html#method.checked_add
 {{% /notice %}}
@@ -156,11 +163,20 @@ fn main() {
 
 [(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=5ecf8f52253983fabe7b24edc2ed6c8d)
 
-Strictly speaking the helper function wasn't really necessary, but it helps
-make the code cleaner and means readers won't see the `a: 1, b: 0` and wonder
-where we pulled those magic numbers from.
+Strictly speaking the helper function wasn't really necessary, but it helps make
+the code cleaner and means readers won't see `Fibonacci { a: 1, b: 0 }` and
+wonder where we pulled those magic numbers from.
+
+Alternatively, we could have implemented the `Default` trait.
 
 ## Iterating Over a Slice
+
+Iterators are commonly used to inspect the items in a collection. The simplest
+collection type is a slice, so let's create our own version of
+[`std::slice::Iter`][slice-iter].
+
+First we need a struct which keeps track of the slice and the index of the next
+item to read.
 
 ```rust
 struct SliceIter<'a, T> {
@@ -168,6 +184,11 @@ struct SliceIter<'a, T> {
     index: usize,
 }
 ```
+
+Our implementation then just uses [the slice's `get()` method][slice-get] to get
+the item at that index or `None` if the index is past the end of the slice.  We
+then just use `?` to return `None` if there was no item, then increment our
+`index` before yielding the item to the caller.
 
 ```rust
 impl<'a, T> Iterator for SliceIter<'a, T> {
@@ -194,6 +215,30 @@ though 😉
 
 [unsafe]: https://play.rust-lang.org/?version=stable&mode=release&edition=2018&gist=420278dbeec26f0c560f9b1b13612922
 {{% /notice %}}
+
+Just for fun, here is a cute version based on [*Slice Patterns*][slice-patterns].
+
+```rust
+struct SliceIter<'a, T> {
+    slice: &'a [T],
+}
+
+impl<'a, T> Iterator for SliceIter<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.slice {
+            [first, rest @ ..] => {
+                self.slice = rest;
+                Some(first)
+            }
+            [] => None,
+        }
+    }
+}
+```
+
+[(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=0fcc643b63d1d1718170ee2b4389fbfd)
 
 ## Filter
 
@@ -275,6 +320,17 @@ where
         }
     }
 }
+
+fn filter<I, F>(iter: I, predicate: F) -> impl Iterator<Item = I::Item>
+where
+    I: IntoIterator,
+    F: FnMut(&I::Item) -> bool,
+{
+    Filter {
+        iter: iter.into_iter(),
+        predicate,
+    }
+}
 ```
 
 [(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=518ed8c15e89a1807ac1c8881211e7a1)
@@ -331,6 +387,19 @@ where
 
 ## Conclusions
 
+We've barely scratched the surface on what iterators can achieve, but hopefully
+you'll now have an understanding of how iterator combinators like `filter()` and
+`map()` are implemented.
+
+Iterators may touch on some higher-level topics like closures, associated types,
+and syntactic sugar, but they aren't magic. Plus, when in doubt you can always
+just [read the source][std].
+
 [syntactic-sugar]: https://en.wikipedia.org/wiki/Syntactic_sugar
 [std-iter]: https://github.com/rust-lang/rust/blob/73d96b090bb68065cd3a469b27cbd568e39bf0e7/library/core/src/iter/traits/iterator.rs#L55-L92
 [filter]: https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.filter
+[combinator]: https://softwareengineering.stackexchange.com/questions/117522/what-are-combinators-and-how-are-they-applied-to-programming-projects-practica
+[std]: https://github.com/rust-lang/rust/tree/73d96b090bb68065cd3a469b27cbd568e39bf0e7/library/std/src
+[slice-iter]: https://doc.rust-lang.org/std/slice/struct.Iter.html
+[slice-patterns]: {{% ref "posts/daily/slice-patterns.md" %}}
+[slice-get]: https://doc.rust-lang.org/std/primitive.slice.html#method.get
