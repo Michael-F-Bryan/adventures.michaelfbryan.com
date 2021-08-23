@@ -1,18 +1,19 @@
 ---
 title: "Daily Rust: Iterators"
-publishDate: "2021-08-32T16:00:00+08:00"
+publishDate: "2021-08-24T03:55:00+08:00"
 draft: true
 tags:
 - Daily Rust
 - Rust
+- Iterators
 ---
 
-Iterators are one of the core abstractions you'll use in Rust. They drive the
-language's for-loop and the various [combinator][combinator] methods provide a
-very ergonomic, functional way to reason about data.
+Iterators are part of Rust's secret sauce. They power things from the humble
+for-loop to the elegant iterator chain, but have you ever stopped to think how
+they work?
 
-That said, they can also feel a bit intimidating because they often touch on
-more "advanced" topics like generics, associated types, and often lifetimes.
+Let's find out more about Rust's iterators by implementing our own versions of
+common iterators and reading the standard library's source code.
 
 {{% notice info %}}
 The code written in this article is available on the Rust Playground using the
