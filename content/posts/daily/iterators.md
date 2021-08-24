@@ -138,10 +138,6 @@ overflow (in release mode). This is Rust's way of telling us that we if we are
 creating bigger and bigger numbers we should handle the situation when our
 numbers get too big for the integer type we are using.
 
-We actually miss the top two Fibonacci numbers using the above `Iterator`
-implementation, but adding extra logic to handle them would complicate the
-example and you wouldn't actually learn anything new about iterators.
-
 [checked-add]: https://doc.rust-lang.org/std/primitive.u32.html#method.checked_add
 {{% /notice %}}
 
