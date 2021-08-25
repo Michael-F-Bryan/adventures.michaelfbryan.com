@@ -114,7 +114,7 @@ fn is_palindrome(items: &[char]) -> bool {
 }
 ```
 
-[(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=30e4a702f32228550c9f3ccc1ecff549)
+[(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=baeec729aea945d2cd98387d1333ba8f)
 
 ## A Poor Man's Argument Parser
 
