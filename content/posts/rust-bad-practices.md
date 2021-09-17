@@ -80,6 +80,8 @@ if let Some(fox) = index {
 }
 ```
 
+[(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=ed6d6b8ebdd7581a95b0098258b4f371)
+
 This way the compiler can help you write better code.
 
 ### An Abundance of `Rc<RefCell<T>>`
