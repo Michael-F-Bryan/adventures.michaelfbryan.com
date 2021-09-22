@@ -4,6 +4,7 @@ publishDate: "2021-09-16T23:44:27+08:00"
 draft: true
 tags:
 - Rust
+- Best Practices
 series:
 - Rust Best Practices
 toc: true
@@ -148,15 +149,353 @@ let account: Account = account.parse()?;
 
 This is arguably superior because we can use the same name for the same concept.
 
-Other languages [frown on shadowing][shadowing] because it can be easy to lose track of what
-type a variable contains (e.g. in a dynamically typed language like JavaScript)
-or you can introduce bugs where the programmer thinks a variable has one type
-but it actually contains something separate. Neither issue is relevant with a
-strongly typed language like Rust
+Other languages [frown on shadowing][shadowing] because it can be easy to lose
+track of what type a variable contains (e.g. in a dynamically typed language
+like JavaScript) or you can introduce bugs where the programmer thinks a
+variable has one type but it actually contains something separate.
+
+Neither of these is particularly relevant to a strongly typed language with
+move semantics like Rust, so you can use shadowing freely without worrying
+about shooting yourself in the foot.
 
 ## An Abundance of `Rc<RefCell<T>>`
 
-- People try to reuse patterns from GC'd (typically OO) languages
+A common pattern in Object Oriented languages is to accept a reference to some
+object so you can call its methods later on.
+
+On its own there is nothing wrong with this, *Dependency Injection* is a very
+good thing to do, but unlike most OO languages Rust doesn't have a garbage
+collector and has strong feelings on shared mutability.
+
+Perhaps this will be easier to understand with an example.
+
+Say we are implementing a game where the player needs to beat up a bunch of
+monsters until they have inflicted a certain amount of damage (I dunno, maybe
+it's for a quest or something).
+
+We create a `Monster` class which has a `health` property and a `takeDamage()`
+method, and so we can keep track of how much damage has been inflicted we'll let
+people provide callbacks that get called whenever the monster receives damage.
+
+```ts
+type OnReceivedDamage = (damageReceived: number) => void;
+
+class Monster {
+    health: number = 50;
+    receivedDamage: OnReceivedDamage[] = [];
+
+    takeDamage(amount: number) {
+        amount = Math.min(this.health, amount);
+        this.health -= amount;
+        this.receivedDamage.forEach(cb => cb(amount));
+    }
+
+    on(event: "damaged", callback: OnReceivedDamage): void {
+        this.receivedDamage.push(callback);
+    }
+}
+```
+
+Let's also create a `DamageCounter` class which tracks how much damage we've
+inflicted and lets us know when that goal is reached.
+
+```ts
+class DamageCounter {
+    damageInflicted: number = 0;
+
+    reachedTargetDamage(): boolean {
+        return this.damageInflicted > 100;
+    }
+
+    onDamageInflicted(amount: number) {
+        this.damageInflicted += amount;
+    }
+}
+```
+
+Now we'll create some monsters and keep inflicting a random amount of damage
+until the `DamageCounter` is happy.
+
+```ts
+const counter = new DamageCounter();
+
+const monsters = [new Monster(), new Monster(), new Monster(), new Monster(), new Monster()];
+monsters.forEach(m => m.on("damaged", amount => counter.onDamageInflicted(amount)));
+
+while (!counter.reachedTargetDamage()) {
+    // pick a random monster
+    const index = Math.floor(Math.random()*monsters.length);
+    const target = monsters[index];
+    // then damage it a bit
+    const damage = Math.round(Math.random() * 50);
+    target.takeDamage(damage);
+
+    console.log(`Monster ${index} received ${damage} damage`);
+}
+```
+
+[(TypeScript Playground)](https://www.typescriptlang.org/play?#code/C4TwDgpgBA8gdgJQgYwgSwG4QCYBECGAtvgObQC8UAFIQFxQCyA9nAM7AQBOANFNkaQhJUmHPTgBXQgCMuASijkAfFAxM02ANwAobcgA2+Vq0Yt2XKAG9tUW1AAWEfPuD3xU2Z0VQArAAYdOyhOFHQsPAEyenhhMJwCYjIAbQBdb1SdGztgfABrCATBKiImCThgdxl5Kyyg2xKy4G8GfFcAOkI0OCpXNFY2x2dXXgbyuUC6217+wZd7KABaSlHgTTrauum2kJFwwrI2gDMmTgBRfGR7KmRpRRUbnvs+kcJSsfGNgF9dIJYqCCw5XoACJ+IkcMDeMhnPppBdctFEKFRBFwXJ6GoNDVJlMnv0dnFUYI2mAJKwrtD9LD4R8gt9vnpDMYoPsIABhN4cLzWIJgwQASTgh30aGQHGwlU83gCPzsIQujmwABV8JwyMBWVR0VBpEwmPonHBsTiQsAJJwjVs+WRBcLReKoCoAIx+GV02W2Fis20isU4YqvRqS6o8nFWyIQH32nBQADUy0D5QmtnpumQZia6caFkocAgAHcWRGOdnOFrMum2E1XlWuCZKEk84XmLWy3JeE3TK2tR2C13zG3e82M1we1BOy2B1qUjoawP+sczgqaHcoIQ2n9QRHsJDqAB9F6chTKKBZ8pcDdwb1C33igNHuQfbT5p4G6gAQjPXO2TkuOBVaoQBqEZagooa2AA9BBUBgKKuRQPgwT4HA2BMIQa4jpwGyVuwUBdNgEAAB7NK09hHPoepli07ScMhqGEFqABUc5cv0BpwCQri0nYOFNDkgFNJQLF1kk+FETOGxQVArgQEa1rQGgTSIdIinYRmfARiRNFvNgVDUWRtEoWhWpQIxvh+NxUyquqbQ5PkmryU+QQ4fqEBtBRJBUAABpOXJQAAJJYYmEZ8wTIuEAWWPJoXydQwBMDk+gaeCeE3tGEqRV+F7yVGfrYJ8XkfJ8QA)
+
+Now let's port this code to Rust. Our `Monster` struct is fairly similar,
+although we need to use `Box<dyn Fn(u32)>` for a closure which accepts a single
+`u32` argument (all closures in JavaScript are heap allocated by default).
+
+```rs
+type OnReceivedDamage = Box<dyn Fn(u32)>;
+
+#[derive(Default)]
+struct Monster {
+    health: u32,
+    received_damage: Vec<OnReceivedDamage>,
+}
+
+impl Monster {
+    fn take_damage(&mut self, amount: u32) {
+        let damage_received = cmp::min(self.health, amount);
+        self.health -= damage_received;
+        for callback in &mut self.received_damage {
+            callback(damage_received);
+        }
+    }
+
+    fn add_listener(&mut self, listener: OnReceivedDamage) {
+        self.received_damage.push(listener);
+    }
+}
+```
+
+Next comes our `DamageCounter`, nothing interesting here.
+
+```rs
+#[derive(Default)]
+struct DamageCounter {
+    damage_inflicted: u32,
+}
+
+impl DamageCounter {
+    fn reached_target_damage(&self) -> bool {
+        self.damage_inflicted > 100
+    }
+
+    fn on_damage_received(&mut self, damage: u32) {
+        self.damage_inflicted += damage;
+    }
+}
+```
+
+And finally our code that inflicts damage.
+
+```rs
+fn main() {
+    let mut rng = rand::thread_rng();
+    let mut counter = DamageCounter::default();
+    let mut monsters: Vec<_> = (0..5).map(|_| Monster::default()).collect();
+
+    for monster in &mut monsters {
+        monster.add_listener(Box::new(|damage| counter.on_damage_received(damage)));
+    }
+
+    while !counter.reached_target_damage() {
+        let index = rng.gen_range(0..monsters.len());
+        let target = &mut monsters[index];
+
+        let damage = rng.gen_range(0..50);
+        target.take_damage(damage);
+
+        println!("Monster {} received {} damage", index, damage);
+    }
+}
+```
+
+[(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=cc701dcf7c02510e3406dc1b3abef5d1)
+
+But herein lies our first problem, when we try to compile the code `rustc` gives
+us not one, but **four** compile errors for the `monster.add_listener()` line 🤣
+
+```rs
+error[E0596]: cannot borrow `counter` as mutable, as it is a captured variable in a `Fn` closure
+  --> src/main.rs:47:48
+   |
+47 |         monster.add_listener(Box::new(|damage| counter.on_damage_received(damage)));
+   |                                                ^^^^^^^ cannot borrow as mutable
+
+error[E0499]: cannot borrow `counter` as mutable more than once at a time
+  --> src/main.rs:47:39
+   |
+47 |         monster.add_listener(Box::new(|damage| counter.on_damage_received(damage)));
+   |                              ---------^^^^^^^^------------------------------------
+   |                              |        |        |
+   |                              |        |        borrows occur due to use of `counter` in closure
+   |                              |        `counter` was mutably borrowed here in the previous iteration of the loop
+   |                              cast requires that `counter` is borrowed for `'static`
+
+error[E0597]: `counter` does not live long enough
+  --> src/main.rs:47:48
+   |
+47 |         monster.add_listener(Box::new(|damage| counter.on_damage_received(damage)));
+   |                              ------------------^^^^^^^----------------------------
+   |                              |        |        |
+   |                              |        |        borrowed value does not live long enough
+   |                              |        value captured here
+   |                              cast requires that `counter` is borrowed for `'static`
+...
+60 | }
+   | - `counter` dropped here while still borrowed
+
+error[E0502]: cannot borrow `counter` as immutable because it is also borrowed as mutable
+  --> src/main.rs:50:12
+   |
+47 |         monster.add_listener(Box::new(|damage| counter.on_damage_received(damage)));
+   |                              -----------------------------------------------------
+   |                              |        |        |
+   |                              |        |        first borrow occurs due to use of `counter` in closure
+   |                              |        mutable borrow occurs here
+   |                              cast requires that `counter` is borrowed for `'static`
+...
+50 |     while !counter.reached_target_damage() {
+   |            ^^^^^^^ immutable borrow occurs here
+```
+
+There are a number of things wrong with this line, but it can be boiled down to:
+
+- The closure captures a reference to `counter`
+- The `counter.on_damage_received()` method takes `&mut self` so our closure
+  needs a `&mut` reference. We add the closures in a loop so we end up taking
+  multiple `&mut` references to the same object at the same time
+- Our listener is a boxed closure without any lifetime annotations, meaning it
+  needs to own any variables it closes over. We would need to `move` the
+  `counter` into the closure, but because we do this in a loop we'll have a
+  *"use of moved value"* error
+- After passing the `counter` to `add_listener()` we try to use it in our
+  loop condition
+
+Overall it's just a bad situation.
+
+The canonical answer to this is to wrap the `DamageCounter` in a
+reference-counted pointer so we can have multiple handles to it at the same
+time, then because we need to call a `&mut self` method we also need a `RefCell`
+to "move" the borrow checking from compile time to run time.
+
+```diff
+ fn main() {
+     let mut rng = rand::thread_rng();
+-    let mut counter = DamageCounter::default();
++    let mut counter = Rc::new(RefCell::new(DamageCounter::default()));
+     let mut monsters: Vec<_> = (0..5).map(|_| Monster::default()).collect();
+
+     for monster in &mut monsters {
+-        monster.add_listener(Box::new(|damage| counter.on_damage_received(damage)));
++        let counter = Rc::clone(&counter);
++        monster.add_listener(Box::new(move |damage| {
++            counter.borrow_mut().on_damage_received(damage)
++        }));
+     }
+
+-    while !counter.reached_target_damage() {
++    while !counter.borrow().reached_target_damage() {
+         let index = rng.gen_range(0..monsters.len());
+         let target = &mut monsters[index];
+         ...
+     }
+ }
+```
+
+[(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=ee5b158751580e9d35a09e1f6300dea5)
+
+Well it works. But this approach tends to get messy, especially when you are
+storing non-trivial things like a `Rc<RefCell<Vec<Foo>>>>` (or its
+multi-threaded cousin `Arc<Mutex<Vec<Foo>>>`) inside structs [^angle-brackets].
+
+It also opens you up to situations where the `RefCell` might be borrowed mutably
+multiple times because your code is complex and something higher up in the call
+stack is already using the `RefCell`. With a `Mutex` this will cause a deadlock
+while the `RefCell` will panic, neither of which is conducive to a reliable
+program.
+
+A much better approach is to change your API to not hold long-lived references
+to other objects. Depending on the situation, it might make sense to take a
+callback argument in the `Monster::take_damage()` method.
+
+```rs
+#[derive(Default)]
+struct Monster {
+    health: u32,
+}
+
+impl Monster {
+    fn take_damage(&mut self, amount: u32, on_damage_received: impl FnOnce(u32)) {
+        let damage_received = cmp::min(self.health, amount);
+        self.health -= damage_received;
+        on_damage_received(damage_received);
+    }
+}
+
+...
+
+fn main() {
+    let mut rng = rand::thread_rng();
+    let mut counter = DamageCounter::default();
+    let mut monsters: Vec<_> = (0..5).map(|_| Monster::default()).collect();
+
+    while !counter.reached_target_damage() {
+        let index = rng.gen_range(0..monsters.len());
+        let target = &mut monsters[index];
+
+        let damage = rng.gen_range(0..50);
+        target.take_damage(damage, |dmg| counter.on_damage_received(dmg));
+
+        println!("Monster {} received {} damage", index, damage);
+    }
+}
+```
+
+[(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=5d09c3cfab144142a0c1cdb45848b15e)
+
+A nice side-effect of this is that we get rid of all the callback management
+boilerplate, meaning this version is only 47 lines long instead of the
+`Rc<RefCell<_>>` version's 62.
+
+Other times it may not be acceptable to give `take_damage()` a callback
+parameter, in which case you could return a "summary" of what happened so the
+caller can decide what to do next.
+
+```rs
+impl Monster {
+    fn take_damage(&mut self, amount: u32) -> AttackSummary {
+        let damage_received = cmp::min(self.health, amount);
+        self.health -= damage_received;
+        AttackSummary { damage_received }
+    }
+}
+
+struct AttackSummary {
+    damage_received: u32,
+}
+
+...
+
+fn main() {
+    let mut rng = rand::thread_rng();
+    let mut counter = DamageCounter::default();
+    let mut monsters: Vec<_> = (0..5).map(|_| Monster::default()).collect();
+
+    while !counter.reached_target_damage() {
+        let index = rng.gen_range(0..monsters.len());
+        let target = &mut monsters[index];
+
+        let damage = rng.gen_range(0..50);
+        let AttackSummary { damage_received } = target.take_damage(damage);
+        counter.on_damage_received(damage_received);
+
+        println!("Monster {} received {} damage", index, damage);
+    }
+}
+```
+
+[(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=42e5e0c4160e614f73de5fac425a8833)
+
+This is my preferred solution and it works especially well for larger codebases
+or when the code is more complex.
 
 ## Using the Wrong Integer Type
 
@@ -191,9 +530,12 @@ is **not** a magical escape hatch which will make the compiler stop complaining.
 
 ## Not Using Namespaces
 
-- Manually uniquefying all identifiers (`lib_module_struct_method`) instead of
-  just using built-in namespaces (`lib::module::Struct::method`). It's what
-  they're there for!
+A common practice in C is to prefix functions with the name of the library or
+module to help readers understand where it comes from and avoid duplicate
+symbol errors (e.g. `rune_wasmer_runtime_load()`).
+
+However, Rust has real namespaces and lets you attach methods to types, so just
+use them (e.g.  `rune::wasmer::Runtime::load()`).
 
 ## Overusing Slice Indexing
 
@@ -338,3 +680,5 @@ are, this may also generate slower code because the fallible operation
 [^benchmark-it]: Don't just listen to some random guy on the internet. If you
   care about performance then write a benchmark.
 
+[^angle-brackets]: Out of curiosity, how many people noticed there are 4 `>`'s
+  in `Rc<RefCell<Vec<Foo>>>>` but only 3 `<`'s?
