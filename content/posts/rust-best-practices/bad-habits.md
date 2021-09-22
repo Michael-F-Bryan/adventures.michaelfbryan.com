@@ -14,8 +14,8 @@ When you are coming to Rust from another language you bring all your previous
 experiences with you.
 
 Often this is awesome because it means you aren't learning programming from
-scratch! However, you can also bring along bad habits or solutions which may
-have been fine in the original language but end up being unidiomatic Rust.
+scratch! However, you can also bring along bad habits which can lead you down
+the wrong rabbit hole or make you write bad code.
 
 {{% notice note %}}
 The code written in this article is available on the Rust Playground using the
@@ -54,8 +54,8 @@ if (index != -1)
 
 You see this sort of *"use a sentinel value to indicate something special"*
 practice all the time. Other sentinel values you might find in the wild are
-`""`, or `null` (someone once referred to this as their *"billion-dollar
-mistake"*).
+`""`, or `null` (someone once referred to this as their [*"billion-dollar
+mistake"*][billion-dollar-mistak]).
 
 The general reason why this is a bad idea is that there is absolutely nothing to
 stop you from forgetting that check. That means you can accidentally crash your
@@ -402,7 +402,7 @@ to "move" the borrow checking from compile time to run time.
 
 [(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=ee5b158751580e9d35a09e1f6300dea5)
 
-Well it works. But this approach tends to get messy, especially when you are
+Well... it works.  But this approach tends to get messy, especially when you are
 storing non-trivial things like a `Rc<RefCell<Vec<Foo>>>>` (or its
 multi-threaded cousin `Arc<Mutex<Vec<Foo>>>`) inside structs [^angle-brackets].
 
@@ -499,10 +499,37 @@ or when the code is more complex.
 
 ## Using the Wrong Integer Type
 
-- Another hang-over from writing a lot of C is using the wrong integer type and
-  getting frustrated because you need to cast to/from `usize` all the time
-  because those integers were actually used as indices.
-- Just use `usize` for anywhere you might be doing indexing or memory operations
+Another hang-over from writing a lot of C is using the wrong integer type and
+getting frustrated because you need to cast to/from `usize` all the time.
+
+I've seen people run into this [so][array-index-1] [many][array-index-2]
+[times][array-index-3] in the wild, especially when indexing.
+
+The underlying problem is that C programmers are all taught to use `int` for
+indexing and for-loops, so when they come to Rust and they need to store a list
+of indices, the programmer will immediately reach for a `Vec<i32>`. They then
+get frustrated because Rust is quite strict when it comes to indexing and
+standard types like arrays, slices, and `Vec` can only be indexed using `usize`
+(the equivalent of `size_t`), meaning their code is cluttered with casts from
+`i32` to `usize` and back again.
+
+There are a number of perfectly legitimate reasons for why Rust only allows
+indexing by `usize`:
+
+- It doesn't make sense to have a negative index (accessing items before the
+  start of a slice is UB), so we can avoid an entire class of bugs by indexing
+  with an unsigned integer
+- A `usize` is defined to be an integer with the same size as a normal pointer,
+  meaning the pointer arithmetic won't have any hidden casts
+- The `std::mem::size_of()` and `std::mem::align_of()` functions return `usize`
+
+Of course, when stated this way the solution is clear. Choose the right integer
+type for your application but when you are doing things that eventually be used
+for indexing, that "right integer type" is probably `usize`.
+
+[array-index-1]: https://users.rust-lang.org/t/type-of-array-index/53632
+[array-index-2]: https://users.rust-lang.org/t/is-there-a-way-to-allow-indexing-vec-by-i32-in-my-program/15755/
+[array-index-3]: https://stackoverflow.com/questions/38888724/how-to-index-vectors-with-integer-types-besides-usize-without-explicit-cast?noredirect=1&lq=1
 
 ## Unsafe - I Know What I'm Doing
 
@@ -534,8 +561,8 @@ A common practice in C is to prefix functions with the name of the library or
 module to help readers understand where it comes from and avoid duplicate
 symbol errors (e.g. `rune_wasmer_runtime_load()`).
 
-However, Rust has real namespaces and lets you attach methods to types, so just
-use them (e.g.  `rune::wasmer::Runtime::load()`).
+However, Rust has real namespaces and lets you attach methods to types (e.g.
+`rune::wasmer::Runtime::load()`). Just use them - it's what they are there for.
 
 ## Overusing Slice Indexing
 
@@ -606,6 +633,9 @@ let stars = github_client.get_starred_repos()
     .map(|repo| repo.author))
 ```
 
+<!-- TODO: Come up with a good example of a complex iterator chain and show how
+     it can be much cleaner when written procedurally. -->
+
 In other domains, this pattern is sometimes referred to as a ["train
 wreck"][train-wreck].
 
@@ -669,11 +699,71 @@ are, this may also generate slower code because the fallible operation
 (`opt.unwrap()` or `list[index]` in that example) needs to do unnecessary checks
 [^benchmark-it].
 
-[post]: https://users.rust-lang.org/t/common-newbie-mistakes-or-bad-practices/64821
-[index-of]: https://docs.microsoft.com/en-us/dotnet/api/system.string.indexof?view=net-5.0
-[hungarian]: https://en.wikipedia.org/wiki/Hungarian_notation
-[shadowing]: https://rules.sonarsource.com/cpp/RSPEC-1117
-[train-wreck]: https://wiki.c2.com/?TrainWreck
+## Initialize After Construction
+
+In many languages, it is normal to call an object's constructor and initialize
+its fields afterwards (either manually or by calling some `init()` method),
+however this goes against Rust's general convention of *"make invalid states
+unrepresentable"*.
+
+Say you are writing a NLP application and have a dictionary containing all the
+possible words you can handle.
+
+This is one way you could create the dictionary:
+
+```rs
+let mut dict = Dictionary::new();
+// read the file and populate some internal HashMap or Vec
+dict.load_from_file("./words.txt")?;
+```
+
+However, writing `Dictionary` this way means it now has two (hidden) states -
+empty and populated.
+
+All downstream code that uses the `Dictionary` will assume it's been populated
+already and write code accordingly. This may include doing things like indexing
+into the dictionary with `dict["word"]` which may panic if `"word"` isn't there.
+
+Now you've opened yourself up to a situation where passing an empty dictionary
+to code that expects a populated dictionary may trigger a panic.
+
+But that's completely unnecessary.
+
+Just make sure the `Dictionary` is usable immediately after constructing it
+instead of populating it after the fact.
+
+```rust
+let dict = Dictionary::from_file("./words.txt")?;
+
+impl Dictionary {
+  fn from_file(filename: impl AsRef<Path>) -> Result<Self, Error> {
+    let text = std::fs::read_to_string(filename)?;
+    let mut words = Vec::new();
+    for line in text.lines() {
+      words.push(line);
+    }
+    Ok(Dictionary { words })
+  }
+}
+```
+
+Internally the `Dictionary::from_file()` might create an empty `Vec` and
+populate it incrementally, but it won't be stored in the `Dictionary`'s `words`
+field yet so there is no assumption that it is populated and useful.
+
+How frequently you run fall into this anti-pattern depends a lot on your
+background and coding style.
+
+Functional languages are often completely immutable so you'll fall into the
+idiomatic pattern naturally. It's kinda hard to create a half-initialized thing
+and populate it later when you aren't allowed to mutate anything, after all.
+
+On the other hand, OO languages are much happier to let you initialize an object
+after it has been constructed, especially because object references can be null
+by default and they have no qualms about mutability... You could argue this
+contributes to why OO languages have a propensity for crashing due to an
+unexpected `NullPointerException`.
+
 
 [^must-be-this-tall]: [*Must be This Tall to Write Multi-Threaded Code* - Bobby Holley](https://bholley.net/blog/2015/must-be-this-tall-to-write-multi-threaded-code.html)
 
@@ -682,3 +772,10 @@ are, this may also generate slower code because the fallible operation
 
 [^angle-brackets]: Out of curiosity, how many people noticed there are 4 `>`'s
   in `Rc<RefCell<Vec<Foo>>>>` but only 3 `<`'s?
+
+[post]: https://users.rust-lang.org/t/common-newbie-mistakes-or-bad-practices/64821
+[index-of]: https://docs.microsoft.com/en-us/dotnet/api/system.string.indexof?view=net-5.0
+[hungarian]: https://en.wikipedia.org/wiki/Hungarian_notation
+[shadowing]: https://rules.sonarsource.com/cpp/RSPEC-1117
+[train-wreck]: https://wiki.c2.com/?TrainWreck
+[billion-dollar-mistake]: https://www.infoq.com/presentations/Null-References-The-Billion-Dollar-Mistake-Tony-Hoare/
