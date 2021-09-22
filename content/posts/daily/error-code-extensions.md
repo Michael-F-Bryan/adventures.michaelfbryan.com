@@ -5,6 +5,8 @@ draft: true
 tags:
 - Daily Rust
 - Rust
+series:
+- Daily Rust
 ---
 
 Due to the way the Rust trait system works you can use a pattern commonly called
