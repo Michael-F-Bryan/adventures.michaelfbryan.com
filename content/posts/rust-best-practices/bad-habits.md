@@ -115,16 +115,14 @@ trait IClone {
 }
 ```
 
-In this case, just drop the leading `I`. It's not actually helping anyone and
-unlike in C#, every place a trait it's unambiguous what the thing is and
-sensible code shouldn't cause situations where you may confuse traits and types
-(trait definitions start with `trait`, trait objects start with `dyn`, you can
-*only* use traits in generics/where clauses, etc.).
+In this case, just drop the leading `I`. Rust's syntax guarantees that it just
+isn't possible to confuse a trait for a normal type, so it isn't helping anyone.
+This is in contrast with C# where interfaces and classes are largely
+interchangeable.
 
-You also see this inside functions where people will come up with new names for
+This is also seen inside functions where people will conjure up new names for
 something as they convert it from one form to another. Often these names are
-silly and/or contrived, providing negligible additional useful information to
-the reader.
+silly or contrived, providing negligible additional information to the reader.
 
 ```rs
 let account_bytes: Vec<u8> = read_some_input();
@@ -622,7 +620,7 @@ Some would argue the version with `map()` and `collect()` is cleaner or more
 "functional", but I'll let you be the judge there.
 
 As a bonus, iterators can often allow better performance because checks can be
-done as part the looping condition instead of being separate[^benchmark-it]
+done as part of the looping condition instead of being separate[^benchmark-it]
 (Alice has a good explanation [here][iter-is-faster]).
 
 ## Overusing Iterators
@@ -809,11 +807,11 @@ are, this may also generate slower code because the fallible operation
 ## Initialize After Construction
 
 In many languages, it is normal to call an object's constructor and initialize
-its fields afterwards (either manually or by calling some `init()` method),
-however this goes against Rust's general convention of *"make invalid states
+its fields afterward (either manually or by calling some `init()` method).
+However, this goes against Rust's general convention of *"make invalid states
 unrepresentable"*.
 
-Say you are writing a NLP application and have a dictionary containing all the
+Say you are writing an NLP application and have a dictionary containing all the
 possible words you can handle.
 
 This is one way you could create the dictionary:
@@ -858,12 +856,13 @@ Internally the `Dictionary::from_file()` might create an empty `Vec` and
 populate it incrementally, but it won't be stored in the `Dictionary`'s `words`
 field yet so there is no assumption that it is populated and useful.
 
-How frequently you run fall into this anti-pattern depends a lot on your
+How frequently you fall into this anti-pattern depends a lot on your
 background and coding style.
 
 Functional languages are often completely immutable so you'll fall into the
-idiomatic pattern naturally. It's kinda hard to create a half-initialized thing
-and populate it later when you aren't allowed to mutate anything, after all.
+idiomatic pattern naturally. After all, it's kinda hard to create a
+half-initialized thing and populate it later when you aren't allowed to mutate
+anything.
 
 On the other hand, OO languages are much happier to let you initialize an object
 after it has been constructed, especially because object references can be null
