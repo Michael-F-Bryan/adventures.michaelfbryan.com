@@ -5,6 +5,8 @@ tags:
 - Daily Rust
 - Rust
 - Iterators
+series:
+- Daily Rust
 ---
 
 Iterators are part of Rust's secret sauce. They power things from the humble

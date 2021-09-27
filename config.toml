@@ -17,6 +17,7 @@ pygmentscodefencesguesssyntax = true
 [taxonomies]
 category = "categories"
 tag = "tags"
+series = "series"
 
 [params]
 author = "Michael-F-Bryan"

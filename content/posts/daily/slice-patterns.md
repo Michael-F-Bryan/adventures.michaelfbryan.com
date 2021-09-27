@@ -4,6 +4,8 @@ publishDate: "2021-08-14T00:00:00+00:00"
 tags:
 - Daily Rust
 - Rust
+series:
+- Daily Rust
 ---
 
 [Rust 1.26][release-1-26] introduced a nifty little feature called *Basic Slice
