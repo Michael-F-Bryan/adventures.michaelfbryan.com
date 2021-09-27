@@ -7,7 +7,6 @@ tags:
 - Best Practices
 series:
 - Rust Best Practices
-toc: true
 ---
 
 When you are coming to Rust from another language you bring all your previous
@@ -404,7 +403,7 @@ to "move" the borrow checking from compile time to run time.
 
 Well... it works.  But this approach tends to get messy, especially when you are
 storing non-trivial things like a `Rc<RefCell<Vec<Foo>>>>` (or its
-multi-threaded cousin `Arc<Mutex<Vec<Foo>>>`) inside structs [^angle-brackets].
+multi-threaded cousin `Arc<Mutex<Vec<Foo>>>>`) inside structs [^angle-brackets].
 
 It also opens you up to situations where the `RefCell` might be borrowed mutably
 multiple times because your code is complex and something higher up in the call
@@ -533,10 +532,14 @@ for indexing, that "right integer type" is probably `usize`.
 
 ## Unsafe - I Know What I'm Doing
 
+&lt;rant&gt;
+
 There's an old Rust koan on the *User Forums* by Daniel Keep that comes to mind
-every time I see a grizzled C++ programmer reach for raw pointers or
+every time I see a grizzled C programmer reach for raw pointers or
 `std::mem::transmute()` because the borrow checker keeps rejecting their code:
 [*Obstacles*](https://users.rust-lang.org/t/rust-koans/2408?u=michael-f-bryan).
+
+You should go read it. It's okay, I'll wait.
 
 Too often you see people wanting to hack around privacy, create
 self-referencing structs, or create global mutable variables using `unsafe`.
@@ -553,7 +556,10 @@ colleagues up to a lot of pain.
 
 It's fine to play around with `unsafe` if you are trying to learn more about
 Rust or you know what you are doing and are using it legitimately, but `unsafe`
-is **not** a magical escape hatch which will make the compiler stop complaining.
+is **not** a magical escape hatch which will make the compiler stop complaining
+and let you write C with Rust syntax.
+
+&lt;/rant&gt;
 
 ## Not Using Namespaces
 
@@ -616,28 +622,124 @@ let differences: Vec<_> = points
 Some would argue the version with `map()` and `collect()` is cleaner or more
 "functional", but I'll let you be the judge there.
 
+As a bonus, iterators can often allow better performance because checks can be
+done as part the looping condition instead of being separate[^benchmark-it]
+(Alice has a good explanation [here][iter-is-faster]).
+
 ## Overusing Iterators
 
-Once you start drinking the koolaid that is Rust's iterators you can run into
+Once you start drinking the Kool-Aid that is Rust's iterators you can run into
 the opposite problem - *when all you have is a hammer everything looks like a
 nail*.
 
-This can result in your code being filled with long chains of `map()`,
-`filter()`, and `and_then()` calls. Especially when intermingled with the
-analogous methods on `Option` and `Result`.
+Long chains of `map()`, `filter()`, and `and_then()` calls can get quite hard to
+read and keep track of what is actually going on, especially when type inference
+lets you omit a closure argument's type.
+
+Other times your iterator-based solution is just unnecessarily complicated.
+
+As an example, have a look at this snippet of code and see if you can figure
+out what it is trying to do.
 
 ```rs
-let stars = github_client.get_starred_repos()
-  .and_then(|response| parse_json(response.body))
-  .map(|payload: StarredRepoResponse| payload.starred_repos.iter()
-    .map(|repo| repo.author))
+pub fn functional_blur(input: &Matrix) -> Matrix {
+    assert!(input.width >= 3);
+    assert!(input.height >= 3);
+
+    // Stash away the top and bottom rows so they can be
+    // directly copied across later
+    let mut rows = input.rows();
+    let first_row = rows.next().unwrap();
+    let last_row = rows.next_back().unwrap();
+
+    let top_row = input.rows();
+    let middle_row = input.rows().skip(1);
+    let bottom_row = input.rows().skip(2);
+
+    let blurred_elements = top_row
+        .zip(middle_row)
+        .zip(bottom_row)
+        .flat_map(|((top, middle), bottom)| blur_rows(top, middle, bottom));
+
+    let elements: Vec<f32> = first_row
+        .iter()
+        .copied()
+        .chain(blurred_elements)
+        .chain(last_row.iter().copied())
+        .collect();
+
+    Matrix::new_row_major(elements, input.width, input.height)
+}
+
+fn blur_rows<'a>(
+    top_row: &'a [f32],
+    middle_row: &'a [f32],
+    bottom_row: &'a [f32],
+) -> impl Iterator<Item = f32> + 'a {
+    // stash away the left-most and right-most elements so they can be copied across directly.
+    let &first = middle_row.first().unwrap();
+    let &last = middle_row.last().unwrap();
+
+    // Get the top, middle, and bottom row of our 3x3 sub-matrix so they can be
+    // averaged.
+    let top_window = top_row.windows(3);
+    let middle_window = middle_row.windows(3);
+    let bottom_window = bottom_row.windows(3);
+
+    // slide the 3x3 window across our middle row so we can get the average
+    // of everything except the left-most and right-most elements.
+    let averages = top_window
+        .zip(middle_window)
+        .zip(bottom_window)
+        .map(|((top, middle), bottom)| top.iter().chain(middle).chain(bottom).sum::<f32>() / 9.0);
+
+    std::iter::once(first)
+        .chain(averages)
+        .chain(std::iter::once(last))
+}
 ```
 
-<!-- TODO: Come up with a good example of a complex iterator chain and show how
-     it can be much cleaner when written procedurally. -->
+[(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=da8fa6e55ca5a0de6005b13672688c14)
 
-In other domains, this pattern is sometimes referred to as a ["train
-wreck"][train-wreck].
+Believe it or not, but that's one of the more readable versions I've seen...
+Now let's look at the imperative implementation.
+
+```rs
+pub fn imperative_blur(input: &Matrix) -> Matrix {
+    assert!(input.width >= 3);
+    assert!(input.height >= 3);
+
+    // allocate our output matrix, copying from the input so
+    // we don't need to worry about the edge cases.
+    let mut output = input.clone();
+
+    for y in 1..(input.height - 1) {
+        for x in 1..(input.width - 1) {
+            let mut pixel_value = 0.0;
+
+            pixel_value += input[[x - 1, y - 1]];
+            pixel_value += input[[x, y - 1]];
+            pixel_value += input[[x + 1, y - 1]];
+
+            pixel_value += input[[x - 1, y]];
+            pixel_value += input[[x, y]];
+            pixel_value += input[[x + 1, y]];
+
+            pixel_value += input[[x - 1, y + 1]];
+            pixel_value += input[[x, y + 1]];
+            pixel_value += input[[x + 1, y + 1]];
+
+            output[[x, y]] = pixel_value / 9.0;
+        }
+    }
+
+    output
+}
+```
+
+[(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=ed5a8cbe8cfab762c32466c551957810)
+
+I know which version I prefer.
 
 ## Not Leveraging Pattern Matching
 
@@ -693,6 +795,12 @@ if let [first, ..] = list {
   ...
 }
 ```
+
+{{% notice tip %}}
+I'm sure most of you have seen `if let Some(...)` before, but if
+`if let [first, ..]` is unfamiliar you may find my article on
+[*Slice Patterns*]({{<ref "/posts/daily/slice-patterns">}}) interesting.
+{{% /notice %}}
 
 Depending on where it is used and how smart LLVM or your CPU's branch predictor
 are, this may also generate slower code because the fallible operation
@@ -764,6 +872,16 @@ by default and they have no qualms about mutability... You could argue this
 contributes to why OO languages have a propensity for crashing due to an
 unexpected `NullPointerException`.
 
+## Conclusions
+
+There are a bunch of other bad habits that I haven't had a chance to touch on
+or which weren't included because I couldn't come up with a concise example.
+
+Thanks to everyone that replied to [my post][post] on the Rust User Forums with
+suggestions for bad habits. Even though we kinda derailed the thread towards
+the end with talk about DI frameworks (it's tangentially related to poor
+design and the general idea of injecting dependencies), it was really
+interesting to hear war stories from other veteran Rustaceans 🙂
 
 [^must-be-this-tall]: [*Must be This Tall to Write Multi-Threaded Code* - Bobby Holley](https://bholley.net/blog/2015/must-be-this-tall-to-write-multi-threaded-code.html)
 
@@ -779,3 +897,4 @@ unexpected `NullPointerException`.
 [shadowing]: https://rules.sonarsource.com/cpp/RSPEC-1117
 [train-wreck]: https://wiki.c2.com/?TrainWreck
 [billion-dollar-mistake]: https://www.infoq.com/presentations/Null-References-The-Billion-Dollar-Mistake-Tony-Hoare/
+[iter-is-faster]: https://users.rust-lang.org/t/we-all-know-iter-is-faster-than-loop-but-why/51486/7?u=michael-f-bryan
