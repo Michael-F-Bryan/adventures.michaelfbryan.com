@@ -1,7 +1,6 @@
 ---
 title: "Common Newbie Mistakes and Bad Practices in Rust: Bad Habits"
-publishDate: "2021-09-16T23:44:27+08:00"
-draft: true
+publishDate: "2021-09-27T18:30:00+08:00"
 tags:
 - Rust
 - Best Practices
@@ -872,16 +871,104 @@ by default and they have no qualms about mutability... You could argue this
 contributes to why OO languages have a propensity for crashing due to an
 unexpected `NullPointerException`.
 
+## Defensive Copies
+
+To point out the obvious, a really nice property of immutable objects is that
+you can rely on them to never change. However, in languages like Python and
+Java, immutability isn't transitive - i.e. if `x` is an immutable object, `x.y`
+isn't guaranteed to be immutable unless it was explicitly defined that way.
+
+This means it's possible to write code like this...
+
+```py
+class ImmutablePerson:
+  def __init__(self, name: str, age: int, addresses: List[str]):
+    self._name = name
+    self._age = age
+    self._addresses = addresses
+
+  # read-only properties
+  @property
+  def name(self): return self._name
+  @property
+  def age(self): return self._age
+  @property
+  def addresses(self): return self._addresses
+```
+
+Then someone else comes along and accidentally messes up the address list as
+part of their normal code.
+
+```py
+def send_letters(message: str, addresses: List[str]):
+  # Note: the post office's API only works with with uppercase letters so we
+  # need to pre-process the address list
+  for i, address in enumerate(addresses):
+    addresses[i] = addresses.upper()
+
+  client = PostOfficeClient()
+  client.send_bulk_mail(message, addresses)
+
+
+person = ImmutablePerson("Joe Bloggs", 42, ["123 Fake Street"])
+
+send_letters(
+  f"Dear {person.name}, I Nigerian prince. Please help me moving my monies.",
+  person.addresses
+)
+
+print(person.addresses) # ["123 FAKE STREET"]
+```
+
+While I admit the example is a bit contrived, it's not uncommon for functions to
+modify the arguments they are given. Normally this is fine, but when your
+`ImmutablePerson` assumes its `addresses` field will never change, it's annoying
+for some random piece of code on the other side of the project to modify it
+without you knowing.
+
+The typical solution to this is to preemptively copy the list so even if the
+caller tries to mutate its contents, they'll be mutating a copy and not the
+original `addresses` field.
+
+```py
+class ImmutablePerson:
+  ...
+
+  @property
+  def addresses(self): return self._addresses.copy()
+```
+
+In general, you'll see defensive copies being used anywhere code wants to be
+sure that another piece of code won't modify some shared object at an
+inopportune time.
+
+Considering this is an article about Rust, you've probably guessed what the
+root cause of this is - a combination of aliasing and mutation.
+
+You've also probably guessed why defensive copies aren't really necessary when
+writing Rust code - lifetimes and the "shared immutable XOR single mutable" rule
+for references means it just isn't possible for code to modify something without
+first asking its original owner for mutable access or explicitly opting into
+shared mutation by using a type like `std::sync::Mutex<T>`.
+
+{{% notice note %}}
+You *may* sometimes see people using `clone()` to get around borrow checker
+errors, and exclaim *"Ha! See, Rust forces you to make defensive copies too!"*
+
+To which I would argue that these copies are mostly caused by a lack of
+familiarity with lifetimes, or an architecture issue which forces the programmer
+to make more copies than they need to.
+{{% /notice %}}
+
 ## Conclusions
 
 There are a bunch of other bad habits that I haven't had a chance to touch on
 or which weren't included because I couldn't come up with a concise example.
 
 Thanks to everyone that replied to [my post][post] on the Rust User Forums with
-suggestions for bad habits. Even though we kinda derailed the thread towards
-the end with talk about DI frameworks (it's tangentially related to poor
-design and the general idea of injecting dependencies), it was really
-interesting to hear war stories from other veteran Rustaceans 🙂
+suggestions for bad habits. Even though I kinda derailed the thread towards the
+end with talk about DI frameworks, it was really interesting to hear war stories
+from other veteran Rustaceans 🙂
 
 [^must-be-this-tall]: [*Must be This Tall to Write Multi-Threaded Code* - Bobby Holley](https://bholley.net/blog/2015/must-be-this-tall-to-write-multi-threaded-code.html)
 
