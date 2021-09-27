@@ -140,7 +140,7 @@ are transforming them from one form to another, especially when the previous
 variable is no longer accessible (e.g. because it's been moved).
 
 ```rs
-let account Vec<u8> = read_some_input();
+let account: Vec<u8> = read_some_input();
 let account = String::from_utf8(account)?;
 let account: Account = account.parse()?;
 ```
