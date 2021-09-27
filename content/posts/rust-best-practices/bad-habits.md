@@ -52,8 +52,8 @@ if (index != -1)
 
 You see this sort of *"use a sentinel value to indicate something special"*
 practice all the time. Other sentinel values you might find in the wild are
-`""`, or `null` (someone once referred to this as their [*"billion-dollar
-mistake"*][billion-dollar-mistak]).
+`""`, or `null` (someone once referred to this as their
+*["billion-dollar mistake"][billion-dollar-mistake]*).
 
 The general reason why this is a bad idea is that there is absolutely nothing to
 stop you from forgetting that check. That means you can accidentally crash your
