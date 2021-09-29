@@ -239,7 +239,6 @@ although we need to use `Box<dyn Fn(u32)>` for a closure which accepts a single
 ```rs
 type OnReceivedDamage = Box<dyn Fn(u32)>;
 
-#[derive(Default)]
 struct Monster {
     health: u32,
     received_damage: Vec<OnReceivedDamage>,
@@ -256,6 +255,12 @@ impl Monster {
 
     fn add_listener(&mut self, listener: OnReceivedDamage) {
         self.received_damage.push(listener);
+    }
+}
+
+impl Default for Monster {
+    fn default() -> Self {
+        Monster { health: 100, received_damage: Vec::new() }
     }
 }
 ```
@@ -303,7 +308,7 @@ fn main() {
 }
 ```
 
-[(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=cc701dcf7c02510e3406dc1b3abef5d1)
+[(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=a8cc547728ef102bbd5dc6b9cafb0ff6)
 
 But herein lies our first problem, when we try to compile the code `rustc` gives
 us not one, but **four** compile errors for the `monster.add_listener()` line 🤣
@@ -396,7 +401,7 @@ to "move" the borrow checking from compile time to run time.
  }
 ```
 
-[(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=ee5b158751580e9d35a09e1f6300dea5)
+[(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=7aca92432f337fa29de62999ea5709b8)
 
 Well... it works.  But this approach tends to get messy, especially when you are
 storing non-trivial things like a `Rc<RefCell<Vec<Foo>>>>` (or its
@@ -413,7 +418,6 @@ to other objects. Depending on the situation, it might make sense to take a
 callback argument in the `Monster::take_damage()` method.
 
 ```rs
-#[derive(Default)]
 struct Monster {
     health: u32,
 }
@@ -424,6 +428,10 @@ impl Monster {
         self.health -= damage_received;
         on_damage_received(damage_received);
     }
+}
+
+impl Default for Monster {
+  fn default() -> Self { Monster { health: 100 } }
 }
 
 ...
@@ -445,7 +453,7 @@ fn main() {
 }
 ```
 
-[(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=5d09c3cfab144142a0c1cdb45848b15e)
+[(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=52b789a7616efe6c2e24b7e1949f7c03)
 
 A nice side-effect of this is that we get rid of all the callback management
 boilerplate, meaning this version is only 47 lines long instead of the
@@ -488,10 +496,10 @@ fn main() {
 }
 ```
 
-[(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=42e5e0c4160e614f73de5fac425a8833)
+[(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=dbd28e96a25f76eb88069c8ee6215a92)
 
-This is my preferred solution and it works especially well for larger codebases
-or when the code is more complex.
+This is my preferred solution; from experience, it tends to work well for
+larger codebases or when the code is more complex.
 
 ## Using the Wrong Integer Type
 
