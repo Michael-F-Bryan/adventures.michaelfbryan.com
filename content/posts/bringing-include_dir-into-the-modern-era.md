@@ -6,15 +6,20 @@ tags:
 - Rust
 ---
 
-Way back in mid-2017 I created a crate called `include_dir` with a single goal
-in mind - give users an `include_dir!()` macro that lets them embed an entire
-directory in their binary.
+Way back in mid-2017 I created [a crate called `include_dir`][include-dir] with
+a single goal in mind - give users an `include_dir!()` macro that lets them
+embed an entire directory in their binary.
 
-- almost 1 million total downloads
-- hasn't been given much love of late
-- Rust has evolved since then, especially around procedural macros
-- I've also learned a lot through my day job, generating Rust code that gets
-  compiled to WebAssembly
+By most metrics, we've been doing phenomenally well. The crate has received a
+fair amount of engagement on GitHub via pull requests and issues, and it has had
+over 1 million downloads and 127 direct dependents published to crates.io alone.
+
+However, due to work commitments and low motivation, the `include_dir` crate
+hasn't received as much love as I'd like to give it over the last year or so 😞
+
+A while back, I found myself with a free weekend and a desire to be productive,
+so I thought I'd apply a lot of the lessons I've learned from writing Rust in
+production and take advantage of how Rust has evolved since 2017.
 
 {{% notice note %}}
 The code written in this article is available [on GitHub][repo]. Feel free to
@@ -27,15 +32,7 @@ blog's [issue tracker][issue]!
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues
 {{% /notice %}}
 
-## What is `include_dir!()` and Why Should I Care?
-
-The sole purpose of the `include_dir` crate is to expose a macro called
-(\*surprise, surprise\*) `include_dir!()`.
-
-This is directly analogous to the [`include_str!()`][include-str] and
-[`include_bytes!()`][include-bytes] macros from the standard library, except
-instead of embedding a single file in your binary, it will embed an entire
-folder.
+## Project Goals and Values
 
 I've written a fair amount of Rust code in my time and [reviewed a lot
 more][u.rl.o], and that has left me with some strong opinions about authoring
@@ -44,9 +41,8 @@ crates:
 1. Don't pull in unnecessary dependencies
 2. Make the happy path simple and intuitive
 3. Don't make me pay for what I don't use
-4. Unless you have a good reason, crates should be usable without the standard
-   library and cross-compilation should *Just Work* without any extra
-   configuration or fiddling
+4. Unless you have a good reason, cross-compilation should *Just Work* without
+   any extra configuration or fiddling
 
 In the past, several people have asked if I can add a level of configurability
 to the `include_dir!()` macro (e.g. excluding files or using a different base
@@ -59,13 +55,13 @@ Points 1, 3, and 4 all relate to how compilation and where the crate can be
 used.
 
 At work, my main project has a component that is compiled to WebAssembly and
-deliberately doesn't use the standard library (i.e. it is a `no_std` crate).
-We have another component that is compiled to Windows/Linux/MacOS desktops,
-mobile devices, and the web.
+deliberately doesn't use the standard library (i.e. it is a `no_std` crate).  We
+have a second component that depends on TensorFlow and needs to be
+cross-compiled to Windows/Linux/MacOS desktops, mobile devices, and the web.
 
 Targeting such a large variety of platforms makes you appreciate libraries that
 are platform-agnostic where cross-compiling *Just Works*, and you *really*
-notice when they don't.
+notice when they don't. That second component reminded me just how
 
 ## Migrating to Newer Language Features
 
@@ -116,22 +112,30 @@ static ASSETS: Dir<'_> = Dir {
 
 On its own this seems rather innocuous, but because macros are evaluated within
 the context of wherever they are called and because we are setting fields
-directly, it means everything needs to be publicly accessible (otherwise you
-run into *" field `path` of struct `Dir` is private"*).
+directly, it means everything needs to be publicly accessible (otherwise your
+macro runs into *" field `path` of struct `Dir` is private"*).
 
 However, making all your fields public means it is possible for *anyone* to use
-the internals of `Dir` and `File`, meaning people will complain about broken
-builds if we ever want to restructure things or change assumptions made about a
-field.
+them and due to [Hyrum's Law][hyrums-law] we know someone will invariably depend
+on these internals. Therefore, if we ever want to restructure things or change
+assumptions made about a *semantically-internal-but-technically-public* field
+we'll have people complaining about broken builds.
+
+{{< figure
+    src="https://imgs.xkcd.com/comics/workflow.png"
+    link="https://xkcd.com/1172"
+    caption="(obligatory XKCD reference)"
+    alt="Workflow"
+>}}
 
 As a ~~hack~~ workaround, we can use the `#[doc(hidden)]` attribute to [hide our
 internal fields][hide] from a crate's documentation. That means people can still
 technically access them, but only if they have deliberately read the source code
-and chosen to access hidden fields anyway.
+and opted in to accessing those hidden fields anyway.
 
 Now, with the ability to call functions when initializing `static` or
-`const` variables we can just give `Dir` and `File` constructors while keeping
-internal details internal.
+`const` variables, we can just give `Dir` and `File` constructors while keeping
+internal details inaccessible from the outside.
 
 ## Environment Variable Interpolation
 
@@ -199,12 +203,71 @@ when a particular environment variable or file has changed. This helps cut down
 on unnecessary recompiles by giving tools like `cargo` and `rust-analyzer` a
 better idea of your dependencies so they can improve caching accuracy.
 
-- Use the `tracked_env` and `tracked_path` features to tell the compiler when
-  we need to be recomputed
+Procedural macros have similar functionality that is currently unstable, namely
+
+- [the `tracked_env` feature][tracked-env] which enables the
+  `proc_macro::tracked_env::var()` function which wraps `std::env::var()`, and
+- [the `tracked_path` feature][track-path] which enables the
+  `proc_macro::tracked_path::path()` function for telling the compiler that this
+  build script depends on a specific path
+
+Personally, I would prefer if the `tracked_path` feature exposed wrappers around
+the `std::fs` module (e.g. `std::fs::read_dir()` and
+`std::fs::read_to_string()`) because it means using a resource automatically
+notifies the compiler of the dependency instead of needing to "remember" to
+call `proc_macro::tracked_path::path()`, but it's a start.
+
+My hope is that down the track, `rust-analyzer` will be able to hook into these
+APIs and avoid unnecessarily reading a directory tree into memory and compiling
+it into Rust constants (a fairly memory-intensive task).
+
 - Use `doc_cfg` for better docs
-- Use `span.source_file()` for relative imports
+
+### Document Feature-gated APIs
+
+The tool used to generate pretty HTML documentation for Rust code, `rustdoc`,
+has a feature which lets users see when particular functions and types are
+feature-gated.
+
+If you have ever browsed the standard library's API docs, you will be familiar
+with the `This is a nightly-only experimental API` annotations that guard
+unstable features.
+
+{{< figure
+    src="/img/nightly-experimental-api.png"
+    link="https://doc.rust-lang.org/stable/proc_macro/tracked_path/fn.path.html"
+    caption="Unstable feature annotation used in proc_macro::tracked_path::path()"
+    alt="A screenshot of the proc_macro::tracked_path::path() docs" >}}
+
+By adding `#![feature(doc_cfg)]` to the top of your `lib.rs`, any crate can get
+similar annotations for code guarded by `#[cfg(...)]`.
+
+{{< figure
+    src="/img/tokio-time-sleep.png"
+    link="https://docs.rs/tokio/latest/tokio/time/fn.sleep.html"
+    caption="Annotation on the Tokio crate's &quot;time&quot; feature"
+    alt="The Tokio crate's time feature" >}}
+
+In version 0.7 of the `include_dir` crate I've enabled this annotation whenever
+the `nightly` feature flag is enabled.
+
+Most end users won't actually use this directly, instead they'll get the
+annotations for free whenever they visit [the online API docs][docs-rs].
 
 ## Conclusion
+
+This release introduces several big improvements, but more than that I think
+it's helped me solidify my goals and values for the project.
+
+Unfortunately, that means I will probably be closing several PRs and issues as
+*"won't fix"*. I'm apologising ahead of time to those affected because I know
+what it's like to really want a feature only to have the project maintainer
+reject it, however I think it's important in the overall goal of making this
+crate as nice to use as possible.
+
+In my opinion, the best thing a person can say about a library or product is
+that it *Just Works*, and I'm hoping this 0.7 release will bring us one step
+closer to that goal.
 
 [include-bytes]: https://doc.rust-lang.org/std/macro.include_bytes.html
 [include-str]: https://doc.rust-lang.org/std/macro.include_str.html
@@ -215,3 +278,8 @@ better idea of your dependencies so they can improve caching accuracy.
 [hide]: https://github.com/Michael-F-Bryan/include_dir/blob/9fb457c1ca618a90b6e6f571c45389af9cdfada5/include_dir/src/file.rs#L7-L12
 [crate_root_join]: https://github.com/Michael-F-Bryan/include_dir/blob/9fb457c1ca618a90b6e6f571c45389af9cdfada5/include_dir_impl/src/lib.rs#L22-L24
 [out-dir]: https://github.com/Michael-F-Bryan/include_dir/issues/55
+[hyrums-law]: https://www.hyrumslaw.com/
+[include-dir]: https://crates.io/crates/include-dir
+[tracked-env]: https://github.com/rust-lang/rust/issues/74690
+[track-path]: https://github.com/rust-lang/rust/issues/73921
+[docs-rs]: https://docs.rs/include_dir
