@@ -1,7 +1,6 @@
 ---
 title: "Bringing include_dir Into the Modern Era"
-date: "2021-11-03T20:16:16+08:00"
-draft: true
+date: "2022-01-06T09:57:09+08:00"
 tags:
 - Rust
 ---
@@ -282,7 +281,7 @@ system like [CREV][crev] would give people more confidence that they can use
 `include_dir` in production. You can check out their [Getting Started
 guide][crev-getting-started] for more.
 
-[^1]: Well... "recently" when I started writing this post. It's been about 4
+[^1]: Well... "recently" when I started writing this post. It's been about 2
 months since then 😅
 
 [include-bytes]: https://doc.rust-lang.org/std/macro.include_bytes.html
