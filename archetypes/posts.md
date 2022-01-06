@@ -5,7 +5,7 @@ draft: true
 ---
 
 {{% notice note %}}
-The code written in this article is available [on GitHub][repo]. Feel free to
+Everything written in this article is available [on GitHub][repo]. Feel free to
 browse through and steal code or inspiration.
 
 If you found this useful or spotted a bug in the article, let me know on the
