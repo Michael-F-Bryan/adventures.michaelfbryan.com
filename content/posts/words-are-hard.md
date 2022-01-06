@@ -8,7 +8,7 @@ tags:
 There's a well-known saying about the hard problems in computer science, of
 which I think this is my favourite variant,
 
-{{< tweet 7269997868 >}}
+{{< tweet id=7269997868 user=secretGeek >}}
 
 I've been writing software long enough to be burned by all three at some
 point, but as someone working in a small business who represents the software
