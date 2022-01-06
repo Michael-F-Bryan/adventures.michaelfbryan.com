@@ -17,9 +17,10 @@ over 1 million downloads and 127 direct dependents published to crates.io alone.
 However, due to work commitments and low motivation, the `include_dir` crate
 hasn't received as much love as I'd like to give it over the last year or so 😞
 
-A while back, I found myself with a free weekend and a desire to be productive,
-so I thought I'd apply a lot of the lessons I've learned from writing Rust in
-production and take advantage of how Rust has evolved since 2017.
+
+I recently[^1], I found myself with a free weekend and a desire to be
+productive, so I thought I'd take advantage of how Rust has evolved since 2017
+and work through some of `include_dir`'s backlog.
 
 {{% notice note %}}
 The code written in this article is available [on GitHub][repo]. Feel free to
@@ -49,7 +50,7 @@ to the `include_dir!()` macro (e.g. excluding files or using a different base
 directory when resolving paths), but most of these proposals involve creating
 multiple macros or overloading the existing `include_dir!()` macro with an
 optional config argument. According to rule 2, these proposals would be
-non-starters.
+non-starters because there are now multiple ways of doing things.
 
 Points 1, 3, and 4 all relate to how compilation and where the crate can be
 used.
@@ -61,7 +62,9 @@ cross-compiled to Windows/Linux/MacOS desktops, mobile devices, and the web.
 
 Targeting such a large variety of platforms makes you appreciate libraries that
 are platform-agnostic where cross-compiling *Just Works*, and you *really*
-notice when they don't. That second component reminded me just how
+notice when they don't. That second component reminded me just how lucky Rust
+is to have `cargo` instead of the mish-mash of Bazel, CMake, Makefiles, and
+random shell scripts.
 
 ## Migrating to Newer Language Features
 
@@ -112,8 +115,8 @@ static ASSETS: Dir<'_> = Dir {
 
 On its own this seems rather innocuous, but because macros are evaluated within
 the context of wherever they are called and because we are setting fields
-directly, it means everything needs to be publicly accessible (otherwise your
-macro runs into *" field `path` of struct `Dir` is private"*).
+directly, it means everything needs to be publicly accessible otherwise your
+macro runs into *" field `path` of struct `Dir` is private"* errors.
 
 However, making all your fields public means it is possible for *anyone* to use
 them and due to [Hyrum's Law][hyrums-law] we know someone will invariably depend
@@ -178,17 +181,21 @@ I ended up choosing an alternative solution that should be familiar to anyone
 that has used a terminal before - environment variable interpolation.
 
 The idea is you can write `include_dir!("$CARGO_MANIFEST_DIR/src/")` and avoid
-all ambiguity. It also solves the `$OUT_DIR` problem quite elegantly (if I do
-say so myself).
+all ambiguity. It also solves the `$OUT_DIR` problem quite elegantly if I do
+say so myself.
 
 ## File Metadata
 
-- Embed things like the last modified/created/accessed time
-- Hidden behind a feature flag
-- The method returns an `Option<Metadata>` containing a bunch of `SystemTime`'s
-- Can store times as a duration since `UNIX_EPOCH` because
-  `Duration::from_secs()` is a `const fn`
-- https://github.com/Michael-F-Bryan/include_dir/pull/63
+Some people were asking if we could record filesystem metadata when embedding
+a directory tree.
+
+Adding hidden fields and extra methods to a type doesn't have much of an impact
+on the way people use the `include_dir!()` macro, but because it adds a level of
+non-determinism to builds I opted to put this behind its own feature flag.
+
+There are some technical difficulties in that `std::time::SystemTime` doesn't
+have any public `const fn` constructors so we end up storing time as a duration
+since the `UNIX_EPOCH`, but other than that it's pretty straightforward.
 
 ## Nightly Features
 
@@ -201,12 +208,14 @@ experience.
 Something I like about build scripts is that you can tell `cargo` to only re-run
 when a particular environment variable or file has changed. This helps cut down
 on unnecessary recompiles by giving tools like `cargo` and `rust-analyzer` a
-better idea of your dependencies so they can improve caching accuracy.
+better idea of your dependencies, letting them improve caching accuracy.
 
-Procedural macros have similar functionality that is currently unstable, namely
+Procedural macros have similar functionality that is currently unstable,
+namely...
 
 - [the `tracked_env` feature][tracked-env] which enables the
-  `proc_macro::tracked_env::var()` function which wraps `std::env::var()`, and
+  `proc_macro::tracked_env::var()` function for reading environment variables,
+  and
 - [the `tracked_path` feature][track-path] which enables the
   `proc_macro::tracked_path::path()` function for telling the compiler that this
   build script depends on a specific path
@@ -220,8 +229,6 @@ call `proc_macro::tracked_path::path()`, but it's a start.
 My hope is that down the track, `rust-analyzer` will be able to hook into these
 APIs and avoid unnecessarily reading a directory tree into memory and compiling
 it into Rust constants (a fairly memory-intensive task).
-
-- Use `doc_cfg` for better docs
 
 ### Document Feature-gated APIs
 
@@ -269,6 +276,15 @@ In my opinion, the best thing a person can say about a library or product is
 that it *Just Works*, and I'm hoping this 0.7 release will bring us one step
 closer to that goal.
 
+I'd also like to use this blog post as an opportunity to ask for reviews. It
+would be really nice to have extra eyes on this crate, and using a public review
+system like [CREV][crev] would give people more confidence that they can use
+`include_dir` in production. You can check out their [Getting Started
+guide][crev-getting-started] for more.
+
+[^1]: Well... "recently" when I started writing this post. It's been about 4
+months since then 😅
+
 [include-bytes]: https://doc.rust-lang.org/std/macro.include_bytes.html
 [include-str]: https://doc.rust-lang.org/std/macro.include_str.html
 [u.rl.o]: https://users.rust-lang.org/u/michael-f-bryan/summary
@@ -283,3 +299,5 @@ closer to that goal.
 [tracked-env]: https://github.com/rust-lang/rust/issues/74690
 [track-path]: https://github.com/rust-lang/rust/issues/73921
 [docs-rs]: https://docs.rs/include_dir
+[crev]: https://web.crev.dev/rust-reviews/
+[crev-getting-started]: https://github.com/crev-dev/cargo-crev/blob/master/cargo-crev/src/doc/getting_started.md
