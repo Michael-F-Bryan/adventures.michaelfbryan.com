@@ -403,8 +403,8 @@ impl model_v1::ModelV1 for ModelV1 {
 ```
 
 Then we can construct the vertices and faces for our resulting shape. You can
-probably figure these out yourselves, but I'm lazy and just copied it from the
-internet.
+probably figure these out using pen and paper, but I'm lazy and just copied it
+from the internet.
 
 ```rs
 // guest/src/lib.rs
@@ -470,7 +470,87 @@ impl<S: Into<String>> From<S> for Error {
 }
 ```
 
-And that's all there is to it.
+To compile our guest to WebAssembly, we need to make sure our `crate-type`
+field in `Cargo.toml` includes `cdylib`.
+
+```toml
+# guest/Cargo.toml
+[package]
+name = "guest"
+version = "0.1.0"
+edition = "2021"
+description = "A module for generating a square prism."
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+...
+```
+
+Now we can compile to WebAssembly.
+
+```console
+$ cargo build --target wasm32-unknown-unknown --release
+   ...
+   Compiling wit-bindgen-rust v0.1.0 (https://github.com/bytecodealliance/wit-bindgen#c9b113be)
+   Compiling guest v0.1.0 (/home/michael/Documents/modern-webassembly/guest)
+    Finished release [optimized] target(s) in 3.71s
+```
+
+{{% notice tip %}}
+Don't forget to install the `wasm32-unknown-unknown` target if you haven't
+already.
+
+```console
+$ rustup target install wasm32-unknown-unknown
+```
+{{% /notice %}}
+
+As a sanity check, we can use `wasm-objdump` from [the WebAssembly Binary
+Tookit][wabt] to inspect our compiled `guest.wasm` binary.
+
+```
+$ wasm-objdump --details ../target/wasm32-unknown-unknown/release/guest.wasm
+guest.wasm:     file format wasm 0x1
+
+Section Details:
+
+Type[21]:
+  - type[0] (i32, i32) -> nil
+  - type[1] (i32, i32, i32) -> i32
+  - type[2] (i32, i32) -> i32
+  - type[3] (i32) -> nil
+  - ...
+Import[3]:
+  - func[0] sig=3 <_ZN68_$LT$guest..fornjot_v1..Context$u20$as$u20$core..ops..drop..Drop$GT$4drop5close17h2350df99eb7559c2E> <- canonical_abi.resource_drop_context
+  - func[1] sig=4 <_ZN5guest8model_v186_$LT$impl$u20$wit_bindgen_rust..LocalHandle$u20$for$u20$guest..fornjot_v1..Context$GT$3get3get17h511cbcb0cddd0a79E> <- canonical_abi.resource_get_context
+  - func[2] sig=5 <_ZN5guest10fornjot_v17Context12get_argument10wit_import17h0df2b308226a6ba0E> <- fornjot-v1.context::get-argument
+Function[206]:
+  - ...
+  - func[5] sig=6 <on-load>
+  - func[6] sig=4 <generate>
+  - ...
+Table[1]:
+  - ...
+Memory[1]:
+  - ...
+Global[3]:
+  - global[0] i32 mutable=1 <__stack_pointer> - init i32=1048576
+  - global[1] i32 mutable=0 <__data_end> - init i32=1066176
+  - global[2] i32 mutable=0 <__heap_base> - init i32=1066176
+Export[8]:
+  - memory[0] -> "memory"
+  - func[5] <on-load> -> "on-load"
+  - func[6] <generate> -> "generate"
+  - global[1] -> "__data_end"
+  - global[2] -> "__heap_base"
+  - ...
+```
+
+There are plenty of other goodies in `wasm-objdump`'s output which might
+interest those who are familiar with how WebAssembly is implemented, and I'd
+love to nerd out on it with you some time, but for now it's enough to see our
+`on-load` and `generate` functions are being exported.
 
 ## Implementing The Host
 
@@ -504,3 +584,4 @@ And that's all there is to it.
 [resource]: https://github.com/bytecodealliance/wit-bindgen/blob/main/WIT.md#item-resource
 [use]: https://github.com/bytecodealliance/wit-bindgen/blob/main/WIT.md#item-use
 [env-variables]: https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates
+[wabt]: https://github.com/WebAssembly/wabt
