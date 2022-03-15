@@ -99,11 +99,46 @@ enum log-level {
 Although the syntax is a bit unfamiliar, you should be able to get the gist.
 All our host provides is a `log()` function for printing messages.
 
-The guest's WIT file is going to be a bit more interesting. For our purposes,
-each model should provide a function for finding out more about it (name,
-description, version number, etc.) and a function for generating the shape.
+Our host also needs to provide some contextual information so our users can
+modify the generated shape.
 
-First comes the `metadata()` function:
+To do this, we'll define a [resource][resource] called `context` which lets
+us look up an argument by its name. Obviously, there is a possibility that the
+argument we want isn't defined, so the return value is wrapped in an `option`.
+
+```
+// fornjot-v1.wit
+
+resource context {
+    get-argument: function(name: string) -> option<string>
+}
+```
+
+A `resource` is roughly analogous to an interface in Java or a trait object in
+Rust.
+
+{{% notice note %}}
+For those that are familiar with some of the ongoing WebAssembly proposals, you
+might recognise that a `resource` is sounds awfully similar to [*WebAssembly
+Interface Types*][wit-proposal].
+
+This isn't a coincidence!
+
+The `wit-bindgen` tool currently implements them by manually managing the memory
+of these objects and referring to them via indices, but you can imagine how one
+day we'll be able to update `wit-bindgen` and magically gain access to interface
+types with no extra code changes.
+
+[wit-proposal]: https://github.com/WebAssembly/interface-types/blob/main/proposals/interface-types/Explainer.md
+{{% /notice %}}
+
+Next up is the WIT file defining the functionality our guest will expose.
+
+For our purposes, each model should provide a function for finding out more
+about it (name, description, version number, etc.) and a function for generating
+the shape.
+
+This is where the `on-load()` function and our `metadata` type come in.
 
 ```
 // model-v1.wit
@@ -128,19 +163,15 @@ no attached behaviour.
 {{% /notice %}}
 
 Next up we have the function that will be called by the host when it wants to
-generate a model, `run()`.
+generate a model, `generate()`.
 
 ```
 // model-v1.wit
 
-run: function(ctx: run-context) -> expected<shape, error>
+generate: function(ctx: context) -> expected<shape, error>
 
 record error {
     message: string,
-}
-
-resource run-context {
-    get-argument: function(name: string) -> optional<string>
 }
 
 record shape {
@@ -155,35 +186,291 @@ record vertex {
 }
 ```
 
-The `run()` function is given a [resource][resource] called `run-context`. While
-a `record` contains just data with no attached behaviour, a `resource` is more
-akin to an interface object and can *only* have methods... In this case, all you
-can do with a `run-context` object is use `get-argument()` to get the value of a
-named argument.
-
-{{% notice note %}}
-For those that are familiar with some of the ongoing WebAssembly proposals, you
-might recognise that a `resource` is meant to represent a [*WebAssembly
-Interface Type*][wit-proposal].
-
-The `wit-bindgen` tool currently implements them by manually managing the memory
-of these objects and referring to them via indices, but you can imagine how one
-day we'll be able to update `wit-bindgen` and magically gain access to interface
-types with no extra code changes.
-
-[wit-proposal]: https://github.com/WebAssembly/interface-types/blob/main/proposals/interface-types/Explainer.md
-{{% /notice %}}
-
 The `expected<shape, error>` should look familiar to Rustaceans. Functions in a
 WIT file signal errors by returning something which is either the OK value
 (`shape`) or the unsuccessful value (`error`). In Rust we might call this a
 `Result`.
 
+Now, our `generate()` function accepts a `context` argument but `model-v1.wit`
+doesn't actually contain a definition for it.
+
+What we need to do is [import][use] `context` from `fornjot-v1.wit` at the top
+of our file.
+
+```
+// model-v1.wit
+
+use { run-context } from fornjot-v1
+```
+
 ## Implementing The Guest
 
-- Metadata just tells you the name, version number, and description
-- Copy the [cuboid model](https://github.com/hannobraun/Fornjot/blob/main/models/cuboid/src/lib.rs)
-- Errors out if there are missing parameters or negative values
+Now we have an interface to code against, let's implement a simple model.
+
+First, we need to create a new Rust crate and the `wit-bindgen` crate for
+implementing the guest side of the interface.
+
+```console
+$ cargo new --lib guest
+$ cd guest
+$ cargo add --git https://github.com/bytecodealliance/wit-bindgen wit-bindgen-rust
+    Updating 'https://github.com/rust-lang/crates.io-index' index
+      Adding wit-bindgen-rust (unknown version) to dependencies
+```
+
+{{% notice note %}}
+We need to add `wit-bindgen` as a git dependency because it hasn't been
+published on crates.io yet. Hopefully it'll be released one day, but today is
+not that day.
+{{% /notice %}}
+
+Next we need to generate our glue code. Fortunately, the `wit-bindgen-rust`
+crate provides two procedural macros which we can point at our `*.wit` files to
+unlock the magic.
+
+```rs
+// guest/src/lib.rs
+
+wit_bindgen_rust::import!("../fornjot-v1.wit");
+wit_bindgen_rust::export!("../model-v1.wit");
+```
+
+{{% notice tip %}}
+The import/export terminology really confused me at first because, as we'll see
+later, what you import and what you export will change depending on whether your
+code is running as the guest or the host.
+
+The way I think of it is that `wit_bindgen_rust::import!()` generates glue code
+for *import*ing functions from somewhere outside this crate. The
+`wit_bindgen::export!()` macro will generate the appropriate `extern "C"`
+functions for letting outside code use our crate's functionality.
+
+I'm not sure whether that clears things up or just makes things more confusing.
+Oh well, I tried 😅
+{{% /notice %}}
+
+Now, if you tried to compile just this code you would see some funny compile
+errors.
+
+```console
+$ cargo check
+   Checking guest v0.1.0 (/home/michael/Documents/modern-webassembly/guest)
+error[E0412]: cannot find type `Context` in module `super`
+ --> guest/src/lib.rs:2:1
+  |
+2 | wit_bindgen_rust::export!("../model-v1.wit");
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not found in `super`
+  |
+  = note: consider importing one of these items:
+          crate::fornjot_v1::Context
+          std::task::Context
+          core::task::Context
+  = note: this error originates in the macro `wit_bindgen_rust::export` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0412]: cannot find type `ModelV1` in module `super`
+ --> guest/src/lib.rs:2:1
+  |
+2 | wit_bindgen_rust::export!("../model-v1.wit");
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not found in `super`
+  |
+  = note: consider importing this trait:
+          crate::model_v1::ModelV1
+  = note: this error originates in the macro `wit_bindgen_rust::export` (in Nightly builds, run with -Z macro-backtrace for more info)
+```
+
+To decipher these error messages, let's use `cargo expand` to see the exact
+code `wit_bindgen_rust::export!()` generated.
+
+```rs
+
+mod model_v1 {
+  ...
+
+  #[export_name = "generate"]
+  unsafe extern "C" fn __wit_bindgen_generate(arg0: i32) -> i32 {
+    let result0 =
+      <super::ModelV1 as ModelV1>::generate(wit_bindgen_rust::Handle::from_raw(arg0));
+
+    ...
+  }
+
+  pub trait ModelV1 {
+    /// An optional callback invoked when a handle is finalized
+    /// and destroyed.
+    fn drop_context(val: super::Context) {
+        drop(val);
+    }
+    /// A callback that is fired when a model is first loaded, allowing Fornjot to
+    /// find out more about it.
+    fn on_load() -> Metadata;
+    fn generate(ctx: wit_bindgen_rust::Handle<super::Context>) -> Result<Shape, Error>;
+  }
+}
+```
+
+Something that may jump out at you is the call to
+`<super::ModelV1 as ModelV1>::generate()` and the `Handle<super::Context>`
+argument.
+
+This means our `model_v1` module expects the parent module to contain a
+`ModelV1` struct (which implements the `ModelV1` trait) and some `Context`
+object (remember, we imported `context` from `fornjot-v1.wit` instead of
+defining it in `model-v1.wit`).
+
+The message about a missing `Context` object is easy enough. In the top-level
+`lib.rs` we just need to import the generated `fornjot_v1::Context` type.
+
+```rs
+// guest/src/lib.rs
+
+use crate::fornjot_v1::Context;
+```
+
+Now we've got to define the `ModelV1` type and make sure it implements the
+`model_v1::ModelV1` trait.
+
+```rs
+// guest/src/lib.rs
+
+use crate::{fornjot_v1::Context, model_v1::{Metadata, Error}};
+
+struct ModelV1;
+
+impl model_v1::ModelV1 for ModelV1 {
+    fn on_load() -> Metadata { todo!() }
+
+    fn generate(ctx: Handle<Context>) -> Result<Shape, Error> {
+      todo!()
+    }
+}
+```
+
+We can implement the `on_load()` method without too much difficulty by
+leveraging [the environment variables][env-variables] `cargo` sets when
+compiling each crate. Now our model's metadata should be automatically kept in
+sync with the contents of `Cargo.toml`.
+
+```rs
+// guest/src/lib.rs
+
+impl model_v1::ModelV1 for ModelV1 {
+      fn on_load() -> Metadata {
+        Metadata {
+            name: env!("CARGO_MANIFEST_DIR").into(),
+            description: env!("CARGO_PKG_DESCRIPTION").into(),
+            version: env!("CARGO_PKG_VERSION").into(),
+        }
+    }
+
+    ...
+}
+```
+
+The `generate()` method is a little trickier so let's take it one step at a
+time.
+
+We're going to generate a square prism, using the `width` argument for our
+square's edge lengths and the `depth` argument to figure out how far back the
+prism goes.
+
+That means we'll first need to get the `width` and `depth` arguments and parse
+them as `f32`s.
+
+```rs
+// guest/src/lib.rs
+
+use wit_bindgen_rust::Handle;
+
+impl model_v1::ModelV1 for ModelV1 {
+    ...
+
+    fn generate(ctx: Handle<Context>) -> Result<Shape, Error> {
+        let width: f32 = ctx
+            .get_argument("width")
+            .ok_or("The \"width\" argument is missing")?
+            .parse()
+            .map_err(|e| format!("Unable to parse the width: {}", e))?;
+
+        let depth: f32 = ctx
+            .get_argument("depth")
+            .ok_or("The \"depth\" argument is missing")?
+            .parse()
+            .map_err(|e| format!("Unable to parse the depth: {}", e))?;
+
+        ...
+    }
+}
+```
+
+Then we can construct the vertices and faces for our resulting shape. You can
+probably figure these out yourselves, but I'm lazy and just copied it from the
+internet.
+
+```rs
+// guest/src/lib.rs
+
+impl model_v1::ModelV1 for ModelV1 {
+    ...
+
+    fn generate(ctx: Handle<Context>) -> Result<Shape, Error> {
+        ...
+
+        let vertices = vec![
+            Vertex::new(0.0, 0.0, 0.0),
+            Vertex::new(width, 0.0, 0.0),
+            Vertex::new(width, width, 0.0),
+            Vertex::new(0.0, width, 0.0),
+            Vertex::new(0.0, width, depth),
+            Vertex::new(width, width, depth),
+            Vertex::new(0.0, 0.0, depth),
+        ];
+
+        let faces = vec![
+            (0, 2, 1), // face front
+            (0, 3, 2),
+            (2, 3, 4), // face top
+            (2, 4, 5),
+            (1, 2, 5), // face right
+            (1, 5, 6),
+            (0, 7, 4), // face left
+            (0, 4, 3),
+            (5, 4, 7), // face back
+            (5, 7, 6),
+            (0, 6, 7), // face bottom
+            (0, 1, 6),
+        ];
+
+        Ok(Shape { faces, vertices })
+    }
+}
+```
+
+A nice thing about the way methods are implemented in Rust is that any module
+can attach methods to any type in that crate.
+
+This means we can reduce the noise when defining `vertices` by giving `Vertex` a
+basic constructor.
+
+```rs
+// guest/src/lib.rs
+
+impl Vertex {
+    fn new(x: f32, y: f32, z: f32) -> Self { Vertex { x, y, z } }
+}
+```
+
+We can also make `?` work by defining a conversion that creates a
+`model_v1::Error` from anything that can be turned into a string.
+
+```rs
+// guest/src/lib.rs
+
+impl<S: Into<String>> From<S> for Error {
+    fn from(s: S) -> Self { Error { message: s.into() } }
+}
+```
+
+And that's all there is to it.
 
 ## Implementing The Host
 
@@ -215,3 +502,5 @@ WIT file signal errors by returning something which is either the OK value
 [rust-67179]: https://github.com/rust-lang/rust/issues/67179
 [wit]: https://github.com/bytecodealliance/wit-bindgen/blob/main/WIT.md
 [resource]: https://github.com/bytecodealliance/wit-bindgen/blob/main/WIT.md#item-resource
+[use]: https://github.com/bytecodealliance/wit-bindgen/blob/main/WIT.md#item-use
+[env-variables]: https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates
