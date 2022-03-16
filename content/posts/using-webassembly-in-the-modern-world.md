@@ -6,39 +6,9 @@ tags:
 - Rust
 - WebAssembly
 - Architecture
+_build:
+  list: never
 ---
-
-It's been 3 years since [the WebAssembly spec reached 1.0][wasm-1.0] and the
-community has grown in leaps and bounds. Back when [I first
-started][first-article] playing with WebAssembly there were only a handful of
-immature implementations and you needed to write a non-trivial amount of
-`unsafe` code in order to get anything working.
-
-Nowadays, we've got nice things like [`wit-bindgen`][wit-bindgen] for defining
-interfaces and generating all that `unsafe` glue code, a multitude of high
-quality WebAssembly runtimes (e.g. [`wasmer`][wasmer], [`wasmtime`][wasmtime],
-and [`wasmi`][wasmi] - check [Awesome Wasm][awesome] for more), and even [a
-package manager][wapm] for distributing compiled `*.wasm` binaries!
-
-{{% notice error %}}
-TODO:
-- Come up with a strong "thesis statement" for the article
-- Make this flow nicely
-- Relate it to an architecture I want to use at HOTG
-{{% /notice %}}
-
-{{% notice note %}}
-The code written in this article is available [on GitHub][repo]. Feel free to
-browse through and steal code or inspiration.
-
-If you found this useful or spotted a bug in the article, let me know on the
-blog's [issue tracker][issue]!
-
-[repo]: https://github.com/Michael-F-Bryan/modern-webassembly
-[issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues
-{{% /notice %}}
-
-## The Problem
 
 While browsing the Rust User Forums the other day, I came across
 [Fornjot][fornjot], a code-first CAD program written by a friend, and one of
@@ -66,7 +36,26 @@ though:
   manipulating `HashMap` inside the model (I've been bitten by this before - see
   [`rust-lang/rust#67179`][rust-67179])
 
-Fortunately, these are exactly the problems WebAssembly was intended to solve!
+Fortunately, I've spent the last year using a technology that aims to solve
+exactly these problems - WebAssembly!
+
+{{% notice error %}}
+TODO:
+- Come up with a strong "thesis statement" for the article
+- Make this flow nicely
+- Relate it to an architecture I want to use at HOTG
+{{% /notice %}}
+
+{{% notice note %}}
+The code written in this article is available [on GitHub][repo]. Feel free to
+browse through and steal code or inspiration.
+
+If you found this useful or spotted a bug in the article, let me know on the
+blog's [issue tracker][issue]!
+
+[repo]: https://github.com/Michael-F-Bryan/modern-webassembly
+[issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues
+{{% /notice %}}
 
 ## Defining our Interfaces
 
@@ -554,10 +543,33 @@ love to nerd out on it with you some time, but for now it's enough to see our
 
 ## Implementing The Host
 
-- CLI tool that you point at a `plugin/` folder
-- It loads each WebAssembly file in the `plugin/` folder and extracts metadata
-- When the user runs `./host some-model x=5 y=7` it will look for the
-  `some-model` model and run it with `[("x", 5.0), ("y", 7.0)]` as the arguments
+Okay, so now we've got some WebAssembly, let's build something to load it and
+call functions.
+
+I'm thinking we should create a CLI tool that looks something like this:
+
+```console
+$ ./host some-model x=5 y=7
+```
+
+The idea is that our `host` binary would try to load all WebAssembly files in
+a pre-defined directory looking for the model with the name, `some-model` (as
+reported via our `Metadata`). Once we find the model we can call its
+`generate()` function, passing in the arguments `x: "5"` and `y: "7"`.
+
+Like all Rust CLI programs, we'll start off by creating a new crate and adding
+some dependencies.
+
+```console
+$ cargo new --bin host && cd host
+$ cargo add anyhow structopt tracing tracing-subscriber wasmer
+    Updating 'https://github.com/rust-lang/crates.io-index' index
+      Adding anyhow v1.0.56 to dependencies
+      Adding structopt v0.3.26 to dependencies
+      Adding tracing v0.1.32 to dependencies
+      Adding tracing-subscriber v0.3.9 to dependencies
+      Adding wasmer v2.2.0 to dependencies
+```
 
 ## Deploying using WAPM
 
@@ -567,6 +579,33 @@ love to nerd out on it with you some time, but for now it's enough to see our
 - Use `wapm install` to add our `guest.wasm` file to `wapm_packages/`
 
 ## Conclusions
+
+It's been 3 years since [the WebAssembly spec reached 1.0][wasm-1.0] and the
+community has grown in leaps and bounds. Back when [I first
+started][first-article] playing with WebAssembly there were only a handful of
+immature implementations and you needed to write a non-trivial amount of
+`unsafe` code in order to get anything working.
+
+Nowadays, we've got nice things like [`wit-bindgen`][wit-bindgen] for defining
+interfaces and generating all that `unsafe` glue code, a multitude of high
+quality WebAssembly runtimes (e.g. [`wasmer`][wasmer], [`wasmtime`][wasmtime],
+and [`wasmi`][wasmi] - check [Awesome Wasm][awesome] for more), and even [a
+package manager][wapm] for distributing compiled `*.wasm` binaries!
+
+Now, I'm going to let you in on a little secret... The aim of this article isn't
+actually to implement Fornjot's model system[^1], the goal was to explore some
+techniques and technologies I'd like to use at work. I just wanted to avoid
+distracting people with the complexity of a Machine Learning pipeline compiler
+with runtimes ("hosts", as this article calls them) written in several languages
+and deployed on a wide range of platforms.
+
+If you've stuck with me until now, there's a good chance you find this topic
+interesting. We're always on the lookout for new talent, so if any of the buzz
+words mentioned in this article sound interesting to you, flick us an email on
+careers@hotg.ai or check out [our careers page][careers].
+
+[^1]: Although Fornjot they want to use it as inspiration or copy sample code,
+be my guest 🙂
 
 [wasm-1.0]: https://github.com/WebAssembly/spec/releases/tag/wg-1.0
 [first-article]: {{< ref "/posts/wasm-as-a-platform-for-abstraction" >}}
@@ -585,3 +624,4 @@ love to nerd out on it with you some time, but for now it's enough to see our
 [use]: https://github.com/bytecodealliance/wit-bindgen/blob/main/WIT.md#item-use
 [env-variables]: https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates
 [wabt]: https://github.com/WebAssembly/wabt
+[careers]: https://hotg.dev/careers
