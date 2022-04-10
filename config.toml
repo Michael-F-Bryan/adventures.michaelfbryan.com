@@ -3,6 +3,7 @@ title = "Michael-F-Bryan"
 theme = "hugo-coder"
 languagecode = "en"
 defaultcontentlanguage = "en"
+relativeURLs = true
 
 paginate = 20
 canonifyurls = false
