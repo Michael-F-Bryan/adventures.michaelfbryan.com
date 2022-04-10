@@ -1,20 +1,33 @@
 {{ if or (and (not (isset .Params "toc"))
-              (gt .Page.ReadingTime .Site.Params.toc_reading_time_threshold))
-         .Params.toc }}
-<div class="notices tip">
-    <p>
-        I often like exploring a topic in great depth and writing about my
-        thoughts and experiences as I go along.
-    </p>
+(gt .Page.ReadingTime .Site.Params.toc_reading_time_threshold))
+.Params.toc }}
 
-    <p>
-        This is more of an extended essay than an article to be read in a
-        single sitting. Feel free to read it one piece at a time, or just
-        skip to the bits that look interesting.
-    </p>
+<div class="notice info">
+    <div class="notice-title">
+        <i class="fa fa-exclamation-circle" aria-hidden="true"></i>
+        Note from the Author
+    </div>
 
-    <p>Here, have a <em>Table of Contents</em>:</p>
+    <div class="notice-content">
+        <p>
+            I often like exploring a topic in great depth and writing about my
+            thoughts and experiences as I go along.
+        </p>
 
-    {{ .Page.TableOfContents }}
+        <p>
+            This is more of an extended essay than an article to be read in a
+            single sitting. Feel free to read it one piece at a time, or just
+            skip to the bits that look interesting.
+        </p>
+
+        <p>Here, have a <em>Table of Contents</em> 🙂</p>
+    </div>
+</div>
+
+<div id="toc_container">
+    <p class="toc_title">Contents</p>
+    <ul class="toc_list">
+        {{ .Page.TableOfContents }}
+    </ul>
 </div>
 {{ end }}
