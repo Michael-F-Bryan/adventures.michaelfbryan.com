@@ -1,5 +1,5 @@
 ---
-title: "Deploying WebAssembly in the Real World"
+title: "Deploying WebAssembly Libraries"
 date: "2022-03-13T19:34:21+08:00"
 draft: true
 tags:
@@ -14,11 +14,11 @@ their issues jumped out at me - [*Switch model system to WASM
 (hannobraun/Fornjot#71)*][Fornjot-71].
 
 The way Fornjot currently works is by implementing each primitive component
-(sketches, cuboids, cylinders, etc.) in its shared library which is loaded and
+(sketches, cuboids, cylinders, etc.) in a shared library which is loaded and
 executed at runtime. That way Fornjot can provide a stable set of core
 abstractions for manipulating shapes, then users can modify their models and
-reload them at runtime (often called ["Hot Module Replacement"][hmr] in the
-JavaScript world).
+reload them at runtime (similar to the idea of ["Hot Module Replacement"][hmr]
+in the JavaScript world).
 
 You could easily imagine an ecosystem evolving around Fornjot where users
 develop their own models and share them with others.
@@ -27,22 +27,16 @@ The current system of natively compiled libraries has a couple flaws,
 though:
 
 - You need to recompile the model for every platform it may be used on
+- Packaging and deploying shared libraries in a cross-platform way can be a
+  pain, especially if you can't guarantee that users will have a compiler
+  toolchain installed
 - Users will be literally downloading and executing untrusted code
-- The current interface is kinda unsound because it passes Rust types across
-  the FFI boundary. This is unsound because there is no guarantee the code for
-  manipulating a `HashMap` in Fornjot will match up with the code for
-  manipulating `HashMap` inside the model (I've been bitten by this before - see
-  [`rust-lang/rust#67179`][rust-67179])
+- The current interface is kinda unsound[^1] because it passes Rust types across
+  the FFI boundary.
+
 
 Fortunately, I've spent the last year using a technology that aims to solve
 exactly these problems - WebAssembly!
-
-{{% notice error %}}
-TODO:
-- Come up with a strong "thesis statement" for the article
-- Make this flow nicely
-- Relate it to an architecture I want to use at HOTG
-{{% /notice %}}
 
 {{% notice note %}}
 The code written in this article is available [on GitHub][repo]. Feel free to
@@ -55,20 +49,64 @@ blog's [issue tracker][issue]!
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues
 {{% /notice %}}
 
+## Where Does WebAssembly Come In?
+
+We can solve a lot of the issues around distribution and untrusted code by
+compiling each model to WebAssembly. This gives us a nice sandboxed environment
+to execute code in, and a single well-specified format for our binaries.
+
+[The `wit-bindgen` project][wit-bindgen] is a tool that gives us nice things
+like lists, records, sum types, and opaque interfaces, while also being able to
+define interfaces declaratively and implement a host or guest in a range of
+languages.
+
+To quote their README:
+
+> This project is based on the [interface types
+> proposal](https://github.com/webassembly/interface-types) and the [canonical
+> ABI](https://github.com/WebAssembly/interface-types/pull/132), both of which
+> are at the time of this writing a work in progress. This repository will be
+> following upstream changes. The purpose of `wit-bindgen` is to provide a
+> forwards-compatible toolchain and story for interface types and a canonical
+> ABI. Generated language bindings all use the canonical ABI for communication,
+> enabling WebAssembly modules to be written in any language with support and
+> for WebAssembly modules to be consumed in any environment with language
+> support.
+
+[component-model]: https://github.com/WebAssembly/component-model
+
+The packaging and distribution side of things can also be solved using the
+[the *WebAssembly Package Manager*][wapm]. This is a package manager which
+is quite similar to Rust's crates.io and JavaScript's NPM, with one main
+difference - instead of distributing source code, we distribute compiled
+WebAssembly binaries.
+
+If you think back to WebAssembly's initial goal - to provide a
+language-agnostic, cross-platform executable format - this makes sense. Consumer
+of WebAssembly modules shouldn't need to care whether the module was written in
+C or Rust or Go or whatever.
+
+Distributing compiled binaries also has a couple other benefits,
+
+- You don't need to install a C/Rust/Go/whatever compiler and build the project
+  from source
+- You can distribute proprietary secret sauce without making the source code
+  public
+
 ## Defining our Interfaces
 
 If we want to solve Fornjot's model problem our first task is to define the
 interfaces used by our various components to communicate, and the way we will
 do this is via [WIT files][wit].
 
-If you are familiar with gRPC, a `*.wit` file fills the same role as a
+For those familiar with gRPC, a `*.wit` file fills the same role as a
 `*.proto` file. You use a domain specific language to declare the interface
 between both sides, then use a code generator to generate strongly-typed glue
 code.
 
 We'll start by defining the host (Fornjot) interface because it's easiest.
 
-```
+```rust
 // fornjot-v1.wit
 
 /// Log a message at the specified verbosity level.
@@ -93,7 +131,7 @@ To do this, we'll define a [resource][resource] called `context` which lets
 us look up an argument by its name. Obviously, there is a possibility that the
 argument we want isn't defined, so the return value is wrapped in an `option`.
 
-```
+```rust
 // fornjot-v1.wit
 
 resource context {
@@ -104,21 +142,6 @@ resource context {
 A `resource` is roughly analogous to an interface in Java or a trait object in
 Rust.
 
-{{% notice note %}}
-For those that are familiar with ongoing WebAssembly proposals, you
-might recognise that a `resource` sounds awfully similar to [*WebAssembly
-Interface Types*][wit-proposal].
-
-This isn't a coincidence!
-
-The `wit-bindgen` tool currently implements them by manually managing the memory
-of these objects and referring to them via indices, but you can imagine how one
-day we'll be able to update `wit-bindgen` and magically gain access to interface
-types with no extra code changes.
-
-[wit-proposal]: https://github.com/WebAssembly/interface-types/blob/main/proposals/interface-types/Explainer.md
-{{% /notice %}}
-
 Next up is the WIT file defining the functionality our guest will expose.
 
 For our purposes, each model should provide a function for finding out more
@@ -127,7 +150,7 @@ the shape.
 
 This is where the `on-load()` function and our `metadata` type come in.
 
-```
+```rust
 // model-v1.wit
 
 record metadata {
@@ -152,7 +175,7 @@ no attached behaviour.
 Next up we have the function that will be called by the host when it wants to
 generate a model, `generate()`.
 
-```
+```rust
 // model-v1.wit
 
 generate: function(ctx: context) -> expected<shape, error>
@@ -184,7 +207,7 @@ doesn't actually contain a definition for it.
 What we need to do is [import][use] `context` from `fornjot-v1.wit` at the top
 of our file.
 
-```
+```rust
 // model-v1.wit
 
 use { run-context } from fornjot-v1
@@ -200,7 +223,7 @@ implementing the guest side of the interface.
 ```console
 $ cargo new --lib guest
 $ cd guest
-$ cargo add --git https://github.com/bytecodealliance/wit-bindgen wit-bindgen-rust
+$ cargo add wit-bindgen-rust --git https://github.com/wasmerio/wit-bindgen --branch wasmer
     Updating 'https://github.com/rust-lang/crates.io-index' index
       Adding wit-bindgen-rust (unknown version) to dependencies
 ```
@@ -209,6 +232,9 @@ $ cargo add --git https://github.com/bytecodealliance/wit-bindgen wit-bindgen-ru
 We need to add `wit-bindgen` as a git dependency because it hasn't been
 published on crates.io yet. Hopefully it'll be released one day, but today is
 not that day.
+
+I'm also using in Wasmer's fork instead of the `bytecodealliance/wit-bindgen`
+repository because I prefer `wasmer` over `wasmtime` for the host.
 {{% /notice %}}
 
 Next we need to generate our glue code. Fortunately, the `wit-bindgen-rust`
@@ -574,7 +600,7 @@ of packages aren't published to crates.io, so we'll pull the crate directly
 from GitHub.
 
 ```console
-$ cargo add --git https://github.com/wasmerio/wit-bindgen wit-bindgen-wasmer
+$ cargo add wit-bindgen-wasmer --git https://github.com/wasmerio/wit-bindgen --branch wasmer
     Updating 'https://github.com/rust-lang/crates.io-index' index
       Adding wit-bindgen-wasmer to dependencies.
 ```
@@ -917,6 +943,11 @@ on careers@hotg.ai or check out [our careers page][careers].
 
 [^1]: Although if they want to use it as inspiration or copy sample code,
 be my guest 🙂
+
+[^1]: This is unsound because there is no guarantee the code for manipulating a
+data structure in Fornjot will match up with the code for manipulating the same
+data structure inside the model. I've been bitten by this before - see
+[`rust-lang/rust#67179`][rust-67179].
 
 [wasm-1.0]: https://github.com/WebAssembly/spec/releases/tag/wg-1.0
 [first-article]: {{< ref "/posts/wasm-as-a-platform-for-abstraction" >}}
