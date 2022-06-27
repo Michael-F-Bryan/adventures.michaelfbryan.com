@@ -1,7 +1,6 @@
 ---
 title: 'Daily Reflection: {{ time.Format "January 2, 2006" .Date  }}'
 publishDate: "{{ .Date }}"
-draft: true
 type: posts
 series:
 - Daily Reflections
