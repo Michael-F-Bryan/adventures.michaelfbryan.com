@@ -5,6 +5,8 @@ draft: true
 tags:
 - Daily Rust
 - Rust
+series:
+- Daily Rust
 ---
 
 {{% notice note %}}
