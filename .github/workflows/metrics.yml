@@ -1,0 +1,46 @@
+name: Metrics
+
+# Copied from https://github.com/ahdinosaur/ahdinosaur
+on:
+  # Schedule updates (each day)
+  schedule:
+    - cron: "0 0 23 * *" # 23:00 UTC
+  # Run workflow manually
+  workflow_dispatch:
+
+jobs:
+  metrics:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Overview
+        uses: lowlighter/metrics@latest
+        with:
+          filename: static/img/metrics.overview.svg
+          token: ${{ secrets.METRICS_TOKEN }}
+          config_order: base.header, base.activity+community, base.repositories
+          base: header, activity, community, repositories, metadata
+          base_indepth: yes
+
+      - name: Commit History
+        uses: lowlighter/metrics@latest
+        with:
+          filename: static/img/metrics.commit_history.svg
+          token: ${{ secrets.METRICS_TOKEN }}
+          config_order: isocalendar
+          base: ""
+          debug: yes
+          plugin_isocalendar: yes
+          plugin_languages_threshold: 1%
+
+      - name: Languages
+        uses: lowlighter/metrics@latest
+        with:
+          filename: static/img/metrics.languages.svg
+          token: ${{ secrets.METRICS_TOKEN }}
+          config_order: languages
+          base: ""
+          debug: yes
+          plugin_languages: yes
+          plugin_languages_threshold: 1%

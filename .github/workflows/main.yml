@@ -5,40 +5,38 @@ on:
     branches:
       - master
   schedule:
-    - cron: '0 0 * * *' # midnight UTC
+    - cron: "0 0 * * *" # midnight UTC
   workflow_dispatch:
-
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+      - uses: actions/checkout@v2
 
-    - name: Checkout submodules
-      shell: bash
-      run: |
-        auth_header="$(git config --local --get http.https://github.com/.extraheader)"
-        git submodule sync --recursive
-        git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive --depth=1
+      - name: Checkout submodules
+        shell: bash
+        run: |
+          auth_header="$(git config --local --get http.https://github.com/.extraheader)"
+          git submodule sync --recursive
+          git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive --depth=1
 
-    - name: Setup Hugo
-      uses: peaceiris/actions-hugo@v2
-      with:
-        hugo-version: 'latest'
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@v2
+        with:
+          hugo-version: "latest"
 
-    - name: Build
-      run: hugo --minify
+      - name: Build
+        run: hugo --minify
 
-    - name: Update CNAME file
-      run: echo 'adventures.michaelfbryan.com' > public/CNAME
+      - name: Update CNAME file
+        run: echo 'adventures.michaelfbryan.com' > public/CNAME
 
-    - name: GitHub Pages
-      uses: crazy-max/ghaction-github-pages@v2
-      with:
-        build_dir: public
-      env:
-        # GITHUB_PAT: ${{ secrets.GH_PAGES_ACCESS_TOKEN }}
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+      - name: GitHub Pages
+        uses: crazy-max/ghaction-github-pages@v2
+        with:
+          build_dir: public
+        env:
+          # GITHUB_PAT: ${{ secrets.GH_PAGES_ACCESS_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
