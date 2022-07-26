@@ -2,6 +2,24 @@
 title: "About Me"
 ---
 
+Hi!
+
+I'm Michael, a self-taught programmer and avid contributor to the open-source
+community. Here's a pretty picture showing what I've been up to on GitHub:
+
+![Overview](/img/metrics.overview.svg)
+
+![Languages](/img/metrics.languages.svg)
+
+A brief overview of my professional life:
+
+- 2013: Started studying Mechanical Engineering at Curtin University, Western
+  Australia
+- 2016: Started an internship for software engineering at Wintech Engineering
+  thanks to my work in the [Curtin Motorsport Team][cmt]
+- 2018: Accepted a full-time software engineer job at Wintech Engineering
+-
+
 I am a self-taught programmer and avid contributor to the open-source
 community. I originally started out studying Mechanical Engineering, but after
 3 years of a 4 year degree found it wasn't for me and took advantage of a
