@@ -19,12 +19,10 @@ jobs:
         with:
           filename: static/img/metrics.overview.svg
           token: ${{ secrets.METRICS_TOKEN }}
-          config_order: base.header, base.activity+community+isocalendar, base.repositories
+          config_order: base.header, base.activity+community, base.repositories
           config_display: columns
           base: header, activity, community, repositories, metadata
           base_indepth: yes
-          plugin_isocalendar: yes
-          plugin_languages_threshold: 1%
 
       - name: Languages
         uses: lowlighter/metrics@latest
@@ -35,8 +33,8 @@ jobs:
           base: ""
           debug: yes
           plugin_languages: yes
-          plugin_languages_analysis_timeout: 15
+          plugin_languages_analysis_timeout: 30
           plugin_languages_details: percentage, bytes-size, lines
-          plugin_languages_ignored: G-code
+          plugin_languages_ignored: G-code, Yacc
           plugin_languages_indepth: yes
           plugin_languages_threshold: 1%
