@@ -6,5 +6,8 @@
         "markdown",
         "latex",
         "plaintext"
+    ],
+    "languageToolLinter.languageTool.ignoredWordsInWorkspace": [
+        "proc-block"
     ]
 }
