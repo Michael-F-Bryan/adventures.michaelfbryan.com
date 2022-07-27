@@ -1,12 +1,125 @@
 ---
-title: "Breaking Dependency Cycles With The Linker"
+title: "Link Time Dependency Injection"
 publishDate: "2022-07-04T00:07:49+08:00"
 draft: true
 tags:
 - Architecture
 - Tips & Tricks
 - Rust
+- Unsafe Rust
 ---
+
+Have you ever been in a situation where, because of how the code is structured,
+it's practically impossible to inject a dependency into the component that needs
+it?
+
+I was recently working on a task where some code depended on functionality
+provided by another component, but I had no way to provide my implementation
+directly as an input because.
+
+Even global variables - ubiquitously reviled for their ability to do "spooky
+action at a distance" - weren't spooky enough.
+
+{{% notice note %}}
+The code written in this article is available [on GitHub][repo]. Feel free to
+browse through and steal code or inspiration.
+
+If you found this useful or spotted a bug in the article, let me know on the
+blog's [issue tracker][issue]!
+
+[repo]: https://github.com/Michael-F-Bryan/fornjot-plugins
+[issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues
+{{% /notice %}}
+
+
+## The Scenario
+
+That introduction was a bit on the vague side, so let's give you a real world
+example.
+
+Imagine you are designing a CAD package where people can provide custom parts
+using a DLL that the CAD package will load at runtime. The CAD package expects
+each DLL to have a function that can be called whenever the part should be
+generated, with the function signature looking something like this:
+
+```rust
+extern "C" fn model(args: &Arguments) -> Shape;
+```
+
+Where the `Arguments` and `Shape` types actually come from some code generator,
+and the only way you can make them ergonomic to use is if you add your own
+helper methods and trait implementations.
+
+Now, what you would really like to do is pull the generated code into a common
+crate that all implementations can import. This lets us hide the code generation
+step, allows reusing the pre-defined helper methods and trait implementations,
+and gives us a nice place to write examples and API docs.
+
+This would normally be fine because you can define the types in some common
+crate and let the model author define the `model()` function (possibly enforcing
+the function signature via a macro), but there's a twist...
+
+1. Because "reasons", the generated code requires our `model()` function to be
+   defined in its parent module (i.e. somewhere in our common crate), and
+2. The CAD package directly calls `model()` with no possibility for the model
+   author to intercept the call or do some setup beforehand
+
+How do you deal with this?
+
+Ideally, I would set things up so the CAD package calls my model implementation
+which then injects the required dependency into the common crate, but that's not
+possible here.
+
+An alternative way to do dependency injection is for the common crate to have a
+`static` variable containing a function, and then make sure the model
+implementation calls some `common:set_model_handler()` function on startup. This
+is the pattern Rust's [`log` crate][log] uses, btw.
+
+However, something I neglected to mention earlier is that this "DLL" is actually
+a WebAssembly binary, and WebAssembly has no way to make sure a function is
+called when it is first loaded (i.e. we can't use `__attribute__(ctor)` or [the
+`ctor` crate][ctor]) so this approach won't work either.
+
+## The Solution
+
+### Create An Abstraction Layer
+
+### Breaking Dependencies with the Linker
+
+### Hide The Implementation Details
+
+## When Should I Use This Trick?
+
+- Last resort
+- If you have control over how/when your code is called - pass in your
+  implementation as an argument
+- If you can run some code on startup - set a global (e.g. the `log` crate)
+- You can guarantee only one version of your crate will be in the crate graph
+  (might be able to use the `links` key in `Cargo.toml`)
+- Only if everything is statically linked and compiled together (unstable ABI)
+
+## Conclusions
+
+- Not a novel technique
+- Point to how [Rust's `#[global_allocator] works`][global-alloc]
+- Used all the time in C programs
+- Titbit, mentioned in *Working Effectively with Legacy Code* under the name
+  *"Link Seams"*
+
+
+
+
+
+
+
+
+---
+
+
+
+
+
+
 
 - Couple months back
 - Ran into a cyclic dependency problem at work
@@ -315,3 +428,5 @@ passes the spectrum to a ML model which can recognise particular words.
 [hotg]: https://hotg.ai/
 [wapm]: https://wapm.io/
 [wit-bindgen]: https://github.com/bytecodealliance/wit-bindgen
+[ctor]: https://crates.io/crates/ctor
+[log]: https://crates.io/crates/log
