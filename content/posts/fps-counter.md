@@ -4,7 +4,7 @@ date: "2019-09-03T08:50:00+08:00"
 tags:
 - adventures-in-motion-control
 - Rust
-- wasm
+- WebAssembly
 ---
 
 As mentioned in [the previous article][the-next-step] the next task is to
