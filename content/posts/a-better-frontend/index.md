@@ -4,7 +4,7 @@ date: "2019-09-27T03:47:00+08:00"
 tags:
 - adventures-in-motion-control
 - Rust
-- wasm
+- WebAssembly
 - vue
 - javascript
 ---
