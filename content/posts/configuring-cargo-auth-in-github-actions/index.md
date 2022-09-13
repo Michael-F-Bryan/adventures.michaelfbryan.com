@@ -1,7 +1,6 @@
 ---
 title: "Configuring Cargo's Git Authentication in GitHub Actions"
 date: "2022-09-13T12:01:45+08:00"
-draft: true
 tags:
 - Rust
 - CI/CD
