@@ -1,22 +1,26 @@
 ---
-title: "Configuring Cargo's Git Authentication in GitHub Actions"
+title: "GitHub Actions can't access private repos? Here's how to fix it"
 date: "2022-09-13T12:01:45+08:00"
 tags:
 - Rust
 - CI/CD
+- GitHub Actions
 ---
 
 When developing locally, you can add a private GitHub repository to your Rust
-crate as a `git` repository and `cargo` should be able to retrieve it just fine.
+crate as a [`git` dependency][git-dep] and `cargo` should be able to retrieve it
+just fine.
 
-However, GitHub Actions will probably run into authentication issues when trying
-to build your crate. The error message will look something like this:
+However, when you push your changes to GitHub and run CI, GitHub Actions can
+run into authentication issues when trying to build your crate.
+
+This is the error message I was fighting for a good part of today:
 
 ```shell
 $ cargo check --workspace --verbose --locked
  Updating git repository `https://github.com/Michael-F-Bryan/my-secret-repo.git`
  Running `git fetch --force --update-head-ok 'https://github.com/Michael-F-Bryan/my-secret-repo.git' '+HEAD:refs/remotes/origin/HEAD'`
-Error: failed to get `internal-crate` as a dependency of package `public-crate v0.1.4 (/home/runner/work/public-crate/public-crate/crates/cli)`
+Error: failed to get `internal-crate` as a dependency of package `some-crate v0.1.4 (/home/runner/work/some-crate/some-crate/crates/cli)`
 Caused by:
  failed to load source for dependency `internal-crate`
 
@@ -33,9 +37,11 @@ Caused by:
 Error: The process '/home/runner/.cargo/bin/cargo' failed with exit code 101
 ```
 
-This happens because the user on your dev machine is associated with a
-particular GitHub account and that account has access to the repository, whereas
-the GitHub Actions user can only see the repository it's attached to.
+Cargo can't check out my private repository!
+
+This happens because the user on your dev machine is usually associated with a
+particular GitHub account and that account has access to the private repository,
+whereas the GitHub Actions user can only see the repository it's attached to.
 
 The *Cargo Book* has a chapter on [*Git Authentication*][git-auth], but the
 *HTTPS Authentication* method they suggest (using credential stores) stopped
@@ -164,3 +170,4 @@ Good Luck 🙂
 [password-auth-announcement]: https://github.blog/changelog/2021-08-12-git-password-authentication-is-shutting-down/
 [deploy-keys]: https://docs.github.com/en/developers/overview/managing-deploy-keys#deploy-keys
 [ssh-agent]: https://www.webfactory.de/blog/use-ssh-key-for-private-repositories-in-github-actions
+[git-dep]: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#specifying-dependencies-from-git-repositories
