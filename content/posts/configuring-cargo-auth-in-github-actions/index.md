@@ -63,7 +63,7 @@ blog's [issue tracker][issue]!
 First, we'll need to generate a set of SSH keys that we can use.
 
 ```console
-$ ssh-keygen -t rsa -b 4096 -C "consulting@michaelfbryan.com"
+$ ssh-keygen -t rsa -b 4096
 Generating public/private rsa key pair.
 Enter file in which to save the key (~/.ssh/id_rsa): /tmp/secret-repo-deploy-key
 Enter passphrase (empty for no passphrase):
@@ -160,6 +160,20 @@ jobs:
       with:
         ssh-private-key: ${{ secrets.SECRET_REPO_DEPLOY_KEY }}
 ```
+
+{{% notice tip %}}
+The `webfactory/ssh-agent` action lets you supply multiple private keys if you
+are trying to access several private repositories. When you are first generating
+the keys, just make sure to attach each repo's URL as a "comment".
+
+That means the `Michael-F-Bryan/my-secret-repo` deploy key would be generated
+using a command like this:
+
+```console
+$ ssh-keygen -t rsa -b 4096 -C https://github.com/Michael-F-Bryan/my-secret-repo
+```
+{{% /notice %}}
+
 
 That's all you should need. Now when you commit and push the changes to GitHub,
 your crate should build again.
