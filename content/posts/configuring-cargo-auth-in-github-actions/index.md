@@ -1,6 +1,7 @@
 ---
-title: "Configuring Cargo's Git Authentication in Github Actions"
+title: "Configuring Cargo's Git Authentication in GitHub Actions"
 date: "2022-09-13T12:01:45+08:00"
+draft: true
 tags:
 - Rust
 - CI/CD
@@ -16,9 +17,9 @@ to build your crate. The error message will look something like this:
 $ cargo check --workspace --verbose --locked
  Updating git repository `https://github.com/Michael-F-Bryan/my-secret-repo.git`
  Running `git fetch --force --update-head-ok 'https://github.com/Michael-F-Bryan/my-secret-repo.git' '+HEAD:refs/remotes/origin/HEAD'`
-Error: failed to get `webc` as a dependency of package `wit-pack-cli v0.1.4 (/home/runner/work/wit-pack/wit-pack/crates/cli)`
+Error: failed to get `internal-crate` as a dependency of package `public-crate v0.1.4 (/home/runner/work/public-crate/public-crate/crates/cli)`
 Caused by:
- failed to load source for dependency `webc`
+ failed to load source for dependency `internal-crate`
 
 Caused by:
  Unable to update https://github.com/Michael-F-Bryan/my-secret-repo.git
@@ -58,7 +59,16 @@ First, we'll need to generate a set of SSH keys that we can use.
 
 ```console
 $ ssh-keygen -t rsa -b 4096 -C "consulting@michaelfbryan.com"
+Generating public/private rsa key pair.
+Enter file in which to save the key (~/.ssh/id_rsa): /tmp/secret-repo-deploy-key
+Enter passphrase (empty for no passphrase):
+Enter same passphrase again:
+Your identification has been saved in /tmp/secret-repo-deploy-key
+Your public key has been saved in /tmp/secret-repo-deploy-key.pub
+...
 ```
+
+This process should be familiar to anyone that's worked with Git or SSH before.
 
 {{% notice tip %}}
 If you are using 1Password to share secrets with co-workers, you can use its
@@ -67,23 +77,25 @@ for SSH keys to generate the key and save it with one click.
 {{% /notice %}}
 
 {{% notice warning %}}
- Make sure you generate a RSA key
+Make sure you generate an RSA key.
 
- When I generated an `ed25519` key, the `ssh-add` on GitHub Actions rejected it with this error message:
+When I generated an `ed25519` key, the `ssh-add` on GitHub Actions rejected it
+with this error message:
 
- ```
- Adding GitHub.com keys to /home/runner/.ssh/known_hosts
- Starting ssh-agent
- SSH_AUTH_SOCK=/tmp/ssh-M5otljx2VjtQ/agent.1637
- SSH_AGENT_PID=1638
- Adding private key(s) to agent
- Error loading key "(stdin)": invalid format
- Error: Command failed: ssh-add -
- Error loading key "(stdin)": invalid format
- ```
+```
+Adding GitHub.com keys to /home/runner/.ssh/known_hosts
+Starting ssh-agent
+SSH_AUTH_SOCK=/tmp/ssh-M5otljx2VjtQ/agent.1637
+SSH_AGENT_PID=1638
+Adding private key(s) to agent
+Error loading key "(stdin)": invalid format
+Error: Command failed: ssh-add -
+Error loading key "(stdin)": invalid format
+```
 
- [According to Stack Overflow](https://serverfault.com/a/1027037), this appears to be an issue with OpenSSH 8.3.
- {{% /notice %}}
+[According to Stack Overflow](https://serverfault.com/a/1027037), this appears
+to be an issue with OpenSSH 8.3.
+{{% /notice %}}
 
 ## Uploading the Deploy Key
 
@@ -91,7 +103,7 @@ Now we need to add the **public** key as a deploy key to the repository we want
 access to (`Michael-F-Bryan/my-secret-repo` in this case). GitHub's website has
 [some docs][deploy-keys] for this, but the process is pretty simple.
 
-I won't bore you with instructions, so here are some screenshots.
+Here, have some screenshots.
 
 ![Finding the "Add Deploy Key" button](add-deploy-keys-button.png)
 
@@ -122,13 +134,14 @@ First, add the dependency using its `ssh` URL.
 ```toml
 # Cargo.toml
 [dependencies]
-webc = { git = "ssh://git@github.com/Michael-F-Bryan/my-secret-repo.git", ... }
+internal-crate = { git = "ssh://git@github.com/Michael-F-Bryan/my-secret-repo.git", ... }
 ```
 
-We need to make sure GitHub Actions uses the deploy key that we're setting up,
-so we can use the
+We need to make sure each job in GitHub Actions uses the deploy key that we're
+setting up. You can [do this manually][ssh-agent], but I find it easier to load
+it into `ssh-agent` with the
 [`webfactory/ssh-agent`](https://github.com/marketplace/actions/webfactory-ssh-agent)
-action to load it into `ssh-agent`.
+action.
 
 ```yml
 # .github/workflows/ci.yml
@@ -143,13 +156,12 @@ jobs:
         ssh-private-key: ${{ secrets.SECRET_REPO_DEPLOY_KEY }}
 ```
 
-This can be done manually as well, but it [requires a couple extra
-steps](https://www.webfactory.de/blog/use-ssh-key-for-private-repositories-in-github-actions).
-
-That's all you should need, so you can commit and push to GitHub now.
+That's all you should need. Now when you commit and push the changes to GitHub,
+your crate should build again.
 
 Good Luck 🙂
 
 [git-auth]: https://doc.rust-lang.org/cargo/appendix/git-authentication.html
 [password-auth-announcement]: https://github.blog/changelog/2021-08-12-git-password-authentication-is-shutting-down/
 [deploy-keys]: https://docs.github.com/en/developers/overview/managing-deploy-keys#deploy-keys
+[ssh-agent]: https://www.webfactory.de/blog/use-ssh-key-for-private-repositories-in-github-actions
