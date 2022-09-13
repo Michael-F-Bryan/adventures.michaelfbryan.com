@@ -17,7 +17,7 @@ jobs:
       - name: Overview
         uses: lowlighter/metrics@latest
         with:
-          filename: static/img/metrics.overview.svg
+          filename: assets/img/metrics.overview.svg
           token: ${{ secrets.METRICS_TOKEN }}
           config_order: base.header, base.activity+community, base.repositories
           base: header, activity, community, repositories, metadata
@@ -26,7 +26,7 @@ jobs:
       - name: Commit History
         uses: lowlighter/metrics@latest
         with:
-          filename: static/img/metrics.commit_history.svg
+          filename: assets/img/metrics.commit_history.svg
           token: ${{ secrets.METRICS_TOKEN }}
           config_order: isocalendar
           base: ""
@@ -37,7 +37,7 @@ jobs:
       - name: Languages
         uses: lowlighter/metrics@latest
         with:
-          filename: static/img/metrics.languages.svg
+          filename: assets/img/metrics.languages.svg
           token: ${{ secrets.METRICS_TOKEN }}
           config_order: languages
           base: ""

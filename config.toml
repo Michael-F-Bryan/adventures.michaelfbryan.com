@@ -48,7 +48,7 @@ url = "https://gitlab.com/Michael-F-Bryan"
 name = "Contact Me"
 icon = "fa fa-envelope fa-2x"
 weight = 3
-url = "mailto:michaelfbryan@gmail.com"
+url = "mailto:consulting@michaelfbryan.com"
 
 [[params.social]]
 name = "RSS"
@@ -64,22 +64,3 @@ url  = "/posts/"
 [[menu.main]]
 name = "About"
 url = "/about/"
-
-[[deployment.targets]]
-name = "Amazon S3"
-URL = "s3://adventures.michaelfbryan.com?region=ap-southeast-2"
-
-[[deployment.matchers]]
-#  Cache static assets for 20 years.
-pattern = "^.+\\.(js|css|svg|ttf)$"
-cacheControl = "max-age=630720000, no-transform, public"
-gzip = true
-
-[[deployment.matchers]]
-pattern = "^.+\\.(png|jpg)$"
-cacheControl = "max-age=630720000, no-transform, public"
-gzip = false
-
-[[deployment.matchers]]
-pattern = "^.+\\.(html|xml|json)$"
-gzip = true

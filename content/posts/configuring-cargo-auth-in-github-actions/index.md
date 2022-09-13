@@ -1,7 +1,9 @@
 ---
 title: "Configuring Cargo's Git Authentication in Github Actions"
 date: "2022-09-13T12:01:45+08:00"
-draft: true
+tags:
+- Rust
+- CI/CD
 ---
 
 When developing locally, you can add a private GitHub repository to your Rust
