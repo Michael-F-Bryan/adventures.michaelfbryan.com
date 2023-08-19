@@ -32,27 +32,35 @@ math = true
 colorscheme = "auto"
 
 [markup.goldmark.renderer]
-unsafe= true
+unsafe = true
 
 [[params.social]]
 name = "Github"
 icon = "fa fa-github fa-2x"
 weight = 1
 url = "https://github.com/Michael-F-Bryan"
+
 [[params.social]]
 name = "GitLab"
 icon = "fa fa-gitlab fa-2x"
 weight = 2
 url = "https://gitlab.com/Michael-F-Bryan"
+
+[[params.social]]
+name = "LinkedIn"
+icon = "fa fa-linkedin fa-2x"
+weight = 4
+url = "https://www.linkedin.com/in/michael-bryan-564889199/"
+
 [[params.social]]
 name = "Contact Me"
 icon = "fa fa-envelope fa-2x"
-weight = 3
+weight = 5
 url = "mailto:consulting@michaelfbryan.com"
 
 [[params.social]]
 name = "RSS"
-icon = "fa fa-rss"
+icon = "fa fa-rss fa-2x"
 weight = 6
 url = "https://adventures.michaelfbryan.com/index.xml"
 rel = "alternate"
