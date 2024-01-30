@@ -62,7 +62,7 @@ url = "mailto:consulting@michaelfbryan.com"
 name = "RSS"
 icon = "fa fa-rss fa-2x"
 weight = 6
-url = "https://adventures.michaelfbryan.com/index.xml"
+url = "/index.xml"
 rel = "alternate"
 type = "application/rss+xml"
 
