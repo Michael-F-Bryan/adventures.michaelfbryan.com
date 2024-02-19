@@ -6,7 +6,7 @@ defaultcontentlanguage = "en"
 
 paginate = 20
 canonifyurls = false
-googleAnalytics = "UA-78714693-3"
+googleAnalytics = "G-M80ZBKQHKV"
 enableGitInfo = true
 enableEmoji = true
 
