@@ -23,6 +23,10 @@ My decision to part ways with Wasmer was not made lightly. Over my 16 months wit
 
 It's important for me to acknowledge that this is as much about my own journey and understanding of my professional needs as it is about the company's culture and direction.
 
+... That said, I think company culture and management *are* big contributors to me becoming so jaded and unmotivated. With things like this it's always useful to look at data and probably the most showing data point is that 10 people (11 if you count me) left the company in the period between August 2022 and January 2024 (17 months), of which at least 4 were directly asked to leave by the CEO. For a startup of 10 people, that sort of turnover is *insane*. During my exit interview (which I had to push for), the moment I brought up the company's turnover stats and suggested it might be because of the company's management, the *People Manager* (who's job is "Culture and Wellness") turned it back on me. Apparently people tend to demonise management when things aren't going so well, and that there was a point where I could have turned things around and fixed things, but I chose not to.
+
+So yeah, it was a hard decision to leave because I loved my teammates and the project, but I'm confident it was the right one.
+
 ## The Road Ahead
 
 I don't have any concrete plans just yet. Instead, I'd like to take a couple weeks to tinker on toy projects and reconnect with my passions.
@@ -57,4 +61,9 @@ Every journey has its ebbs and flows, and my time at Wasmer was no exception.
 
 While it's time for me to seek new horizons, the experiences and friendships I've gained here will always resonate within me. I'm excited about what the future holds, and I look forward to crossing paths with the incredible people of Wasmer in this small, interconnected world of ours.
 
+
 So long, and thanks for all the fish.
+
+<small>
+p.s. If you are looking to get a job with Wasmer or wanting to hear more before investing in the company, you can email me privately and I'd be happy to answer any questions you have.
+</small>
