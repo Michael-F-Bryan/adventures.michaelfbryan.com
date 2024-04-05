@@ -2,69 +2,55 @@
 title: "About Me"
 ---
 
-I am a self-taught programmer and avid contributor to the open-source
-community. I originally started out studying Mechanical Engineering, but after
-3 years of a 4 year degree found it wasn't for me and took advantage of a
-Software Engineering job offer (gained thanks to my work in the software
-community and involvement in the [Curtin Motorsport Team][cmt]) to change
-career path.
+Hello! I'm Michael, a senior software engineer and open source enthusiast based in Perth, Western Australia. My journey in the tech world has been marked by a passion for innovation and a deep commitment to building useful solutions to real world problems.
 
-I still enjoy learning about how the world works and leveraging my
-engineering knowledge wherever I can, whether that is in the geometry and
-calculus required to write a CAD/CAM program at work, or using the equations
-of motion and control theory to simulate a motion controller.
+## Professional Journey
 
-In my spare time I like to learn more about computer science, in particular
-embedded systems, high performance applications (e.g. games), and compilers.
-It's not uncommon for me to explore a particular niche over a weekend then
-write an in-depth article about what I've learned (e.g. [Audio
-Processing][audio], [embedding a WebAssembly runtime][wasm], or
-[Rust's Const-Generics][cg]).
+I've been writing software professionally for about 8 years now, with my most recent role being a Senior Software Engineer at Wasmer.
 
-My top 4 favourite programming languages at the moment:
+At [Wasmer](https://wasmer.io) (2022-2024), I was at the forefront of developing our [WebAssembly Systems Interface](https://wasix.org/) implementations, both on the server and in the browser. Something I'm particularly proud of was creating [the `@wasmer/sdk` package](https://www.npmjs.com/package/@wasmer/sdk) which allowed running truly multi-threaded and multi-process applications in the browser.
 
-1. [Rust](https://rust-lang.org)
-2. [Go](https://golang.org)
-3. [C#](https://docs.microsoft.com/en-us/dotnet/csharp/)
-4. [TypeScript](https://www.typescriptlang.org/)
+I also made significant contributions to the ecosystem by building [an integration](https://wasmer.io/posts/wasmer-takes-webassembly-libraries-manistream-with-wai) that would allow anyone to add a WebAssembly package from the Wasmer Registry to their Python or JavaScript applications, just like any other library.
 
-Some projects I've been involved in:
+However, recognising the importance of well-being and a supportive work environment, I [decided to step away][farewell-wasmer] from Wasmer to recharge and refocus due to burnout and a toxic work culture.
 
-- [mdbook][mdbook] - a program for compiling a set of *Markdown* files into a
-  website which can be viewed online. I was the maintainer from November 2017 to
-  January 2019
-- [The Rust FFI Guide][ffi-guide] - A tutorial which teaches people how to
-  interoperate between Rustand other languages via C APIs
-- [gcode-rs][gcode] - A crate for parsing g-code programs without allocations,
-  primarily designed for embedded devices
-- [libsignal-protocol-rs][libsignal] - An idiomatic Rust wrapper around the
-  `libsignal-protocol-c` library, the canonical implementation of the
-  [*Signal Protocol*][libsignal-c] (the crypto library underneath WhatsApp and
-  Signal)
+Currently, I'm on a sabbatical, embracing this period as a vital opportunity for personal and professional growth. This break is a time for reflection, learning, and planning the next steps in my journey, especially with my growing interest in personal knowledge management, project management, and the aspiration to launch my own tech startup one day.
 
-## Resume
+Before Wasmer, I worked at [Hammer of the Gods](https://hotg.ai/) as a Rust Engineer from 2021 until the company ran out of runway in mid-2022. At HotG, we were building a solution for containerising ML pipelines by compiling them to WebAssembly and rapidly deploying them to a wide variety of edge platforms (browser, server, Android, iOS, etc.). If you've heard of Huggingface's Candle, that's exactly what we built, except their implementation successful made it to market 😅
 
-You can look me up on [GitHub][gh] or [GitLab][gl] to see examples of my
-work. To get a feel for my involvement in the software community you may want to
-look me up on the [Rust User Forums][urlo] or [Reddit][reddit].
+My first job was at [Wintech Engineering](https://wintechengineering.com.au/) (2016-2020) where started as a Software Engineer Intern, then progressed to the role of Software Engineer where I rewrote Wintech's CAD/CAM package (Wintech Profiler) in C# and maintained the previous Delphi version. I also maintained the embedded device used to control their CNC foam cutting machines.
 
-If you want a more formal view, check out [my resume][resume-pdf]. The entire
-repository is [publicly available][resume-repo], and uses GitLab's CI system
-to automatically re-compile the PDF whenever new changes are pushed to
-`master`.
+## Interests and Ambitions
 
-[resume-repo]: https://gitlab.com/Michael-F-Bryan/resume/
-[resume-pdf]: https://michael-f-bryan.gitlab.io/resume/resume.pdf
-[ffi-guide]: https://michael-f-bryan.github.io/rust-ffi-guide/
-[mdbook]: https://crates.io/crates/mdbook
-[libsignal]: https://github.com/Michael-F-Bryan/libsignal-protocol-rs
-[libsignal-c]: https://github.com/signalapp/libsignal-protocol-c
-[gcode]: https://github.com/Michael-F-Bryan/gcode-rs
-[gh]: https://github.com/Michael-F-Bryan
-[gl]: https://gitlab.com/Michael-F-Bryan
-[urlo]: https://users.rust-lang.org/u/michael-f-bryan/
-[reddit]: https://www.reddit.com/user/Michael-F-Bryan
-[wasm]: {{< ref "/posts/wasm-as-a-platform-for-abstraction.md" >}}
-[cg]: {{< ref "/posts/const-arrayvec.md" >}}
-[audio]: {{< ref "/posts/audio-processing-for-dummies/index.md" >}}
-[cmt]: https://www.curtinmotorsport.com
+Outside of my professional life, I like to work on personal projects in areas that interest me.
+
+These projects will change over time as I discover new fields or have different ideas, but at the moment my top project is a compiler and Language Server Protocol for the [WIT](https://github.com/WebAssembly/component-model/blob/main/design/mvp/WIT.md) interface definition language called [`wit-lsp`](https://GitHub.com/Michael-F-Bryan/wit-lsp). I've taken a lot of inspiration from [Matklad's blog posts](https://matklad.github.io/) and YouTube series about building Rust Analyzer, while building on top of a resilient parser generated by [Tree Sitter](https://tree-sitter.github.io/tree-sitter/) and the query-based [Salsa](https://github.com/salsa-rs/salsa/) framework for incremental compilation.
+
+I've also been using my ML experience to build a service called [`radio-chatter`](https://github.com/Michael-F-Bryan/radio-chatter) to assist the Communications Support Unit during the high threat period for monitoring DFES radio traffic and analysing it to provide better situational awareness during emergencies.
+
+Beyond coding, I am deeply fascinated by the realm of personal knowledge management and leveraging my second brain to improve my ability to draw connections between all the various aspects of my life.
+
+## Volunteering: Communications Support Unit
+
+A core part of my life is volunteering for the [Communications Support Unit](https://csu-ses.com.au/), a specialist unit in the Western Australian State Emergency Service. I've been a member of CSU since 2018, a team leader since 2021, and was more recently voted to be the unit's Training Manager in 2023.
+
+The CSU is a unique unit that specialises in providing communications and Incident Management Team, especially during critical times such as bushfires and land searches.
+
+As the Training Manager of CSU, it is my responsibility to develop the unit's training program and manage the progression of our ~50 members. This role involves planning (and often delivering) weekly training sessions, organising DFES accredited courses, managing the unit's recruitment program, and ensuring our team is equipped with the necessary skills and knowledge to serve our community effectively.
+
+My personal knowledge management system, and the habits I've built around it, have been absolutely invaluable for this.
+
+Besides being the Training Manager, I am also an endorsed Trainer Assessor and have delivered numerous DFES courses since 2022, primarily those focused on radio skills.
+
+### Personal Life
+
+When I'm not coding or volunteering, I cherish my life in Perth with my girlfriend. This beautiful city not only provides the backdrop for my professional endeavours but also supports my personal development and well-being.
+
+### Closing
+
+As I navigate this period of growth and exploration, I remain open to new opportunities, collaborations, and learning experiences. Whether in the realm of technology, community service, or personal development, I am excited about what the future holds and am eager to contribute my skills and passion to meaningful projects.
+
+Thank you for visiting my little website. Feel free to reach out if you'd like to connect or explore potential collaborations.
+
+
+[farewell]: {{< ref "/posts/farewell-wasmer.md" >}}
