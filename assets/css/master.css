@@ -17,7 +17,7 @@ div.notices>ul {
 
 /* The notice "header" */
 
-div.notices p:first-child:before {
+div.notices > p:first-child:before {
     position: absolute;
     top: 2px;
     color: #fff;
@@ -29,7 +29,7 @@ div.notices p:first-child:before {
 
 /* Style the header text */
 
-div.notices p:first-child:after {
+div.notices > p:first-child:after {
     position: absolute;
     top: 2px;
     color: #fff;
@@ -38,11 +38,11 @@ div.notices p:first-child:after {
 
 /* header text */
 
-div.notices.info p:first-child:after {
+div.notices.info > p:first-child:after {
     content: 'Info';
 }
 
-div.notices.warning p:first-child:after {
+div.notices.warning > p:first-child:after {
     content: 'Warning';
 }
 
@@ -50,25 +50,25 @@ div.notices.note p:first-child:after {
     content: 'Note';
 }
 
-div.notices.tip p:first-child:after {
+div.notices.tip > p:first-child:after {
     content: 'Tip';
 }
 
 /* Give the header a background */
 
-div.notices.warning p:first-child {
+div.notices.warning > p:first-child {
     border-top: 30px solid #d9534fcc;
 }
 
-div.notices.note p:first-child {
+div.notices.note > p:first-child {
     border-top: 30px solid #6ab0de;
 }
 
-div.notices.tip p:first-child {
+div.notices.tip > p:first-child {
     border-top: 30px solid #5cb85ccc;
 }
 
-div.notices.info p:first-child {
+div.notices.info > p:first-child {
     border-top: 30px solid #F0B37E;
 }
 
