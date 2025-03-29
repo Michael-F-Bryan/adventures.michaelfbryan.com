@@ -2,55 +2,58 @@
 title: "About Me"
 ---
 
-Hello! I'm Michael, a senior software engineer and open source enthusiast based in Perth, Western Australia. My journey in the tech world has been marked by a passion for innovation and a deep commitment to building useful solutions to real world problems.
+I'm Michael Bryan, a software engineer based in Perth, WA, with a passion for building resilient systems and elegant solutions.
 
-## Professional Journey
+## Professional Overview
 
-I've been writing software professionally for about 8 years now, with my most recent role being a Senior Software Engineer at Wasmer.
+I'm currently a **Senior Software Engineer** at Multiversal Ventures, primarily focused on developing robust web crawlers for extracting US healthcare data.
 
-At [Wasmer](https://wasmer.io) (2022-2024), I was at the forefront of developing our [WebAssembly Systems Interface](https://wasix.org/) implementations, both on the server and in the browser. Something I'm particularly proud of was creating [the `@wasmer/sdk` package](https://www.npmjs.com/package/@wasmer/sdk) which allowed running truly multi-threaded and multi-process applications in the browser.
+I specialise in writing precise, maintainable code and consider myself an expert in Rust, with extensive experience in Go, TypeScript, React, and GraphQL. I'm particularly passionate about compilers, type-safe code, and designing parsers that gracefully handle errors.
 
-I also made significant contributions to the ecosystem by building [an integration](https://wasmer.io/posts/wasmer-takes-webassembly-libraries-manistream-with-wai) that would allow anyone to add a WebAssembly package from the Wasmer Registry to their Python or JavaScript applications, just like any other library.
+- Strong typing advocate for clearer, bug-free code.
+- Enthusiastic about systems design and architecture.
 
-However, recognising the importance of well-being and a supportive work environment, I [decided to step away][farewell-wasmer] from Wasmer to recharge and refocus due to burnout and a toxic work culture.
+### Previous Roles
 
-Currently, I'm on a sabbatical, embracing this period as a vital opportunity for personal and professional growth. This break is a time for reflection, learning, and planning the next steps in my journey, especially with my growing interest in personal knowledge management, project management, and the aspiration to launch my own tech startup one day.
+- **Senior Software Engineer**, [Wasmer](https://wasmer.io) (2022-2024)
+  - Worked on Wasmer's *WebAssembly Systems Interface* implementations for server and browser.
+  - Created the [`@wasmer/sdk` package](https://www.npmjs.com/package/@wasmer/sdk), enabling multi-threaded and multi-process applications in the browser.
+  - Built integrations allowing easy inclusion of WebAssembly packages into Python and JavaScript applications.
+- **Rust Engineer**, [Hammer of the Gods (HotG)](https://hotg.ai/) (2021-2022)
+  - Developed a solution for containerising ML pipelines using WebAssembly, targeting edge platforms.
+- **Software Engineer**, [Wintech Engineering](https://wintechengineering.com.au/) (2016-2020)
+  - Rewrote Wintech's CAD/CAM software in C# and maintained embedded systems for CNC machines.
 
-Before Wasmer, I worked at [Hammer of the Gods](https://hotg.ai/) as a Rust Engineer from 2021 until the company ran out of runway in mid-2022. At HotG, we were building a solution for containerising ML pipelines by compiling them to WebAssembly and rapidly deploying them to a wide variety of edge platforms (browser, server, Android, iOS, etc.). If you've heard of Huggingface's Candle, that's exactly what we built, except their implementation successful made it to market 😅
+## Technical Interests
 
-My first job was at [Wintech Engineering](https://wintechengineering.com.au/) (2016-2020) where started as a Software Engineer Intern, then progressed to the role of Software Engineer where I rewrote Wintech's CAD/CAM package (Wintech Profiler) in C# and maintained the previous Delphi version. I also maintained the embedded device used to control their CNC foam cutting machines.
+My technical curiosity extends into areas like WebAssembly, machine learning, and computational geometry. I find satisfaction in automating away complexity and creating elegant solutions that "just work."
 
-## Interests and Ambitions
+### Notable Projects
 
-Outside of my professional life, I like to work on personal projects in areas that interest me.
+- [`wit-lsp`](https://github.com/Michael-F-Bryan/wit-lsp): Compiler and Language Server Protocol for WebAssembly's WIT interface definition language, inspired by Rust Analyzer.
+- [`include_dir`](https://github.com/Michael-F-Bryan/include_dir): An evolution of the `include_str!()` and `include_bytes!()` macros for embedding an entire directory tree into your binary.
 
-These projects will change over time as I discover new fields or have different ideas, but at the moment my top project is a compiler and Language Server Protocol for the [WIT](https://github.com/WebAssembly/component-model/blob/main/design/mvp/WIT.md) interface definition language called [`wit-lsp`](https://GitHub.com/Michael-F-Bryan/wit-lsp). I've taken a lot of inspiration from [Matklad's blog posts](https://matklad.github.io/) and YouTube series about building Rust Analyzer, while building on top of a resilient parser generated by [Tree Sitter](https://tree-sitter.github.io/tree-sitter/) and the query-based [Salsa](https://github.com/salsa-rs/salsa/) framework for incremental compilation.
+## Personal Knowledge Management
 
-I've also been using my ML experience to build a service called [`radio-chatter`](https://github.com/Michael-F-Bryan/radio-chatter) to assist the Communications Support Unit during the high threat period for monitoring DFES radio traffic and analysing it to provide better situational awareness during emergencies.
+I'm a heavy user of Obsidian, applying Tiago Forte's CODE and PARA systems to organise my thoughts, tasks, and projects. I prefer structured, visual, and highly queryable notes—my vault is probably more organised than my desk.
 
-Beyond coding, I am deeply fascinated by the realm of personal knowledge management and leveraging my second brain to improve my ability to draw connections between all the various aspects of my life.
+## Volunteer and Community Engagement
 
-## Volunteering: Communications Support Unit
+Outside of work, I'm deeply involved with the Communications Support Unit (CSU) of the Western Australian State Emergency Service as the **Training Manager**. I've been with CSU since 2018, became a team leader in 2021, and stepped into the Training Manager role in 2023.
 
-A core part of my life is volunteering for the [Communications Support Unit](https://csu-ses.com.au/), a specialist unit in the Western Australian State Emergency Service. I've been a member of CSU since 2018, a team leader since 2021, and was more recently voted to be the unit's Training Manager in 2023.
+- Responsible for developing training programs, organising DFES accredited courses, and managing recruitment.
+- Endorsed Trainer Assessor, frequently delivering DFES courses, especially focused on radio communications.
+- Committed to improving accountability, knowledge sharing, and team effectiveness.
 
-The CSU is a unique unit that specialises in providing communications and Incident Management Team, especially during critical times such as bushfires and land searches.
+## Personal Life
 
-As the Training Manager of CSU, it is my responsibility to develop the unit's training program and manage the progression of our ~50 members. This role involves planning (and often delivering) weekly training sessions, organising DFES accredited courses, managing the unit's recruitment program, and ensuring our team is equipped with the necessary skills and knowledge to serve our community effectively.
+I live in Perth with my partner, Gabbey, and our collection of pets (including two large dogs and several cats). We recently bought our first home in Greenmount, where I’ve been having a crash course in home and garden maintenance.
 
-My personal knowledge management system, and the habits I've built around it, have been absolutely invaluable for this.
+## Aspirations
 
-Besides being the Training Manager, I am also an endorsed Trainer Assessor and have delivered numerous DFES courses since 2022, primarily those focused on radio skills.
+Long-term, I aim to become the Chief Technical Officer of a startup focused on machine learning, WebAssembly, or computational geometry. I'm continually working to sharpen my skills in project management, leadership, and making strategic technical decisions.
 
-### Personal Life
+## Work Style and Productivity
 
-When I'm not coding or volunteering, I cherish my life in Perth with my girlfriend. This beautiful city not only provides the backdrop for my professional endeavours but also supports my personal development and well-being.
+I perform best in environments that respect autonomy, flexibility, and trust. I prefer working in intense, productive bursts rather than traditional deadlines and structured schedules. Complex, interesting problems tend to pull me in, especially when I'm free to explore and create solutions without unnecessary oversight.
 
-### Closing
-
-As I navigate this period of growth and exploration, I remain open to new opportunities, collaborations, and learning experiences. Whether in the realm of technology, community service, or personal development, I am excited about what the future holds and am eager to contribute my skills and passion to meaningful projects.
-
-Thank you for visiting my little website. Feel free to reach out if you'd like to connect or explore potential collaborations.
-
-
-[farewell]: {{< ref "/posts/farewell-wasmer.md" >}}
