@@ -1,9 +1,7 @@
 ---
-title: "Reboot Friendly Projects"
+title: "Reboot Friendly Projects - Building Systems That Let You Disappear (and Come Back)"
 date: "2025-03-29T12:59:58+08:00"
 ---
-
-# Reboot-Friendly Projects: Building Systems That Let You Disappear (and Come Back)
 
 You get an idea. You get excited. You start building.
 
