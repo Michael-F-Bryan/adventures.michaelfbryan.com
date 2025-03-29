@@ -4,7 +4,6 @@ theme = "hugo-coder"
 languagecode = "en"
 defaultcontentlanguage = "en"
 
-paginate = 20
 canonifyurls = false
 googleAnalytics = "G-M80ZBKQHKV"
 enableGitInfo = true
@@ -72,3 +71,6 @@ url  = "/posts/"
 [[menu.main]]
 name = "About"
 url = "/about/"
+
+[pagination]
+pageSize = 20
