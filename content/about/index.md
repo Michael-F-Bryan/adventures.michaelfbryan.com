@@ -6,7 +6,7 @@ I'm Michael Bryan, a software engineer based in Perth, WA, with a passion for bu
 
 ## Professional Overview
 
-I'm currently a **Senior Software Engineer** at Multiversal Ventures, primarily focused on developing robust web crawlers for extracting US healthcare data.
+I'm currently a **Senior Software Engineer** at [Multiversal Ventures][mvv], primarily focused on developing robust web crawlers at scale and leveraging ML to extract information from US healthcare websites.
 
 I specialise in writing precise, maintainable code and consider myself an expert in Rust, with extensive experience in Go, TypeScript, React, and GraphQL. I'm particularly passionate about compilers, type-safe code, and designing parsers that gracefully handle errors.
 
@@ -57,3 +57,4 @@ Long-term, I aim to become the Chief Technical Officer of a startup focused on m
 
 I perform best in environments that respect autonomy, flexibility, and trust. I prefer working in intense, productive bursts rather than traditional deadlines and structured schedules. Complex, interesting problems tend to pull me in, especially when I'm free to explore and create solutions without unnecessary oversight.
 
+[mvv]: https://multiversal.ventures/
