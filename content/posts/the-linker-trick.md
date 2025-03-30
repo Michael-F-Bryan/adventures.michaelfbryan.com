@@ -1,6 +1,6 @@
 ---
 title: "Link Time Dependency Injection"
-publishDate: "2024-03-29T12:59:58+08:00"
+publishDate: "2025-03-30T12:59:58+08:00"
 tags:
 - Architecture
 - Tips & Tricks
