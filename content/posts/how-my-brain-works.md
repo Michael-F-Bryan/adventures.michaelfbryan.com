@@ -10,22 +10,24 @@ Ask anyone that knows me and they'll tell you I care about quality, precision, l
 
 This document outlines the core principles, rhythms, and operating conditions that allow me to do my best work. My goal isn’t special treatment — it’s alignment. When the way I work aligns with the way my brain functions, I produce better outcomes, experience less friction, and recover faster from inevitable periods of lower energy or clarity.
 
+Like everyone, I'm constantly growing and figuring out what I want to do. Don't think this is set in stone.
+
 ## 1. Autonomy Is Non-Negotiable
 
-The single most important condition for me to do effective, sustained work is autonomy. I recognize that some team workflows require structured collaboration, and I'm fully capable of adapting to those contexts. The key for me is clarity around expectations and the opportunity to bring my own structure to how I contribute. When I know the "why" and "what," I can more easily find a path to align with the "how"—even when the process isn't mine to design. When I’m trusted to solve a problem on my own terms, with clearly defined goals but flexible paths, I thrive. When I feel micromanaged, monitored, or pulled into rigid structures I didn’t design, I struggle to even begin.
+The single most important condition for me to do effective, sustained work is autonomy. I recognize that some team workflows require structured collaboration, and I'm fully capable of adapting to those contexts. The key for me is clarity around expectations and the opportunity to bring my own structure to how I contribute. When I know the "why" and "what", I can more easily find a path to align with the "how" - even when the process isn't mine to design. When I’m trusted to solve a problem on my own terms, with clearly defined goals but flexible paths, I thrive. When I feel micromanaged, monitored, or pulled into rigid structures I didn’t design, I struggle to even begin.
 
 What this looks like in practice:
 - Assign me a problem, not a method.
 - Let me shape the roadmap, architecture, and schedule where appropriate.
-- I will proactively check in, document, and align as needed—but the process works best when self-directed.
+- I will proactively check in, document, and align as needed — but the process works best when self-directed.
 
 This isn’t about avoiding collaboration—it’s about owning flow.
 
 ## 2. My Productivity Is Cyclical, Not Linear
 
-Some weeks I’m deep in the zone—designing systems, solving hard problems, shipping things that feel invisible but essential. Other weeks, my executive function is low, my cognitive energy is limited, and I need to slow down to stay functional.
+Some weeks I’m deep in the zone - designing systems, solving hard problems, shipping things that feel invisible but essential. Other weeks, my executive function is low, my cognitive energy is limited, and I need to slow down to stay functional.
 
-I work best in bursts. Long sprints of focused work followed by intentional decompression. This isn’t inconsistency—it’s sustainable pacing.
+I work best in bursts. Long sprints of focused work followed by intentional decompression. This isn’t inconsistency - it’s sustainable pacing.
 
 How I manage this:
 - I log work regularly, even if output is minimal.
@@ -59,7 +61,7 @@ The solution:
 - Avoid assigning me to tools or formats that are overly rigid or prescribed.
 - Trust that if I’m quiet, I’m still thinking — I just need to make it make sense to myself first. 
 
-## 5.Recovery Is Part of the Work
+## 5. Recovery Is Part of the Work
 
 I’ve stopped seeing rest as "time away from productivity". If I try to push through burnout, I not only become less effective — I also risk longer recovery and lower quality in everything I do.
 
