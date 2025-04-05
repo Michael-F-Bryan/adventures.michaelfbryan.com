@@ -1,0 +1,64 @@
+<!doctype html><html lang=en><head><title>Announcing Adventures in Motion Control · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="This is the first installation in my Adventures in Motion Control series.
+At $JOB we build industrial CNC machines, and while developing a simulator
+for our machines I noticed a distinct lack of online resources on how
+they work under the hood. Hopefully this series will address the situation.
+
+  The Goal
+  
+    
+    Link to heading
+  
+
+The goal for this series is to develop a simulator which will accurately reflect
+how an embedded motion controller is implemented internally."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="Announcing Adventures in Motion Control"><meta name=twitter:description content="This is the first installation in my Adventures in Motion Control series.
+At $JOB we build industrial CNC machines, and while developing a simulator for our machines I noticed a distinct lack of online resources on how they work under the hood. Hopefully this series will address the situation.
+The Goal Link to heading The goal for this series is to develop a simulator which will accurately reflect how an embedded motion controller is implemented internally."><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/announcing-adventures-in-motion-control/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="Announcing Adventures in Motion Control"><meta property="og:description" content="This is the first installation in my Adventures in Motion Control series.
+At $JOB we build industrial CNC machines, and while developing a simulator for our machines I noticed a distinct lack of online resources on how they work under the hood. Hopefully this series will address the situation.
+The Goal Link to heading The goal for this series is to develop a simulator which will accurately reflect how an embedded motion controller is implemented internally."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2019-09-01T16:27:15+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Adventures-in-Motion-Control"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/announcing-adventures-in-motion-control/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/announcing-adventures-in-motion-control/>Announcing Adventures in Motion Control</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2019-09-01T16:27:15+08:00>September 1, 2019
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+3-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/adventures-in-motion-control/>Adventures-in-Motion-Control</a></span></div></div></header><div class=post-content><p>This is the first installation in my <em>Adventures in Motion Control</em> series.</p><p>At <code>$JOB</code> we build industrial CNC machines, and while developing a simulator
+for our machines I noticed a distinct lack of online resources on how
+they work under the hood. Hopefully this series will address the situation.</p><h2 id=the-goal>The Goal
+<a class=heading-link href=#the-goal><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>The goal for this series is to develop a simulator which will accurately reflect
+how an embedded motion controller is implemented internally.</p><p>This motion controller will be designed to control a 3D printer, with the
+eventual idea being to compile everything to <em>WebAssembly</em> so the simulator will
+run in the browser and users can explore it using a basic web UI.</p><h2 id=identifying-requirements-and-subsystems>Identifying Requirements and Subsystems
+<a class=heading-link href=#identifying-requirements-and-subsystems><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>The first step in implementing any project is to specify exactly what you want
+it to do (and <em>not</em> do) and the constraints imposed by hardware.</p><p>This project will simulate a 3D printer. Most 3D printers have 3 orthogonal
+axes (hence the 3D bit) controlled using stepper motors. The printer will
+have a pre-defined &ldquo;working area&rdquo;, with <a href=https://en.wikipedia.org/wiki/Limit_switch class=external-link target=_blank rel=noopener>limit switches</a> at the
+ends of each axis to make sure we don&rsquo;t go past the end of travel.</p><p>The only way an outside user can interact with the printer will be via a
+<a href=https://en.wikipedia.org/wiki/RS-232 class=external-link target=_blank rel=noopener>RS-232 connection</a> (which we will model as a simple, bi-directional
+byte stream). RS-232, often referred to as <em>Serial</em>, provides no guarantees
+around framing (breaking bytes into individual &ldquo;messages&rdquo;), detecting
+corrupted data, or that the other end has actually received our message. This
+will all need to be accounted for.</p><p>The printer won&rsquo;t have any other physical inputs (e.g. push buttons or sensors)
+or outputs (e.g. an LCD display).</p><p>Jobs will be sent to the motion controller over the serial connection in the
+form of a <a href=https://en.wikipedia.org/wiki/Gcode class=external-link target=_blank rel=noopener>gcode</a> program.</p><p>The motion controller will need to expose some of its internal state to the
+user for diagnostic purposes.</p><p>Users should be able to inject &ldquo;errors&rdquo; to see how the simulator would react.</p><p>The motion controller should be able to execute pre-defined automation
+sequences. For example, bed levelling and axis calibration.</p><p>The motion controller will have a limited amount of non-volatile memory (e.g.
+<a href=https://en.wikipedia.org/wiki/Flash_memory class=external-link target=_blank rel=noopener>an on-board flash chip</a>) which can be used for caching jobs and
+settings.</p><p>The simulator <em>won&rsquo;t</em> need to support flashing new &ldquo;firmware&rdquo;. This means we
+won&rsquo;t need to worry about having a bootloader, or deal with all the complexity
+around rewriting firmware in-place and worry about <a href=https://en.wikipedia.org/wiki/Brick_%28electronics%29 class=external-link target=_blank rel=noopener>&ldquo;bricking&rdquo;</a> our
+simulator.</p><p>The motion controller won&rsquo;t have access to nice things like multi-threading and
+may only have access to a small amount of RAM (e.g. 192KB).</p><h2 id=the-next-step>The Next Step
+<a class=heading-link href=#the-next-step><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now we&rsquo;ve got a rough understanding of the project the next step is to start
+implementing it. The way I like to do things is by stubbing out just enough of
+the top-level architecture to get a <em>Hello World</em> working then dive into one
+area, preferably something fundamental so other systems can start making
+progress.</p><p>To see the code, check out the
+<a href=https://github.com/Michael-F-Bryan/adventures-in-motion-control class=external-link target=_blank rel=noopener>Michael-F-Bryan/adventures-in-motion-control</a> repository on GitHub.</p></div><footer></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>

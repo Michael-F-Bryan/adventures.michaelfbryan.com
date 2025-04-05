@@ -1,0 +1,963 @@
+<!doctype html><html lang=en><head><title>Creating a Robust, Reusable Link-Checker · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="With over 68,842 downloads, one of my most successful Rust projects is a
+nondescript little program called mdbook-linkcheck. This
+is a link-checker for mdbook, the tool powering a lot of
+documentation in the Rust community, including The Rust Programming
+Language and The Rustc Dev Book.
+As an example of what it looks like, I recently found a couple
+broken links in the documentation for Chalk. When the tool
+detects broken links in your markdown it&rsquo;ll emit error messages that point
+you at the place the link is defined and explain what the issue is."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="Creating a Robust, Reusable Link-Checker"><meta name=twitter:description content="With over 68,842 downloads, one of my most successful Rust projects is a nondescript little program called mdbook-linkcheck. This is a link-checker for mdbook, the tool powering a lot of documentation in the Rust community, including The Rust Programming Language and The Rustc Dev Book.
+As an example of what it looks like, I recently found a couple broken links in the documentation for Chalk. When the tool detects broken links in your markdown it’ll emit error messages that point you at the place the link is defined and explain what the issue is."><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/linkchecker/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="Creating a Robust, Reusable Link-Checker"><meta property="og:description" content="With over 68,842 downloads, one of my most successful Rust projects is a nondescript little program called mdbook-linkcheck. This is a link-checker for mdbook, the tool powering a lot of documentation in the Rust community, including The Rust Programming Language and The Rustc Dev Book.
+As an example of what it looks like, I recently found a couple broken links in the documentation for Chalk. When the tool detects broken links in your markdown it’ll emit error messages that point you at the place the link is defined and explain what the issue is."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2020-05-02T19:20:00+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Rust"><meta property="article:tag" content="I Made a Thing"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/linkchecker/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/linkchecker/>Creating a Robust, Reusable Link-Checker</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2020-05-02T19:20:00+08:00>May 2, 2020
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+26-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/rust/>Rust</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/i-made-a-thing/>I Made a Thing</a></span></div></div></header><div class=post-content><p>With over 68,842 downloads, one of my most successful Rust projects is a
+nondescript little program called <a href=https://github.com/Michael-F-Bryan/mdbook-linkcheck class=external-link target=_blank rel=noopener>mdbook-linkcheck</a>. This
+is a link-checker for <a href=https://github.com/rust-lang/mdBook class=external-link target=_blank rel=noopener>mdbook</a>, the tool powering a lot of
+documentation in the Rust community, including <a href=https://doc.rust-lang.org/book/ class=external-link target=_blank rel=noopener><em>The Rust Programming
+Language</em></a> and <a href=https://rustc-dev-guide.rust-lang.org/ class=external-link target=_blank rel=noopener><em>The Rustc Dev Book</em></a>.</p><p>As an example of what it looks like, I recently found <a href=https://github.com/rust-lang/chalk/pull/408/ class=external-link target=_blank rel=noopener>a couple</a>
+broken links in <a href=https://rust-lang.github.io/chalk/book/html/index.html class=external-link target=_blank rel=noopener>the documentation</a> for Chalk. When the tool
+detects broken links in your markdown it&rsquo;ll emit error messages that point
+you at the place the link is defined and explain what the issue is.</p><p><img src=chalk-broken-links.png alt="Broken Links in Chalk&rsquo;s Documentation"></p><p>This tool has been around for a while and works quite well, so when I was
+fixing a bug the other day I decided it&rsquo;s about time to extract the core logic
+into a standalone library that others can use.</p><div class="notices note"><p>The code written in this article is available <a href=https://github.com/Michael-F-Bryan/linkcheck class=external-link target=_blank rel=noopener>on GitHub</a> and published
+[on crates.io][crate]. Feel free to browse through and steal code or
+inspiration.</p><p>If you found this useful or spotted a bug, let me know on the blog&rsquo;s
+<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com class=external-link target=_blank rel=noopener>issue tracker</a>!</p></div><h2 id=what-belongs-in-a-library>What Belongs in a Library?
+<a class=heading-link href=#what-belongs-in-a-library><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>When you start building a library it&rsquo;s good to think about what problem the
+library is trying to solve. That way you know what features belong in the
+library and, more importantly, what doesn&rsquo;t.</p><p>The <a href=https://crates.io/crates/linkcheck class=external-link target=_blank rel=noopener><code>linkcheck</code></a> crate&rsquo;s primary objective is to find links in a
+document and check that they point to something valid. There seem to be two
+concepts here:</p><ul><li><code>Scanner</code> - some sort of function which can consume text and return a stream
+of links that are found.</li><li><code>Validator</code> - something which can take a batch of links and tell you whether
+they are valid or not</li></ul><div class="notices note"><p>For diagnostic purposes we&rsquo;ll also want to know <em>where</em> each link occurs in
+the source document. So instead of just being a <code>String</code>, a link will need to
+drag its <code>Span</code> along with it.</p><p>The <a href=https://crates.io/crates/codespan class=external-link target=_blank rel=noopener><code>codespan</code></a> crate contains a lot of powerful tools for
+managing source code and emitting diagnostics, so I imagine I&rsquo;ll be leaning
+on it quite a bit.</p></div><p>In the long run, it&rsquo;d be nice to include scanners for most popular formats,
+however to keep things manageable I&rsquo;m going to constrain this to plain text
+and markdown for now. I imagine HTML would also be a nice addition because
+it&rsquo;ll let people check their websites, but I&rsquo;ll leave that as an exercise for
+later.</p><p>As far as I can tell, there are only really two types of links,</p><ul><li><em>Local Files</em> - a link to another file on disk</li><li><em>Web Links</em> - a URL for some resource on the internet</li></ul><p>Validating web links should be rather easy, we can send a GET request to the
+appropriate website and our web client (probably <a href=https://crates.io/crates/reqwest class=external-link target=_blank rel=noopener><code>reqwest</code></a>) will let
+us know if we&rsquo;ve got a dead link or not.</p><h2 id=extracting-links-from-plain-text>Extracting Links from Plain Text
+<a class=heading-link href=#extracting-links-from-plain-text><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>I thought I&rsquo;d start with plain text because that&rsquo;s easiest. We want to create
+some sort of iterator which yields all the bits of text that resemble a URL.</p><p>Originally I thought it&rsquo;d just be a case of writing a regular expression and
+mapping the <a href=https://docs.rs/regex/1.3.7/regex/struct.Matches.html class=external-link target=_blank rel=noopener><code>Matches</code></a> iterator from the <a href=https://crates.io/crates/regex class=external-link target=_blank rel=noopener><code>regex</code></a>
+crate, but it turns out URLs aren&rsquo;t that easy to work with.</p><p>After searching google for about 10 minutes and scanning through dozens of
+StackOverflow questions I wasn&rsquo;t able to find an expression which would match
+<em>all</em> the types of URLs I expected while also avoiding punctuation like a
+trailing full stop or when a link is in parentheses, and detecting links
+don&rsquo;t have a scheme (e.g. <code>./README.md</code> instead of <code>file:///README.md</code>).</p><p>This reminds me of a popular quote&mldr;</p><blockquote><p>Some people, when confronted with a problem, think <em>&ldquo;I know, I&rsquo;ll use
+regular expressions.&rdquo;</em> Now they have two problems.</p><p><cite>Jamie Zawinski</cite></p></blockquote><p>Luckily for me, this problem has <a href=https://github.com/robinst/linkify class=external-link target=_blank rel=noopener>already been solved</a> and <a href=https://crates.io/crates/linkify class=external-link target=_blank rel=noopener>the
+<code>linkify</code> crate</a> is available on crates.io!</p><p>Looking through the source code, it seems like they&rsquo;ve written a lot of
+manual code to take into account how URLs may be embedded in bodies of text.
+This mainly consists of scanning for certain &ldquo;trigger characters&rdquo; (<code>:</code> for a
+URL, <code>@</code> for an email address) then backtracking to find the start of the
+item. There are also <a href=https://github.com/robinst/linkify/blob/a08b343bb524f267130d67ad3e1a752c34dd49ac/tests/url.rs class=external-link target=_blank rel=noopener>lots of tests</a> to make sure only the
+desired text is detected as a match.</p><p>The end result means the implementation of our <code>plaintext</code> scanner is almost
+trivial:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/scanners/plaintext.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> <span style=color:#66d9ef>crate</span>::codespan::Span;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> linkify::{LinkFinder, LinkKind};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>plaintext</span>(src: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>) -&gt; <span style=color:#a6e22e>impl</span> Iterator<span style=color:#f92672>&lt;</span>Item <span style=color:#f92672>=</span> (<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>str</span>, Span)<span style=color:#f92672>&gt;</span> <span style=color:#f92672>+</span> &#39;_ {
+</span></span><span style=display:flex><span>    LinkFinder::new()
+</span></span><span style=display:flex><span>        .kinds(<span style=color:#f92672>&amp;</span>[LinkKind::Url])
+</span></span><span style=display:flex><span>        .links(src)
+</span></span><span style=display:flex><span>        .map(<span style=color:#f92672>|</span>link<span style=color:#f92672>|</span> {
+</span></span><span style=display:flex><span>            (
+</span></span><span style=display:flex><span>                link.as_str(),
+</span></span><span style=display:flex><span>                Span::new(link.start() <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>u32</span>, link.end() <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>u32</span>),
+</span></span><span style=display:flex><span>            )
+</span></span><span style=display:flex><span>        })
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>I also threw in tests for a couple examples:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/scanners/plaintext.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[cfg(test)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>mod</span> tests {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>use</span> <span style=color:#66d9ef>super</span>::<span style=color:#f92672>*</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>detect_urls_in_some_text</span>() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> src <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;hello http://localhost/ world. this is file://some/text.&#34;</span>;
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> should_be <span style=color:#f92672>=</span> vec![
+</span></span><span style=display:flex><span>            (<span style=color:#e6db74>&#34;http://localhost/&#34;</span>, Span::new(<span style=color:#ae81ff>6</span>, <span style=color:#ae81ff>23</span>)),
+</span></span><span style=display:flex><span>            (<span style=color:#e6db74>&#34;file://some/text&#34;</span>, Span::new(<span style=color:#ae81ff>39</span>, <span style=color:#ae81ff>55</span>)),
+</span></span><span style=display:flex><span>        ];
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> got: Vec<span style=color:#f92672>&lt;</span>_<span style=color:#f92672>&gt;</span> <span style=color:#f92672>=</span> plaintext(src).collect();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        assert_eq!(got, should_be);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=extracting-links-from-markdown>Extracting Links from Markdown
+<a class=heading-link href=#extracting-links-from-markdown><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>For parsing markdown my go-to library is <a href=https://crates.io/crates/pulldown-cmark class=external-link target=_blank rel=noopener><code>pulldown-cmark</code></a>.
+This exposes an iterator-based API, yielding <code>Event</code>s like <em>&ldquo;start of
+paragraph tag&rdquo;</em>, <em>&ldquo;end of inline code&rdquo;</em>, <em>&ldquo;horizontal rule&rdquo;</em>, and so on.</p><p>This API is pretty low level and you&rsquo;ll need to do a lot of work yourself if
+you want to create some sort of semantic model (e.g. a DOM) of the document,
+but if you&rsquo;re just wanting to scan through a document and extract specific
+bits like we are, it&rsquo;s ideal.</p><p>The <code>pulldown-cmark</code> parser also provides an <a href=https://docs.rs/pulldown-cmark/0.7.0/pulldown_cmark/struct.OffsetIter.html class=external-link target=_blank rel=noopener>&ldquo;offset&rdquo;
+iterator</a> who&rsquo;s <code>Item</code> is a <code>(Event&lt;'a>, Range&lt;usize>)</code>. This should give us enough information to provide developers
+with useful diagnostics.</p><p>My initial <code>markdown</code> scanner looked something like this:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/scanners/markdown.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>markdown</span>(src: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>) -&gt; <span style=color:#a6e22e>impl</span> Iterator<span style=color:#f92672>&lt;</span>Item <span style=color:#f92672>=</span> (String, Span)<span style=color:#f92672>&gt;</span> <span style=color:#f92672>+</span> &#39;_ {
+</span></span><span style=display:flex><span>    Parser::new(src)
+</span></span><span style=display:flex><span>    .into_offset_iter()
+</span></span><span style=display:flex><span>    .filter_map(<span style=color:#f92672>|</span>(event, range)<span style=color:#f92672>|</span> <span style=color:#66d9ef>match</span> event {
+</span></span><span style=display:flex><span>        Event::Start(Tag::Link(_, dest, _))
+</span></span><span style=display:flex><span>        <span style=color:#f92672>|</span> Event::Start(Tag::Image(_, dest, _)) <span style=color:#f92672>=&gt;</span> Some((
+</span></span><span style=display:flex><span>            dest.to_string(),
+</span></span><span style=display:flex><span>            Span::new(range.start <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>u32</span>, range.end <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>u32</span>),
+</span></span><span style=display:flex><span>        )),
+</span></span><span style=display:flex><span>        _ <span style=color:#f92672>=&gt;</span> None,
+</span></span><span style=display:flex><span>    })
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The chain of iterator combinators and <code>match</code> statement make the code look
+complicated, the idea itself is quite simple&mldr; Filter out everything but the
+start of <code>Link</code> and <code>Image</code> tags, then transform them to a tuple containing
+the link itself and its location in the source text.</p><p>The <code>pulldown-cmark</code> parser also lets you provide a callback that can will be
+triggered whenever it encounters a footnote-style link (e.g. <code>[some text][link]</code>) with no corresponding link definition (e.g. <code>[link]: https://example.com</code>). This is normally meant as a mechanism for <em>fixing</em> the
+broken reference, but we can use it to emit diagnostics.</p><p>The updated scanner:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/scanners/markdown.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> <span style=color:#66d9ef>crate</span>::codespan::Span;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> pulldown_cmark::{Event, Options, Parser, Tag};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>markdown</span>(src: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>) -&gt; <span style=color:#a6e22e>impl</span> Iterator<span style=color:#f92672>&lt;</span>Item <span style=color:#f92672>=</span> (String, Span)<span style=color:#f92672>&gt;</span> <span style=color:#f92672>+</span> &#39;_ {
+</span></span><span style=display:flex><span>    markdown_with_broken_link_callback(src, <span style=color:#f92672>&amp;|</span>_, _<span style=color:#f92672>|</span> None)
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>markdown_with_broken_link_callback</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, F<span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>    src: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;a</span> <span style=color:#66d9ef>str</span>,
+</span></span><span style=display:flex><span>    on_broken_link: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;a</span> <span style=color:#a6e22e>F</span>,
+</span></span><span style=display:flex><span>) -&gt; <span style=color:#a6e22e>impl</span> Iterator<span style=color:#f92672>&lt;</span>Item <span style=color:#f92672>=</span> (String, Span)<span style=color:#f92672>&gt;</span> <span style=color:#f92672>+</span> <span style=color:#a6e22e>&#39;a</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    F: Fn(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>str</span>, <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>str</span>) -&gt; Option<span style=color:#f92672>&lt;</span>(String, String)<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    Parser::new_with_broken_link_callback(
+</span></span><span style=display:flex><span>        src,
+</span></span><span style=display:flex><span>        Options::<span style=color:#66d9ef>ENABLE_FOOTNOTES</span>,
+</span></span><span style=display:flex><span>        Some(on_broken_link),
+</span></span><span style=display:flex><span>    )
+</span></span><span style=display:flex><span>    .into_offset_iter()
+</span></span><span style=display:flex><span>    .filter_map(<span style=color:#f92672>|</span>(event, range)<span style=color:#f92672>|</span> <span style=color:#66d9ef>match</span> event {
+</span></span><span style=display:flex><span>        Event::Start(Tag::Link(_, dest, _))
+</span></span><span style=display:flex><span>        <span style=color:#f92672>|</span> Event::Start(Tag::Image(_, dest, _)) <span style=color:#f92672>=&gt;</span> Some((
+</span></span><span style=display:flex><span>            dest.to_string(),
+</span></span><span style=display:flex><span>            Span::new(range.start <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>u32</span>, range.end <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>u32</span>),
+</span></span><span style=display:flex><span>        )),
+</span></span><span style=display:flex><span>        _ <span style=color:#f92672>=&gt;</span> None,
+</span></span><span style=display:flex><span>    })
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices info"><p>Unfortunately, the <code>on_broken_link</code> callback doesn&rsquo;t provide span information
+so that&rsquo;ll make it a bit tricky to provide useful error messages.</p><p>I had to deal with this in <code>mdbook-linkcheck</code> as well and ended up using <a href=https://github.com/Michael-F-Bryan/mdbook-linkcheck/blob/d39af0a48ce8b83db1e54f723d994258689f825a/src/validate.rs#L317-L332 class=external-link target=_blank rel=noopener>a
+hacky workaround</a> consisting of a call to
+<code>src.index_of(broken_reference)</code> and hoping for the best.</p><p>Hopefully <a href=https://github.com/raphlinus/pulldown-cmark/issues/165 class=external-link target=_blank rel=noopener>raphlinus/pulldown-cmark#165</a> will be solved some
+time soon and they&rsquo;ll change the signature to something more useful, because
+it&rsquo;s kinda clunky at the moment. I&rsquo;ve seen at least <a href=https://github.com/rust-lang/rustc-dev-guide/issues/478 class=external-link target=_blank rel=noopener>one case</a>
+where these sorts of broken links occur in real world documents, so it&rsquo;d be
+nice to have a solid solution.</p></div><p>By now you&rsquo;ve probably identified a pattern with implementing scanners.</p><p>Basically,</p><ol><li>Find a crate that already exists</li><li>let them do the hard work of parsing your document</li><li>do a bit of post-processing to extract just the bits we care about</li></ol><h2 id=validating-links-to-local-files>Validating Links to Local Files
+<a class=heading-link href=#validating-links-to-local-files><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>The main reason we want to check links to other local files is for
+documentation tools like <a href=https://github.com/rust-lang/mdBook class=external-link target=_blank rel=noopener><code>mdbook</code></a>. This is where several markdown
+files exist in a directory tree, and they will be compiled to HTML that
+maintains the same tree structure.</p><h3 id=constraints>Constraints
+<a class=heading-link href=#constraints><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>It&rsquo;s important to re-state this mdbook-specific aspect because it adds a couple
+interesting constraints to the problem&mldr;</p><ol><li>You can write a link to a directory (e.g. <code>/foo/</code>) and the browser will
+fall back to a default path (e.g. <code>/foo/index.html</code>)</li><li>There is the concept of a &ldquo;root directory&rdquo; which the document will be served
+from, and any absolute links (i.e. a link starting with a <code>/</code>) should be
+relative to this directory</li><li>We want to control whether links can go outside the root directory (e.g.
+<code>../../../../etc/passwd</code>) for security reasons and because these sorts of
+links make assumptions about the environment which may not always be true
+(e.g. the relative location of two repositories on disk)</li></ol><p>These constraints are encapsulated in our <code>Options</code> type:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/filesystem.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::{ffi::OsString, path::PathBuf};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Options</span> {
+</span></span><span style=display:flex><span>    root_directory: Option<span style=color:#f92672>&lt;</span>PathBuf<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    default_file: <span style=color:#a6e22e>OsString</span>,
+</span></span><span style=display:flex><span>    links_may_traverse_the_root_directory: <span style=color:#66d9ef>bool</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Options {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>DEFAULT_FILE</span>: <span style=color:#66d9ef>&amp;</span>&#39;static <span style=color:#66d9ef>str</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;index.html&#34;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new</span>() -&gt; <span style=color:#a6e22e>Self</span> {
+</span></span><span style=display:flex><span>        Options {
+</span></span><span style=display:flex><span>            root_directory: None,
+</span></span><span style=display:flex><span>            default_file: <span style=color:#a6e22e>OsString</span>::from(Options::<span style=color:#66d9ef>DEFAULT_FILE</span>),
+</span></span><span style=display:flex><span>            links_may_traverse_the_root_directory: <span style=color:#a6e22e>false</span>,
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>(The type also has several getters and setters, but they are largely irrelevant
+for our purposes)</p><p>The first big operation that we can do with <code>Options</code> is to &ldquo;join&rdquo; a directory
+and a link. This reduces to a <code>current_dir.join(second)</code> in the simplest case,
+but we need to do some fancy logic when the link is absolute.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/filesystem.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Options {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>join</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span>self,
+</span></span><span style=display:flex><span>        current_dir: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Path</span>,
+</span></span><span style=display:flex><span>        second: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Path</span>,
+</span></span><span style=display:flex><span>    ) -&gt; Result<span style=color:#f92672>&lt;</span>PathBuf, Reason<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> second.is_absolute() {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// if the path is absolute (i.e. has a leading slash) then it&#39;s
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#75715e>// meant to be relative to the root directory, not the current one
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#66d9ef>match</span> self.root_directory() {
+</span></span><span style=display:flex><span>                Some(root) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> buffer <span style=color:#f92672>=</span> root.to_path_buf();
+</span></span><span style=display:flex><span>                    <span style=color:#75715e>// append everything except the root element
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                    buffer.extend(second.iter().skip(<span style=color:#ae81ff>1</span>));
+</span></span><span style=display:flex><span>                    Ok(buffer)
+</span></span><span style=display:flex><span>                },
+</span></span><span style=display:flex><span>                <span style=color:#75715e>// You really shouldn&#39;t provide links to absolute files on your
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                <span style=color:#75715e>// system (e.g. &#34;/home/michael/Documents/whatever&#34; or
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                <span style=color:#75715e>// &#34;/etc/passwd&#34;).
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                <span style=color:#75715e>//
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                <span style=color:#75715e>// For one, it&#39;s extremely brittle and will probably only work
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                <span style=color:#75715e>// on that computer, but more importantly it&#39;s also a vector
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                <span style=color:#75715e>// for directory traversal attacks.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                <span style=color:#75715e>//
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                <span style=color:#75715e>// Feel free to send a PR if you believe otherwise.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                None <span style=color:#f92672>=&gt;</span> Err(Reason::TraversesParentDirectories),
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        } <span style=color:#66d9ef>else</span> {
+</span></span><span style=display:flex><span>            Ok(current_dir.join(second))
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The next big operation is path canonicalisation. This is where we convert the
+joined path to its canonical form, resolving symbolic links and <code>..</code>s
+appropriately. As a side-effect of canonicalisation, the OS will also return a
+<code>FileNotFound</code> error if the item doesn&rsquo;t exist.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/filesystem.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Options {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>canonicalize</span>(<span style=color:#f92672>&amp;</span>self, path: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Path</span>) -&gt; Result<span style=color:#f92672>&lt;</span>PathBuf, Reason<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> canonical <span style=color:#f92672>=</span> path.canonicalize()<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> canonical.is_dir() {
+</span></span><span style=display:flex><span>            canonical.push(<span style=color:#f92672>&amp;</span>self.default_file);
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// we need to canonicalize again because the default file may be a
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#75715e>// symlink, or not exist at all
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            canonical <span style=color:#f92672>=</span> canonical.canonicalize()<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        Ok(canonical)
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We also need to do a quick sanity check to make sure links don&rsquo;t escape the
+&ldquo;root&rdquo; directory unless explicitly allowed.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/filesystem.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Options {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>sanity_check</span>(<span style=color:#f92672>&amp;</span>self, path: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Path</span>) -&gt; Result<span style=color:#f92672>&lt;</span>(), Reason<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> Some(root) <span style=color:#f92672>=</span> self.root_directory() {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>if</span> <span style=color:#f92672>!</span>(self.links_may_traverse_the_root_directory <span style=color:#f92672>||</span> path.starts_with(root))
+</span></span><span style=display:flex><span>            {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>return</span> Err(Reason::TraversesParentDirectories);
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        Ok(())
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h3 id=resolving-file-system-links>Resolving File System Links
+<a class=heading-link href=#resolving-file-system-links><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>Now we&rsquo;ve encoded our constraints in the <code>Options</code> type, we can wrap all this
+code up into a single function. This function will take a &ldquo;link&rdquo; and tries to
+figure out which file is being linked to.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/filesystem.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>resolve_link</span>(
+</span></span><span style=display:flex><span>    current_directory: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Path</span>,
+</span></span><span style=display:flex><span>    link: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Path</span>,
+</span></span><span style=display:flex><span>    options: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Options</span>,
+</span></span><span style=display:flex><span>) -&gt; Result<span style=color:#f92672>&lt;</span>PathBuf, Reason<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> joined <span style=color:#f92672>=</span> options.join(current_directory, link)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> canonical <span style=color:#f92672>=</span> options.canonicalize(<span style=color:#f92672>&amp;</span>joined)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>    options.sanity_check(<span style=color:#f92672>&amp;</span>canonical)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// Note: canonicalizing also made sure the file exists
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    Ok(canonical)
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>As a side note, we use the <a href=https://crates.io/crates/thiserror class=external-link target=_blank rel=noopener><code>thiserror</code></a> crate to simplify the
+boilerplate around defining the reason that validation may fail, <code>Reason</code>. Our
+<code>Reason</code> type is just an enum of the different reasons that validation may fail.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Possible reasons for a bad link.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug, thiserror::Error)]</span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[non_exhaustive]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>Reason</span> {
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[error(</span><span style=color:#e6db74>&#34;Linking outside of the book directory is forbidden&#34;</span><span style=color:#75715e>)]</span>
+</span></span><span style=display:flex><span>    TraversesParentDirectories,
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[error(</span><span style=color:#e6db74>&#34;An OS-level error occurred&#34;</span><span style=color:#75715e>)]</span>
+</span></span><span style=display:flex><span>    Io(<span style=color:#75715e>#[from]</span> std::io::Error),
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[error(</span><span style=color:#e6db74>&#34;The web client encountered an error&#34;</span><span style=color:#75715e>)]</span>
+</span></span><span style=display:flex><span>    Web(<span style=color:#75715e>#[from]</span> reqwest::Error),
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Reason {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>file_not_found</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>bool</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> self {
+</span></span><span style=display:flex><span>            Reason::Io(e) <span style=color:#f92672>=&gt;</span> e.kind() <span style=color:#f92672>==</span> std::io::ErrorKind::NotFound,
+</span></span><span style=display:flex><span>            _ <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>false</span>,
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>timed_out</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>bool</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> self {
+</span></span><span style=display:flex><span>            Reason::Web(e) <span style=color:#f92672>=&gt;</span> e.is_timeout(),
+</span></span><span style=display:flex><span>            _ <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>false</span>,
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h3 id=wrapping-it-up-in-a-check>Wrapping It Up in a Check
+<a class=heading-link href=#wrapping-it-up-in-a-check><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>The whole point of this endeavour is to have some sort of validation function
+which takes a link to a local file and makes sure it&rsquo;s valid.</p><p>For this, I&rsquo;m going to introduce the idea of a validator context. This is a
+collections of useful properties and callbacks to help guide the validation
+process.</p><p>At the moment we only need access to the file system validator&rsquo;s <code>Options</code>, so
+the <code>Context</code> trait looks a little bare.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> Context {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Options to use when checking a link on the filesystem.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>filesystem_options</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Options</span>;
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Now we need to wrap our <code>resolve_link()</code> in a <code>check_filesystem()</code> function
+which uses the <code>Context</code></p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/filesystem.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> <span style=color:#66d9ef>crate</span>::validation::Context;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Check whether a [`Path`] points to a valid file on disk.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// If a fragment specifier is provided, this function will scan through the
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// linked document and check that the file contains the corresponding anchor
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// (e.g. markdown heading or HTML `id`).
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>check_filesystem</span><span style=color:#f92672>&lt;</span>C<span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>    current_directory: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Path</span>,
+</span></span><span style=display:flex><span>    path: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Path</span>,
+</span></span><span style=display:flex><span>    fragment: Option<span style=color:#f92672>&lt;&amp;</span><span style=color:#66d9ef>str</span><span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    ctx: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>C</span>,
+</span></span><span style=display:flex><span>) -&gt; Result<span style=color:#f92672>&lt;</span>(), Reason<span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    C: <span style=color:#a6e22e>Context</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    log::debug!(
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>&#34;Checking </span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>{}</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74> in the context of </span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>{}</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>&#34;</span>,
+</span></span><span style=display:flex><span>        path.display(),
+</span></span><span style=display:flex><span>        current_directory.display()
+</span></span><span style=display:flex><span>    );
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> resolved_location <span style=color:#f92672>=</span> resolve_link(
+</span></span><span style=display:flex><span>        current_directory,
+</span></span><span style=display:flex><span>        path,
+</span></span><span style=display:flex><span>        ctx.filesystem_options(),
+</span></span><span style=display:flex><span>    )<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    log::debug!(
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>{}</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74> resolved to </span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>{}</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>&#34;</span>,
+</span></span><span style=display:flex><span>        path.display(),
+</span></span><span style=display:flex><span>        resolved_location.display()
+</span></span><span style=display:flex><span>    );
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> Some(fragment) <span style=color:#f92672>=</span> fragment {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// TODO: detect the file type and check the fragment exists
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        log::warn!(
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;Not checking that the </span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>{}</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74> section exists in </span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>{}</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74> because fragment resolution isn&#39;t implemented&#34;</span>,
+</span></span><span style=display:flex><span>            fragment,
+</span></span><span style=display:flex><span>            resolved_location.display(),
+</span></span><span style=display:flex><span>        );
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    Ok(())
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The code isn&rsquo;t overly exciting, it boils down to a bunch of log statements and
+returns a <code>()</code> instead of <code>PathBuf</code> to indicate we don&rsquo;t care about the result
+of a successful check.</p><div class="notices note"><p>You may have noticed there&rsquo;s this new <code>fragment</code> parameter and a big <code>TODO</code>
+comment when one is provided.</p><p>The idea is that sometimes we won&rsquo;t <em>just</em> have a link to some document (e.g.
+<code>../index.md</code>) and will want to link to a particular part of the document. In
+HTML this is often done using a <a href=https://en.wikipedia.org/wiki/Fragment_identifier class=external-link target=_blank rel=noopener>fragment identifier</a>, the <code>some-heading</code>
+part in <code>../index.md#some-heading</code>.</p><p>I&rsquo;m not really sure how I&rsquo;ll implement this one. Different document types
+will implement <em>fragment identifiers</em> in different ways, so I&rsquo;d probably need
+to check the linked file&rsquo;s mime-type and search for an element with a
+<code>id="some-heading"</code> attribute in HTML, or a markdown heading who&rsquo;s
+<a href=https://en.wikipedia.org/wiki/Clean_URL#Slug class=external-link target=_blank rel=noopener>slug</a> looks something like <code>some-heading</code>&mldr; That sounds a bit fiddly,
+so I&rsquo;m going to skip it for now.</p></div><h2 id=validating-links-on-the-web>Validating Links on the Web
+<a class=heading-link href=#validating-links-on-the-web><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now we&rsquo;ve reached the core part of our link checker, checking if a URL points
+to a valid resource on the internet.</p><p>The good news is that actually checking that a URL is valid is almost trivial.
+The <a href=https://crates.io/crates/reqwest class=external-link target=_blank rel=noopener><code>reqwest</code></a> crate provides an asynchronous HTTP client with a nice
+API, so checking the URL is as simple as sending a GET request.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/web.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> http::HeaderMap;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> reqwest::{Client, Url};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Send a GET request to a particular endpoint.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>async</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get</span>(
+</span></span><span style=display:flex><span>    client: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Client</span>,
+</span></span><span style=display:flex><span>    url: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Url</span>,
+</span></span><span style=display:flex><span>    extra_headers: <span style=color:#a6e22e>HeaderMap</span>,
+</span></span><span style=display:flex><span>) -&gt; Result<span style=color:#f92672>&lt;</span>(), reqwest::Error<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    client
+</span></span><span style=display:flex><span>        .get(url.clone())
+</span></span><span style=display:flex><span>        .headers(extra_headers)
+</span></span><span style=display:flex><span>        .send()
+</span></span><span style=display:flex><span>        .<span style=color:#66d9ef>await</span><span style=color:#f92672>?</span>
+</span></span><span style=display:flex><span>        .error_for_status()<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    Ok(())
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Something to note is that we accept this <code>extra_headers</code> parameter. Sometimes
+you&rsquo;ll need to send extra headers to particular endpoints (imagine needing to
+send <code>Authorization: bearer some-token</code> to access a page that requires
+logging in), so we&rsquo;ll give the caller a way to do that.</p><div class="notices note"><p>From a performance standpoint it&rsquo;s also nice to know creating an empty
+<code>HeaderMap</code> <a href=https://docs.rs/http/0.2.1/http/header/struct.HeaderMap.html#method.new class=external-link target=_blank rel=noopener>won&rsquo;t make any allocations</a>. I doubt we&rsquo;d even notice/care
+if it did, but it&rsquo;s still nice to know.</p></div><h3 id=caching>Caching
+<a class=heading-link href=#caching><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>While sending a GET request to a particular URL is easy to do, going with
+just the naive version (<code>for link in links { check(link) }</code>) will make the
+link checking process incredibly slow.</p><p>What we want to do is avoid unnecessary trips over the network by reusing
+previous results, both from within the same run (e.g. a file links to the
+same URL twice) or from multiple runs (e.g. the last time link checking was
+done in CI).</p><p>We&rsquo;ll need some sort of caching layer.</p><div class="notices info"><p>To see why this is important, let&rsquo;s have a look at how many web links there are
+in some of the books on my computer.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span># The Rust Programming Language <span style=color:#f92672>(</span>aka <span style=color:#e6db74>&#34;The Book&#34;</span><span style=color:#f92672>)</span>
+</span></span><span style=display:flex><span>$ cd ~/Documents/forks/book
+</span></span><span style=display:flex><span>$ rg <span style=color:#e6db74>&#39;http(s?)://&#39;</span> --stats --glob <span style=color:#e6db74>&#39;*.md&#39;</span> --quiet
+</span></span><span style=display:flex><span>421 matches
+</span></span><span style=display:flex><span>415 matched lines
+</span></span><span style=display:flex><span>330 files contained matches
+</span></span><span style=display:flex><span>430 files searched
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span># The Rust developers guide
+</span></span><span style=display:flex><span>$ cd ~/Documents/forks/rustc-guide
+</span></span><span style=display:flex><span>$ rg <span style=color:#e6db74>&#39;http(s?)://&#39;</span> --stats --glob <span style=color:#e6db74>&#39;*.md&#39;</span> --quiet
+</span></span><span style=display:flex><span>566 matches
+</span></span><span style=display:flex><span>558 matched lines
+</span></span><span style=display:flex><span>79 files contained matches
+</span></span><span style=display:flex><span>102 files searched
+</span></span></code></pre></div><p>The <code>mdbook-linkcheck</code> plugin is executed whenever a <code>mdbook</code> book is built
+and I know Rust is fast, but the network is slow and making 400-500 web
+requests every time you make a change is quickly going to make the link
+checker unusable.</p></div><p>To mix things up a little I&rsquo;m going to show you the final <code>check_web()</code>
+function and we can step through it bit by bit.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/web.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Check whether a [`Url`] points to a valid resource on the internet.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>async</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>check_web</span><span style=color:#f92672>&lt;</span>C<span style=color:#f92672>&gt;</span>(url: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Url</span>, ctx: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>C</span>) -&gt; Result<span style=color:#f92672>&lt;</span>(), Reason<span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    C: <span style=color:#a6e22e>Context</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    log::debug!(<span style=color:#e6db74>&#34;Checking </span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>{}</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74> on the web&#34;</span>, url);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> already_valid(<span style=color:#f92672>&amp;</span>url, ctx) {
+</span></span><span style=display:flex><span>        log::debug!(<span style=color:#e6db74>&#34;The cache says </span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>{}</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74> is still valid&#34;</span>, url);
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>return</span> Ok(());
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> result <span style=color:#f92672>=</span> get(ctx.client(), <span style=color:#f92672>&amp;</span>url, ctx.url_specific_headers(<span style=color:#f92672>&amp;</span>url)).<span style=color:#66d9ef>await</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> Some(fragment) <span style=color:#f92672>=</span> url.fragment() {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// TODO: check the fragment
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        log::warn!(<span style=color:#e6db74>&#34;Fragment checking isn&#39;t implemented, not checking if there is a </span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>{}</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74> header in </span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>{}</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>&#34;</span>, fragment, url);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> entry <span style=color:#f92672>=</span> CacheEntry::new(SystemTime::now(), result.is_ok());
+</span></span><span style=display:flex><span>    update_cache(url, ctx, entry);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    result.map_err(Reason::from)
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The first interesting bit is the <code>already_valid()</code> check. This runs beforehand
+and lets us skip any further work if our cache says the link is already valid.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/web.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>already_valid</span><span style=color:#f92672>&lt;</span>C<span style=color:#f92672>&gt;</span>(url: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Url</span>, ctx: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>C</span>) -&gt; <span style=color:#66d9ef>bool</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>where</span>
+</span></span><span style=display:flex><span>    C: <span style=color:#a6e22e>Context</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> Some(cache) <span style=color:#f92672>=</span> ctx.cache() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>return</span> cache.url_is_still_valid(url, ctx.cache_timeout());
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>false</span>
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>What we do is check if the <code>Context</code> has a cache (for simplicity, some users
+may not care about caching) and then ask the cache to do a lookup, specifying
+how long a cache entry can be considered valid for.</p><p>The <code>Cache</code> itself isn&rsquo;t anything special. It&rsquo;s just a wrapper around a
+<code>HashMap</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> reqwest::Url;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::{collections::HashMap, time::SystemTime};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Cache</span> {
+</span></span><span style=display:flex><span>    entries: <span style=color:#a6e22e>HashMap</span><span style=color:#f92672>&lt;</span>Url, CacheEntry<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>CacheEntry</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> timestamp: <span style=color:#a6e22e>SystemTime</span>,
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> valid: <span style=color:#66d9ef>bool</span>,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The <code>Cache::url_is_still_valid()</code> method is a bit more complex because we
+need to deal with the fact that you can sometimes time travel when using
+<code>SystemTime</code> (e.g. because your computer&rsquo;s clock changed between now and
+whenever the <code>CacheEntry</code> was added).</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Cache {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>url_is_still_valid</span>(<span style=color:#f92672>&amp;</span>self, url: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Url</span>, timeout: <span style=color:#a6e22e>Duration</span>) -&gt; <span style=color:#66d9ef>bool</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> Some(entry) <span style=color:#f92672>=</span> self.lookup(url) {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>if</span> entry.valid {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> Ok(time_since_check_was_done) <span style=color:#f92672>=</span> entry.timestamp.elapsed()
+</span></span><span style=display:flex><span>                {
+</span></span><span style=display:flex><span>                    <span style=color:#66d9ef>return</span> time_since_check_was_done <span style=color:#f92672>&lt;</span> timeout;
+</span></span><span style=display:flex><span>                }
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>false</span>
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>lookup</span>(<span style=color:#f92672>&amp;</span>self, url: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Url</span>) -&gt; Option<span style=color:#f92672>&lt;&amp;</span>CacheEntry<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        self.entries.get(url)
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Something to note is that this cache is deliberately conservative. It&rsquo;ll only
+consider an entry to <em>&ldquo;still be valid&rdquo;</em> if it was previously valid and there
+have been no time-travelling shenanigans. We also need a <code>timeout</code> parameter
+to allow for cache invalidation.</p><p>To facilitate caching, the <code>Context</code> trait will need a couple more methods:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> Context {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// An optional cache that can be used to avoid unnecessary network
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// requests.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// We need to use internal mutability here because validation is done
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// concurrently. This [`MutexGuard`] is guaranteed to be short lived (just
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// the duration of a [`Cache::insert()`] or [`Cache::lookup()`]), so it&#39;s
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// okay to use a [`std::sync::Mutex`] instead of [`futures::lock::Mutex`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>cache</span>(<span style=color:#f92672>&amp;</span>self) -&gt; Option<span style=color:#f92672>&lt;</span>MutexGuard<span style=color:#f92672>&lt;</span>Cache<span style=color:#f92672>&gt;&gt;</span> { None }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// How long should a cached item be considered valid for before we need to
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// check again?
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>cache_timeout</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#a6e22e>Duration</span> {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// 24 hours should be a good default
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        Duration::from_secs(<span style=color:#ae81ff>24</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>60</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>60</span>)
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Next up is a call to the <code>get()</code> function we wrote earlier.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/web.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>async</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>check_web</span><span style=color:#f92672>&lt;</span>C<span style=color:#f92672>&gt;</span>(url: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Url</span>, ctx: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>C</span>) -&gt; Result<span style=color:#f92672>&lt;</span>(), Reason<span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    C: <span style=color:#a6e22e>Context</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> result <span style=color:#f92672>=</span> get(ctx.client(), <span style=color:#f92672>&amp;</span>url, ctx.url_specific_headers(<span style=color:#f92672>&amp;</span>url)).<span style=color:#66d9ef>await</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We want to reuse the same HTTP client if possible because we get nice things
+like connection pooling and the ability to set headers that&rsquo;ll be sent with
+every request (e.g. <code>User-Agent</code>). We also need to ask the <code>Context</code> if there
+are any headers that need to be sent when checking <em>this</em> specific URL.</p><p><em>*sigh*</em>&mldr; Okay, let&rsquo;s add some more methods to the <code>Context</code> trait.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> Context {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The HTTP client to use.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>client</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Client</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Get any extra headers that should be sent when checking this [`Url`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>url_specific_headers</span>(<span style=color:#f92672>&amp;</span>self, _url: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Url</span>) -&gt; <span style=color:#a6e22e>HeaderMap</span> { HeaderMap::new() }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>You&rsquo;ll also notice that we store the return value from <code>get()</code> in a <code>result</code>
+variable instead of using <code>?</code> to bail if an error occurs. That&rsquo;s necessary for
+the next bit&mldr; updating the cache.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/web.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>async</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>check_web</span><span style=color:#f92672>&lt;</span>C<span style=color:#f92672>&gt;</span>(url: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Url</span>, ctx: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>C</span>) -&gt; Result<span style=color:#f92672>&lt;</span>(), Reason<span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    C: <span style=color:#a6e22e>Context</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> entry <span style=color:#f92672>=</span> CacheEntry::new(SystemTime::now(), result.is_ok());
+</span></span><span style=display:flex><span>    update_cache(url, ctx, entry);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>update_cache</span><span style=color:#f92672>&lt;</span>C<span style=color:#f92672>&gt;</span>(url: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Url</span>, ctx: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>C</span>, entry: <span style=color:#a6e22e>CacheEntry</span>)
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    C: <span style=color:#a6e22e>Context</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> Some(<span style=color:#66d9ef>mut</span> cache) <span style=color:#f92672>=</span> ctx.cache() {
+</span></span><span style=display:flex><span>        cache.insert(url.clone(), entry);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Updating the cache isn&rsquo;t overly interesting, we just create a new <code>CacheEntry</code>
+and add it to the <code>cache</code> if the <code>Context</code> has one.</p><p>And finally we can return the result, converting the <code>reqwest::Error</code> from
+<code>get()</code> into a <code>Reason</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/web.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>async</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>check_web</span><span style=color:#f92672>&lt;</span>C<span style=color:#f92672>&gt;</span>(url: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Url</span>, ctx: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>C</span>) -&gt; Result<span style=color:#f92672>&lt;</span>(), Reason<span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    C: <span style=color:#a6e22e>Context</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    result.map_err(Reason::from)
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=tying-it-all-together>Tying it All Together
+<a class=heading-link href=#tying-it-all-together><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now we&rsquo;ve implemented a couple validators it&rsquo;s time to give users a more
+convenient interface. Ideally, I&rsquo;d like to provide a single asynchronous
+<code>validate()</code> function that accepts a list of links and a <code>Context</code>, and returns
+a summary of all the checks.</p><p>This turned out to be kinda annoying because one of our validators is
+asynchronous and the other isn&rsquo;t. It&rsquo;s not made easier by needing to deal
+with all the different possible outcomes of link checking, including&mldr;</p><ul><li><em>valid</em> - the check passed successfully</li><li><em>invalid</em> - the check failed for some <code>Reason</code></li><li><em>unknown link type</em> - we can&rsquo;t figure out which validator to use, and</li><li><em>ignored</em> - sometimes users will want to skip certain links (e.g. to skip
+false positives, or because the server on the other end is funny)</li></ul><p>For reference, a <code>Link</code> is just a string containing the link itself, plus
+some information we can use to figure out which text it came from (e.g. to
+provide pretty error messages).</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// A link to some other resource.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Link</span> {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The link itself.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> href: String,
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Where the [`Link`] lies in its source text.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> span: <span style=color:#a6e22e>Span</span>,
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Which document does this [`Link`] belong to?
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> file: <span style=color:#a6e22e>FileId</span>,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h3 id=categorising-links>Categorising Links
+<a class=heading-link href=#categorising-links><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>To figure out which validator to use, we&rsquo;ll need to sort links into categories.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::path::PathBuf;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> reqwest::Url;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>Category</span> {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// A local file.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    FileSystem {
+</span></span><span style=display:flex><span>        path: <span style=color:#a6e22e>PathBuf</span>,
+</span></span><span style=display:flex><span>        fragment: Option<span style=color:#f92672>&lt;</span>String<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    },
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// A URL for something on the web.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    Url(Url),
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>From my work with <code>mdbook-linkcheck</code> I know categorising can be kinda annoying,
+so let&rsquo;s create a couple tests.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>parse_into_categories</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> inputs <span style=color:#f92672>=</span> vec![
+</span></span><span style=display:flex><span>        (
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;https://example.com/&#34;</span>,
+</span></span><span style=display:flex><span>            Some(Category::Url(
+</span></span><span style=display:flex><span>                Url::parse(<span style=color:#e6db74>&#34;https://example.com/&#34;</span>).unwrap(),
+</span></span><span style=display:flex><span>            )),
+</span></span><span style=display:flex><span>        ),
+</span></span><span style=display:flex><span>        (
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;README.md&#34;</span>,
+</span></span><span style=display:flex><span>            Some(Category::FileSystem {
+</span></span><span style=display:flex><span>                path: <span style=color:#a6e22e>PathBuf</span>::from(<span style=color:#e6db74>&#34;README.md&#34;</span>),
+</span></span><span style=display:flex><span>                fragment: None,
+</span></span><span style=display:flex><span>            }),
+</span></span><span style=display:flex><span>        ),
+</span></span><span style=display:flex><span>        (
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;./README.md&#34;</span>,
+</span></span><span style=display:flex><span>            Some(Category::FileSystem {
+</span></span><span style=display:flex><span>                path: <span style=color:#a6e22e>PathBuf</span>::from(<span style=color:#e6db74>&#34;./README.md&#34;</span>),
+</span></span><span style=display:flex><span>                fragment: None,
+</span></span><span style=display:flex><span>            }),
+</span></span><span style=display:flex><span>        ),
+</span></span><span style=display:flex><span>        (
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;./README.md#license&#34;</span>,
+</span></span><span style=display:flex><span>            Some(Category::FileSystem {
+</span></span><span style=display:flex><span>                path: <span style=color:#a6e22e>PathBuf</span>::from(<span style=color:#e6db74>&#34;./README.md&#34;</span>),
+</span></span><span style=display:flex><span>                fragment: Some(String::from(<span style=color:#e6db74>&#34;license&#34;</span>)),
+</span></span><span style=display:flex><span>            }),
+</span></span><span style=display:flex><span>        ),
+</span></span><span style=display:flex><span>    ];
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>for</span> (src, should_be) <span style=color:#66d9ef>in</span> inputs {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> got <span style=color:#f92672>=</span> Category::categorise(src);
+</span></span><span style=display:flex><span>        assert_eq!(got, should_be);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Luckily, <code>reqwest::Url</code> implements <code>std::str::FromStr</code> so we can just use
+<code>some_string.parse()</code> for the <code>Url</code> variant.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Category {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>categorise</span>(src: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>) -&gt; Option<span style=color:#f92672>&lt;</span>Self<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> Ok(url) <span style=color:#f92672>=</span> src.parse() {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>return</span> Some(Category::Url(url));
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>If parsing it as a <code>Category::Url</code> fails it&rsquo;s probably going to fall into the
+<code>FileSystem</code> category. We can&rsquo;t reuse something like the <code>reqwest::Url</code> or
+<code>http::Uri</code> types because they both expect the URL/URI to have a schema so
+we&rsquo;ll need to get creative.</p><p>Regardless of whether we check fragments for file system links or not, we&rsquo;ll
+need to make sure we can handle links with fragments otherwise we&rsquo;ll try to
+see if the <code>./README.md#license</code> file exists when we actually meant
+<code>./README.md</code>.</p><p>The first step in parsing file system links is to split it into <code>path</code> and
+<code>fragment</code> bits.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Category {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>categorise</span>(src: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>) -&gt; Option<span style=color:#f92672>&lt;</span>Self<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> (path, fragment) <span style=color:#f92672>=</span> <span style=color:#66d9ef>match</span> src.find(<span style=color:#e6db74>&#34;#&#34;</span>) {
+</span></span><span style=display:flex><span>            Some(hash) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> (path, rest) <span style=color:#f92672>=</span> src.split_at(hash);
+</span></span><span style=display:flex><span>                (path, Some(String::from(<span style=color:#f92672>&amp;</span>rest[<span style=color:#ae81ff>1</span><span style=color:#f92672>..</span>])))
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            None <span style=color:#f92672>=&gt;</span> (src, None),
+</span></span><span style=display:flex><span>        };
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Something else to consider is that the <code>path</code> may be URL-encoded (e.g.
+because the file&rsquo;s name contains a space). Because I&rsquo;m lazy, instead of
+pulling in a crate for URL decoding I&rsquo;m going to reuse the same machinery the
+<code>http</code> crate uses for parsing the path section of a URL&mldr;
+<a href=https://docs.rs/http/0.2.1/http/uri/struct.PathAndQuery.html class=external-link target=_blank rel=noopener><code>http::uri::PathAndQuery</code></a>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Category {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>categorise</span>(src: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>) -&gt; Option<span style=color:#f92672>&lt;</span>Self<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// as a sanity check we use the http crate&#39;s PathAndQuery type to make
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#75715e>// sure the path is decoded correctly
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> Ok(path_and_query) <span style=color:#f92672>=</span> path.parse::<span style=color:#f92672>&lt;</span>PathAndQuery<span style=color:#f92672>&gt;</span>() {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>return</span> Some(Category::FileSystem {
+</span></span><span style=display:flex><span>                path: <span style=color:#a6e22e>PathBuf</span>::from(path_and_query.path()),
+</span></span><span style=display:flex><span>                fragment,
+</span></span><span style=display:flex><span>            });
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>And that should be enough to categorise a link.</p><details><summary>Full code for <code>Category::categorise()</code>.</summary><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#66d9ef>impl</span> Category {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>categorise</span>(src: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>) -&gt; Option<span style=color:#f92672>&lt;</span>Self<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> Ok(url) <span style=color:#f92672>=</span> src.parse() {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>return</span> Some(Category::Url(url));
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> (path, fragment) <span style=color:#f92672>=</span> <span style=color:#66d9ef>match</span> src.find(<span style=color:#e6db74>&#34;#&#34;</span>) {
+</span></span><span style=display:flex><span>            Some(hash) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> (path, rest) <span style=color:#f92672>=</span> src.split_at(hash);
+</span></span><span style=display:flex><span>                (path, Some(String::from(<span style=color:#f92672>&amp;</span>rest[<span style=color:#ae81ff>1</span><span style=color:#f92672>..</span>])))
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            None <span style=color:#f92672>=&gt;</span> (src, None),
+</span></span><span style=display:flex><span>        };
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// as a sanity check we use the http crate&#39;s PathAndQuery type to make
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#75715e>// sure the path is decoded correctly
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> Ok(path_and_query) <span style=color:#f92672>=</span> path.parse::<span style=color:#f92672>&lt;</span>PathAndQuery<span style=color:#f92672>&gt;</span>() {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>return</span> Some(Category::FileSystem {
+</span></span><span style=display:flex><span>                path: <span style=color:#a6e22e>PathBuf</span>::from(path_and_query.path()),
+</span></span><span style=display:flex><span>                fragment,
+</span></span><span style=display:flex><span>            });
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        None
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div></details><h3 id=validating-a-single-link>Validating a Single Link
+<a class=heading-link href=#validating-a-single-link><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>Now we need to write a function that will <code>match</code> on the <code>Category</code> and invoke
+the appropriate validator.</p><p>When a link fails validation we&rsquo;ll tell the caller by returning the name of the
+failing link and why it failed (<code>InvalidLink</code>).</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// A [`Link`] and the [`Reason`] why it is invalid.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>InvalidLink</span> {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The invalid link.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> link: <span style=color:#a6e22e>Link</span>,
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Why is this link invalid?
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> reason: <span style=color:#a6e22e>Reason</span>,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>I&rsquo;m also going to need an intermediate type representing the different possible
+outcomes.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>Outcome</span> {
+</span></span><span style=display:flex><span>    Valid(Link),
+</span></span><span style=display:flex><span>    Invalid(InvalidLink),
+</span></span><span style=display:flex><span>    Ignored(Link),
+</span></span><span style=display:flex><span>    UnknownCategory(Link),
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Now we can start writing our <code>validate_one()</code> function.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Try to validate a single link, deferring to the appropriate validator based
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// on the link&#39;s [`Category`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>async</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>validate_one</span><span style=color:#f92672>&lt;</span>C<span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>    link: <span style=color:#a6e22e>Link</span>,
+</span></span><span style=display:flex><span>    current_directory: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Path</span>,
+</span></span><span style=display:flex><span>    ctx: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>C</span>,
+</span></span><span style=display:flex><span>) -&gt; <span style=color:#a6e22e>Outcome</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    C: <span style=color:#a6e22e>Context</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    unimplemented!()
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Users need the ability to skip a link if desired, so let&rsquo;s give <code>Context</code> a
+<code>should_ignore()</code> method and call it at the top of <code>validate_one()</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> Context {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Should this [`Link`] be skipped?
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>should_ignore</span>(<span style=color:#f92672>&amp;</span>self, _link: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Link</span>) -&gt; <span style=color:#66d9ef>bool</span> { <span style=color:#66d9ef>false</span> }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>async</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>validate_one</span><span style=color:#f92672>&lt;</span>C<span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>    link: <span style=color:#a6e22e>Link</span>,
+</span></span><span style=display:flex><span>    current_directory: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Path</span>,
+</span></span><span style=display:flex><span>    ctx: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>C</span>,
+</span></span><span style=display:flex><span>) -&gt; <span style=color:#a6e22e>Outcome</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    C: <span style=color:#a6e22e>Context</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> ctx.should_ignore(<span style=color:#f92672>&amp;</span>link) {
+</span></span><span style=display:flex><span>        log::debug!(<span style=color:#e6db74>&#34;Ignoring </span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>{}</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>&#34;</span>, link.href);
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>return</span> Outcome::Ignored(link);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>And now comes the big ugly <code>match</code> statement for dispatching to the appropriate
+validator.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>async</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>validate_one</span><span style=color:#f92672>&lt;</span>C<span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>    link: <span style=color:#a6e22e>Link</span>,
+</span></span><span style=display:flex><span>    current_directory: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Path</span>,
+</span></span><span style=display:flex><span>    ctx: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>C</span>,
+</span></span><span style=display:flex><span>) -&gt; <span style=color:#a6e22e>Outcome</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    C: <span style=color:#a6e22e>Context</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>match</span> link.category() {
+</span></span><span style=display:flex><span>        Some(Category::FileSystem { path, fragment }) <span style=color:#f92672>=&gt;</span> Outcome::from_result(
+</span></span><span style=display:flex><span>            link,
+</span></span><span style=display:flex><span>            check_filesystem(
+</span></span><span style=display:flex><span>                current_directory,
+</span></span><span style=display:flex><span>                <span style=color:#f92672>&amp;</span>path,
+</span></span><span style=display:flex><span>                fragment.as_deref(),
+</span></span><span style=display:flex><span>                ctx,
+</span></span><span style=display:flex><span>            ),
+</span></span><span style=display:flex><span>        ),
+</span></span><span style=display:flex><span>        Some(Category::Url(url)) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>            Outcome::from_result(link, check_web(<span style=color:#f92672>&amp;</span>url, ctx).<span style=color:#66d9ef>await</span>)
+</span></span><span style=display:flex><span>        },
+</span></span><span style=display:flex><span>        None <span style=color:#f92672>=&gt;</span> Outcome::UnknownCategory(link),
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices info"><p>The astute amongst you may have noticed that the <code>check_filesystem()</code> function
+is synchronous and will need to do some interaction with the file system&mldr;
+Which may block, especially if we might be reading the file&rsquo;s contents to
+check that a fragment identifier is valid.</p><p>Normally we get taught that doing something that may block is a big no-no
+when writing asynchronous code.</p><p>And yeah, technically I&rsquo;d agree with that sentiment&mldr; But practically speaking
+you probably won&rsquo;t notice the difference.</p><p>If we don&rsquo;t need check fragments, a call to <code>check_filesystem()</code> won&rsquo;t need
+much more than a couple calls to <a href=https://linux.die.net/man/2/stat class=external-link target=_blank rel=noopener><code>stat(2)</code></a>. Even if we did need to
+scan through a file to find the section identified by a fragment you can
+expect file system links to point at reasonably sized files (e.g. less than
+1MB) and reasonably close (i.e. not on a network drive on the other side of
+the world).</p><p>All of this means that we won&rsquo;t block for very long (maybe 10s of
+milliseconds at worst?) and the link checker will still be making progress,
+plus if link-checking will be slow if we&rsquo;re going over the network anyway,
+so&mldr; she&rsquo;ll be right?</p></div><h3 id=validating-bulk-links>Validating Bulk Links
+<a class=heading-link href=#validating-bulk-links><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>The final step in creating a high-level <code>validate()</code> function is to actually
+write it.</p><p>We can implement a buffered fan-out, fan-in flow by leveraging
+[<code>StreamExt::buffer_unordered()</code>][buffer_unordered] adapter to run up to <code>n</code>
+validations concurrently, then use <a href=https://docs.rs/futures/0.3.4/futures/stream/trait.StreamExt.html#method.collect class=external-link target=_blank rel=noopener>`StreamExt::collect()</a> to merge
+the results.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Validate several [`Link`]s relative to a particular directory.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>validate</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, L, C<span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>    current_directory: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;a</span> <span style=color:#a6e22e>Path</span>,
+</span></span><span style=display:flex><span>    links: <span style=color:#a6e22e>L</span>,
+</span></span><span style=display:flex><span>    ctx: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;a</span> <span style=color:#a6e22e>C</span>,
+</span></span><span style=display:flex><span>) -&gt; <span style=color:#a6e22e>impl</span> Future<span style=color:#f92672>&lt;</span>Output <span style=color:#f92672>=</span> Outcomes<span style=color:#f92672>&gt;</span> <span style=color:#f92672>+</span> <span style=color:#a6e22e>&#39;a</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    L: IntoIterator<span style=color:#f92672>&lt;</span>Item <span style=color:#f92672>=</span> Link<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    L::IntoIter: <span style=color:#a6e22e>&#39;a</span>,
+</span></span><span style=display:flex><span>    C: <span style=color:#a6e22e>Context</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    futures::stream::iter(links)
+</span></span><span style=display:flex><span>        .map(<span style=color:#66d9ef>move</span> <span style=color:#f92672>|</span>link<span style=color:#f92672>|</span> validate_one(link, current_directory, ctx))
+</span></span><span style=display:flex><span>        .buffer_unordered(ctx.concurrency())
+</span></span><span style=display:flex><span>        .collect()
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The function signature looks pretty gnarly because we&rsquo;re wanting to accept
+anything which can be turned into an iterator that yields <code>Link</code>s (e.g. a
+<code>Vec&lt;Link></code> or one of the scanner iterators), but other than that it&rsquo;s rather
+straightforward.</p><ol><li>Convert the synchronous iterator into a <code>futures::Stream</code></li><li>Map each <code>Link</code> to an unstarted future which will validate that link</li><li>Make sure we poll up to <code>ctx.concurrency()</code> futures to completion
+concurrently with <code>buffer_unordered()</code></li><li>Collect the results into one container</li></ol><p>We have almost everything we need, too. The only necessary additions are some
+sort of bucket for <code>Outcome</code>s (called <code>Outcomes</code>), and a way for <code>Context</code> to
+control how many validations are polled to completion at a time.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/validation/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> Context {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// How many items should we check at a time?
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>concurrency</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>usize</span> { <span style=color:#ae81ff>64</span> }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// The result of validating a batch of [`Link`]s.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug, Default)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Outcomes</span> {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Valid links.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> valid: Vec<span style=color:#f92672>&lt;</span>Link<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Links which are broken.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> invalid: Vec<span style=color:#f92672>&lt;</span>InvalidLink<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Items that were explicitly ignored by the [`Context`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> ignored: Vec<span style=color:#f92672>&lt;</span>Link<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Links which we weren&#39;t able to identify a suitable validator for.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> unknown_category: Vec<span style=color:#f92672>&lt;</span>Link<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Extend<span style=color:#f92672>&lt;</span>Outcome<span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> Outcomes {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>extend</span><span style=color:#f92672>&lt;</span>T: IntoIterator<span style=color:#f92672>&lt;</span>Item <span style=color:#f92672>=</span> Outcome<span style=color:#f92672>&gt;&gt;</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, items: <span style=color:#a6e22e>T</span>) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>for</span> outcome <span style=color:#66d9ef>in</span> items {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>match</span> outcome {
+</span></span><span style=display:flex><span>                Outcome::Valid(v) <span style=color:#f92672>=&gt;</span> self.valid.push(v),
+</span></span><span style=display:flex><span>                Outcome::Invalid(i) <span style=color:#f92672>=&gt;</span> self.invalid.push(i),
+</span></span><span style=display:flex><span>                Outcome::Ignored(i) <span style=color:#f92672>=&gt;</span> self.ignored.push(i),
+</span></span><span style=display:flex><span>                Outcome::UnknownCategory(u) <span style=color:#f92672>=&gt;</span> self.unknown_category.push(u),
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>And yeah, that&rsquo;s all there is to it. Pretty easy, huh?</p><h2 id=conclusions>Conclusions
+<a class=heading-link href=#conclusions><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>This took a bit longer than I expected to walk through, but hopefully you&rsquo;ve now
+got a good idea of how the <a href=https://crates.io/crates/linkcheck class=external-link target=_blank rel=noopener><code>linkcheck</code></a> crate works 🙂</p><p>Overall it wasn&rsquo;t <em>too</em> difficult to implement, although it took a couple
+iterations until I found a way to merge the different validators that
+worked&mldr; My first attempt at integrating synchronous and asynchronous
+validators, all of which have their own sets of inputs and expectations, led
+to some rather ugly code.</p><p>It kinda reminds me of an article called <a href=https://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/ class=external-link target=_blank rel=noopener><em>&ldquo;What Colour is Your
+Function?&rdquo;</em></a> by <em>Bob Nystrom</em>&mldr;</p><p>Bob makes a good case that having a sync/async split in your language (like
+Rust, Python, or Node) can lead to poor ergonomics and difficulty reusing
+code. He also points out that it&rsquo;s possible to have <em>both</em> a single &ldquo;mode&rdquo; of
+execution <em>and</em> all the nice things that come along with async code. Go&rsquo;s
+green threading (<em>&ldquo;goroutines&rdquo;</em>) are a really good example of this.</p></div><footer></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>

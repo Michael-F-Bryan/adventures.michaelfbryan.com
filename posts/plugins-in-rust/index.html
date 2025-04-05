@@ -1,0 +1,546 @@
+<!doctype html><html lang=en><head><title>Plugins in Rust · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="Imagine you are implementing a calculator application and want users to be able
+to extend the application with their own functionality. For example, imagine a
+user wants to provide a random() function that generates true random numbers
+using random.org instead of the pseudo-random numbers that a crate like
+rand would provide.
+The Rust language gives you a lot of really powerful tools for adding
+flexibility and extensibility to your applications (e.g. traits, enums,
+macros), but all of these happen at compile time. Unfortunately, to get the
+flexibility that we&rsquo;re looking we&rsquo;ll need to be able to add new functionalty at
+runtime."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="Plugins in Rust"><meta name=twitter:description content="Imagine you are implementing a calculator application and want users to be able to extend the application with their own functionality. For example, imagine a user wants to provide a random() function that generates true random numbers using random.org instead of the pseudo-random numbers that a crate like rand would provide.
+The Rust language gives you a lot of really powerful tools for adding flexibility and extensibility to your applications (e.g. traits, enums, macros), but all of these happen at compile time. Unfortunately, to get the flexibility that we’re looking we’ll need to be able to add new functionalty at runtime."><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/plugins-in-rust/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="Plugins in Rust"><meta property="og:description" content="Imagine you are implementing a calculator application and want users to be able to extend the application with their own functionality. For example, imagine a user wants to provide a random() function that generates true random numbers using random.org instead of the pseudo-random numbers that a crate like rand would provide.
+The Rust language gives you a lot of really powerful tools for adding flexibility and extensibility to your applications (e.g. traits, enums, macros), but all of these happen at compile time. Unfortunately, to get the flexibility that we’re looking we’ll need to be able to add new functionalty at runtime."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2019-09-30T22:04:58+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Rust"><meta property="article:tag" content="FFI"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/plugins-in-rust/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/plugins-in-rust/>Plugins in Rust</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2019-09-30T22:04:58+08:00>September 30, 2019
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+13-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/rust/>Rust</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/ffi/>FFI</a></span></div></div></header><div class=post-content><p>Imagine you are implementing a calculator application and want users to be able
+to extend the application with their own functionality. For example, imagine a
+user wants to provide a <code>random()</code> function that generates <em>true</em> random numbers
+using <a href=https://random.org/ class=external-link target=_blank rel=noopener>random.org</a> instead of the pseudo-random numbers that a crate like
+<a href=https://crates.io/crates/rand class=external-link target=_blank rel=noopener>rand</a> would provide.</p><p>The Rust language gives you a lot of really powerful tools for adding
+flexibility and extensibility to your applications (e.g. traits, enums,
+macros), but all of these happen at compile time. Unfortunately, to get the
+flexibility that we&rsquo;re looking we&rsquo;ll need to be able to add new functionalty at
+runtime.</p><p>This can be achieved using a technique called <a href=https://en.wikipedia.org/wiki/Dynamic_loading class=external-link target=_blank rel=noopener>Dynamic Loading</a>.</p><div class="notices note"><p>The code written in this article is available <a href=https://github.com/Michael-F-Bryan/plugins_in_rust class=external-link target=_blank rel=noopener>on GitHub</a>. Feel free to
+browse through and steal code or inspiration.</p><p>If you found this useful or spotted a bug, let me know on the blog&rsquo;s
+<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com class=external-link target=_blank rel=noopener>issue tracker</a>!</p></div><h2 id=what-is-dynamic-loading>What Is Dynamic Loading?
+<a class=heading-link href=#what-is-dynamic-loading><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Dynamic loading is a mechanism provided by all mainstream Operating Systems
+where a library can be loaded at runtime so the user can retrieve addresses of
+functions or variables. The address of these functions and variables can then
+be used just like any other pointer.</p><p>On *nix platforms, the <code>dlopen()</code> function is used to load a library into memory
+and <code>dlsym()</code> lets you get a pointer to something via its symbol name. Something
+to remember is that symbols don&rsquo;t contain any type information so the caller
+has to (<code>unsafe</code>-ly) cast the pointer to the right type.</p><p>This is normally done by having some sort of contract with the library being
+loaded ahead of time (e.g. a header file declares the <code>"cos"</code> function is
+<code>fn(f64) -> f64</code>).</p><p>Example usage from <code>man dlopen</code>:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c><span style=display:flex><span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;stdio.h&gt;</span><span style=color:#75715e>
+</span></span></span><span style=display:flex><span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;stdlib.h&gt;</span><span style=color:#75715e>
+</span></span></span><span style=display:flex><span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;dlfcn.h&gt;</span><span style=color:#75715e>
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span><span style=color:#75715e>// Defines LIBM_SO (which will be a string such as &#34;libm.so.6&#34;)
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;gnu/lib-names.h&gt;</span><span style=color:#75715e>
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// the type signature used by our cosine function
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span><span style=color:#66d9ef>typedef</span> <span style=color:#a6e22e>double</span> (<span style=color:#f92672>*</span>trig_func)(<span style=color:#66d9ef>double</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>main</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>error;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// load the libm library into memory
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>handle <span style=color:#f92672>=</span> <span style=color:#a6e22e>dlopen</span>(LIBM_SO, RTLD_LAZY);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// handle loading failures
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>handle) {
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>fprintf</span>(stderr, <span style=color:#e6db74>&#34;unable to load libm: %s</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>, <span style=color:#a6e22e>dlerror</span>());
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>return</span> EXIT_FAILURE;
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// Clear any existing errors
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#a6e22e>dlerror</span>();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// get a pointer to the &#34;cos&#34; symbol and cast it to the right type
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    trig_func cosine <span style=color:#f92672>=</span> (trig_func) <span style=color:#a6e22e>dlsym</span>(handle, <span style=color:#e6db74>&#34;cos&#34;</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// were we able to find the symbol?
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    error <span style=color:#f92672>=</span> <span style=color:#a6e22e>dlerror</span>();
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> (error <span style=color:#f92672>!=</span> NULL) {
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>fprintf</span>(stderr, <span style=color:#e6db74>&#34;cos not found: %s</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>, error);
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>return</span> EXIT_FAILURE;
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// use our cosine function
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#a6e22e>printf</span>(<span style=color:#e6db74>&#34;cos(2.0) = %f</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>, (<span style=color:#f92672>*</span>cosine)(<span style=color:#ae81ff>2.0</span>));
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// cleanup and exit
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#a6e22e>dlclose</span>(handle);
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>return</span> EXIT_SUCCESS;
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The story is almost identical for Windows, except <a href=https://docs.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibrarya class=external-link target=_blank rel=noopener><code>LoadLibraryA()</code></a>,
+<a href=https://docs.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getprocaddress class=external-link target=_blank rel=noopener><code>GetProcAddress()</code></a>, and <a href=https://docs.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-freelibrary class=external-link target=_blank rel=noopener><code>FreeLibrary()</code></a> are used instead
+of <code>dlopen()</code>, <code>dlsym()</code>, and <code>dlclose()</code>, respectively.</p><p>The <a href=https://docs.rs/libloading/ class=external-link target=_blank rel=noopener>libloading</a> crate provides a high quality Rust interface to
+the underlying platform&rsquo;s dynamic loading mechanism.</p><h2 id=determining-the-plugin-interface>Determining the Plugin Interface
+<a class=heading-link href=#determining-the-plugin-interface><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>The first step is to define a common interface that all plugins should satisfy.
+This should be placed in some sort of &ldquo;core&rdquo; crate that both plugins and the
+main application depend on.</p><p>This will usually take the form of a trait.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// core/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> Function {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>call</span>(<span style=color:#f92672>&amp;</span>self, args: <span style=color:#66d9ef>&amp;</span>[<span style=color:#66d9ef>f64</span>]) -&gt; Result<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, InvocationError<span style=color:#f92672>&gt;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Help text that may be used to display information about this function.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>help</span>(<span style=color:#f92672>&amp;</span>self) -&gt; Option<span style=color:#f92672>&lt;&amp;</span><span style=color:#66d9ef>str</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        None
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>InvocationError</span> {
+</span></span><span style=display:flex><span>    InvalidArgumentCount { expected: <span style=color:#66d9ef>usize</span>, found: <span style=color:#66d9ef>usize</span> },
+</span></span><span style=display:flex><span>    Other { msg: String },
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Now we&rsquo;ve defined the application-level API, we also need a way to declare
+plugins so they&rsquo;re accessible when dynamically loading. This isn&rsquo;t difficult,
+but there are a couple gotchas to keep in mind to prevent undesired behaviour
+(UB, crashes, etc.).</p><p>Some things to keep in mind:</p><ul><li>Rust doesn&rsquo;t have a stable ABI, meaning different compiler versions can
+generate incompatible code, and</li><li>Different versions of the <code>core</code> crate may have different definitions of the
+<code>Function</code> trait</li><li>Each plugin will need to have some sort of <code>register()</code> function so it can
+construct a <code>Function</code> instance and give the application a <code>Box&lt;dyn Function></code>
+(we need dynamic dispatch because plugin registration happens at runtime
+and static dispatch requires knowing types at compile time)</li><li>To avoid freeing memory allocated by a different allocator, each plugin
+will need to provide an explicit <code>free_plugin()</code> function, or the plugin and
+application both need to be using the same allocator</li></ul><p>To prevent plugin authors from needing to deal with this themselves, we&rsquo;ll
+provide a <code>export_plugin!()</code> macro that populates some <code>PluginDeclaration</code>
+struct with version numbers and a pointer to the <code>register()</code> function provided
+by a user.</p><p>The <code>PluginDeclaration</code> struct itself is quite simple:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// core/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>PluginDeclaration</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> rustc_version: <span style=color:#66d9ef>&amp;</span>&#39;static <span style=color:#66d9ef>str</span>,
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> core_version: <span style=color:#66d9ef>&amp;</span>&#39;static <span style=color:#66d9ef>str</span>,
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> register: <span style=color:#a6e22e>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> <span style=color:#66d9ef>dyn</span> PluginRegistrar),
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>With the <code>PluginRegistrar</code> being a trait that has a single method.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// core/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> PluginRegistrar {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>register_function</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, name: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>, function: Box<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>dyn</span> Function<span style=color:#f92672>&gt;</span>);
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>To get the version of <code>rustc</code>, we&rsquo;ll add a <code>build.rs</code> script to the <code>core</code> crate
+and pass the version number through as an environment variable.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// core/build.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>main</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> version <span style=color:#f92672>=</span> rustc_version::version().unwrap();
+</span></span><span style=display:flex><span>    println!(<span style=color:#e6db74>&#34;cargo:rustc-env=RUSTC_VERSION=</span><span style=color:#e6db74>{}</span><span style=color:#e6db74>&#34;</span>, version);
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We&rsquo;re using the <a href=https://docs.rs/rustc_version/ class=external-link target=_blank rel=noopener><code>rustc_version</code></a> crate to fetch <code>rustc</code>&rsquo;s
+version number. Don&rsquo;t forget to add it to <code>core/Cargo.toml</code> as a build
+dependency:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cd core
+</span></span><span style=display:flex><span>$ cargo add rustc_version
+</span></span><span style=display:flex><span>    Updating &#39;https://github.com/rust-lang/crates.io-index&#39; index
+</span></span><span style=display:flex><span>      Adding rustc_version v0.2.3 to build-dependencies
+</span></span></code></pre></div><p>Now all we need to do is embed the version numbers as static strings.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// core/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>static</span> <span style=color:#66d9ef>CORE_VERSION</span>: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span> <span style=color:#f92672>=</span> env!(<span style=color:#e6db74>&#34;CARGO_PKG_VERSION&#34;</span>);
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>static</span> <span style=color:#66d9ef>RUSTC_VERSION</span>: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span> <span style=color:#f92672>=</span> env!(<span style=color:#e6db74>&#34;RUSTC_VERSION&#34;</span>);
+</span></span></code></pre></div><p>Our <code>export_plugin!()</code> macro now becomes almost trivial:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// core/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[macro_export]</span>
+</span></span><span style=display:flex><span>macro_rules<span style=color:#f92672>!</span> export_plugin {
+</span></span><span style=display:flex><span>    (<span style=color:#75715e>$register</span>:<span style=color:#a6e22e>expr</span>) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>#[doc(hidden)]</span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>#[no_mangle]</span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>static</span> plugin_declaration: <span style=color:#75715e>$crate</span>::PluginDeclaration <span style=color:#f92672>=</span> <span style=color:#75715e>$crate</span>::PluginDeclaration {
+</span></span><span style=display:flex><span>            rustc_version: <span style=color:#75715e>$crate</span>::<span style=color:#66d9ef>RUSTC_VERSION</span>,
+</span></span><span style=display:flex><span>            core_version: <span style=color:#75715e>$crate</span>::<span style=color:#66d9ef>CORE_VERSION</span>,
+</span></span><span style=display:flex><span>            register: <span style=color:#75715e>$register</span>,
+</span></span><span style=display:flex><span>        };
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=creating-a-plugin>Creating a Plugin
+<a class=heading-link href=#creating-a-plugin><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now we have a public plugin interface and a mechanism for registering new
+plugins, lets actually create one.</p><p>First we&rsquo;ll need to create a <code>plugins_random</code> crate and add it to the workspace.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cargo new --lib random --name plugins_random
+</span></span><span style=display:flex><span>     Created library `plugins_random` package
+</span></span><span style=display:flex><span>$ cat Cargo.toml
+</span></span><span style=display:flex><span>[workspace]
+</span></span><span style=display:flex><span>members = [&#34;core&#34;, &#34;random&#34;]
+</span></span></code></pre></div><p>Next, make sure the <code>plugins_random</code> crate pulls in <code>plugins_core</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cd random
+</span></span><span style=display:flex><span>$ cargo add ../core
+</span></span><span style=display:flex><span>    Updating &#39;https://github.com/rust-lang/crates.io-index&#39; index
+</span></span><span style=display:flex><span>      Adding plugins_core (unknown version) to dependencies
+</span></span></code></pre></div><p>This crate will need to be compiled as a dynamic library (<code>*.so</code> in *nix,
+<code>*.dll</code> on Windows) so it can be loaded at runtime.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-toml data-lang=toml><span style=display:flex><span><span style=color:#75715e># random/Cargo.toml</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>[<span style=color:#a6e22e>package</span>]
+</span></span><span style=display:flex><span><span style=color:#a6e22e>name</span> = <span style=color:#e6db74>&#34;plugins_random&#34;</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>version</span> = <span style=color:#e6db74>&#34;0.1.0&#34;</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>authors</span> = [<span style=color:#e6db74>&#34;Michael Bryan &lt;michaelfbryan@gmail.com&gt;&#34;</span>]
+</span></span><span style=display:flex><span><span style=color:#a6e22e>edition</span> = <span style=color:#e6db74>&#34;2018&#34;</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>[<span style=color:#a6e22e>lib</span>]
+</span></span><span style=display:flex><span><span style=color:#a6e22e>crate-type</span> = [<span style=color:#e6db74>&#34;cdylib&#34;</span>]
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>[<span style=color:#a6e22e>dependencies</span>]
+</span></span><span style=display:flex><span><span style=color:#a6e22e>plugins_core</span> = { <span style=color:#a6e22e>path</span> = <span style=color:#e6db74>&#34;../core&#34;</span> }
+</span></span></code></pre></div><p>Recompiling should show a <code>libplugins_random.so</code> file in the <code>target/</code> directory.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cargo build --all
+</span></span><span style=display:flex><span>   Compiling semver-parser v0.7.0
+</span></span><span style=display:flex><span>   Compiling semver v0.9.0
+</span></span><span style=display:flex><span>   Compiling rustc_version v0.2.3
+</span></span><span style=display:flex><span>   Compiling plugins_core v0.1.0 (/home/michael/Documents/plugins/core)
+</span></span><span style=display:flex><span>   Compiling plugins_random v0.1.0 (/home/michael/Documents/plugins/random)
+</span></span><span style=display:flex><span>    Finished dev [unoptimized + debuginfo] target(s) in 1.32s
+</span></span><span style=display:flex><span>$ ls ../target/debug
+</span></span><span style=display:flex><span>build deps examples incremental libplugins_core.d libplugins_core.rlib
+</span></span><span style=display:flex><span>libplugins_random.d libplugins_random.so
+</span></span></code></pre></div><p>Now things are set up, we can start implementing our <code>random()</code> plugin.</p><p>Looking at the <a href=https://www.random.org/integers/ class=external-link target=_blank rel=noopener>Random Integer Generator</a> page, retrieving a set of
+random integers is just a case of sending a GET request to
+<code>https://www.random.org/integers/</code>.</p><p>For example, to get 10 numbers from 1 to 6 in base 10 and one number per line:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ curl <span style=color:#e6db74>&#39;https://www.random.org/integers/?num=10&amp;min=1&amp;max=6&amp;col=1&amp;base=10&amp;format=plain&#39;</span>
+</span></span><span style=display:flex><span>5
+</span></span><span style=display:flex><span>2
+</span></span><span style=display:flex><span>6
+</span></span><span style=display:flex><span>4
+</span></span><span style=display:flex><span>5
+</span></span><span style=display:flex><span>2
+</span></span><span style=display:flex><span>1
+</span></span><span style=display:flex><span>4
+</span></span><span style=display:flex><span>1
+</span></span><span style=display:flex><span>3
+</span></span></code></pre></div><p>This turns out to be almost trivial to implement thanks to the
+<a href=https://crates.io/crates/reqwest class=external-link target=_blank rel=noopener><code>reqwest</code></a> crate.</p><p>First we&rsquo;ll create a helper struct for the arguments to pass to <em>random.org</em>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// random/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>RequestInfo</span> {
+</span></span><span style=display:flex><span>    min: <span style=color:#66d9ef>i32</span>,
+</span></span><span style=display:flex><span>    max: <span style=color:#66d9ef>i32</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> RequestInfo {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>format</span>(<span style=color:#f92672>&amp;</span>self) -&gt; String {
+</span></span><span style=display:flex><span>        format!(
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;https://www.random.org/integers/?num=1&amp;min=</span><span style=color:#e6db74>{}</span><span style=color:#e6db74>&amp;max=</span><span style=color:#e6db74>{}</span><span style=color:#e6db74>&amp;col=1&amp;base=10&amp;format=plain&#34;</span>,
+</span></span><span style=display:flex><span>            self.min, self.max
+</span></span><span style=display:flex><span>        )
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Then write a function that calls <code>reqwest::get()</code> using the formatted URL and
+parses the response body.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// random/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>fetch</span>(request: <span style=color:#a6e22e>RequestInfo</span>) -&gt; Result<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, InvocationError<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> url <span style=color:#f92672>=</span> request.format();
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> response_body <span style=color:#f92672>=</span> reqwest::get(<span style=color:#f92672>&amp;</span>url)<span style=color:#f92672>?</span>.text()<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>    response_body.trim().parse().map_err(Into::into)
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>To make <code>?</code> work nicely, I&rsquo;ve also added a <code>From</code> impl which lets us create an
+<code>InvocationError</code> from anything that is <code>ToString</code> (which all
+<code>std::error::Error</code> types implement).</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// core/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>S: ToString<span style=color:#f92672>&gt;</span> From<span style=color:#f92672>&lt;</span>S<span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> InvocationError {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>from</span>(other: <span style=color:#a6e22e>S</span>) -&gt; <span style=color:#a6e22e>InvocationError</span> {
+</span></span><span style=display:flex><span>        InvocationError::Other {
+</span></span><span style=display:flex><span>            msg: <span style=color:#a6e22e>other</span>.to_string(),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Finally, we just need to create a <code>Random</code> struct which will implement our
+<code>Function</code> interface.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// random/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Random</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Function <span style=color:#66d9ef>for</span> Random {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>call</span>(<span style=color:#f92672>&amp;</span>self, _args: <span style=color:#66d9ef>&amp;</span>[<span style=color:#66d9ef>f64</span>]) -&gt; Result<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, InvocationError<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        fetch(RequestInfo { min: <span style=color:#ae81ff>0</span>, max: <span style=color:#ae81ff>100</span> })
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Ideally our <code>random()</code> function should have a couple overloads so users can
+tweak the random number&rsquo;s properties.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// get a random number between 0 and 100
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>random</span>() -&gt; <span style=color:#66d9ef>f64</span>;
+</span></span><span style=display:flex><span><span style=color:#75715e>// get a random number between 0 and max
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>random</span>(max: <span style=color:#66d9ef>f64</span>) -&gt; <span style=color:#66d9ef>f64</span>;
+</span></span><span style=display:flex><span><span style=color:#75715e>// get a random number between min and max
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>random</span>(min: <span style=color:#66d9ef>f64</span>, max: <span style=color:#66d9ef>f64</span>) -&gt; <span style=color:#66d9ef>f64</span>;
+</span></span></code></pre></div><p>The logic for turning the <code>&[f64]</code> args into a <code>RequestInfo</code> can be neatly
+extracted into its own function.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// random/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>parse_args</span>(args: <span style=color:#66d9ef>&amp;</span>[<span style=color:#66d9ef>f64</span>]) -&gt; Result<span style=color:#f92672>&lt;</span>RequestInfo, InvocationError<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>match</span> args.len() {
+</span></span><span style=display:flex><span>        <span style=color:#ae81ff>0</span> <span style=color:#f92672>=&gt;</span> Ok(RequestInfo { min: <span style=color:#ae81ff>0</span>, max: <span style=color:#ae81ff>100</span> }),
+</span></span><span style=display:flex><span>        <span style=color:#ae81ff>1</span> <span style=color:#f92672>=&gt;</span> Ok(RequestInfo {
+</span></span><span style=display:flex><span>            min: <span style=color:#ae81ff>0</span>,
+</span></span><span style=display:flex><span>            max: <span style=color:#a6e22e>args</span>[<span style=color:#ae81ff>0</span>].round() <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>i32</span>,
+</span></span><span style=display:flex><span>        }),
+</span></span><span style=display:flex><span>        <span style=color:#ae81ff>2</span> <span style=color:#f92672>=&gt;</span> Ok(RequestInfo {
+</span></span><span style=display:flex><span>            min: <span style=color:#a6e22e>args</span>[<span style=color:#ae81ff>0</span>].round() <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>i32</span>,
+</span></span><span style=display:flex><span>            max: <span style=color:#a6e22e>args</span>[<span style=color:#ae81ff>1</span>].round() <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>i32</span>,
+</span></span><span style=display:flex><span>        }),
+</span></span><span style=display:flex><span>        _ <span style=color:#f92672>=&gt;</span> Err(<span style=color:#e6db74>&#34;0, 1, or 2 arguments are required&#34;</span>.into()),
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>And then we just need to update the <code>Function</code> impl accordingly.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// random/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Function <span style=color:#66d9ef>for</span> Random {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>call</span>(<span style=color:#f92672>&amp;</span>self, args: <span style=color:#66d9ef>&amp;</span>[<span style=color:#66d9ef>f64</span>]) -&gt; Result<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, InvocationError<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        parse_args(args).and_then(fetch)
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Now our <code>random()</code> function is fully implemented, we just need to make a
+<code>register()</code> function and call <code>plugins_core::export_plugin!()</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// random/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>plugins_core::export_plugin!(register);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>register</span>(registrar: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> <span style=color:#66d9ef>dyn</span> PluginRegistrar) {
+</span></span><span style=display:flex><span>    registrar.register_function(<span style=color:#e6db74>&#34;random&#34;</span>, Box::new(Random));
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=loading-plugins>Loading Plugins
+<a class=heading-link href=#loading-plugins><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now we&rsquo;ve defined a plugin we need a way to load it into memory and use it as
+part of our application.</p><p>The first step is to create a new crate and add some dependencies.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cargo new --lib --name plugins_app app
+</span></span><span style=display:flex><span>$ cat Cargo.toml
+</span></span><span style=display:flex><span>[workspace]
+</span></span><span style=display:flex><span>members = [&#34;core&#34;, &#34;random&#34;, &#34;app&#34;]
+</span></span><span style=display:flex><span>$ cd app
+</span></span><span style=display:flex><span>$ cargo add libloading ../core
+</span></span><span style=display:flex><span>    Updating &#39;https://github.com/rust-lang/crates.io-index&#39; index
+</span></span><span style=display:flex><span>      Adding libloading v0.5.2 to dependencies
+</span></span><span style=display:flex><span>      Adding plugins_core (unknown version) to dependencies
+</span></span></code></pre></div><p>When a library is loaded into memory, we need to make sure that it outlives
+anything created from it. For example, a trait object&rsquo;s vtable (and all the
+functions it points to) is embedded in the library&rsquo;s code. If we tried to invoke
+a plugin object&rsquo;s methods after its parent library was unloaded from memory,
+we&rsquo;d try to execute garbage and crash the entire application.</p><p>This means we need a way to make sure plugins can&rsquo;t outlive the library they
+were loaded from.</p><p>We&rsquo;ll do this using the <a href=https://refactoring.guru/design-patterns/proxy class=external-link target=_blank rel=noopener><em>Proxy Pattern</em></a>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// app/src/main.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// A proxy object which wraps a [`Function`] and makes sure it can&#39;t outlive
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// the library it came from.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>FunctionProxy</span> {
+</span></span><span style=display:flex><span>    function: Box<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>dyn</span> Function<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    _lib: <span style=color:#a6e22e>Rc</span><span style=color:#f92672>&lt;</span>Library<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Function <span style=color:#66d9ef>for</span> FunctionProxy {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>call</span>(<span style=color:#f92672>&amp;</span>self, args: <span style=color:#66d9ef>&amp;</span>[<span style=color:#66d9ef>f64</span>]) -&gt; Result<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, InvocationError<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        self.function.call(args)
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>help</span>(<span style=color:#f92672>&amp;</span>self) -&gt; Option<span style=color:#f92672>&lt;&amp;</span><span style=color:#66d9ef>str</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        self.function.help()
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We also need something which can contain all loaded plugins.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// app/src/main.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>ExternalFunctions</span> {
+</span></span><span style=display:flex><span>    functions: <span style=color:#a6e22e>HashMap</span><span style=color:#f92672>&lt;</span>String, FunctionProxy<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    libraries: Vec<span style=color:#f92672>&lt;</span>Rc<span style=color:#f92672>&lt;</span>Library<span style=color:#f92672>&gt;&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> ExternalFunctions {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new</span>() -&gt; <span style=color:#a6e22e>ExternalFunctions</span> {
+</span></span><span style=display:flex><span>        ExternalFunctions::default()
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>load</span><span style=color:#f92672>&lt;</span>P: AsRef<span style=color:#f92672>&lt;</span>OsStr<span style=color:#f92672>&gt;&gt;</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, library_path: <span style=color:#a6e22e>P</span>) -&gt; <span style=color:#a6e22e>io</span>::Result<span style=color:#f92672>&lt;</span>()<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        unimplemented!()
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The <code>ExternalFunctions::load()</code> method is the real meat and potatoes of our
+plugin system. It&rsquo;s where we:</p><ol><li>Load the library into memory</li><li>Get a reference to the static <code>PluginDeclaration</code></li><li>Check the <code>rustc</code> and <code>plugins_core</code> versions match</li><li>Create a <code>PluginRegistrar</code> which will create <code>FunctionProxy</code>s associated with
+the library</li><li>Pass the <code>PluginRegistrar</code> to the plugin&rsquo;s <code>register()</code> function</li><li>Add any loaded plugins to the internal functions map</li></ol><p>The <code>PluginRegistrar</code> type itself is almost trivial:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// app/src/main.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>PluginRegistrar</span> {
+</span></span><span style=display:flex><span>    functions: <span style=color:#a6e22e>HashMap</span><span style=color:#f92672>&lt;</span>String, FunctionProxy<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    lib: <span style=color:#a6e22e>Rc</span><span style=color:#f92672>&lt;</span>Library<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> PluginRegistrar {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new</span>(lib: <span style=color:#a6e22e>Rc</span><span style=color:#f92672>&lt;</span>Library<span style=color:#f92672>&gt;</span>) -&gt; <span style=color:#a6e22e>PluginRegistrar</span> {
+</span></span><span style=display:flex><span>        PluginRegistrar {
+</span></span><span style=display:flex><span>            lib,
+</span></span><span style=display:flex><span>            functions: <span style=color:#a6e22e>HashMap</span>::default(),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> plugins_core::PluginRegistrar <span style=color:#66d9ef>for</span> PluginRegistrar {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>register_function</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, name: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>, function: Box<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>dyn</span> Function<span style=color:#f92672>&gt;</span>) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> proxy <span style=color:#f92672>=</span> FunctionProxy {
+</span></span><span style=display:flex><span>            function,
+</span></span><span style=display:flex><span>            _lib: <span style=color:#a6e22e>Rc</span>::clone(<span style=color:#f92672>&amp;</span>self.lib),
+</span></span><span style=display:flex><span>        };
+</span></span><span style=display:flex><span>        self.functions.insert(name.to_string(), proxy);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>And now our <code>PluginRegistrar</code> helper is implemented, we have everything required
+to complete <code>ExternalFunctions::load()</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// app/src/main.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> ExternalFunctions {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Load a plugin library and add all contained functions to the internal
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// function table.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// # Safety
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// A plugin library **must** be implemented using the
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// [`plugins_core::plugin_declaration!()`] macro. Trying manually implement
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// a plugin without going through that macro will result in undefined
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// behaviour.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>load</span><span style=color:#f92672>&lt;</span>P: AsRef<span style=color:#f92672>&lt;</span>OsStr<span style=color:#f92672>&gt;&gt;</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        library_path: <span style=color:#a6e22e>P</span>,
+</span></span><span style=display:flex><span>    ) -&gt; <span style=color:#a6e22e>io</span>::Result<span style=color:#f92672>&lt;</span>()<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// load the library into memory
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>let</span> library <span style=color:#f92672>=</span> Rc::new(Library::new(library_path)<span style=color:#f92672>?</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// get a pointer to the plugin_declaration symbol.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>let</span> decl <span style=color:#f92672>=</span> library
+</span></span><span style=display:flex><span>            .get::<span style=color:#f92672>&lt;*</span><span style=color:#66d9ef>mut</span> PluginDeclaration<span style=color:#f92672>&gt;</span>(<span style=color:#e6db74>b</span><span style=color:#e6db74>&#34;plugin_declaration</span><span style=color:#ae81ff>\0</span><span style=color:#e6db74>&#34;</span>)<span style=color:#f92672>?</span>
+</span></span><span style=display:flex><span>            .read();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// version checks to prevent accidental ABI incompatibilities
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>if</span> decl.rustc_version <span style=color:#f92672>!=</span> plugins_core::<span style=color:#66d9ef>RUSTC_VERSION</span>
+</span></span><span style=display:flex><span>            <span style=color:#f92672>||</span> decl.core_version <span style=color:#f92672>!=</span> plugins_core::<span style=color:#66d9ef>CORE_VERSION</span>
+</span></span><span style=display:flex><span>        {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>return</span> Err(io::Error::new(
+</span></span><span style=display:flex><span>                io::ErrorKind::Other,
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#34;Version mismatch&#34;</span>,
+</span></span><span style=display:flex><span>            ));
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> registrar <span style=color:#f92672>=</span> PluginRegistrar::new(Rc::clone(<span style=color:#f92672>&amp;</span>library));
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        (decl.register)(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> registrar);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// add all loaded plugins to the functions map
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        self.functions.extend(registrar.functions);
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// and make sure ExternalFunctions keeps a reference to the library
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        self.libraries.push(library);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        Ok(())
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices note"><p>Note the <em>Safety</em> section in the function&rsquo;s doc-comments. The process of
+loading a plugin is inherently <code>unsafe</code> (the compiler can&rsquo;t guarantee
+whatever is behind the <code>plugin_declaration</code> symbol is a <code>PluginDeclaration</code>)
+and this section documents the contract that must be upheld.</p></div><h2 id=using-the-plugin>Using the Plugin
+<a class=heading-link href=#using-the-plugin><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>At this point we&rsquo;ve actually completed the plugin system. The only thing left is
+to demonstrate it works and start using the thing.</p><p>For our purposes, it should be good enough to create a command-line app that
+loads a library then invokes a function by name, passing in any specified
+arguments.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback><span style=display:flex><span>Usage: app &lt;plugin-path&gt; &lt;function&gt; &lt;args&gt;...
+</span></span></code></pre></div><p>First we&rsquo;ll create a quick <code>Args</code> struct to parse our command-line arguments
+into.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// app/src/main.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Args</span> {
+</span></span><span style=display:flex><span>    plugin_library: <span style=color:#a6e22e>PathBuf</span>,
+</span></span><span style=display:flex><span>    function: String,
+</span></span><span style=display:flex><span>    arguments: Vec<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span><span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Then hack together a quick&rsquo;n&rsquo;dirty command-line parser. Real applications should
+prefer to use something like <code>clap</code> or <code>structopt</code> instead.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// app/src/main.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Args {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>parse</span>(<span style=color:#66d9ef>mut</span> args: <span style=color:#a6e22e>impl</span> Iterator<span style=color:#f92672>&lt;</span>Item <span style=color:#f92672>=</span> String<span style=color:#f92672>&gt;</span>) -&gt; Option<span style=color:#f92672>&lt;</span>Args<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> plugin_library <span style=color:#f92672>=</span> PathBuf::from(args.next()<span style=color:#f92672>?</span>);
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> function <span style=color:#f92672>=</span> args.next()<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> arguments <span style=color:#f92672>=</span> Vec::new();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>for</span> arg <span style=color:#66d9ef>in</span> args {
+</span></span><span style=display:flex><span>            arguments.push(arg.parse().ok()<span style=color:#f92672>?</span>);
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        Some(Args {
+</span></span><span style=display:flex><span>            plugin_library,
+</span></span><span style=display:flex><span>            function,
+</span></span><span style=display:flex><span>            arguments,
+</span></span><span style=display:flex><span>        })
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We&rsquo;ll also need a way to <code>call()</code> a function by name.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// app/src/main.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> ExternalFunctions {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>call</span>(<span style=color:#f92672>&amp;</span>self, function: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>, arguments: <span style=color:#66d9ef>&amp;</span>[<span style=color:#66d9ef>f64</span>]) -&gt; Result<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, InvocationError<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        self.functions
+</span></span><span style=display:flex><span>            .get(function)
+</span></span><span style=display:flex><span>            .ok_or_else(<span style=color:#f92672>||</span> format!(<span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>{}</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74> not found&#34;</span>, function))<span style=color:#f92672>?</span>
+</span></span><span style=display:flex><span>            .call(arguments)
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>By default a <code>cdylib</code> will use the system allocator, but executables aren&rsquo;t guaranteed
+to use</p><p>According to the docs from <code>std::alloc</code>,</p><blockquote><p>Currently the default global allocator is unspecified. Libraries, however,
+like <code>cdylib</code>s and <code>staticlib</code>s are guaranteed to use the <code>System</code> by default.</p></blockquote><p>To make sure there&rsquo;s no chance of allocator mismatch (i.e. a plugin allocates
+a <code>String</code> using the <code>System</code> allocator and we try to free it using Jemalloc) we
+need to explicitly declare that the app uses the <code>System</code> allocator.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// app/src/main.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::alloc::System;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[global_allocator]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>static</span> <span style=color:#66d9ef>ALLOCATOR</span>: <span style=color:#a6e22e>System</span> <span style=color:#f92672>=</span> System;
+</span></span></code></pre></div><p>And finally, we can write <code>main()</code>&rsquo;s body.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// app/src/main.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>main</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// parse arguments
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> args <span style=color:#f92672>=</span> env::args().skip(<span style=color:#ae81ff>1</span>);
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> args <span style=color:#f92672>=</span> Args::parse(args)
+</span></span><span style=display:flex><span>        .expect(<span style=color:#e6db74>&#34;Usage: app &lt;plugin-path&gt; &lt;function&gt; &lt;args&gt;...&#34;</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// create our functions table and load the plugin
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> functions <span style=color:#f92672>=</span> ExternalFunctions::new();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>        functions
+</span></span><span style=display:flex><span>            .load(<span style=color:#f92672>&amp;</span>args.plugin_library)
+</span></span><span style=display:flex><span>            .expect(<span style=color:#e6db74>&#34;Function loading failed&#34;</span>);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// then call the function
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> result <span style=color:#f92672>=</span> functions
+</span></span><span style=display:flex><span>        .call(<span style=color:#f92672>&amp;</span>args.function, <span style=color:#f92672>&amp;</span>args.arguments)
+</span></span><span style=display:flex><span>        .expect(<span style=color:#e6db74>&#34;Invocation failed&#34;</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// print out the result
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    println!(
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>&#34;</span><span style=color:#e6db74>{}</span><span style=color:#e6db74>(</span><span style=color:#e6db74>{}</span><span style=color:#e6db74>) = </span><span style=color:#e6db74>{}</span><span style=color:#e6db74>&#34;</span>,
+</span></span><span style=display:flex><span>        args.function,
+</span></span><span style=display:flex><span>        args.arguments
+</span></span><span style=display:flex><span>            .iter()
+</span></span><span style=display:flex><span>            .map(ToString::to_string)
+</span></span><span style=display:flex><span>            .collect::<span style=color:#f92672>&lt;</span>Vec<span style=color:#f92672>&lt;</span>_<span style=color:#f92672>&gt;&gt;</span>()
+</span></span><span style=display:flex><span>            .join(<span style=color:#e6db74>&#34;, &#34;</span>),
+</span></span><span style=display:flex><span>        result
+</span></span><span style=display:flex><span>    );
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>If everything goes to plan, the <code>app</code> tool should <em>Just Work</em>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cargo run -- ../target/release/libplugins_random.so random
+</span></span><span style=display:flex><span>random() = 40
+</span></span><span style=display:flex><span>$ cargo run -- ../target/release/libplugins_random.so random <span style=color:#ae81ff>42</span>
+</span></span><span style=display:flex><span>random(42) = 15
+</span></span><span style=display:flex><span>$ cargo run -- ../target/release/libplugins_random.so random <span style=color:#ae81ff>42</span> <span style=color:#ae81ff>64</span>
+</span></span><span style=display:flex><span>random(42, 64) = 54
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span># Note: the <span style=color:#66d9ef>function</span> doesn<span style=color:#960050;background-color:#1e0010>&#39;</span>t support <span style=color:#ae81ff>3</span> arguments
+</span></span><span style=display:flex><span>$ cargo run -- ../target/release/libplugins_random.so random <span style=color:#ae81ff>1</span> <span style=color:#ae81ff>2</span> <span style=color:#ae81ff>3</span>
+</span></span><span style=display:flex><span>thread &#39;main&#39; panicked at &#39;Invocation failed: Other { msg: &#34;0, 1, or 2 arguments are required&#34; }&#39;, src/libcore/result.rs:1165:5
+</span></span><span style=display:flex><span>note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace.
+</span></span></code></pre></div><p>If a plugin author forgot to invoke the <code>export_plugin!()</code> macro, they may see
+an error like this:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cargo run -- ../target/debug/libplugins_random.so random
+</span></span><span style=display:flex><span>    Finished dev [unoptimized + debuginfo] target(s) in 0.02s
+</span></span><span style=display:flex><span>     Running `/home/michael/Documents/plugins/target/debug/plugins_app ../target/debug/libplugins_random.so random`
+</span></span><span style=display:flex><span>thread &#39;main&#39; panicked at &#39;Function loading failed: Custom { kind: Other, error: &#34;../target/debug/libplugins_random.so: undefined symbol: plugin_declaration&#34; }&#39;, src/libcore/result.rs:1165:5
+</span></span><span style=display:flex><span>note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace.
+</span></span></code></pre></div><p>This is saying we couldn&rsquo;t find the <code>plugin_declaration</code> symbol. You can
+use the <code>nm</code> tool to help with troubleshooting, it shows all symbols exported by
+a library.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>nm ../target/release/libplugins_random.so  | grep plugin
+</span></span><span style=display:flex><span>00000000004967b0 D plugin_declaration
+</span></span><span style=display:flex><span>0000000000056c60 t _ZN12plugins_core8Function4help17hc92b9e8d4917f964E
+</span></span><span style=display:flex><span>0000000000057f60 t _ZN14plugins_random8register17hd43ebfdd726021a4E
+</span></span><span style=display:flex><span>0000000000057f80 t _ZN65_$LT$plugins_random..Random$u20$as$u20$plugins_core..Function$GT$4call17h7434ef9b1f1ca59eE
+</span></span><span style=display:flex><span>00000000000590f0 t _ZN78_$LT$plugins_core..InvocationError$u20$as$u20$core..convert..From$LT$S$GT$$GT$4from17h3a759bcd267b48a1E
+</span></span></code></pre></div><p>And there you have it, a relatively simple, yet safe and robust, plugin
+system which you can use in your own projects.</p><h2 id=see-also>See Also
+<a class=heading-link href=#see-also><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><ul><li><a href=https://sourcey.com/articles/building-a-simple-cpp-cross-platform-plugin-system class=external-link target=_blank rel=noopener>Building a Simple C++ Cross-platform Plugin System</a></li><li><a href=https://michael-f-bryan.github.io/rust-ffi-guide/dynamic_loading.html class=external-link target=_blank rel=noopener>The (unofficial) Rust FFI Guide: Dynamic Loading & Plugins</a></li><li><a href=https://eli.thegreenplace.net/2012/08/24/plugins-in-c class=external-link target=_blank rel=noopener>Plugins in C</a></li><li>The code written alongside this article <a href=https://github.com/Michael-F-Bryan/plugins_in_rust class=external-link target=_blank rel=noopener>on GitHub</a></li></ul></div><footer></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>

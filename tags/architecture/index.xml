@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Architecture on Michael-F-Bryan</title><link>https://adventures.michaelfbryan.com/tags/architecture/</link><description>Recent content in Architecture on Michael-F-Bryan</description><generator>Hugo</generator><language>en</language><lastBuildDate>Tue, 01 Apr 2025 09:19:10 +0800</lastBuildDate><atom:link href="https://adventures.michaelfbryan.com/tags/architecture/index.xml" rel="self" type="application/rss+xml"/><item><title>Link Time Dependency Injection</title><link>https://adventures.michaelfbryan.com/posts/the-linker-trick/</link><pubDate>Sun, 30 Mar 2025 12:59:58 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/the-linker-trick/</guid><description>&lt;p>Have you ever been in a situation where, because of how the code is structured, it&amp;rsquo;s practically impossible to inject a dependency into the component that needs it? Even global variables - ubiquitously reviled for their ability to do &amp;ldquo;spooky action at a distance&amp;rdquo; - weren&amp;rsquo;t spooky enough.&lt;/p>
+&lt;p>In this article, I&amp;rsquo;ll share a technique I discovered while working on a WebAssembly-based CAD package that allows for dependency injection at link time. This technique is particularly useful when traditional dependency injection methods aren&amp;rsquo;t available or practical.&lt;/p></description></item><item><title>How I Translate Feature Requests into Code</title><link>https://adventures.michaelfbryan.com/posts/turning-feature-requests-into-code/</link><pubDate>Wed, 02 Dec 2020 16:10:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/turning-feature-requests-into-code/</guid><description>&lt;p>As part of my previous job I worked on a CAD/CAM package, and a very common
+task would be to take a vague feature description, rephrase it as a more
+formal software problem, then use computational geometry algorithms to turn
+it into code which can be integrated into the overall application.&lt;/p>
+&lt;p>I eventually got quite good at this, so I&amp;rsquo;m going to write down the system I
+came up with. This process works especially well for larger features which
+add new functionality with minimal coupling to existing code.&lt;/p></description></item><item><title>A Pragmatic Approach To Global State</title><link>https://adventures.michaelfbryan.com/posts/pragmatic-global-state/</link><pubDate>Mon, 17 Feb 2020 22:22:47 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/pragmatic-global-state/</guid><description>&lt;p>One of the first things I learned when programming professionally is that
+&lt;em>global variables are bad&lt;/em>. We all take it for granted that it&amp;rsquo;s bad practice
+to write code that relies heavily on global state but the other day I was
+working with a 3rd party native library, and it reminded &lt;em>why&lt;/em> these best
+practices come about.&lt;/p>
+&lt;p>There are a couple factors which made this particular library&amp;rsquo;s use of global
+mutable state rather ugly to work with,&lt;/p></description></item><item><title>Creating Interactive Applications While Maintaining Your Sanity</title><link>https://adventures.michaelfbryan.com/posts/implementing-interactive-applications/</link><pubDate>Thu, 06 Feb 2020 23:43:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/implementing-interactive-applications/</guid><description>&lt;p>One of the primary reasons computers are so ubiquitous in modern society is
+their ability to let humans and software cooperate to achieve a desired goal.
+That is, to be interactive.&lt;/p>
+&lt;p>Creating interactive applications can be pretty annoying for a programmer.
+Unlike a computer which is predictable and will blindly follow any
+instructions given to it,&lt;/p>
+&lt;ul>
+&lt;li>Humans are unpredictable. They like to press buttons and push features further
+than they were originally intended&lt;/li>
+&lt;li>Humans have a habit of asking for special cases (&lt;em>&amp;ldquo;Feature X works really
+well, but when I click on this triangle while holding shift and tilting my
+head at an angle, it should really do Y instead. It&amp;rsquo;s not a big feature, can
+you just add?&amp;rdquo;&lt;/em>)&lt;/li>
+&lt;li>Humans often don&amp;rsquo;t know what they want, meaning even if you implement
+something exactly as described to you users will still complain about it not
+doing the right thing&lt;/li>
+&lt;li>The real world is messy, and letting users interact with your program is a
+really effective way of mixing the messy outside world with the nice
+structured world inside a computer&lt;/li>
+&lt;li>Also, users are the ones funding your pay check so you should probably try
+to keep them happy 😁&lt;/li>
+&lt;/ul>
+&lt;p>The ideas and concepts shown in this article aren&amp;rsquo;t overly advanced. In fact,
+if you&amp;rsquo;ve been programming for a couple months (especially if it&amp;rsquo;s part of a
+formal Computer Science program) you&amp;rsquo;re probably already familiar with them.&lt;/p></description></item><item><title>A Thought Experiment: Using the ECS Pattern Outside of Game Engines</title><link>https://adventures.michaelfbryan.com/posts/ecs-outside-of-games/</link><pubDate>Sat, 28 Dec 2019 00:00:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/ecs-outside-of-games/</guid><description>&lt;p>It&amp;rsquo;s been about 6 months since I watched Catherine West&amp;rsquo;s excellent &lt;a href="https://www.youtube.com/watch?v=aKLntZcp27M" class="external-link" target="_blank" rel="noopener">Using
+Rust for Game Development&lt;/a> sent me down the &lt;em>Entity-Component-System&lt;/em>
+(ECS) rabbit hole, and I thought I&amp;rsquo;d share some of my findings.&lt;/p>
+&lt;p>I&amp;rsquo;ve been meaning to write about this for quite a while now but it took a
+while to put my thoughts into a cohesive article without throwing massive
+walls of code at you.&lt;/p>
+
+&lt;div class="notices note" >
+ &lt;p>This article is mainly focused around the high-level decisions you make when
+designing a project, so there won&amp;rsquo;t be as much code as normal. That said, all
+code written in this article is available &lt;a href="https://github.com/Michael-F-Bryan/arcs" class="external-link" target="_blank" rel="noopener">on GitHub&lt;/a>. Feel free to
+browse through and steal code or inspiration.&lt;/p></description></item></channel></rss>

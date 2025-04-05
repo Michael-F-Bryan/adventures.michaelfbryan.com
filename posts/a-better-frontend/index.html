@@ -1,0 +1,475 @@
+<!doctype html><html lang=en><head><title>A Better Frontend · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="Now we&rsquo;ve got a half-usable motion controller, we need a graphical way for
+humans to interact with it. The controller runs in a browser, which makes
+Vue a perfect candidate for the UI.
+
+  Adding Vue to the Frontend
+  
+    
+    Link to heading
+  
+
+Now, we don&rsquo;t actually have much frontend code (47 lines of JavaScript to be
+exact) so it&rsquo;s actually easier to delete the existing frontend and use the
+vue CLI tool to create a new one."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="A Better Frontend"><meta name=twitter:description content="Now we’ve got a half-usable motion controller, we need a graphical way for humans to interact with it. The controller runs in a browser, which makes Vue a perfect candidate for the UI.
+Adding Vue to the Frontend Link to heading Now, we don’t actually have much frontend code (47 lines of JavaScript to be exact) so it’s actually easier to delete the existing frontend and use the vue CLI tool to create a new one."><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/a-better-frontend/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="A Better Frontend"><meta property="og:description" content="Now we’ve got a half-usable motion controller, we need a graphical way for humans to interact with it. The controller runs in a browser, which makes Vue a perfect candidate for the UI.
+Adding Vue to the Frontend Link to heading Now, we don’t actually have much frontend code (47 lines of JavaScript to be exact) so it’s actually easier to delete the existing frontend and use the vue CLI tool to create a new one."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2019-09-27T03:47:00+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Adventures-in-Motion-Control"><meta property="article:tag" content="Rust"><meta property="article:tag" content="WebAssembly"><meta property="article:tag" content="Vue"><meta property="article:tag" content="Javascript"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/a-better-frontend/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/a-better-frontend/>A Better Frontend</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2019-09-27T03:47:00+08:00>September 27, 2019
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+12-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/adventures-in-motion-control/>Adventures-in-Motion-Control</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/rust/>Rust</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/webassembly/>WebAssembly</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/vue/>Vue</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/javascript/>Javascript</a></span></div></div></header><div class=post-content><p>Now we&rsquo;ve got a half-usable motion controller, we need a graphical way for
+humans to interact with it. The controller runs in a browser, which makes
+<a href=https://vuejs.org/ class=external-link target=_blank rel=noopener>Vue</a> a perfect candidate for the UI.</p><h2 id=adding-vue-to-the-frontend>Adding Vue to the Frontend
+<a class=heading-link href=#adding-vue-to-the-frontend><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now, we don&rsquo;t actually have much frontend code (47 lines of JavaScript to be
+exact) so it&rsquo;s actually easier to delete the existing <code>frontend</code> and use the
+<a href=https://cli.vuejs.org/guide/installation.html class=external-link target=_blank rel=noopener><code>vue</code> CLI tool</a> to create a new one.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ rm -r frontend
+</span></span><span style=display:flex><span>$ yarn global add @vue/cli
+</span></span><span style=display:flex><span>$ vue create frontend
+</span></span><span style=display:flex><span>  Vue CLI v3.11.0
+</span></span><span style=display:flex><span>  ? Please pick a preset: Manually select features
+</span></span><span style=display:flex><span>  ? Check the features needed for your project: Babel, TS
+</span></span><span style=display:flex><span>  ? Use class-style component syntax? Yes
+</span></span><span style=display:flex><span>  ? Use Babel alongside TypeScript (required for modern mode, auto-detected polyfills, transpiling JSX)? Yes
+</span></span><span style=display:flex><span>  ? Where do you prefer placing config for Babel, PostCSS, ESLint, etc.? In dedicated config files
+</span></span><span style=display:flex><span>  ? Save this as a preset for future projects? No
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span>  ...
+</span></span></code></pre></div><div class="notices note"><p>Make sure to check the <em>TypeScript</em> and <em>Babel</em> options when creating
+<code>frontend</code>.</p></div><p>Any JavaScript that uses WASM code must be loaded asynchronously so we&rsquo;ll use
+the same trick that the <code>rustwasm/create-wasm-app</code> used, a <code>bootstrap.js</code> shim.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-js data-lang=js><span style=display:flex><span><span style=color:#75715e>// frontend/src/bootstrap.js
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// A dependency graph that contains any wasm must all be imported
+</span></span></span><span style=display:flex><span><span style=color:#75715e>// asynchronously. This `bootstrap.js` file does the single async import, so
+</span></span></span><span style=display:flex><span><span style=color:#75715e>// that no one else needs to worry about it again.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span><span style=color:#66d9ef>import</span>(<span style=color:#e6db74>&#34;./main.ts&#34;</span>)
+</span></span><span style=display:flex><span>    .<span style=color:#66d9ef>catch</span>(<span style=color:#a6e22e>e</span> =&gt; <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>error</span>(<span style=color:#e6db74>&#34;Error importing `main.ts`:&#34;</span>, <span style=color:#a6e22e>e</span>));
+</span></span></code></pre></div><p>If we want our <code>bootstrap.js</code> shim to be called, we&rsquo;ll need to tell Webpack
+to use it as the app&rsquo;s entrypoint.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-js data-lang=js><span style=display:flex><span><span style=color:#75715e>// frontend/vue.config.js
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>const</span> <span style=color:#a6e22e>path</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>require</span>(<span style=color:#e6db74>&#34;path&#34;</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>module</span>.<span style=color:#a6e22e>exports</span> <span style=color:#f92672>=</span> {
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>configureWebpack</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>config</span> =&gt; {
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>entry</span>.<span style=color:#a6e22e>app</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>path</span>.<span style=color:#a6e22e>join</span>(<span style=color:#a6e22e>__dirname</span>, <span style=color:#e6db74>&#34;src&#34;</span>, <span style=color:#e6db74>&#34;bootstrap.js&#34;</span>);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We&rsquo;ll also delete some of the junk that comes with the default scaffold so our
+<code>App</code> just displays <em>&ldquo;Hello, World&rdquo;</em>. This gives us a nice clean slate to work
+from.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vue data-lang=vue><span style=display:flex><span><span style=color:#75715e>// frontend/src/App.vue
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>&lt;<span style=color:#f92672>template</span>&gt;
+</span></span><span style=display:flex><span>  &lt;<span style=color:#f92672>div</span> <span style=color:#a6e22e>id</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;app&#34;</span>&gt;
+</span></span><span style=display:flex><span>    &lt;<span style=color:#f92672>h1</span>&gt;<span style=color:#a6e22e>Hello</span>, <span style=color:#a6e22e>World</span><span style=color:#f92672>!</span>&lt;/<span style=color:#f92672>h1</span>&gt;
+</span></span><span style=display:flex><span>  &lt;/<span style=color:#f92672>div</span>&gt;
+</span></span><span style=display:flex><span>&lt;/<span style=color:#f92672>template</span>&gt;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>&lt;<span style=color:#f92672>script</span> <span style=color:#a6e22e>lang</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;ts&#34;</span>&gt;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>import</span> { <span style=color:#a6e22e>Component</span>, <span style=color:#a6e22e>Vue</span> } <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#34;vue-property-decorator&#34;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>@</span><span style=color:#a6e22e>Component</span>({})
+</span></span><span style=display:flex><span><span style=color:#66d9ef>export</span> <span style=color:#66d9ef>default</span> <span style=color:#66d9ef>class</span> <span style=color:#a6e22e>App</span> <span style=color:#66d9ef>extends</span> <span style=color:#a6e22e>Vue</span> {}
+</span></span><span style=display:flex><span>&lt;/<span style=color:#f92672>script</span>&gt;
+</span></span></code></pre></div><p>If you start the dev server now (<code>yarn serve</code>), you should hopefully be
+greeted by a page saying <em>&ldquo;Hello, World!&rdquo;</em>.</p><h2 id=wiring-aimc_sim-up-to-the-frontend-again>Wiring <code>aimc_sim</code> Up to the Frontend Again
+<a class=heading-link href=#wiring-aimc_sim-up-to-the-frontend-again><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now we&rsquo;ve got a working frontend, we can wire up the <code>aimc_sim</code> crate so it&rsquo;s
+able to interact with the UI again.</p><p>First, don&rsquo;t forget to add the WASM code generated by the <code>sim</code> crate to our
+new <code>frontend</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>yarn add ../sim/pkg
+</span></span></code></pre></div><p>Next in order to support Vue&rsquo;s reactive way of doing things, we&rsquo;ll need to
+rewrite the <code>Browser</code> module so it&rsquo;ll accept a reference to some JavaScript
+object.</p><p>We want to take advantage of <code>wasm-bindgen</code>&rsquo;s ability to work with <a href=https://rustwasm.github.io/docs/wasm-bindgen/reference/working-with-duck-typed-interfaces.html class=external-link target=_blank rel=noopener>Duck-typed
+interfaces</a> so the top-level Vue <code>App</code> can communicate with the motion
+controller by passing down something that has some pre-defined methods.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// sim/src/browser.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> aimc_comms::Tx;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> aimc_fps_counter::{Fps, FpsSink};
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> wasm_bindgen::prelude::<span style=color:#f92672>*</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[wasm_bindgen]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// An arbitrary JavaScript object which implements the [`Browser`]
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// interface.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Browser</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[wasm_bindgen(structural, method)]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>set_fps</span>(this: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Browser</span>, frequency: <span style=color:#66d9ef>f32</span>, tick_duration_ms: <span style=color:#66d9ef>f32</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[wasm_bindgen(structural, method)]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>send_data</span>(this: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Browser</span>, data: <span style=color:#66d9ef>&amp;</span>[<span style=color:#66d9ef>u8</span>]);
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Wrapper around a JavaScript [`Browser`] object which implements the various
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// system traits.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>B</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span>(<span style=color:#66d9ef>pub</span> <span style=color:#f92672>&amp;</span><span style=color:#a6e22e>&#39;a</span> Browser);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> FpsSink <span style=color:#66d9ef>for</span> B<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>emit_fps</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, fps: <span style=color:#a6e22e>Fps</span>) {
+</span></span><span style=display:flex><span>        self.<span style=color:#ae81ff>0</span>
+</span></span><span style=display:flex><span>            .set_fps(fps.frequency, fps.tick_duration.as_secs_f32() <span style=color:#f92672>*</span> <span style=color:#ae81ff>1000.0</span>)
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> Tx <span style=color:#66d9ef>for</span> B<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>send</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, data: <span style=color:#66d9ef>&amp;</span>[<span style=color:#66d9ef>u8</span>]) { self.<span style=color:#ae81ff>0.</span>send_data(data); }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Believe it or not, but this makes the <code>aimc_sim::App</code> <em>cleaner</em> because we
+aren&rsquo;t binding to the DOM directly, and therefore don&rsquo;t have to worry about
+setup failing.</p><p>I&rsquo;ll elide the changes to <code>sim/src/app.rs</code> for now seeing as they&rsquo;re mostly
+mechanical code changes. The WASM functions exported by <code>lib.rs</code> are kinda
+important though, seeing as that&rsquo;s the interface our frontend will be using.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// sim/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[wasm_bindgen]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>setup_world</span>() -&gt; <span style=color:#a6e22e>App</span> { App::new(Inputs::default()) }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[wasm_bindgen]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>poll</span>(app: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> App, browser: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Browser</span>) { app.poll(browser); }
+</span></span></code></pre></div><p>Now the Rust code has been updated to work with the browser, we can attach it
+to the Vue <code>App</code> component and wire up an <code>animate()</code> function to be called
+every time the browser refreshes.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vue data-lang=vue><span style=display:flex><span><span style=color:#75715e>// frontend/src/App.vue
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>&lt;<span style=color:#f92672>script</span> <span style=color:#a6e22e>lang</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;ts&#34;</span>&gt;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>import</span> { <span style=color:#a6e22e>Component</span>, <span style=color:#a6e22e>Vue</span> } <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#34;vue-property-decorator&#34;</span>;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>import</span> <span style=color:#f92672>*</span> <span style=color:#a6e22e>as</span> <span style=color:#a6e22e>wasm</span> <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#34;aimc_sim&#34;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>@</span><span style=color:#a6e22e>Component</span>({})
+</span></span><span style=display:flex><span><span style=color:#66d9ef>export</span> <span style=color:#66d9ef>default</span> <span style=color:#66d9ef>class</span> <span style=color:#a6e22e>App</span> <span style=color:#66d9ef>extends</span> <span style=color:#a6e22e>Vue</span> {
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>private</span> <span style=color:#a6e22e>app</span><span style=color:#f92672>?:</span> <span style=color:#a6e22e>wasm</span>.<span style=color:#a6e22e>App</span>;
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>private</span> <span style=color:#a6e22e>animateToken</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>  <span style=color:#a6e22e>mounted</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// setup the world
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>app</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>wasm</span>.<span style=color:#a6e22e>setup_world</span>();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// and schedule the animate() function to be called on the next tick
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>animateToken</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>requestAnimationFrame</span>(<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>animate</span>.<span style=color:#a6e22e>bind</span>(<span style=color:#66d9ef>this</span>));
+</span></span><span style=display:flex><span>  }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>  <span style=color:#a6e22e>beforeDestroy</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// make sure the animate method is cancelled when this component is removed
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#75715e>// from the screen
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#a6e22e>cancelAnimationFrame</span>(<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>animateToken</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// don&#39;t forget to drop() our App
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> (<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>app</span>) {
+</span></span><span style=display:flex><span>      <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>app</span>.<span style=color:#a6e22e>free</span>();
+</span></span><span style=display:flex><span>      <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>app</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>undefined</span>;
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>  }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>  <span style=color:#a6e22e>animate</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// schedule animate to be called again
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>animateToken</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>requestAnimationFrame</span>(<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>animate</span>.<span style=color:#a6e22e>bind</span>(<span style=color:#66d9ef>this</span>));
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> (<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>app</span>) {
+</span></span><span style=display:flex><span>      <span style=color:#75715e>// poll the app to let it make progress
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>      <span style=color:#a6e22e>wasm</span>.<span style=color:#a6e22e>poll</span>(<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>app</span>, <span style=color:#66d9ef>this</span>);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>  }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>&lt;/<span style=color:#f92672>script</span>&gt;
+</span></span></code></pre></div><p>If you squint, you can almost see our <a href=https://github.com/Michael-F-Bryan/adventures-in-motion-control/blob/2459d6e02d72ac9a012fe002ffd89876716670fb/frontend/index.js class=external-link target=_blank rel=noopener>original <code>index.js</code></a> in
+there&mldr;</p><p>You may have also noticed that the call to <code>wasm.poll()</code> is passed a reference
+to <code>this</code>. That means we&rsquo;ll need to implement the <code>Browser</code> &ldquo;interface&rdquo; on
+<code>App</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vue data-lang=vue><span style=display:flex><span><span style=color:#75715e>// frontend/src/App.vue
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>&lt;<span style=color:#f92672>script</span> <span style=color:#a6e22e>lang</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;ts&#34;</span>&gt;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>import</span> { <span style=color:#a6e22e>Component</span>, <span style=color:#a6e22e>Vue</span> } <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#34;vue-property-decorator&#34;</span>;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>import</span> <span style=color:#f92672>*</span> <span style=color:#a6e22e>as</span> <span style=color:#a6e22e>wasm</span> <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#34;aimc_sim&#34;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>@</span><span style=color:#a6e22e>Component</span>({})
+</span></span><span style=display:flex><span><span style=color:#66d9ef>export</span> <span style=color:#66d9ef>default</span> <span style=color:#66d9ef>class</span> <span style=color:#a6e22e>App</span> <span style=color:#66d9ef>extends</span> <span style=color:#a6e22e>Vue</span> {
+</span></span><span style=display:flex><span>  ...
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>public</span> <span style=color:#a6e22e>frequency</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>public</span> <span style=color:#a6e22e>tick_duration_ms</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>  ...
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>  <span style=color:#a6e22e>set_fps</span>(<span style=color:#a6e22e>frequency</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>number</span>, <span style=color:#a6e22e>tick_duration_ms</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>number</span>) {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>frequency</span> <span style=color:#f92672>=</span> Math.<span style=color:#a6e22e>round</span>(<span style=color:#a6e22e>frequency</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>10</span>) <span style=color:#f92672>/</span> <span style=color:#ae81ff>10</span>;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>tick_duration_ms</span> <span style=color:#f92672>=</span> Math.<span style=color:#a6e22e>round</span>(<span style=color:#a6e22e>tick_duration_ms</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>10</span>) <span style=color:#f92672>/</span> <span style=color:#ae81ff>10</span>;
+</span></span><span style=display:flex><span>  }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>  <span style=color:#a6e22e>send_data</span>(<span style=color:#a6e22e>data</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>Uint8Array</span>) {
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>new</span> <span style=color:#a6e22e>TextDecoder</span>(<span style=color:#e6db74>&#34;utf-8&#34;</span>).<span style=color:#a6e22e>decode</span>(<span style=color:#a6e22e>data</span>));
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// TODO: actually handle the message...
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>  }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>&lt;/<span style=color:#f92672>script</span>&gt;
+</span></span></code></pre></div><p>Now we&rsquo;ve got access to the FPS counter again, we may as well add it to the
+rendered document.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vue data-lang=vue><span style=display:flex><span><span style=color:#75715e>// frontend/src/App.vue
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>&lt;<span style=color:#f92672>template</span>&gt;
+</span></span><span style=display:flex><span>  &lt;<span style=color:#f92672>div</span> <span style=color:#a6e22e>id</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;app&#34;</span>&gt;
+</span></span><span style=display:flex><span>    &lt;<span style=color:#f92672>h1</span>&gt;<span style=color:#a6e22e>Hello</span>, <span style=color:#a6e22e>World</span><span style=color:#f92672>!</span>&lt;/<span style=color:#f92672>h1</span>&gt;
+</span></span><span style=display:flex><span>    &lt;<span style=color:#f92672>p</span>&gt;{{<span style=color:#a6e22e>frequency</span>}} <span style=color:#a6e22e>Hz</span> ({{<span style=color:#a6e22e>tick_duration_ms</span><span style=color:#f92672>*</span><span style=color:#ae81ff>1000</span>}} <span style=color:#a6e22e>μs</span>)&lt;/<span style=color:#f92672>p</span>&gt;
+</span></span><span style=display:flex><span>  &lt;/<span style=color:#f92672>div</span>&gt;
+</span></span><span style=display:flex><span>&lt;/<span style=color:#f92672>template</span>&gt;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>&lt;<span style=color:#f92672>script</span> <span style=color:#a6e22e>lang</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;ts&#34;</span>&gt;
+</span></span><span style=display:flex><span>...
+</span></span><span style=display:flex><span>&lt;/<span style=color:#f92672>script</span>&gt;
+</span></span></code></pre></div><p>Restarting the dev server and going to http://localhost:8080/ again will show
+our <em>Hello, World!</em> and a rapidly changing FPS counter.</p><p><video controls src=simple-ui.webm type=video/webm style=width:100%></video></p><div class="notices note"><p>After letting the JIT warm up for a while, the <em>&ldquo;average tick duration&rdquo;</em> seems
+to hover between 0 and 100 μs. This appears to be the best resolution the
+browser&rsquo;s <code>performance.now()</code> will give us.</p><p>Now we&rsquo;re not directly manipulating the DOM and leaving Vue to do the
+deduplication of UI changes, our <code>poll()</code> function is a couple orders of
+magnitude faster.</p></div><h2 id=scouting-the-competition>Scouting the Competition
+<a class=heading-link href=#scouting-the-competition><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>The first step when designing a UI is to look at what other people have done for
+inspiration.</p><p>This screenshot of <a href=https://octoprint.org/ class=external-link target=_blank rel=noopener>OctoPrint</a> web UI, showing their <em>&ldquo;terminal&rdquo;</em> tab
+looks promising. We&rsquo;ll probably want something similar to the terminal for
+diagnostics and viewing the raw messages as they go back and forth.</p><p><img src=octoprint-terminal.png alt="OctoPrint terminal tab"></p><p>Another example, more machine-oriented this time, is <a href=https://www.machsupport.com/software/mach4/ class=external-link target=_blank rel=noopener>Mach4</a>. This is a
+commercial desktop program commonly used to control CNC machines.</p><p><img src=mach4.jpg alt=Mach4></p><p>Another option is the highly configurable <a href=http://linuxcnc.org/ class=external-link target=_blank rel=noopener>LinuxCNC</a>.</p><p><img src=linuxcnc.jpg alt=LinuxCNC></p><p>Some elements they all have in common:</p><ul><li>Lots of numbers and buttons, preferring functionality over aesthetics</li><li>Some sort of pseudo-text editor for viewing the program sent to the machine</li><li>Instantaneous axis positions</li><li>Buttons for triggering various automation sequences</li><li>Colours which indicate whether things are &ldquo;happy&rdquo; (or not) at a glance</li><li>A 3D preview which shows how the job might look when cut</li></ul><p>I&rsquo;m personally leaning towards the <em>OctoPrint</em> example. It&rsquo;s rather clean, and
+the UI layout/behaviour fits well in a browser (probably not surprising,
+considering it&rsquo;s a web UI).</p><h2 id=implementation>Implementation
+<a class=heading-link href=#implementation><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>We&rsquo;re going to lean heavily on <a href=https://bootstrap-vue.js.org/docs/ class=external-link target=_blank rel=noopener>Bootstrap</a> and <a href=https://bootstrap-vue.js.org/ class=external-link target=_blank rel=noopener>BootstrapVue</a> for the
+CSS and UI elements here, so add them as a dependency.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>yarn add vue bootstrap-vue bootstrap
+</span></span></code></pre></div><p>We&rsquo;ll also need to import the CSS and register the <code>BootstrapVue</code> plugin.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-ts data-lang=ts><span style=display:flex><span><span style=color:#75715e>// frontend/src/main.ts
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>import</span> <span style=color:#a6e22e>Vue</span> <span style=color:#66d9ef>from</span> <span style=color:#e6db74>&#39;vue&#39;</span>;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>import</span> <span style=color:#a6e22e>BootstrapVue</span> <span style=color:#66d9ef>from</span> <span style=color:#e6db74>&#39;bootstrap-vue&#39;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>import</span> <span style=color:#a6e22e>App</span> <span style=color:#66d9ef>from</span> <span style=color:#e6db74>&#39;./App.vue&#39;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>import</span> <span style=color:#e6db74>&#39;bootstrap/dist/css/bootstrap.css&#39;</span>;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>import</span> <span style=color:#e6db74>&#39;bootstrap-vue/dist/bootstrap-vue.css&#39;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>Vue</span>.<span style=color:#a6e22e>use</span>(<span style=color:#a6e22e>BootstrapVue</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>...
+</span></span></code></pre></div><p>The next step is to mock out the various UI elements. This part can take a
+while, especially if you aren&rsquo;t a normally frontend developer (like me!).</p><p>After some tweaking, I came up with this:</p><p><video controls src=mock-ui.webm type=video/webm style=width:100%></video></p><div class="notices note"><p>If you want to see all of the code that went into that frontend, it&rsquo;s all on
+GitHub. You&rsquo;ll want to start around commit
+<a href=https://github.com/Michael-F-Bryan/adventures-in-motion-control/tree/24ca65c7d8be8194754525963193735febe36aaa class=external-link target=_blank rel=noopener>24ca65c7</a>).</p></div><p>This design has roughly two areas, the <em>Sidebar</em> and <em>Body</em>.</p><p>The <em>Sidebar</em> is given its own component containing information which you&rsquo;ll
+want to see at a glance. This includes things like the current machine state
+(axis positions, limit switches, etc.) and an overview of the simulator (FPS,
+job upload progress, etc.).</p><p>The <code>frequency</code> and <code>tick_duration_us</code> are passed down from <code>App</code> as props. That
+way whenever they get updated on the <code>App</code>, the new values will be automagically
+passed down to the <code>Sidebar</code> and trigger a redraw.</p><p>Rendering is just a case of tweaking <a href=https://bootstrap-vue.js.org/docs/components/collapse#accordion-support class=external-link target=_blank rel=noopener>the Accordian example</a> from
+BootstrapVue&rsquo;s website. Axis positions aren&rsquo;t actually recorded anywhere, so
+we&rsquo;ll use dummy values for the moment.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vue data-lang=vue><span style=display:flex><span><span style=color:#75715e>// frontend/src/components/Sidebar.vue
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>&lt;<span style=color:#f92672>template</span>&gt;
+</span></span><span style=display:flex><span>  &lt;<span style=color:#f92672>div</span> <span style=color:#a6e22e>class</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;sidebar&#34;</span> <span style=color:#a6e22e>role</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;tablist&#34;</span>&gt;
+</span></span><span style=display:flex><span>    &lt;<span style=color:#f92672>b-card</span> <span style=color:#a6e22e>no</span><span style=color:#f92672>-body</span> <span style=color:#a6e22e>class</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;mb-1&#34;</span>&gt;
+</span></span><span style=display:flex><span>      &lt;<span style=color:#f92672>b-card-header</span> <span style=color:#a6e22e>header</span><span style=color:#f92672>-tag</span><span style=color:#960050;background-color:#1e0010>=&#34;</span><span style=color:#a6e22e>header</span><span style=color:#960050;background-color:#1e0010>&#34;</span> <span style=color:#a6e22e>class</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;p-1&#34;</span> <span style=color:#a6e22e>role</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;tab&#34;</span>&gt;
+</span></span><span style=display:flex><span>        &lt;<span style=color:#f92672>b-button</span> <span style=color:#a6e22e>block</span> <span style=color:#a6e22e>href</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;#&#34;</span> <span style=color:#f92672>v-b-toggle.accordion-1</span> <span style=color:#a6e22e>variant</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;info&#34;</span>&gt;<span style=color:#a6e22e>Overview</span>&lt;/<span style=color:#f92672>b-button</span>&gt;
+</span></span><span style=display:flex><span>      &lt;/<span style=color:#f92672>b-card-header</span>&gt;
+</span></span><span style=display:flex><span>      &lt;<span style=color:#f92672>b-collapse</span> <span style=color:#a6e22e>id</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;accordion-1&#34;</span> <span style=color:#a6e22e>visible</span> <span style=color:#a6e22e>accordion</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;my-accordion&#34;</span> <span style=color:#a6e22e>role</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;tabpanel&#34;</span>&gt;
+</span></span><span style=display:flex><span>        &lt;<span style=color:#f92672>b-card-body</span>&gt;
+</span></span><span style=display:flex><span>          &lt;<span style=color:#f92672>table</span> <span style=color:#a6e22e>class</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;table&#34;</span>&gt;
+</span></span><span style=display:flex><span>            &lt;<span style=color:#f92672>tr</span>&gt;
+</span></span><span style=display:flex><span>              &lt;<span style=color:#f92672>td</span>&gt;<span style=color:#a6e22e>FPS</span>&lt;/<span style=color:#f92672>td</span>&gt;
+</span></span><span style=display:flex><span>              &lt;<span style=color:#f92672>td</span>&gt;{{<span style=color:#a6e22e>frequency</span>}} <span style=color:#a6e22e>Hz</span> &lt;<span style=color:#f92672>small</span>&gt;({{<span style=color:#a6e22e>tick_duration_us</span>}} <span style=color:#a6e22e>μs</span>)&lt;/<span style=color:#f92672>small</span>&gt;&lt;/<span style=color:#f92672>td</span>&gt;
+</span></span><span style=display:flex><span>            &lt;/<span style=color:#f92672>tr</span>&gt;
+</span></span><span style=display:flex><span>          &lt;/<span style=color:#f92672>table</span>&gt;
+</span></span><span style=display:flex><span>        &lt;/<span style=color:#f92672>b-card-body</span>&gt;
+</span></span><span style=display:flex><span>      &lt;/<span style=color:#f92672>b-collapse</span>&gt;
+</span></span><span style=display:flex><span>    &lt;/<span style=color:#f92672>b-card</span>&gt;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    &lt;<span style=color:#f92672>b-card</span> <span style=color:#a6e22e>no</span><span style=color:#f92672>-body</span> <span style=color:#a6e22e>class</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;mb-1&#34;</span>&gt;
+</span></span><span style=display:flex><span>      &lt;<span style=color:#f92672>b-card-header</span> <span style=color:#a6e22e>header</span><span style=color:#f92672>-tag</span><span style=color:#960050;background-color:#1e0010>=&#34;</span><span style=color:#a6e22e>header</span><span style=color:#960050;background-color:#1e0010>&#34;</span> <span style=color:#a6e22e>class</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;p-1&#34;</span> <span style=color:#a6e22e>role</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;tab&#34;</span>&gt;
+</span></span><span style=display:flex><span>        &lt;<span style=color:#f92672>b-button</span> <span style=color:#a6e22e>block</span> <span style=color:#a6e22e>href</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;#&#34;</span> <span style=color:#f92672>v-b-toggle.accordion-2</span> <span style=color:#a6e22e>variant</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;info&#34;</span>&gt;<span style=color:#a6e22e>Current</span> <span style=color:#a6e22e>State</span>&lt;/<span style=color:#f92672>b-button</span>&gt;
+</span></span><span style=display:flex><span>      &lt;/<span style=color:#f92672>b-card-header</span>&gt;
+</span></span><span style=display:flex><span>      &lt;<span style=color:#f92672>b-collapse</span> <span style=color:#a6e22e>id</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;accordion-2&#34;</span> <span style=color:#a6e22e>accordion</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;my-accordion&#34;</span> <span style=color:#a6e22e>role</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;tabpanel&#34;</span>&gt;
+</span></span><span style=display:flex><span>        &lt;<span style=color:#f92672>b-card-body</span>&gt;
+</span></span><span style=display:flex><span>          &lt;<span style=color:#f92672>table</span> <span style=color:#a6e22e>class</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;table&#34;</span>&gt;
+</span></span><span style=display:flex><span>            &lt;<span style=color:#f92672>tr</span>&gt;&lt;<span style=color:#f92672>td</span>&gt;<span style=color:#a6e22e>X</span>&lt;/<span style=color:#f92672>td</span>&gt;&lt;<span style=color:#f92672>td</span>&gt;<span style=color:#ae81ff>123</span>&lt;/<span style=color:#f92672>td</span>&gt;&lt;/<span style=color:#f92672>tr</span>&gt;
+</span></span><span style=display:flex><span>            &lt;<span style=color:#f92672>tr</span>&gt;&lt;<span style=color:#f92672>td</span>&gt;<span style=color:#a6e22e>Y</span>&lt;/<span style=color:#f92672>td</span>&gt;&lt;<span style=color:#f92672>td</span>&gt;<span style=color:#ae81ff>321</span>&lt;/<span style=color:#f92672>td</span>&gt;&lt;/<span style=color:#f92672>tr</span>&gt;
+</span></span><span style=display:flex><span>            &lt;<span style=color:#f92672>tr</span>&gt;&lt;<span style=color:#f92672>td</span>&gt;<span style=color:#a6e22e>Z</span>&lt;/<span style=color:#f92672>td</span>&gt;&lt;<span style=color:#f92672>td</span>&gt;<span style=color:#ae81ff>456.7</span>&lt;/<span style=color:#f92672>td</span>&gt;&lt;/<span style=color:#f92672>tr</span>&gt;
+</span></span><span style=display:flex><span>          &lt;/<span style=color:#f92672>table</span>&gt;
+</span></span><span style=display:flex><span>        &lt;/<span style=color:#f92672>b-card-body</span>&gt;
+</span></span><span style=display:flex><span>      &lt;/<span style=color:#f92672>b-collapse</span>&gt;
+</span></span><span style=display:flex><span>    &lt;/<span style=color:#f92672>b-card</span>&gt;
+</span></span><span style=display:flex><span>  &lt;/<span style=color:#f92672>div</span>&gt;
+</span></span><span style=display:flex><span>&lt;/<span style=color:#f92672>template</span>&gt;
+</span></span></code></pre></div><p>The bulk of the page is filled with the <em>Body</em>. This contains a set of tabs
+(may or may not be copied from BootstrapVue&rsquo;s <a href=https://bootstrap-vue.js.org/docs/components/tabs#basic-usage class=external-link target=_blank rel=noopener>tabs example</a>) with a
+couple useful panels.</p><p>First, as the way a user interacts with the motion controller it makes sense to
+have a <em>Control</em> panel. This will contain buttons for sending various commands
+or setting values (e.g. calibration ratios) but for now it&rsquo;ll just have an
+input for triggering the <em>Home</em> automation sequence, and a field for setting the
+homing speed.</p><p>Again, this gets pulled out into its own component. We make use of the <code>@Emit</code>
+decorator to emit a <code>"home"</code> event whenever the <em>Home</em> button is pressed. The
+event&rsquo;s payload contains the homing speed (in <code>mm/s</code>) and will be used by the
+<code>App</code> later on to send a message to the motion controller.</p><p>Other than that, it&rsquo;s fairly similar to what you may see in the Vue tutorial
+or BootstrapVue&rsquo;s <a href=https://bootstrap-vue.js.org/docs/components/form#inline-form class=external-link target=_blank rel=noopener>inline form</a> example.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vue data-lang=vue><span style=display:flex><span><span style=color:#75715e>// frontend/src/components/Controls.vue
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>&lt;<span style=color:#f92672>template</span>&gt;
+</span></span><span style=display:flex><span>  &lt;<span style=color:#f92672>div</span>&gt;
+</span></span><span style=display:flex><span>    &lt;<span style=color:#f92672>b-form</span> <span style=color:#a6e22e>inline</span> <span style=color:#f92672>@submit</span><span style=color:#e6db74>=&#34;onHomePressed&#34;</span>&gt;
+</span></span><span style=display:flex><span>      &lt;<span style=color:#f92672>label</span> <span style=color:#a6e22e>class</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;sr-only&#34;</span> <span style=color:#a6e22e>for</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;homing-speed&#34;</span>&gt;<span style=color:#a6e22e>Homing</span> <span style=color:#a6e22e>Speed</span>&lt;/<span style=color:#f92672>label</span>&gt;
+</span></span><span style=display:flex><span>      &lt;<span style=color:#f92672>b-input-group</span> <span style=color:#a6e22e>append</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;mm/s&#34;</span> <span style=color:#a6e22e>class</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;mb-2 mr-sm-2 mb-sm-0&#34;</span>&gt;
+</span></span><span style=display:flex><span>        &lt;<span style=color:#f92672>b-input</span>
+</span></span><span style=display:flex><span>          <span style=color:#a6e22e>type</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;number&#34;</span>
+</span></span><span style=display:flex><span>          <span style=color:#a6e22e>step</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;0.01&#34;</span>
+</span></span><span style=display:flex><span>          <span style=color:#a6e22e>min</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;0&#34;</span>
+</span></span><span style=display:flex><span>          <span style=color:#a6e22e>id</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;homing-speed&#34;</span>
+</span></span><span style=display:flex><span>          <span style=color:#a6e22e>v</span><span style=color:#f92672>-model</span><span style=color:#a6e22e>.number</span><span style=color:#960050;background-color:#1e0010>=&#34;</span><span style=color:#a6e22e>motion.homingSpeed</span><span style=color:#960050;background-color:#1e0010>&#34;</span>
+</span></span><span style=display:flex><span>        &gt;&lt;/<span style=color:#f92672>b-input</span>&gt;
+</span></span><span style=display:flex><span>      &lt;/<span style=color:#f92672>b-input-group</span>&gt;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>      &lt;<span style=color:#f92672>b-button</span> <span style=color:#a6e22e>type</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;submit&#34;</span> <span style=color:#a6e22e>variant</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;primary&#34;</span>&gt;<span style=color:#a6e22e>Home</span>&lt;/<span style=color:#f92672>b-button</span>&gt;
+</span></span><span style=display:flex><span>    &lt;/<span style=color:#f92672>b-form</span>&gt;
+</span></span><span style=display:flex><span>  &lt;/<span style=color:#f92672>div</span>&gt;
+</span></span><span style=display:flex><span>&lt;/<span style=color:#f92672>template</span>&gt;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>&lt;<span style=color:#f92672>script</span> <span style=color:#a6e22e>lang</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;ts&#34;</span>&gt;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>import</span> { <span style=color:#a6e22e>Component</span>, <span style=color:#a6e22e>Vue</span>, <span style=color:#a6e22e>Emit</span> } <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#34;vue-property-decorator&#34;</span>;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>import</span> <span style=color:#a6e22e>MotionParameters</span> <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#34;../MotionParameters&#34;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>@</span><span style=color:#a6e22e>Component</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>export</span> <span style=color:#66d9ef>default</span> <span style=color:#66d9ef>class</span> <span style=color:#a6e22e>Controls</span> <span style=color:#66d9ef>extends</span> <span style=color:#a6e22e>Vue</span> {
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>public</span> <span style=color:#a6e22e>motion</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>MotionParameters</span>();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>  <span style=color:#a6e22e>onHomePressed</span>(<span style=color:#a6e22e>e</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>Event</span>) {
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>e</span>.<span style=color:#a6e22e>preventDefault</span>();
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>home</span>();
+</span></span><span style=display:flex><span>  }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>  <span style=color:#960050;background-color:#1e0010>@</span><span style=color:#a6e22e>Emit</span>()
+</span></span><span style=display:flex><span>  <span style=color:#a6e22e>home</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>return</span> { <span style=color:#a6e22e>speed</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>motion</span>.<span style=color:#a6e22e>homingSpeed</span> };
+</span></span><span style=display:flex><span>  }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>&lt;/<span style=color:#f92672>script</span>&gt;
+</span></span></code></pre></div><p>The <code>GCodeViewer</code> itself is almost trivial. It&rsquo;s essentially a component which
+is passed a <code>text</code> property and will display it. Whitespace is important when
+viewing a g-code program so we use <code>&lt;pre></code> and <code>&lt;code></code> tags to render the text
+line-by-line.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vue data-lang=vue><span style=display:flex><span><span style=color:#75715e>// frontend/src/components/GCodeViewer.vue
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>&lt;<span style=color:#f92672>template</span>&gt;
+</span></span><span style=display:flex><span>  &lt;<span style=color:#f92672>div</span>&gt;
+</span></span><span style=display:flex><span>    &lt;<span style=color:#f92672>pre</span>&gt;&lt;<span style=color:#f92672>code</span> <span style=color:#f92672>v-for</span><span style=color:#e6db74>=&#34;(line, i) in lines&#34; </span><span style=color:#f92672>:key</span><span style=color:#e6db74>=&#34;i&#34;</span>&gt;{{<span style=color:#a6e22e>line</span>}}&lt;<span style=color:#f92672>br</span> /&gt;&lt;/<span style=color:#f92672>code</span>&gt;&lt;/<span style=color:#f92672>pre</span>&gt;
+</span></span><span style=display:flex><span>  &lt;/<span style=color:#f92672>div</span>&gt;
+</span></span><span style=display:flex><span>&lt;/<span style=color:#f92672>template</span>&gt;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>&lt;<span style=color:#f92672>script</span> <span style=color:#a6e22e>lang</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;ts&#34;</span>&gt;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>import</span> { <span style=color:#a6e22e>Component</span>, <span style=color:#a6e22e>Vue</span>, <span style=color:#a6e22e>Prop</span> } <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#34;vue-property-decorator&#34;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>@</span><span style=color:#a6e22e>Component</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>export</span> <span style=color:#66d9ef>default</span> <span style=color:#66d9ef>class</span> <span style=color:#a6e22e>GCodeViewer</span> <span style=color:#66d9ef>extends</span> <span style=color:#a6e22e>Vue</span> {
+</span></span><span style=display:flex><span>  <span style=color:#960050;background-color:#1e0010>@</span><span style=color:#a6e22e>Prop</span>({ <span style=color:#a6e22e>type</span><span style=color:#f92672>:</span> String, <span style=color:#66d9ef>default</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#34;&#34;</span> })
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>public</span> <span style=color:#a6e22e>text</span><span style=color:#f92672>!:</span> <span style=color:#a6e22e>string</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>public</span> <span style=color:#a6e22e>get</span> <span style=color:#a6e22e>lines</span>()<span style=color:#f92672>:</span> <span style=color:#a6e22e>string</span>[] {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>text</span>.<span style=color:#a6e22e>split</span>(<span style=color:#e6db74>&#34;\n&#34;</span>);
+</span></span><span style=display:flex><span>  }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>&lt;/<span style=color:#f92672>script</span>&gt;
+</span></span></code></pre></div><p>Other than that, implementing the <code>GCodeViewer</code> is just a case of playing with
+CSS until it looks like a proper editor.</p><p>The final tab (and last major component) is the <code>Terminal</code>, a component we&rsquo;ll
+become quite familiar with when troubleshooting communications problems. The
+general idea is the <code>Terminal</code> will have a list of messages that have been
+recently sent or received, and will render them using a <code>v-for</code> and a
+<code>MessageViewer</code> helper.</p><p>For now the <code>Terminal</code> is quite minimal, but later on it&rsquo;ll also include buttons
+and fields for manually sending messages to the motion controller.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vue data-lang=vue><span style=display:flex><span><span style=color:#75715e>// frontend/src/components/Terminal.vue
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>&lt;<span style=color:#f92672>template</span>&gt;
+</span></span><span style=display:flex><span>  &lt;<span style=color:#f92672>div</span> <span style=color:#a6e22e>class</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;console&#34;</span>&gt;
+</span></span><span style=display:flex><span>    &lt;<span style=color:#f92672>MessageViewer</span> <span style=color:#f92672>v-for</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;(msg, i) in messages&#34; :key=&#34;i&#34; :msg=&#34;msg&#34;</span> /&gt;
+</span></span><span style=display:flex><span>  &lt;/<span style=color:#f92672>div</span>&gt;
+</span></span><span style=display:flex><span>&lt;/<span style=color:#f92672>template</span>&gt;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>&lt;<span style=color:#f92672>script</span> <span style=color:#a6e22e>lang</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;ts&#34;</span>&gt;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>import</span> { <span style=color:#a6e22e>Component</span>, <span style=color:#a6e22e>Vue</span>, <span style=color:#a6e22e>Prop</span> } <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#34;vue-property-decorator&#34;</span>;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>import</span> <span style=color:#a6e22e>MessageViewer</span> <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#34;@/components/MessageViewer.vue&#34;</span>;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>import</span> { <span style=color:#a6e22e>Message</span>, <span style=color:#a6e22e>areMessages</span> } <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#34;../Message&#34;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>@</span><span style=color:#a6e22e>Component</span>({ <span style=color:#a6e22e>components</span><span style=color:#f92672>:</span> { <span style=color:#a6e22e>MessageViewer</span> } })
+</span></span><span style=display:flex><span><span style=color:#66d9ef>export</span> <span style=color:#66d9ef>default</span> <span style=color:#66d9ef>class</span> <span style=color:#a6e22e>Terminal</span> <span style=color:#66d9ef>extends</span> <span style=color:#a6e22e>Vue</span> {
+</span></span><span style=display:flex><span>  <span style=color:#960050;background-color:#1e0010>@</span><span style=color:#a6e22e>Prop</span>({ <span style=color:#a6e22e>required</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>true</span>, <span style=color:#66d9ef>default</span><span style=color:#f92672>:</span> () =&gt; [], <span style=color:#a6e22e>validator</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>areMessages</span> })
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>public</span> <span style=color:#a6e22e>messages</span><span style=color:#f92672>!:</span> <span style=color:#a6e22e>Message</span>[];
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>&lt;/<span style=color:#f92672>script</span>&gt;
+</span></span></code></pre></div><p>The <code>Message</code> itself is almost trivial:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-ts data-lang=ts><span style=display:flex><span><span style=color:#75715e>// frontend/src/Message.ts
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>export</span> <span style=color:#66d9ef>interface</span> <span style=color:#a6e22e>Message</span> {
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>direction</span>: <span style=color:#66d9ef>Direction</span>;
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>timestamp</span>: <span style=color:#66d9ef>Date</span>;
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>toString</span>()<span style=color:#f92672>:</span> <span style=color:#66d9ef>string</span>;
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>export</span> <span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>Direction</span> {
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>Sent</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>1</span>,
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>Received</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>2</span>,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Likewise, the <code>MessageViewer</code> helper is just a widget for displaying <code>Message</code>s.
+It&rsquo;ll print the direction (using a unicode arrow), timestamp, and a string
+representation. Later on we may also add the ability to double-click on a
+message to show a more detailed JSON representation.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vue data-lang=vue><span style=display:flex><span><span style=color:#75715e>// frontend/src/components/MessageViewer.vue
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>&lt;<span style=color:#f92672>template</span>&gt;
+</span></span><span style=display:flex><span>  &lt;<span style=color:#f92672>div</span> <span style=color:#a6e22e>class</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;message&#34;</span> <span style=color:#f92672>:class</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;style&#34;</span>&gt;
+</span></span><span style=display:flex><span>    &lt;<span style=color:#f92672>span</span> <span style=color:#a6e22e>class</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;direction&#34;</span>&gt;{{<span style=color:#a6e22e>arrow</span>}}&lt;/<span style=color:#f92672>span</span>&gt;
+</span></span><span style=display:flex><span>    &lt;<span style=color:#f92672>span</span> <span style=color:#a6e22e>class</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;timestamp&#34;</span>&gt;{{<span style=color:#a6e22e>timestamp</span>}}&lt;/<span style=color:#f92672>span</span>&gt;
+</span></span><span style=display:flex><span>    &lt;<span style=color:#f92672>pre</span>&gt;{{<span style=color:#a6e22e>msg</span>.<span style=color:#a6e22e>toString</span>()}}&lt;/<span style=color:#f92672>pre</span>&gt;
+</span></span><span style=display:flex><span>  &lt;/<span style=color:#f92672>div</span>&gt;
+</span></span><span style=display:flex><span>&lt;/<span style=color:#f92672>template</span>&gt;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>&lt;<span style=color:#f92672>script</span> <span style=color:#a6e22e>lang</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;ts&#34;</span>&gt;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>import</span> { <span style=color:#a6e22e>Component</span>, <span style=color:#a6e22e>Vue</span>, <span style=color:#a6e22e>Prop</span> } <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#34;vue-property-decorator&#34;</span>;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>import</span> { <span style=color:#a6e22e>Message</span>, <span style=color:#a6e22e>isMessage</span>, <span style=color:#a6e22e>Direction</span> } <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#34;../Message&#34;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>@</span><span style=color:#a6e22e>Component</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>export</span> <span style=color:#66d9ef>default</span> <span style=color:#66d9ef>class</span> <span style=color:#a6e22e>MessageViewer</span> <span style=color:#66d9ef>extends</span> <span style=color:#a6e22e>Vue</span> {
+</span></span><span style=display:flex><span>  <span style=color:#960050;background-color:#1e0010>@</span><span style=color:#a6e22e>Prop</span>({ <span style=color:#a6e22e>required</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>true</span>, <span style=color:#a6e22e>validator</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>isMessage</span> })
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>public</span> <span style=color:#a6e22e>msg</span><span style=color:#f92672>!:</span> <span style=color:#a6e22e>Message</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>public</span> <span style=color:#a6e22e>get</span> <span style=color:#a6e22e>timestamp</span>()<span style=color:#f92672>:</span> <span style=color:#a6e22e>string</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>msg</span>.<span style=color:#a6e22e>timestamp</span>.<span style=color:#a6e22e>toISOString</span>().<span style=color:#a6e22e>replace</span>(<span style=color:#e6db74>&#34;T&#34;</span>, <span style=color:#e6db74>&#34; &#34;</span>).<span style=color:#a6e22e>replace</span>(<span style=color:#e6db74>&#34;Z&#34;</span>, <span style=color:#e6db74>&#34;&#34;</span>);
+</span></span><span style=display:flex><span>  }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>public</span> <span style=color:#a6e22e>get</span> <span style=color:#a6e22e>arrow</span>()<span style=color:#f92672>:</span> <span style=color:#a6e22e>string</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>switch</span> (<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>msg</span>.<span style=color:#a6e22e>direction</span>) {
+</span></span><span style=display:flex><span>      <span style=color:#66d9ef>case</span> <span style=color:#a6e22e>Direction</span>.<span style=color:#a6e22e>Sent</span><span style=color:#f92672>:</span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>return</span> <span style=color:#e6db74>&#34;▶&#34;</span>;
+</span></span><span style=display:flex><span>      <span style=color:#66d9ef>case</span> <span style=color:#a6e22e>Direction</span>.<span style=color:#a6e22e>Received</span><span style=color:#f92672>:</span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>return</span> <span style=color:#e6db74>&#34;◀&#34;</span>;
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>  }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>public</span> <span style=color:#a6e22e>get</span> <span style=color:#a6e22e>style</span>()<span style=color:#f92672>:</span> <span style=color:#a6e22e>string</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>switch</span> (<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>msg</span>.<span style=color:#a6e22e>direction</span>) {
+</span></span><span style=display:flex><span>      <span style=color:#66d9ef>case</span> <span style=color:#a6e22e>Direction</span>.<span style=color:#a6e22e>Sent</span><span style=color:#f92672>:</span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>return</span> <span style=color:#e6db74>&#34;sent&#34;</span>;
+</span></span><span style=display:flex><span>      <span style=color:#66d9ef>case</span> <span style=color:#a6e22e>Direction</span>.<span style=color:#a6e22e>Received</span><span style=color:#f92672>:</span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>return</span> <span style=color:#e6db74>&#34;received&#34;</span>;
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>  }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>&lt;/<span style=color:#f92672>script</span>&gt;
+</span></span></code></pre></div><div class="notices note"><p>As well as using a <code>message</code> class for styling the component as a whole,
+we&rsquo;re taking advantage of <a href=https://vuejs.org/v2/guide/class-and-style.html class=external-link target=_blank rel=noopener>computed styles</a> to dynamically mark a
+particular message as <code>send</code> or <code>receive</code>. This allows us to use colour to
+differentiate between the message direction.</p></div><h2 id=the-next-step>The Next Step
+<a class=heading-link href=#the-next-step><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>So far we&rsquo;ve built a <em>Communications</em> system, a <em>Motion</em> system and automation
+routines, and we&rsquo;ve stubbed out the <em>User Interface</em>. For a change, instead of
+spending the entire time in the bowels of our Rust motion controller code, we
+jumped back up the stack and wrote a big chunk of the user-facing frontend.</p><p>This isn&rsquo;t uncommon when working in smaller teams. Often implementing a
+feature will require adding a bunch of low-level logic to the embedded
+system, then jumping over to the frontend code to make sure the various
+buttons, knobs, and levers are accessible to the user.</p><p>Our next job will be to make sure the UI and motion controller can pass
+messages to each other. Hopefully once the two halves of our simulator can
+communicate we can start adding new functionality and begin to feel the
+productivity boost associated with our earlier infrastructure work
+(<a href=https://adventures.michaelfbryan.com/posts/comms-part-2/#making-sense-of-messages class=external-link target=_blank rel=noopener>generalised message handling</a>, the <a href=https://adventures.michaelfbryan.com/posts/top-level-infrastructure/#inter-system-communication class=external-link target=_blank rel=noopener>decoupling of systems from
+each other</a> and the larger application, etc.).</p></div><footer></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>

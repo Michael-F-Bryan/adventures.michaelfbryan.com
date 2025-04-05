@@ -1,0 +1,455 @@
+<!doctype html><html lang=en><head><title>I Made A Thing: Markedit · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="A couple days ago I released markedit, a small crate for editing
+unstructured markdown documents. This is a useful enough library that I
+thought I&rsquo;d explain the main ideas behind it and potential use cases.
+This originally came about when I was at work, preparing our application&rsquo;s
+change log before a release for the umpteenth time (we&rsquo;ve found the keep a
+changelog format really useful) and on the drive home I started thinking
+of ways to automate things."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="I Made A Thing: Markedit"><meta name=twitter:description content="A couple days ago I released markedit, a small crate for editing unstructured markdown documents. This is a useful enough library that I thought I’d explain the main ideas behind it and potential use cases.
+This originally came about when I was at work, preparing our application’s change log before a release for the umpteenth time (we’ve found the keep a changelog format really useful) and on the drive home I started thinking of ways to automate things."><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/markedit/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="I Made A Thing: Markedit"><meta property="og:description" content="A couple days ago I released markedit, a small crate for editing unstructured markdown documents. This is a useful enough library that I thought I’d explain the main ideas behind it and potential use cases.
+This originally came about when I was at work, preparing our application’s change log before a release for the umpteenth time (we’ve found the keep a changelog format really useful) and on the drive home I started thinking of ways to automate things."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2020-02-09T04:40:00+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Rust"><meta property="article:tag" content="I Made a Thing"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/markedit/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/markedit/>I Made A Thing: Markedit</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2020-02-09T04:40:00+08:00>February 9, 2020
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+14-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/rust/>Rust</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/i-made-a-thing/>I Made a Thing</a></span></div></div></header><div class=post-content><p>A couple days ago I released <a href=https://crates.io/crates/markedit class=external-link target=_blank rel=noopener>markedit</a>, a small crate for editing
+unstructured markdown documents. This is a useful enough library that I
+thought I&rsquo;d explain the main ideas behind it and potential use cases.</p><p>This originally came about when I was at work, preparing our application&rsquo;s
+change log before a release for the umpteenth time (we&rsquo;ve found the <a href=https://keepachangelog.com/en/1.0.0/ class=external-link target=_blank rel=noopener>keep a
+changelog</a> format really useful) and on the drive home I started thinking
+of ways to automate things.</p><figure><a href=https://xkcd.com/1319/><img src=https://imgs.xkcd.com/comics/automation.png alt=Automation></a><figcaption><p>(obligatory XKCD reference)</p></figcaption></figure><p>To put this into context, we&rsquo;ve tried to automate the release process as much
+as possible to minimise friction and avoid using the time required to cut a
+release as an excuse for putting it off. It&rsquo;s now at the point where the
+fairly involved process of generating a release (compiling independent
+projects written in multiple languages, rendering docs, bumping version
+numbers, tagging commits, generating installers, uploading assets to a file
+server, etc.) can be done with a single click.</p><p>Everything&rsquo;s automated. The whole system functions like a well-oiled machine&mldr;
+Except for that annoying change log.</p><p>See, I still need to manually promote everything under the <code>[Unreleased]</code>
+section to its own named release (e.g. <code>[v1.2.3] - 2020-02-09</code>) and update
+links so <code>[Unreleased]</code> now points to the diff between the <code>v1.2.3</code> tag and
+<code>master</code>, and <code>[v1.2.3]</code> shows the diff between <code>v1.2.2</code> and <code>v1.2.3</code>. The
+linked pages look kinda <a href=https://gitlab.com/gitlab-org/gitlab/-/compare/10-2-stable-ee...10-1-stable-ee class=external-link target=_blank rel=noopener>like this</a> and are surprisingly useful
+when trying to track down regressions or get an overview of what code changed
+between releases.</p><p>It&rsquo;s only a couple find-and-replace operations, but needing to spend an extra
+60 seconds manually editing files before a release acts as a speed bump and
+means you can&rsquo;t just hit the <em>&ldquo;Release&rdquo;</em> button and grab a coffee. There&rsquo;s
+also a real chance that we could forget to update the change log before
+cutting a release, and that&rsquo;d be embarrassing.</p><div class="notices note"><p>The code written in this article is available <a href=https://github.com/Michael-F-Bryan/markedit class=external-link target=_blank rel=noopener>on GitHub</a> and
+<a href=https://crates.io/crates/markedit class=external-link target=_blank rel=noopener>published on crates.io</a>. Feel free to browse through and steal code
+or inspiration.</p><p>If you found this useful or spotted a bug, let me know on the blog&rsquo;s
+<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com class=external-link target=_blank rel=noopener>issue tracker</a>!</p></div><h2 id=the-main-concepts>The Main Concepts
+<a class=heading-link href=#the-main-concepts><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now that I&rsquo;ve explained the initial inspiration for this project, let&rsquo;s have
+a high-level look at the implementation.</p><p>There are a couple fundamental concepts, but the central one is the stream of
+<a href=https://docs.rs/pulldown-cmark/0.6.1/pulldown_cmark/enum.Event.html class=external-link target=_blank rel=noopener>markdown <code>Event</code>s</a> emitted by <a href=https://crates.io/crates/pulldown-cmark class=external-link target=_blank rel=noopener>pulldown-cmark</a>&rsquo;s markdown parser.
+This is just an iterator over things like <code>Event::Start(Tag::Heading(1))</code>,
+<code>Event::Text("some text")</code>, and <code>Event::End(Tag::Link(...))</code>.</p><p>Reusing the <code>Iterator</code> interface from the standard library already makes
+<code>pulldown-cmark</code> quite easy to use, but when you&rsquo;re trying to look for a
+specific pattern (e.g. <em>&ldquo;the first line after a level 1 heading&rdquo;</em>) the code
+starts to get pretty gnarly.</p><p>For example, <a href=https://github.com/rust-lang/mdBook/blob/d5999849d9fa4b40986e53fe6c4001bb48cbd73f/src/book/summary.rs#L293-L357 class=external-link target=_blank rel=noopener>the logic in <code>mdbook</code></a> for parsing a
+<code>SUMMARY.md</code> and discovering the book&rsquo;s structure is particularly hard to
+understand, and the fact it&rsquo;s barely been touched in two years is a good
+indicator of that&mldr; I&rsquo;d be lying if I said I didn&rsquo;t feel a bit guilty for
+writing such a code monster 😔</p><p>To ease this problem of matching sequences of events we introduce the concept
+of a <em>Matcher</em>, something which can be fed <code>Event</code>s and will tell you when it
+finds a match. It&rsquo;s essentially a fancy predicate.</p><p>To actually do something once you&rsquo;ve found a match we have rewriting rules. This
+is a bit of code which lets you manipulate the stream of events in-place (e.g.
+by skipping certain items or adding new ones).</p><p>Something to note is this entire process is built upon the <code>Iterator</code> trait. At
+no point should the <code>markedit</code> crate assume you&rsquo;ve parsed an entire document
+into memory beforehand.</p><p>My primary reasons for this were:</p><ul><li>Memory usage - a document contains <em>a lot</em> of <code>Event</code>s, and by not reading
+everything into memory we can avoid large amounts of memory (memory overhead
+with iterators is ammortised <code>O(1)</code> instead of <code>O(n)</code>)</li><li>Flexibility - the core algorithms shouldn&rsquo;t need to care if the events are
+already in a buffer, streamed from the network, or the caller has already
+done some pre-processing of the events via the various iterator combinators</li><li>Because I can - I mean, why else do we do half the things we do?</li></ul><h2 id=matchers>Matchers
+<a class=heading-link href=#matchers><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>At its core the <code>Matcher</code> trait is quite trivial.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/matchers/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> Matcher {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>matches_event</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, event: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Event</span><span style=color:#f92672>&lt;</span>&#39;_<span style=color:#f92672>&gt;</span>) -&gt; <span style=color:#66d9ef>bool</span>;
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>However if combined with closures and ideas from functional programming we
+can build something reminiscent of <a href=https://crates.io/crates/pulldown-cmark class=external-link target=_blank rel=noopener>Parser Combinators</a>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/matchers/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>F<span style=color:#f92672>&gt;</span> Matcher <span style=color:#66d9ef>for</span> F
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    F: FnMut(<span style=color:#f92672>&amp;</span>Event<span style=color:#f92672>&lt;</span>&#39;_<span style=color:#f92672>&gt;</span>) -&gt; <span style=color:#66d9ef>bool</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>matches_event</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, event: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Event</span><span style=color:#f92672>&lt;</span>&#39;_<span style=color:#f92672>&gt;</span>) -&gt; <span style=color:#66d9ef>bool</span> { self(event) }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>For example, here is the definition for the <code>text()</code> function for getting a
+<code>Matcher</code> which applies a predicate to every <code>Event::Text</code> node.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/matchers/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Match a [`Event::Text`] node using an arbitrary predicate.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>text</span><span style=color:#f92672>&lt;</span>P<span style=color:#f92672>&gt;</span>(<span style=color:#66d9ef>mut</span> predicate: <span style=color:#a6e22e>P</span>) -&gt; <span style=color:#a6e22e>impl</span> Matcher
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    P: FnMut(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>str</span>) -&gt; <span style=color:#66d9ef>bool</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>move</span> <span style=color:#f92672>|</span>ev: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Event</span><span style=color:#f92672>&lt;</span>&#39;_<span style=color:#f92672>&gt;|</span> <span style=color:#66d9ef>match</span> ev {
+</span></span><span style=display:flex><span>        Event::Text(text) <span style=color:#f92672>=&gt;</span> predicate(text.as_ref()),
+</span></span><span style=display:flex><span>        _ <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>false</span>,
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>This lets us build a <code>Matcher</code> which will return <code>true</code> when it encounters an
+exact string, or a piece of text containing our desired string.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/matchers/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>exact_text</span><span style=color:#f92672>&lt;</span>S: AsRef<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>str</span><span style=color:#f92672>&gt;&gt;</span>(needle: <span style=color:#a6e22e>S</span>) -&gt; <span style=color:#a6e22e>impl</span> Matcher {
+</span></span><span style=display:flex><span>    text(<span style=color:#66d9ef>move</span> <span style=color:#f92672>|</span>text<span style=color:#f92672>|</span> AsRef::<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>str</span><span style=color:#f92672>&gt;</span>::as_ref(text) <span style=color:#f92672>==</span> needle.as_ref())
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>text_containing</span><span style=color:#f92672>&lt;</span>S: AsRef<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>str</span><span style=color:#f92672>&gt;&gt;</span>(needle: <span style=color:#a6e22e>S</span>) -&gt; <span style=color:#a6e22e>impl</span> Matcher {
+</span></span><span style=display:flex><span>    text(<span style=color:#66d9ef>move</span> <span style=color:#f92672>|</span>text<span style=color:#f92672>|</span> text.contains(needle.as_ref()))
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices tip"><p>You&rsquo;ll notice that we&rsquo;re using the <code>impl Trait</code> pattern all over the place.
+This lets us create complex types while preserving the ability to change our
+underlying implementation (e.g. imagine we decide to use an explicit type
+instead of a closure) while maintaining backwards compatibility.</p><p>As an added bonus, because <code>impl Trait</code> uses static dispatch the optimiser
+should hopefully be able to generate machine code as good as what a human
+could write manually.</p></div><h3 id=matching-headings>Matching Headings
+<a class=heading-link href=#matching-headings><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>When I&rsquo;m moving items from the <code>[Unreleased]</code> section to their own named release
+I&rsquo;ll select everything between the end of the <code>[Unreleased]</code> section header and
+the start of the next header.</p><p>To create a <code>Matcher</code> which will match those items I&rsquo;ll first need to detect
+when we&rsquo;re inside a heading. This is a little more complicated than a simple
+yes/no predicate, so for readability I&rsquo;ve decided to implement this using a
+struct instead of a closure.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/matchers/heading.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Matches the items inside a heading tag, including the start and end tags.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Heading</span> {
+</span></span><span style=display:flex><span>    inside_heading: <span style=color:#66d9ef>bool</span>,
+</span></span><span style=display:flex><span>    level: Option<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>u32</span><span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Heading {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Create a new [`Heading`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new</span>(level: Option<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>u32</span><span style=color:#f92672>&gt;</span>) -&gt; <span style=color:#a6e22e>Self</span> {
+</span></span><span style=display:flex><span>        Heading {
+</span></span><span style=display:flex><span>            level,
+</span></span><span style=display:flex><span>            inside_heading: <span style=color:#a6e22e>false</span>,
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Matches any heading.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>any_level</span>() -&gt; <span style=color:#a6e22e>Self</span> { Heading::new(None) }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Matches only headings with the desired level.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>with_level</span>(level: <span style=color:#66d9ef>u32</span>) -&gt; <span style=color:#a6e22e>Self</span> { Heading::new(Some(level)) }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The implementation is also pretty simple. When we see the start of a header with
+the desired level, keep returning <code>true</code> until we see the end tag.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/matchers/heading.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Matcher <span style=color:#66d9ef>for</span> Heading {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>matches_event</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, event: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Event</span><span style=color:#f92672>&lt;</span>&#39;_<span style=color:#f92672>&gt;</span>) -&gt; <span style=color:#66d9ef>bool</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> event {
+</span></span><span style=display:flex><span>            Event::Start(Tag::Heading(level)) <span style=color:#66d9ef>if</span> self.matches_level(<span style=color:#f92672>*</span>level) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                self.inside_heading <span style=color:#f92672>=</span> <span style=color:#66d9ef>true</span>;
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            Event::End(Tag::Heading(level)) <span style=color:#66d9ef>if</span> self.matches_level(<span style=color:#f92672>*</span>level) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                self.inside_heading <span style=color:#f92672>=</span> <span style=color:#66d9ef>false</span>;
+</span></span><span style=display:flex><span>                <span style=color:#75715e>// make sure the end tag is also matched
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>true</span>;
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            _ <span style=color:#f92672>=&gt;</span> {},
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        self.inside_heading
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Heading {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>matches_level</span>(<span style=color:#f92672>&amp;</span>self, level: <span style=color:#66d9ef>u32</span>) -&gt; <span style=color:#66d9ef>bool</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> self.level {
+</span></span><span style=display:flex><span>            Some(expected) <span style=color:#f92672>=&gt;</span> level <span style=color:#f92672>==</span> expected,
+</span></span><span style=display:flex><span>            None <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>true</span>,
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>While we&rsquo;re at it, we should probably write a test to make sure we match a
+all the items inside a header. I just printed the <code>Event</code>s generated by a string
+of text then manually marked each event as <code>true</code> or <code>false</code> depending on what
+I&rsquo;d expect.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/matchers/heading.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>match_everything_inside_a_header</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// The original text for these events was:
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#75715e>//
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#75715e>// This is some text.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#75715e>//
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#75715e>// ## Then a *header*
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#75715e>//
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#75715e>// [And a link](https://example.com)
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> inputs <span style=color:#f92672>=</span> vec![
+</span></span><span style=display:flex><span>        (Event::Start(Tag::Paragraph), <span style=color:#66d9ef>false</span>),
+</span></span><span style=display:flex><span>        (Event::Text(<span style=color:#e6db74>&#34;This is some text.&#34;</span>.into()), <span style=color:#66d9ef>false</span>),
+</span></span><span style=display:flex><span>        (Event::End(Tag::Paragraph), <span style=color:#66d9ef>false</span>),
+</span></span><span style=display:flex><span>        (Event::Start(Tag::Heading(<span style=color:#ae81ff>2</span>)), <span style=color:#66d9ef>true</span>),
+</span></span><span style=display:flex><span>        (Event::Text(<span style=color:#e6db74>&#34;Then a &#34;</span>.into()), <span style=color:#66d9ef>true</span>),
+</span></span><span style=display:flex><span>        (Event::Start(Tag::Emphasis), <span style=color:#66d9ef>true</span>),
+</span></span><span style=display:flex><span>        (Event::Text(<span style=color:#e6db74>&#34;header&#34;</span>.into()), <span style=color:#66d9ef>true</span>),
+</span></span><span style=display:flex><span>        (Event::End(Tag::Emphasis), <span style=color:#66d9ef>true</span>),
+</span></span><span style=display:flex><span>        (Event::End(Tag::Heading(<span style=color:#ae81ff>2</span>)), <span style=color:#66d9ef>true</span>),
+</span></span><span style=display:flex><span>        (Event::Start(Tag::Paragraph), <span style=color:#66d9ef>false</span>),
+</span></span><span style=display:flex><span>        (Event::Start(Tag::Link(LinkType::Inline, <span style=color:#e6db74>&#34;https://example.com&#34;</span>.into(), <span style=color:#e6db74>&#34;&#34;</span>.into())), <span style=color:#66d9ef>false</span>),
+</span></span><span style=display:flex><span>        (Event::Text(<span style=color:#e6db74>&#34;And a link&#34;</span>.into()), <span style=color:#66d9ef>false</span>),
+</span></span><span style=display:flex><span>        (Event::End(Tag::Link(LinkType::Inline, <span style=color:#e6db74>&#34;https://example.com&#34;</span>.into(), <span style=color:#e6db74>&#34;&#34;</span>.into())), <span style=color:#66d9ef>false</span>),
+</span></span><span style=display:flex><span>        (Event::End(Tag::Paragraph), <span style=color:#66d9ef>false</span>),
+</span></span><span style=display:flex><span>    ];
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> matcher <span style=color:#f92672>=</span> Heading::any_level();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>for</span> (tag, should_be) <span style=color:#66d9ef>in</span> inputs {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> got <span style=color:#f92672>=</span> matcher.matches_event(<span style=color:#f92672>&amp;</span>tag);
+</span></span><span style=display:flex><span>        assert_eq!(got, should_be, <span style=color:#e6db74>&#34;{:?}&#34;</span>, tag);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h3 id=matching-a-falling-edge>Matching a Falling Edge
+<a class=heading-link href=#matching-a-falling-edge><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>Remember that we want to select items between two headings, that means we&rsquo;ll
+need to a falling edge signal from the <code>Heading</code>s matcher.</p><p>This can be done generically using some <code>FallingEdge</code> matcher which wraps
+another matcher.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/matchers/falling_edge.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>FallingEdge</span><span style=color:#f92672>&lt;</span>M<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    inner: <span style=color:#a6e22e>M</span>,
+</span></span><span style=display:flex><span>    previous_was_matched: <span style=color:#66d9ef>bool</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>M<span style=color:#f92672>&gt;</span> FallingEdge<span style=color:#f92672>&lt;</span>M<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new</span>(inner: <span style=color:#a6e22e>M</span>) -&gt; <span style=color:#a6e22e>Self</span> {
+</span></span><span style=display:flex><span>        FallingEdge {
+</span></span><span style=display:flex><span>            inner,
+</span></span><span style=display:flex><span>            previous_was_matched: <span style=color:#a6e22e>false</span>,
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>From here, detecting a falling edge pretty straightforward.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/matchers/falling_edge.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>M: <span style=color:#a6e22e>Matcher</span><span style=color:#f92672>&gt;</span> Matcher <span style=color:#66d9ef>for</span> FallingEdge<span style=color:#f92672>&lt;</span>M<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>matches_event</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, event: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Event</span><span style=color:#f92672>&lt;</span>&#39;_<span style=color:#f92672>&gt;</span>) -&gt; <span style=color:#66d9ef>bool</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> current_is_matched <span style=color:#f92672>=</span> self.inner.matches_event(event);
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> is_falling_edge <span style=color:#f92672>=</span> self.previous_was_matched <span style=color:#f92672>&amp;&amp;</span> <span style=color:#f92672>!</span>current_is_matched;
+</span></span><span style=display:flex><span>        self.previous_was_matched <span style=color:#f92672>=</span> current_is_matched;
+</span></span><span style=display:flex><span>        is_falling_edge
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>For convenience we can add a combinator method to the <code>Matcher</code> trait. This will
+allow users to compose matchers using method syntax instead of needing to write
+the more verbose <code>FallingEdge::new(...)</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/matchers/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> Matcher {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Get a [`Matcher`] which returns `true` when `self` goes from `true` to
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// `false`.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>falling_edge</span>(self) -&gt; <span style=color:#a6e22e>FallingEdge</span><span style=color:#f92672>&lt;</span>Self<span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>        Self: Sized,
+</span></span><span style=display:flex><span>    {
+</span></span><span style=display:flex><span>        FallingEdge::new(self)
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>By combining the <code>Heading</code> and <code>FallingEdge</code> matchers we now have all the tools
+necessary to find the items between two headings in a markdown document.</p><p>Once you reach this point it&rsquo;s easy to get carried away making more and more
+elaborate <code>Matcher</code> primitives (i.e. <code>text()</code> and <code>Heading</code>) and combinators
+(i.e. <code>FallingEdge</code>), so let&rsquo;s discuss document manipulation.</p><h2 id=rewrite-rules>Rewrite Rules
+<a class=heading-link href=#rewrite-rules><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>It took a bit of thinking to come up with an API flexible enough to allow
+updating items in-place (imagine auto-correcting text), removing items, and
+adding items, all without reading the full document into memory or seeking back
+and forth.</p><p>This is the API I eventually came up with:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/rewriters/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Something which can rewrite events.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> Rewriter<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Process a single [`Event`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// This may mean ignoring it, mutating it, or adding new events to the
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// [`Writer`]&#39;s buffer.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// The [`Writer`] is used as a temporary buffer that will then be streamed
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// to the user via [`rewrite()`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>rewrite_event</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, event: <span style=color:#a6e22e>Event</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span><span style=color:#f92672>&gt;</span>, writer: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Writer<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span><span style=color:#f92672>&gt;</span>);
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Again, seeing as this trait only has a single method it&rsquo;s an ideal candidate for
+allowing people to use concise closures instead of needing to create a full
+type.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/rewriters/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span>, F<span style=color:#f92672>&gt;</span> Rewriter<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span><span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> F
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    F: FnMut(Event<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span><span style=color:#f92672>&gt;</span>, <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> Writer<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span><span style=color:#f92672>&gt;</span>),
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>rewrite_event</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, event: <span style=color:#a6e22e>Event</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span><span style=color:#f92672>&gt;</span>, writer: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Writer<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span><span style=color:#f92672>&gt;</span>) {
+</span></span><span style=display:flex><span>        self(event, writer);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>You may be wondering what this <code>Writer</code> is for, well that&rsquo;s where a lot of the
+rewriting magic comes in.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/rewriters/writer.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> pulldown_cmark::Event;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::collections::VecDeque;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// The output buffer given to [`Rewriter::rewrite_event()`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Writer</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) buffer: <span style=color:#a6e22e>VecDeque</span><span style=color:#f92672>&lt;</span>Event<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> Writer<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new</span>() -&gt; <span style=color:#a6e22e>Writer</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        Writer {
+</span></span><span style=display:flex><span>            buffer: <span style=color:#a6e22e>VecDeque</span>::new(),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Queue an [`Event`] to be emitted.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>push</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, event: <span style=color:#a6e22e>Event</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span>) { self.buffer.push_back(event); }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> Extend<span style=color:#f92672>&lt;</span>Event<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;&gt;</span> <span style=color:#66d9ef>for</span> Writer<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>extend</span><span style=color:#f92672>&lt;</span>I: IntoIterator<span style=color:#f92672>&lt;</span>Item <span style=color:#f92672>=</span> Event<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;&gt;&gt;</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, iter: <span style=color:#a6e22e>I</span>) {
+</span></span><span style=display:flex><span>        self.buffer.extend(iter);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>This innoculous <code>Writer</code> struct serves as a temporary holding place for events
+that needed to be spliced into the resulting stream of <code>Event</code>s. We can combine
+the <code>Writer</code> and our <code>Rewrite</code> trait to create a <code>Rewritten</code> stream of <code>Event</code>s.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/rewriters/rewritten.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// A stream of [`Event`]s that have been modified by a [`Rewriter`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Rewritten</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span>, E, R<span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    E: Iterator<span style=color:#f92672>&lt;</span>Item <span style=color:#f92672>=</span> Event<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span><span style=color:#f92672>&gt;&gt;</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    events: <span style=color:#a6e22e>E</span>,
+</span></span><span style=display:flex><span>    rewriter: <span style=color:#a6e22e>R</span>,
+</span></span><span style=display:flex><span>    writer: <span style=color:#a6e22e>Writer</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span><span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span>, E, R<span style=color:#f92672>&gt;</span> Iterator <span style=color:#66d9ef>for</span> Rewritten<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span>, E, R<span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    E: Iterator<span style=color:#f92672>&lt;</span>Item <span style=color:#f92672>=</span> Event<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span><span style=color:#f92672>&gt;&gt;</span>,
+</span></span><span style=display:flex><span>    R: <span style=color:#a6e22e>Rewriter</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span><span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Item</span> <span style=color:#f92672>=</span> Event<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span><span style=color:#f92672>&gt;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>next</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; Option<span style=color:#f92672>&lt;</span>Self::Item<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// we&#39;re still working through items buffered by the rewriter
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> Some(ev) <span style=color:#f92672>=</span> self.writer.buffer.pop_front() {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>return</span> Some(ev);
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// we need to pop another event and process it
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>let</span> event <span style=color:#f92672>=</span> self.events.next()<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>        self.rewriter.rewrite_event(event, <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self.writer);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        self.writer.buffer.pop_front()
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The idea is to keep popping <code>Event</code>s from the <code>Writer</code> buffer until there are no
+more, then fetch the next <code>Event</code> from the underlying stream and ask our
+<code>Rewriter</code> to process it, updating the buffer in the process. Repeat until the
+inner stream runs out.</p><h3 id=making-a-rewriter>Making A Rewriter
+<a class=heading-link href=#making-a-rewriter><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>Probably the easiest <code>Rewriter</code> to implement is something that will splice new
+events into the event stream before every match.</p><p>This lets us use something like the <code>Heading::any_level().falling_edge()</code>
+matcher to insert something immediately after a heading (we match the first
+item after the heading&rsquo;s close tag).</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/rewriters/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Splice some events into the resulting event stream before every match.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>insert_before</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span>, M<span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>    to_insert: Vec<span style=color:#f92672>&lt;</span>Event<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span><span style=color:#f92672>&gt;&gt;</span>,
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>mut</span> matcher: <span style=color:#a6e22e>M</span>,
+</span></span><span style=display:flex><span>) -&gt; <span style=color:#a6e22e>impl</span> Rewriter<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span><span style=color:#f92672>&gt;</span> <span style=color:#f92672>+</span> <span style=color:#a6e22e>&#39;src</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    M: <span style=color:#a6e22e>Matcher</span> <span style=color:#f92672>+</span> <span style=color:#a6e22e>&#39;src</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>move</span> <span style=color:#f92672>|</span>ev: <span style=color:#a6e22e>Event</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span><span style=color:#f92672>&gt;</span>, writer: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Writer<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span><span style=color:#f92672>&gt;|</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> matcher.matches_event(<span style=color:#f92672>&amp;</span>ev) {
+</span></span><span style=display:flex><span>            writer.extend(to_insert.iter().cloned());
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>        writer.push(ev);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Once you get past the various <code>'src</code> lifetime annotations, <code>impl Trait</code>, and
+closure syntax, this function is pretty simple. Whenever we get another event
+check whether our matcher matches it, and add a copy of the desired events to
+the stream. We want the matched event to also be outputted so we always need
+to add it to the <code>Writer</code> buffer.</p><p>Let&rsquo;s also create an <code>insert_markdown_before()</code> function which takes a string
+of markdown text. Most users won&rsquo;t want to be generating a list of <code>Event</code>s
+manually, so this allows us to present a more user-friendly interface.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/rewriters/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Inserts some markdown text before whatever is matched by the [`Matcher`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// # Examples
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// ```rust
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// use markedit::Matcher;
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// let src = &#34;# Heading\nsome text\n&#34;;
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// let first_line_after_heading = markedit::exact_text(&#34;Heading&#34;)
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///     .falling_edge();
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// let rewriter = markedit::insert_markdown_before(
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///     &#34;## Second Heading&#34;,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///     first_line_after_heading,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// );
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// let events = markedit::parse(src);
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// let rewritten: Vec&lt;_&gt; = markedit::rewrite(events, rewriter).collect();
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// // if everything went to plan, the output should contain &#34;Second Heading&#34;
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// assert!(markedit::exact_text(&#34;Second Heading&#34;).is_in(&amp;rewritten));
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// ```
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>insert_markdown_before</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span>, M, S<span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>    markdown_text: <span style=color:#a6e22e>S</span>,
+</span></span><span style=display:flex><span>    matcher: <span style=color:#a6e22e>M</span>,
+</span></span><span style=display:flex><span>) -&gt; <span style=color:#a6e22e>impl</span> Rewriter<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span><span style=color:#f92672>&gt;</span> <span style=color:#f92672>+</span> <span style=color:#a6e22e>&#39;src</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    M: <span style=color:#a6e22e>Matcher</span> <span style=color:#f92672>+</span> <span style=color:#a6e22e>&#39;src</span>,
+</span></span><span style=display:flex><span>    S: AsRef<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>str</span><span style=color:#f92672>&gt;</span> <span style=color:#f92672>+</span> <span style=color:#a6e22e>&#39;src</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> events <span style=color:#f92672>=</span> <span style=color:#66d9ef>crate</span>::parse(markdown_text.as_ref())
+</span></span><span style=display:flex><span>        .collect();
+</span></span><span style=display:flex><span>    insert_before(events, matcher)
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=possible-applications>Possible Applications
+<a class=heading-link href=#possible-applications><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now you&rsquo;ve got a better understanding of the abstractions provided by the
+<code>markedit</code> crate, you should have a better idea of where they can be applied.</p><p>The <code>Matcher</code> idea is especially powerful when you want to extract information
+from a markdown document.</p><p>Unlike structured data formats like protobufs, the items in a markdown
+document don&rsquo;t have a well defined order and you can&rsquo;t make any sweeping
+assumptions about the <code>Event</code> stream coming from the parser. Instead we rely
+on conventions (a project README might have a level 1 header with the title,
+then a paragraph or two of description, then a level 2 header with getting
+started instructions, etc.) and need a concise, flexible mechanism for
+extracting data. That mechanism is the <code>Matcher</code>.</p><p>In the same way that you can build up an <a href=https://en.wikipedia.org/wiki/XPath class=external-link target=_blank rel=noopener>XPath</a> query for searching
+an XML document or chain of <code>sed</code>, <code>grep</code>, and <code>awk</code> commands for searching
+plain text, the various <code>Matcher</code> combinators let you build up a markdown
+query.</p><p>The <code>Rewriter</code> mechanism lets you (surprise, surprise) rewrite part of a
+document. You can think of it as a markdown-aware <code>sed</code>, and as such can be used
+for a lot of the same operations.</p><p>After rewriting part of an <code>Event</code> you&rsquo;ll need a way to turn it back into
+markdown text. The <code>markedit</code> crate doesn&rsquo;t (yet!) have a pretty-printer,
+however you can leverage existing solutions like <a href=https://crates.io/crates/pulldown-cmark-to-cmark class=external-link target=_blank rel=noopener>pulldown-cmark-to-cmark</a>
+for the same effect.</p><p>Some places you might want to use the <code>markedit</code> crate instead of working with
+raw events from <code>pulldown-cmark</code> are,</p><ul><li>extracting structured information from Rust docstrings (e.g.
+<a href=https://github.com/killercup/rust-docstrings class=external-link target=_blank rel=noopener>killercup/rust-docstrings</a>)</li><li><a href=https://rust-lang.github.io/mdBook/for_developers/preprocessors.html class=external-link target=_blank rel=noopener><code>mdbook</code> preprocessors</a></li><li>extracting links from markdown documents to verify they are still valid
+(<a href=https://github.com/Michael-F-Bryan/mdbook-linkcheck class=external-link target=_blank rel=noopener>mdbook-linkcheck</a>)</li><li>automatically correcting spelling mistakes</li><li>Merging several markdown documents and updating inter-doc links so they point
+to their new location (<a href=https://github.com/cetra3/mdcollate class=external-link target=_blank rel=noopener>mdcollate</a>),
+and of course</li><li>Rewriting part of your <code>CHANGELOG.md</code> file in preparation for a release</li></ul><h2 id=conclusions>Conclusions
+<a class=heading-link href=#conclusions><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>This was a fun project to make and I&rsquo;m pretty happy with the resulting
+abstractions. Preparing this write-up was also a great way to formalise the
+main concepts in my head and identify bugs or better ways of formulating the
+crate&rsquo;s API.</p><p>If you&rsquo;re working on a new project I&rsquo;d definitely recommend writing up a blog
+post explaining how it works. A blog post also doubles as good high-level
+documentation.</p><p>I&rsquo;m already using it in a couple places, but it needs a lot more use in the
+real world before it&rsquo;s ready for <code>1.0</code>. I&rsquo;d really like to know if you use it
+in your own projects and find places it can be improved, especially in areas
+like ergonomics or documentation.</p></div><footer></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>

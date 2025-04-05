@@ -1,0 +1,1070 @@
+<!doctype html><html lang=en><head><title>How to RiiR · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="In a previous article we&rsquo;ve talked about how you can avoid
+rewriting a library in Rust when you don&rsquo;t need to. But what about the times
+when you really do need to?
+In most languages you&rsquo;d need to rewrite the entire library from the ground
+up, waiting until the port is almost finished before you can start seeing
+results. These sorts of ports tend to be quite expensive and error-prone, and
+often they&rsquo;ll fail midway and you&rsquo;ll have nothing to show for your effort.
+Joel Spolsky does a much better job of explaining this than I ever could, see
+his article on why full rewrites are a bad idea for more."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="How to RiiR"><meta name=twitter:description content="In a previous article we’ve talked about how you can avoid rewriting a library in Rust when you don’t need to. But what about the times when you really do need to?
+In most languages you’d need to rewrite the entire library from the ground up, waiting until the port is almost finished before you can start seeing results. These sorts of ports tend to be quite expensive and error-prone, and often they’ll fail midway and you’ll have nothing to show for your effort. Joel Spolsky does a much better job of explaining this than I ever could, see his article on why full rewrites are a bad idea for more."><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/how-to-riir/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="How to RiiR"><meta property="og:description" content="In a previous article we’ve talked about how you can avoid rewriting a library in Rust when you don’t need to. But what about the times when you really do need to?
+In most languages you’d need to rewrite the entire library from the ground up, waiting until the port is almost finished before you can start seeing results. These sorts of ports tend to be quite expensive and error-prone, and often they’ll fail midway and you’ll have nothing to show for your effort. Joel Spolsky does a much better job of explaining this than I ever could, see his article on why full rewrites are a bad idea for more."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2019-12-02T01:00:00+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Rust"><meta property="article:tag" content="FFI"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/how-to-riir/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/how-to-riir/>How to RiiR</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2019-12-02T01:00:00+08:00>December 2, 2019
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+26-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/rust/>Rust</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/ffi/>FFI</a></span></div></div></header><div class=post-content><p>In <a href=https://adventures.michaelfbryan.com/posts/how-not-to-riir/>a previous article</a> we&rsquo;ve talked about how you can avoid
+rewriting a library in Rust when you don&rsquo;t need to. But what about the times
+when you really <em>do</em> need to?</p><p>In most languages you&rsquo;d need to rewrite the entire library from the ground
+up, waiting until the port is almost finished before you can start seeing
+results. These sorts of ports tend to be quite expensive and error-prone, and
+often they&rsquo;ll fail midway and you&rsquo;ll have nothing to show for your effort.
+<em>Joel Spolsky</em> does a much better job of explaining this than I ever could, see
+<a href=https://www.joelonsoftware.com/2000/04/06/things-you-should-never-do-part-i/ class=external-link target=_blank rel=noopener>his article on why full rewrites are a bad idea</a> for more.</p><p>However, Rust has a killer feature when it comes to this sort of thing. It
+can call into C code with no overhead (i.e. the runtime doesn&rsquo;t need to
+inject automatic marshalling like <a href=https://docs.microsoft.com/en-us/dotnet/standard/native-interop/pinvoke class=external-link target=_blank rel=noopener>C#&rsquo;s P/Invoke</a>) and it can
+expose functions which can be consumed by C just like any other C function.
+This opens the door for an alternative approach:</p><p>Port the library to Rust one function at a time.</p><div class="notices note"><p>The code written in this article is available <a href=https://github.com/Michael-F-Bryan/tinyvm-rs class=external-link target=_blank rel=noopener>on GitHub</a>. Feel free to
+browse through and steal code or inspiration.</p><p>If you found this useful or spotted a bug, let me know on the blog&rsquo;s
+<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com class=external-link target=_blank rel=noopener>issue tracker</a>!</p></div><h2 id=getting-started>Getting Started
+<a class=heading-link href=#getting-started><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Before we do anything else, we&rsquo;re going to need to make a new project. I&rsquo;ve got
+<a href=https://github.com/Michael-F-Bryan/github-template class=external-link target=_blank rel=noopener>a template</a> project that sets up some nice things like CI and
+licenses that I&rsquo;ll use with <a href=https://crates.io/crates/cargo-generate class=external-link target=_blank rel=noopener><code>cargo-generate</code></a>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cargo generate --git https://github.com/Michael-F-Bryan/github-template --name tinyvm-rs
+</span></span><span style=display:flex><span>$ cd tinyvm-rs <span style=color:#f92672>&amp;&amp;</span> tree
+</span></span><span style=display:flex><span>tree -I &#39;vendor|target&#39;
+</span></span><span style=display:flex><span>.
+</span></span><span style=display:flex><span>├── Cargo.toml
+</span></span><span style=display:flex><span>├── LICENSE_APACHE.md
+</span></span><span style=display:flex><span>├── LICENSE_MIT.md
+</span></span><span style=display:flex><span>├── README.md
+</span></span><span style=display:flex><span>├── .travis.yml
+</span></span><span style=display:flex><span>└── src
+</span></span><span style=display:flex><span>    └── lib.rs
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span>1 directory, 6 files
+</span></span></code></pre></div><p>Now that&rsquo;s out of the way our first real task will be to build the library we
+want to port, and get to know it a bit better.</p><p>In this case we&rsquo;re porting <a href=https://github.com/jakogut/tinyvm class=external-link target=_blank rel=noopener>jakogut/tinyvm</a>,</p><blockquote><p>TinyVM is a small, fast, lightweight virtual machine written in pure ANSI C.</p></blockquote><p>To make referencing it easier in the future we&rsquo;ll add the repository as a
+submodule to our project.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ git submodule add https://github.com/jakogut/tinyvm vendor/tinyvm
+</span></span></code></pre></div><p>Now we&rsquo;ve got a copy of the source code, let&rsquo;s have a look at the <code>README.md</code>
+for build instructions.</p><blockquote><p>TinyVM is a virtual machine with the goal of having a small footprint.
+Low memory usage, a small amount of code, and a small binary.</p><p>Building can be accomplished on UNIX-like systems with make and GCC.</p><p>There are no external dependencies, save the C standard library.</p><p><strong>Building can be accomplished using &ldquo;make,&rdquo; or &ldquo;make rebuild&rdquo;.</strong></p><p>To build a debug version, add &ldquo;DEBUG=yes&rdquo; after &ldquo;make&rdquo;. To build a binary with
+profiling enabled, add &ldquo;PROFILE=yes&rdquo; after &ldquo;make&rdquo;.</p><p>I can be reached at &ldquo;joseph.kogut(at)gmail.com&rdquo;</p></blockquote><p>(emphasis added)</p><p>Okay, let&rsquo;s <code>cd</code> into the <code>tinyvm</code> directory and see if the build will <em>Just
+Work</em>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cd vendor/tinyvm
+</span></span><span style=display:flex><span>$ make
+</span></span><span style=display:flex><span>clang -Wall -pipe -Iinclude/ -std=gnu11 -Werror -pedantic -pedantic-errors -O3 -c libtvm/tvm_program.c -o libtvm/tvm_program.o
+</span></span><span style=display:flex><span>clang -Wall -pipe -Iinclude/ -std=gnu11 -Werror -pedantic -pedantic-errors -O3 -c libtvm/tvm_lexer.c -o libtvm/tvm_lexer.o
+</span></span><span style=display:flex><span>clang -Wall -pipe -Iinclude/ -std=gnu11 -Werror -pedantic -pedantic-errors -O3 -c libtvm/tvm.c -o libtvm/tvm.o
+</span></span><span style=display:flex><span>clang -Wall -pipe -Iinclude/ -std=gnu11 -Werror -pedantic -pedantic-errors -O3 -c libtvm/tvm_htab.c -o libtvm/tvm_htab.o
+</span></span><span style=display:flex><span>clang -Wall -pipe -Iinclude/ -std=gnu11 -Werror -pedantic -pedantic-errors -O3 -c libtvm/tvm_memory.c -o libtvm/tvm_memory.o
+</span></span><span style=display:flex><span>clang -Wall -pipe -Iinclude/ -std=gnu11 -Werror -pedantic -pedantic-errors -O3 -c libtvm/tvm_preprocessor.c -o libtvm/tvm_preprocessor.o
+</span></span><span style=display:flex><span>clang -Wall -pipe -Iinclude/ -std=gnu11 -Werror -pedantic -pedantic-errors -O3 -c libtvm/tvm_parser.c -o libtvm/tvm_parser.o
+</span></span><span style=display:flex><span>clang -Wall -pipe -Iinclude/ -std=gnu11 -Werror -pedantic -pedantic-errors -O3 -c libtvm/tvm_file.c -o libtvm/tvm_file.o
+</span></span><span style=display:flex><span>ar rcs lib/libtvm.a libtvm/tvm_program.o libtvm/tvm_lexer.o libtvm/tvm.o libtvm/tvm_htab.o libtvm/tvm_memory.o libtvm/tvm_preprocessor.o libtvm/tvm_parser.o libtvm/tvm_file.o
+</span></span><span style=display:flex><span>clang src/tvmi.c -ltvm -Wall -pipe -Iinclude/ -std=gnu11 -Werror -pedantic -pedantic-errors -O3 -Llib/ -o bin/tvmi
+</span></span><span style=display:flex><span>clang -Wall -pipe -Iinclude/ -std=gnu11 -Werror -pedantic -pedantic-errors -O3 -c tdb/main.c -o tdb/main.o
+</span></span><span style=display:flex><span>clang -Wall -pipe -Iinclude/ -std=gnu11 -Werror -pedantic -pedantic-errors -O3 -c tdb/tdb.c -o tdb/tdb.o
+</span></span><span style=display:flex><span>clang tdb/main.o tdb/tdb.o -ltvm -Wall -pipe -Iinclude/ -std=gnu11 -Werror -pedantic -pedantic-errors -O3 -Llib/ -o bin/tdb
+</span></span></code></pre></div><p>I really like it when C libraries will compile straight out of the box without
+needing to install random <code>*-dev</code> packages or mess with the build system 🎉</p><p>Unfortunately the library doesn&rsquo;t contain any tests so we won&rsquo;t be able to
+(initially) make sure individual functions have been translated correctly,
+but it <em>does</em> contain an example interpreter that we can use to explore the
+high-level functionality.</p><p>So we know we can build it from the command-line without much hassle, now
+we need to make sure our <code>tinyvm</code> crate can build everything programmatically.</p><p>This is where build scripts come in. Our strategy will be for the Rust crate to
+use a <code>build.rs</code> build script and the <a href=https://crates.io/crates/cc class=external-link target=_blank rel=noopener><code>cc</code></a> crate to invoke the equivalent
+commands to our <code>make</code> invocation. From there we can link to <code>libtvm</code> from Rust
+just like any other native library.</p><p>We&rsquo;ll need to add the <code>cc</code> crate as a dependency.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cargo add --build cc
+</span></span><span style=display:flex><span>    Updating &#39;https://github.com/rust-lang/crates.io-index&#39; index
+</span></span><span style=display:flex><span>      Adding cc v1.0.47 to build-dependencies
+</span></span></code></pre></div><p>And also make sure <code>build.rs</code> compiles the <code>libtvm</code> source code.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// build.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> cc::Build;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::path::Path;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>main</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> tinyvm <span style=color:#f92672>=</span> Path::new(<span style=color:#e6db74>&#34;vendor/tinyvm&#34;</span>);
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> include <span style=color:#f92672>=</span> tinyvm.join(<span style=color:#e6db74>&#34;include&#34;</span>);
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> src <span style=color:#f92672>=</span> tinyvm.join(<span style=color:#e6db74>&#34;libtvm&#34;</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    Build::new()
+</span></span><span style=display:flex><span>        .warnings(<span style=color:#66d9ef>false</span>)
+</span></span><span style=display:flex><span>        .file(src.join(<span style=color:#e6db74>&#34;tvm_file.c&#34;</span>))
+</span></span><span style=display:flex><span>        .file(src.join(<span style=color:#e6db74>&#34;tvm_htab.c&#34;</span>))
+</span></span><span style=display:flex><span>        .file(src.join(<span style=color:#e6db74>&#34;tvm_lexer.c&#34;</span>))
+</span></span><span style=display:flex><span>        .file(src.join(<span style=color:#e6db74>&#34;tvm_memory.c&#34;</span>))
+</span></span><span style=display:flex><span>        .file(src.join(<span style=color:#e6db74>&#34;tvm_parser.c&#34;</span>))
+</span></span><span style=display:flex><span>        .file(src.join(<span style=color:#e6db74>&#34;tvm_preprocessor.c&#34;</span>))
+</span></span><span style=display:flex><span>        .file(src.join(<span style=color:#e6db74>&#34;tvm_program.c&#34;</span>))
+</span></span><span style=display:flex><span>        .file(src.join(<span style=color:#e6db74>&#34;tvm.c&#34;</span>))
+</span></span><span style=display:flex><span>        .include(<span style=color:#f92672>&amp;</span>include)
+</span></span><span style=display:flex><span>        .compile(<span style=color:#e6db74>&#34;tvm&#34;</span>);
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices note"><p>If you&rsquo;ve looked at the <code>cc</code> crate&rsquo;s documentation you may have noticed there&rsquo;s
+a <a href=https://docs.rs/cc/1.0.47/cc/struct.Build.html#method.files class=external-link target=_blank rel=noopener><code>Build::files()</code></a> method which accepts an iterator of paths. We
+<em>could</em> have programmatically detected all the <code>*.c</code> files inside
+<code>vendor/tinyvm/libtvm</code>, but because we&rsquo;re porting code one function at a time
+it&rsquo;ll be much easier to delete individual <code>.file()</code> calls as bits are ported.</p></div><p>We also need a way to let Rust know which functions it can call from <code>libtvm</code>.
+This is typically done by writing definitions for each function in an
+<a href=https://doc.rust-lang.org/reference/items/external-blocks.html class=external-link target=_blank rel=noopener><code>extern</code> block</a>, but luckily a tool called <a href=https://crates.io/crates/bindgen class=external-link target=_blank rel=noopener><code>bindgen</code></a> exists which
+can read in a C-style header file and generate the definitions for us.</p><p>Let&rsquo;s generate bindings from <code>vendor/tinyvm/include/tvm/tvm.h</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cargo install bindgen
+</span></span><span style=display:flex><span>$ bindgen vendor/tinyvm/include/tvm/tvm.h -o src/ffi.rs
+</span></span><span style=display:flex><span>$ wc --lines src/ffi.rs
+</span></span><span style=display:flex><span>992 src/ffi.rs
+</span></span></code></pre></div><p>We&rsquo;ll need to add the <code>ffi</code> module to our crate.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[allow(non_camel_case_types, non_snake_case)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>mod</span> ffi;
+</span></span></code></pre></div><p>Looking at <code>tinyvm</code>&rsquo;s <code>src/</code> directory, we find the source code for a <code>tinyvm</code>
+interpreter.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c><span style=display:flex><span><span style=color:#75715e>// vendor/tinyvm/src/tvmi.c
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;stdlib.h&gt;</span><span style=color:#75715e>
+</span></span></span><span style=display:flex><span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;stdio.h&gt;</span><span style=color:#75715e>
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;tvm/tvm.h&gt;</span><span style=color:#75715e>
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>main</span>(<span style=color:#66d9ef>int</span> argc, <span style=color:#66d9ef>char</span> <span style=color:#f92672>**</span>argv)
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>struct</span> tvm_ctx <span style=color:#f92672>*</span>vm <span style=color:#f92672>=</span> <span style=color:#a6e22e>tvm_vm_create</span>();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> (vm <span style=color:#f92672>!=</span> NULL <span style=color:#f92672>&amp;&amp;</span> <span style=color:#a6e22e>tvm_vm_interpret</span>(vm, argv[<span style=color:#ae81ff>1</span>]) <span style=color:#f92672>==</span> <span style=color:#ae81ff>0</span>)
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>tvm_vm_run</span>(vm);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>tvm_vm_destroy</span>(vm);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>return</span> <span style=color:#ae81ff>0</span>;
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>It&rsquo;s incredibly simple. Which is nice considering we&rsquo;ll be using this
+interpreter as one of our examples.</p><p>For now, let&rsquo;s translate it directly to Rust and stick it in the <code>examples/</code>
+directory.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// examples/tvmi.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::{env, ffi::CString};
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> tinyvm::ffi;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>main</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> filename <span style=color:#f92672>=</span> CString::new(env::args().nth(<span style=color:#ae81ff>1</span>).unwrap()).unwrap();
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// cast away the `const` because that&#39;s what libtvm expects
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> filename <span style=color:#f92672>=</span> filename.as_ptr() <span style=color:#66d9ef>as</span> <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> _;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> vm <span style=color:#f92672>=</span> ffi::tvm_vm_create();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> <span style=color:#f92672>!</span>vm.is_null() <span style=color:#f92672>&amp;&amp;</span> ffi::tvm_vm_interpret(vm, filename) <span style=color:#f92672>==</span> <span style=color:#ae81ff>0</span> {
+</span></span><span style=display:flex><span>            ffi::tvm_vm_run(vm);
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        ffi::tvm_vm_destroy(vm);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>As a sanity check, we can also run the virtual machine and make sure it all
+works.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cargo run --example tvmi -- vendor/tinyvm/programs/tinyvm/fact.vm
+</span></span><span style=display:flex><span>    Finished dev [unoptimized + debuginfo] target(s) in 0.02s
+</span></span><span style=display:flex><span>     Running `target/debug/examples/tvmi vendor/tinyvm/programs/tinyvm/fact.vm`
+</span></span><span style=display:flex><span>1
+</span></span><span style=display:flex><span>2
+</span></span><span style=display:flex><span>6
+</span></span><span style=display:flex><span>24
+</span></span><span style=display:flex><span>120
+</span></span><span style=display:flex><span>720
+</span></span><span style=display:flex><span>5040
+</span></span><span style=display:flex><span>40320
+</span></span><span style=display:flex><span>362880
+</span></span><span style=display:flex><span>3628800
+</span></span></code></pre></div><p>LGTM 👍</p><h2 id=low-hanging-fruit>Low Hanging Fruit
+<a class=heading-link href=#low-hanging-fruit><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>When you start out with something like this it&rsquo;s tempting to dive into the most
+important functions and port those first. Try to resist this urge. It can be
+easy to bite off more than you can chew and end up either wasting time or
+becoming demoralized and give up.</p><p>Instead, let&rsquo;s look for the easiest item.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ ls libtvm
+</span></span><span style=display:flex><span>tvm.c  tvm_file.c  tvm_htab.c  tvm_lexer.c  tvm_memory.c  tvm_parser.c
+</span></span><span style=display:flex><span>tvm_preprocessor.c  tvm_program.c
+</span></span></code></pre></div><p>That <code>tvm_htab.c</code> file looks promising. I&rsquo;m pretty sure <code>htab</code> stands for
+<em>&ldquo;Hash Table&rdquo;</em>, and Rust&rsquo;s standard library already contains a high-quality
+implementation. We should be able to swap that in easily enough.</p><p>Let&rsquo;s look at the <code>tvm_htab.h</code> header file and see what we&rsquo;re dealing with.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c><span style=display:flex><span><span style=color:#75715e>// vendor/tinyvm/include/tvm/tvm_htab.h
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#ifndef TVM_HTAB_H_
+</span></span></span><span style=display:flex><span><span style=color:#75715e>#define TVM_HTAB_H_
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#define KEY_LENGTH 64
+</span></span></span><span style=display:flex><span><span style=color:#75715e>#define HTAB_SIZE 4096
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> tvm_htab_node {
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>key;
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>int</span> value;
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>valptr;
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>struct</span> tvm_htab_node <span style=color:#f92672>*</span>next;
+</span></span><span style=display:flex><span>};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> tvm_htab_ctx {
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>int</span> num_nodes;
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>int</span> size;
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>struct</span> tvm_htab_node <span style=color:#f92672>**</span>nodes;
+</span></span><span style=display:flex><span>};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> tvm_htab_ctx <span style=color:#f92672>*</span><span style=color:#a6e22e>tvm_htab_create</span>();
+</span></span><span style=display:flex><span><span style=color:#66d9ef>void</span> <span style=color:#a6e22e>tvm_htab_destroy</span>(<span style=color:#66d9ef>struct</span> tvm_htab_ctx <span style=color:#f92672>*</span>htab);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>tvm_htab_add</span>(<span style=color:#66d9ef>struct</span> tvm_htab_ctx <span style=color:#f92672>*</span>htab, <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>key, <span style=color:#66d9ef>int</span> value);
+</span></span><span style=display:flex><span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>tvm_htab_add_ref</span>(<span style=color:#66d9ef>struct</span> tvm_htab_ctx <span style=color:#f92672>*</span>htab,
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>key, <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>valptr, <span style=color:#66d9ef>int</span> len);
+</span></span><span style=display:flex><span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>tvm_htab_find</span>(<span style=color:#66d9ef>struct</span> tvm_htab_ctx <span style=color:#f92672>*</span>htab, <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>key);
+</span></span><span style=display:flex><span><span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>tvm_htab_find_ref</span>(<span style=color:#66d9ef>struct</span> tvm_htab_ctx <span style=color:#f92672>*</span>htab, <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>key);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#endif
+</span></span></span></code></pre></div><p>Looks easy enough to implement. Our only problem is the definition for
+<code>tvm_htab_ctx</code> and <code>tvm_htab_node</code> are included in the header file, meaning it&rsquo;s
+possible that some code accesses the hash table&rsquo;s internals directly instead of
+going through the published interface.</p><p>We can check whether anything accesses hash table internals by temporarily
+moving the struct definitions into <code>tvm_htab.c</code> and see if everything still
+compiles.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-diff data-lang=diff><span style=display:flex><span>diff --git a/include/tvm/tvm_htab.h b/include/tvm/tvm_htab.h
+</span></span><span style=display:flex><span>index 9feb7a9..e7346b7 100644
+</span></span><span style=display:flex><span><span style=color:#f92672>--- a/include/tvm/tvm_htab.h
+</span></span></span><span style=display:flex><span><span style=color:#f92672></span><span style=color:#a6e22e>+++ b/include/tvm/tvm_htab.h
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span><span style=color:#75715e>@@ -4,18 +4,8 @@
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span> #define KEY_LENGTH 64
+</span></span><span style=display:flex><span> #define HTAB_SIZE 4096
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#f92672>-struct tvm_htab_node {
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-       char *key;
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-       int value;
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-       void *valptr;
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-       struct tvm_htab_node *next;
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-};
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-struct tvm_htab_ctx {
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-       unsigned int num_nodes;
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-       unsigned int size;
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-       struct tvm_htab_node **nodes;
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-};
+</span></span></span><span style=display:flex><span><span style=color:#f92672></span><span style=color:#a6e22e>+struct tvm_htab_node;
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+struct tvm_htab_ctx;
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span>
+</span></span><span style=display:flex><span> struct tvm_htab_ctx *tvm_htab_create();
+</span></span><span style=display:flex><span> void tvm_htab_destroy(struct tvm_htab_ctx *htab);
+</span></span></code></pre></div><p>And after running <code>make</code> again:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ make
+</span></span><span style=display:flex><span>make
+</span></span><span style=display:flex><span>clang -Wall -pipe -Iinclude/ -std=gnu11 -Werror -pedantic -pedantic-errors -O3 -c libtvm/tvm_htab.c -o libtvm/tvm_htab.o
+</span></span><span style=display:flex><span>ar rcs lib/libtvm.a libtvm/tvm_program.o libtvm/tvm_lexer.o libtvm/tvm.o libtvm/tvm_htab.o libtvm/tvm_memory.o libtvm/tvm_preprocessor.o libtvm/tvm_parser.o libtvm/tvm_file.o
+</span></span><span style=display:flex><span>clang src/tvmi.c -ltvm -Wall -pipe -Iinclude/ -std=gnu11 -Werror -pedantic -pedantic-errors -O3 -Llib/ -o bin/tvmi
+</span></span><span style=display:flex><span>clang tdb/main.o tdb/tdb.o -ltvm -Wall -pipe -Iinclude/ -std=gnu11 -Werror -pedantic -pedantic-errors -O3 -Llib/ -o bin/tdb
+</span></span></code></pre></div><p>Looks like it all still works, now onto phase B; Create an identical set of
+functions which use a <code>HashMap&lt;K, V></code> under the hood.</p><p>Stubbing out the bare minimum, we get:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/htab.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::{
+</span></span><span style=display:flex><span>    collections::HashMap,
+</span></span><span style=display:flex><span>    ffi::CString,
+</span></span><span style=display:flex><span>    os::raw::{c_char, c_int, c_void},
+</span></span><span style=display:flex><span>};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Default, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>HashTable</span>(<span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) HashMap<span style=color:#f92672>&lt;</span>CString, Item<span style=color:#f92672>&gt;</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Item</span> {
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// not sure what to put here yet
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[no_mangle]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>tvm_htab_create</span>() -&gt; <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> HashTable {
+</span></span><span style=display:flex><span>    unimplemented!()
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[no_mangle]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>tvm_htab_destroy</span>(htab: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> HashTable) {
+</span></span><span style=display:flex><span>    unimplemented!()
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[no_mangle]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>tvm_htab_add</span>(
+</span></span><span style=display:flex><span>    htab: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> HashTable,
+</span></span><span style=display:flex><span>    key: <span style=color:#f92672>*</span><span style=color:#66d9ef>const</span> c_char,
+</span></span><span style=display:flex><span>    value: <span style=color:#a6e22e>c_int</span>,
+</span></span><span style=display:flex><span>) -&gt; <span style=color:#a6e22e>c_int</span> {
+</span></span><span style=display:flex><span>    unimplemented!()
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[no_mangle]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>tvm_htab_add_ref</span>(
+</span></span><span style=display:flex><span>    htab: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> HashTable,
+</span></span><span style=display:flex><span>    key: <span style=color:#f92672>*</span><span style=color:#66d9ef>const</span> c_char,
+</span></span><span style=display:flex><span>    value_ptr: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> c_void,
+</span></span><span style=display:flex><span>    length: <span style=color:#a6e22e>c_int</span>,
+</span></span><span style=display:flex><span>) -&gt; <span style=color:#a6e22e>c_int</span> {
+</span></span><span style=display:flex><span>    unimplemented!()
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[no_mangle]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>tvm_htab_find</span>(
+</span></span><span style=display:flex><span>    htab: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> HashTable,
+</span></span><span style=display:flex><span>    key: <span style=color:#f92672>*</span><span style=color:#66d9ef>const</span> c_char,
+</span></span><span style=display:flex><span>) -&gt; <span style=color:#a6e22e>c_int</span> {
+</span></span><span style=display:flex><span>    unimplemented!()
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[no_mangle]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>tvm_htab_find_ref</span>(
+</span></span><span style=display:flex><span>    htab: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> HashTable,
+</span></span><span style=display:flex><span>    key: <span style=color:#f92672>*</span><span style=color:#66d9ef>const</span> c_char,
+</span></span><span style=display:flex><span>) -&gt; <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> c_char {
+</span></span><span style=display:flex><span>    unimplemented!()
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We also need to declare the <code>htab</code> module and re-export its functions from
+<code>lib.rs</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>mod</span> htab;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>use</span> htab::<span style=color:#f92672>*</span>;
+</span></span></code></pre></div><p>Now we need to make sure the original <code>tvm_htab.c</code> doesn&rsquo;t get compiled and
+linked into the final library, otherwise we&rsquo;ll be greeted with a wall of
+duplicate symbol errors by the linker.</p><details><summary>A wall of duplicate symbol errors</summary><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-mysql data-lang=mysql><span style=display:flex><span>error: linking <span style=color:#66d9ef>with</span> <span style=color:#f92672>`/</span>usr<span style=color:#f92672>/</span>bin<span style=color:#f92672>/</span>clang<span style=color:#f92672>`</span> failed: <span style=color:#66d9ef>exit</span> code: <span style=color:#ae81ff>1</span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>|</span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>=</span> note: <span style=color:#e6db74>&#34;/usr/bin/clang&#34;</span> <span style=color:#e6db74>&#34;-Wl,--as-needed&#34;</span> <span style=color:#e6db74>&#34;-Wl,-z,noexecstack&#34;</span> <span style=color:#e6db74>&#34;-m64&#34;</span> <span style=color:#e6db74>&#34;-L&#34;</span> <span style=color:#e6db74>&#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.17q5thi94e1eoj5i.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.19e8sqirbm56nu8g.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.1g6ljku8dwzpfvhi.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.1h5e5mxmiptpb7iz.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.1herotdop66zv9ot.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.1qbfxpvgd885u6o.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.21psdg8ni4vgdrzk.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.2albhpxlxxvc0ccu.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.2btm2dc9rhjhhna1.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.2kct5ftnkrqqr0mf.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.2lwgg3uosup4mkh0.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.2xduj46e9sw5vuan.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.35h8y7f23ua1qnz0.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.3cgfdtku63ltd8oc.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.3ot768hzkzzy7r76.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.3u2xnetcch8f2o02.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.4ldrdjvfzk58myrv.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.4omnum6bdjqsrq8b.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.4s8ch4ccmewulj22.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.4syl3x2rb8328h8x.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.532awiysf0h9r50f.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.5b2qwmmtc5pvnbh.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.dfjs079cp9si4o5.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.qxp6yb2gjpj0v6n.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.xz7ld20yvprst1r.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.z35ukhvchmmby1c.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;-o&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-599d57f523fdb1a4.1d7wvlwdjap8p3g4.rcgu.o&#34;</span> <span style=color:#e6db74>&#34;-Wl,--gc-sections&#34;</span> <span style=color:#e6db74>&#34;-pie&#34;</span> <span style=color:#e6db74>&#34;-Wl,-zrelro&#34;</span> <span style=color:#e6db74>&#34;-Wl,-znow&#34;</span> <span style=color:#e6db74>&#34;-nodefaultlibs&#34;</span> <span style=color:#e6db74>&#34;-L&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/deps&#34;</span> <span style=color:#e6db74>&#34;-L&#34;</span> <span style=color:#e6db74>&#34;/home/michael/Documents/tinyvm-rs/target/debug/build/tinyvm-3f1a2766f78b5580/out&#34;</span> <span style=color:#e6db74>&#34;-L&#34;</span> <span style=color:#e6db74>&#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib&#34;</span> <span style=color:#e6db74>&#34;-Wl,-Bstatic&#34;</span> <span style=color:#e6db74>&#34;-Wl,--whole-archive&#34;</span> <span style=color:#e6db74>&#34;-ltvm&#34;</span> <span style=color:#e6db74>&#34;-Wl,--no-whole-archive&#34;</span> <span style=color:#e6db74>&#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libtest-a39a3e9a77b17f55.rlib&#34;</span> <span style=color:#e6db74>&#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libterm-97a69cd310ff0925.rlib&#34;</span> <span style=color:#e6db74>&#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libgetopts-66a42b1d94e3e6f9.rlib&#34;</span> <span style=color:#e6db74>&#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libunicode_width-dd7761d848144e0d.rlib&#34;</span> <span style=color:#e6db74>&#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_std_workspace_std-f722acdb78755ba0.rlib&#34;</span> <span style=color:#e6db74>&#34;-Wl,--start-group&#34;</span> <span style=color:#e6db74>&#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd-974c3c08f6def4b3.rlib&#34;</span> <span style=color:#e6db74>&#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libpanic_unwind-eb49676f33a2c8a6.rlib&#34;</span> <span style=color:#e6db74>&#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libhashbrown-7ae0446feecc60f2.rlib&#34;</span> <span style=color:#e6db74>&#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_std_workspace_alloc-2de299b65d7f5721.rlib&#34;</span> <span style=color:#e6db74>&#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libbacktrace-64514775bc06309a.rlib&#34;</span> <span style=color:#e6db74>&#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libbacktrace_sys-1ed8aa185c63b9a5.rlib&#34;</span> <span style=color:#e6db74>&#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_demangle-a839df87f563fba5.rlib&#34;</span> <span style=color:#e6db74>&#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libunwind-8e726bdc2018d836.rlib&#34;</span> <span style=color:#e6db74>&#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcfg_if-5285f42cbadf207d.rlib&#34;</span> <span style=color:#e6db74>&#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/liblibc-b0362d20f8aa58fa.rlib&#34;</span> <span style=color:#e6db74>&#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/liballoc-f3dd7051708453a4.rlib&#34;</span> <span style=color:#e6db74>&#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_std_workspace_core-83744846c43307ce.rlib&#34;</span> <span style=color:#e6db74>&#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcore-d5565a3a0f4cfe21.rlib&#34;</span> <span style=color:#e6db74>&#34;-Wl,--end-group&#34;</span> <span style=color:#e6db74>&#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcompiler_builtins-ea790e85415e3bbf.rlib&#34;</span> <span style=color:#e6db74>&#34;-Wl,-Bdynamic&#34;</span> <span style=color:#e6db74>&#34;-ldl&#34;</span> <span style=color:#e6db74>&#34;-lrt&#34;</span> <span style=color:#e6db74>&#34;-lpthread&#34;</span> <span style=color:#e6db74>&#34;-lgcc_s&#34;</span> <span style=color:#e6db74>&#34;-lc&#34;</span> <span style=color:#e6db74>&#34;-lm&#34;</span> <span style=color:#e6db74>&#34;-lrt&#34;</span> <span style=color:#e6db74>&#34;-lpthread&#34;</span> <span style=color:#e6db74>&#34;-lutil&#34;</span> <span style=color:#e6db74>&#34;-lutil&#34;</span> <span style=color:#e6db74>&#34;-fuse-ld=lld&#34;</span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>=</span> note: ld.lld: error: duplicate symbol: tvm_htab_create
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span> defined at htab.rs:<span style=color:#ae81ff>14</span> (src<span style=color:#f92672>/</span>htab.rs:<span style=color:#ae81ff>14</span>)
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span>            <span style=color:#f92672>/</span>home<span style=color:#f92672>/</span>michael<span style=color:#f92672>/</span>Documents<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span>rs<span style=color:#f92672>/</span>target<span style=color:#f92672>/</span>debug<span style=color:#f92672>/</span>deps<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span><span style=color:#ae81ff>599</span>d57f523fdb1a4.<span style=color:#ae81ff>5</span>b2qwmmtc5pvnbh.rcgu.o:(tvm_htab_create)
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span> defined at tvm_htab.c:<span style=color:#ae81ff>23</span> (vendor<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>/</span>libtvm<span style=color:#f92672>/</span>tvm_htab.c:<span style=color:#ae81ff>23</span>)
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span>            tvm_htab.o:(.<span style=color:#66d9ef>text</span>.tvm_htab_create<span style=color:#f92672>+</span><span style=color:#ae81ff>0</span>x0) <span style=color:#66d9ef>in</span> archive <span style=color:#f92672>/</span>home<span style=color:#f92672>/</span>michael<span style=color:#f92672>/</span>Documents<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span>rs<span style=color:#f92672>/</span>target<span style=color:#f92672>/</span>debug<span style=color:#f92672>/</span>build<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span><span style=color:#ae81ff>3</span>f1a2766f78b5580<span style=color:#f92672>/</span><span style=color:#66d9ef>out</span><span style=color:#f92672>/</span>libtvm.a
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>          ld.lld: error: duplicate symbol: tvm_htab_destroy
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span> defined at htab.rs:<span style=color:#ae81ff>17</span> (src<span style=color:#f92672>/</span>htab.rs:<span style=color:#ae81ff>17</span>)
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span>            <span style=color:#f92672>/</span>home<span style=color:#f92672>/</span>michael<span style=color:#f92672>/</span>Documents<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span>rs<span style=color:#f92672>/</span>target<span style=color:#f92672>/</span>debug<span style=color:#f92672>/</span>deps<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span><span style=color:#ae81ff>599</span>d57f523fdb1a4.<span style=color:#ae81ff>5</span>b2qwmmtc5pvnbh.rcgu.o:(tvm_htab_destroy)
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span> defined at tvm_htab.c:<span style=color:#ae81ff>35</span> (vendor<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>/</span>libtvm<span style=color:#f92672>/</span>tvm_htab.c:<span style=color:#ae81ff>35</span>)
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span>            tvm_htab.o:(.<span style=color:#66d9ef>text</span>.tvm_htab_destroy<span style=color:#f92672>+</span><span style=color:#ae81ff>0</span>x0) <span style=color:#66d9ef>in</span> archive <span style=color:#f92672>/</span>home<span style=color:#f92672>/</span>michael<span style=color:#f92672>/</span>Documents<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span>rs<span style=color:#f92672>/</span>target<span style=color:#f92672>/</span>debug<span style=color:#f92672>/</span>build<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span><span style=color:#ae81ff>3</span>f1a2766f78b5580<span style=color:#f92672>/</span><span style=color:#66d9ef>out</span><span style=color:#f92672>/</span>libtvm.a
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>          ld.lld: error: duplicate symbol: tvm_htab_add_ref
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span> defined at htab.rs:<span style=color:#ae81ff>29</span> (src<span style=color:#f92672>/</span>htab.rs:<span style=color:#ae81ff>29</span>)
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span>            <span style=color:#f92672>/</span>home<span style=color:#f92672>/</span>michael<span style=color:#f92672>/</span>Documents<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span>rs<span style=color:#f92672>/</span>target<span style=color:#f92672>/</span>debug<span style=color:#f92672>/</span>deps<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span><span style=color:#ae81ff>599</span>d57f523fdb1a4.<span style=color:#ae81ff>5</span>b2qwmmtc5pvnbh.rcgu.o:(tvm_htab_add_ref)
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span> defined at tvm_htab.c:<span style=color:#ae81ff>160</span> (vendor<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>/</span>libtvm<span style=color:#f92672>/</span>tvm_htab.c:<span style=color:#ae81ff>160</span>)
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span>            tvm_htab.o:(.<span style=color:#66d9ef>text</span>.tvm_htab_add_ref<span style=color:#f92672>+</span><span style=color:#ae81ff>0</span>x0) <span style=color:#66d9ef>in</span> archive <span style=color:#f92672>/</span>home<span style=color:#f92672>/</span>michael<span style=color:#f92672>/</span>Documents<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span>rs<span style=color:#f92672>/</span>target<span style=color:#f92672>/</span>debug<span style=color:#f92672>/</span>build<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span><span style=color:#ae81ff>3</span>f1a2766f78b5580<span style=color:#f92672>/</span><span style=color:#66d9ef>out</span><span style=color:#f92672>/</span>libtvm.a
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>          ld.lld: error: duplicate symbol: tvm_htab_add
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span> defined at htab.rs:<span style=color:#ae81ff>20</span> (src<span style=color:#f92672>/</span>htab.rs:<span style=color:#ae81ff>20</span>)
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span>            <span style=color:#f92672>/</span>home<span style=color:#f92672>/</span>michael<span style=color:#f92672>/</span>Documents<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span>rs<span style=color:#f92672>/</span>target<span style=color:#f92672>/</span>debug<span style=color:#f92672>/</span>deps<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span><span style=color:#ae81ff>599</span>d57f523fdb1a4.<span style=color:#ae81ff>5</span>b2qwmmtc5pvnbh.rcgu.o:(tvm_htab_add)
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span> defined at tvm_htab.c:<span style=color:#ae81ff>147</span> (vendor<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>/</span>libtvm<span style=color:#f92672>/</span>tvm_htab.c:<span style=color:#ae81ff>147</span>)
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span>            tvm_htab.o:(.<span style=color:#66d9ef>text</span>.tvm_htab_add<span style=color:#f92672>+</span><span style=color:#ae81ff>0</span>x0) <span style=color:#66d9ef>in</span> archive <span style=color:#f92672>/</span>home<span style=color:#f92672>/</span>michael<span style=color:#f92672>/</span>Documents<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span>rs<span style=color:#f92672>/</span>target<span style=color:#f92672>/</span>debug<span style=color:#f92672>/</span>build<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span><span style=color:#ae81ff>3</span>f1a2766f78b5580<span style=color:#f92672>/</span><span style=color:#66d9ef>out</span><span style=color:#f92672>/</span>libtvm.a
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>          ld.lld: error: duplicate symbol: tvm_htab_find
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span> defined at htab.rs:<span style=color:#ae81ff>39</span> (src<span style=color:#f92672>/</span>htab.rs:<span style=color:#ae81ff>39</span>)
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span>            <span style=color:#f92672>/</span>home<span style=color:#f92672>/</span>michael<span style=color:#f92672>/</span>Documents<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span>rs<span style=color:#f92672>/</span>target<span style=color:#f92672>/</span>debug<span style=color:#f92672>/</span>deps<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span><span style=color:#ae81ff>599</span>d57f523fdb1a4.<span style=color:#ae81ff>5</span>b2qwmmtc5pvnbh.rcgu.o:(tvm_htab_find)
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span> defined at tvm_htab.c:<span style=color:#ae81ff>189</span> (vendor<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>/</span>libtvm<span style=color:#f92672>/</span>tvm_htab.c:<span style=color:#ae81ff>189</span>)
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span>            tvm_htab.o:(.<span style=color:#66d9ef>text</span>.tvm_htab_find<span style=color:#f92672>+</span><span style=color:#ae81ff>0</span>x0) <span style=color:#66d9ef>in</span> archive <span style=color:#f92672>/</span>home<span style=color:#f92672>/</span>michael<span style=color:#f92672>/</span>Documents<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span>rs<span style=color:#f92672>/</span>target<span style=color:#f92672>/</span>debug<span style=color:#f92672>/</span>build<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span><span style=color:#ae81ff>3</span>f1a2766f78b5580<span style=color:#f92672>/</span><span style=color:#66d9ef>out</span><span style=color:#f92672>/</span>libtvm.a
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>          ld.lld: error: duplicate symbol: tvm_htab_find_ref
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span> defined at htab.rs:<span style=color:#ae81ff>47</span> (src<span style=color:#f92672>/</span>htab.rs:<span style=color:#ae81ff>47</span>)
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span>            <span style=color:#f92672>/</span>home<span style=color:#f92672>/</span>michael<span style=color:#f92672>/</span>Documents<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span>rs<span style=color:#f92672>/</span>target<span style=color:#f92672>/</span>debug<span style=color:#f92672>/</span>deps<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span><span style=color:#ae81ff>599</span>d57f523fdb1a4.<span style=color:#ae81ff>5</span>b2qwmmtc5pvnbh.rcgu.o:(tvm_htab_find_ref)
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span> defined at tvm_htab.c:<span style=color:#ae81ff>199</span> (vendor<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>/</span>libtvm<span style=color:#f92672>/</span>tvm_htab.c:<span style=color:#ae81ff>199</span>)
+</span></span><span style=display:flex><span>          <span style=color:#f92672>&gt;&gt;&gt;</span>            tvm_htab.o:(.<span style=color:#66d9ef>text</span>.tvm_htab_find_ref<span style=color:#f92672>+</span><span style=color:#ae81ff>0</span>x0) <span style=color:#66d9ef>in</span> archive <span style=color:#f92672>/</span>home<span style=color:#f92672>/</span>michael<span style=color:#f92672>/</span>Documents<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span>rs<span style=color:#f92672>/</span>target<span style=color:#f92672>/</span>debug<span style=color:#f92672>/</span>build<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>-</span><span style=color:#ae81ff>3</span>f1a2766f78b5580<span style=color:#f92672>/</span><span style=color:#66d9ef>out</span><span style=color:#f92672>/</span>libtvm.a
+</span></span><span style=display:flex><span>          clang: error: linker command failed <span style=color:#66d9ef>with</span> <span style=color:#66d9ef>exit</span> code <span style=color:#ae81ff>1</span> (<span style=color:#66d9ef>use</span> <span style=color:#f92672>-</span>v <span style=color:#66d9ef>to</span> see invocation)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>error: aborting due <span style=color:#66d9ef>to</span> previous error
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>error: could <span style=color:#66d9ef>not</span> compile <span style=color:#f92672>`</span>tinyvm<span style=color:#f92672>`</span>.
+</span></span></code></pre></div></details><p>The fix is actually quite simple.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-diff data-lang=diff><span style=display:flex><span>diff --git a/build.rs b/build.rs
+</span></span><span style=display:flex><span>index 6f274c8..af9d467 100644
+</span></span><span style=display:flex><span><span style=color:#f92672>--- a/build.rs
+</span></span></span><span style=display:flex><span><span style=color:#f92672></span><span style=color:#a6e22e>+++ b/build.rs
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span><span style=color:#75715e>@@ -9,7 +9,6 @@ fn main() {
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>     Build::new()
+</span></span><span style=display:flex><span>         .warnings(false)
+</span></span><span style=display:flex><span>         .file(src.join(&#34;tvm_file.c&#34;))
+</span></span><span style=display:flex><span><span style=color:#f92672>-        .file(src.join(&#34;tvm_htab.c&#34;))
+</span></span></span><span style=display:flex><span><span style=color:#f92672></span>         .file(src.join(&#34;tvm_lexer.c&#34;))
+</span></span><span style=display:flex><span>         .file(src.join(&#34;tvm_memory.c&#34;))
+</span></span><span style=display:flex><span>         .file(src.join(&#34;tvm_parser.c&#34;))
+</span></span></code></pre></div><p>And trying to run the <code>tvmi</code> example again crashes, just as you&rsquo;d expect a
+program full of <code>unimplemented!()</code> to.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cargo run --example tvmi -- vendor/tinyvm/programs/tinyvm/fact.vm
+</span></span><span style=display:flex><span>    Finished dev [unoptimized + debuginfo] target(s) in 0.02s
+</span></span><span style=display:flex><span>     Running `target/debug/examples/tvmi vendor/tinyvm/programs/tinyvm/fact.vm`
+</span></span><span style=display:flex><span>thread &#39;main&#39; panicked at &#39;not yet implemented&#39;, src/htab.rs:14:57
+</span></span><span style=display:flex><span>note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace.
+</span></span></code></pre></div><p>When adding FFI support for a new type, the easiest place to start is often
+with the constructor and destructor.</p><div class="notices info"><p>The C code can only ever access our <code>HashTable</code> via a pointer, so we need to
+allocate one on the heap and then pass ownership of that heap-allocated object
+to the caller.</p></div><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/htab.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[no_mangle]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>tvm_htab_create</span>() -&gt; <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> HashTable {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> hashtable <span style=color:#f92672>=</span> Box::new(HashTable::default());
+</span></span><span style=display:flex><span>    Box::into_raw(hashtable)
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[no_mangle]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>tvm_htab_destroy</span>(htab: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> HashTable) {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> htab.is_null() {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// nothing to free
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>return</span>;
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> hashtable <span style=color:#f92672>=</span> Box::from_raw(htab);
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// explicitly destroy the hashtable
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    drop(hashtable);
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices warning"><p>It is important that callers only ever destroy the <code>HashTable</code> by using the
+<code>tvm_htab_destroy()</code> function!</p><p>If they don&rsquo;t do that and instead try to call <code>free()</code> directly, we&rsquo;ll
+almost certainly have a bad time. At best, it&rsquo;ll leak a bunch of memory, but
+it&rsquo;s also quite possible that our Rust <code>Box</code> doesn&rsquo;t use the same heap as
+<code>malloc()</code> and <code>free()</code>, meaning freeing a Rust object from C could corrupt
+the heap and leave the world in a broken state.</p></div><p>Adding items to our hashmap is almost as easy to implement.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/hmap.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Item</span> {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// An integer value.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    value: <span style=color:#a6e22e>c_int</span>,
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// An opaque value used with [`tvm_htab_add_ref()`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// # Safety
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// Storing the contents of a `void *` in a `Vec&lt;u8&gt;` *would* normally
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// result in alignment issues, but we&#39;ve got access to the `libtvm` source
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// code and know it will only ever store `char *` strings.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    opaque_value: Vec<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>u8</span><span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Item {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>integer</span>(value: <span style=color:#a6e22e>c_int</span>) -&gt; <span style=color:#a6e22e>Item</span> {
+</span></span><span style=display:flex><span>        Item {
+</span></span><span style=display:flex><span>            value,
+</span></span><span style=display:flex><span>            opaque_value: Vec::new(),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>opaque</span><span style=color:#f92672>&lt;</span>V<span style=color:#f92672>&gt;</span>(opaque_value: <span style=color:#a6e22e>V</span>) -&gt; <span style=color:#a6e22e>Item</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>        V: Into<span style=color:#f92672>&lt;</span>Vec<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>u8</span><span style=color:#f92672>&gt;&gt;</span>,
+</span></span><span style=display:flex><span>    {
+</span></span><span style=display:flex><span>        Item {
+</span></span><span style=display:flex><span>            value: <span style=color:#ae81ff>0</span>,
+</span></span><span style=display:flex><span>            opaque_value: <span style=color:#a6e22e>opaque_value</span>.into(),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>from_void</span>(pointer: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> c_void, length: <span style=color:#a6e22e>c_int</span>) -&gt; <span style=color:#a6e22e>Item</span> {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// we need to create an owned copy of the value
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>let</span> opaque_value <span style=color:#f92672>=</span> <span style=color:#66d9ef>if</span> pointer.is_null() {
+</span></span><span style=display:flex><span>            Vec::new()
+</span></span><span style=display:flex><span>        } <span style=color:#66d9ef>else</span> {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>                std::slice::from_raw_parts(pointer <span style=color:#66d9ef>as</span> <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> <span style=color:#66d9ef>u8</span>, length <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>usize</span>)
+</span></span><span style=display:flex><span>                    .to_owned()
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        };
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        Item::opaque(opaque_value)
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[no_mangle]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>tvm_htab_add</span>(
+</span></span><span style=display:flex><span>    htab: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> HashTable,
+</span></span><span style=display:flex><span>    key: <span style=color:#f92672>*</span><span style=color:#66d9ef>const</span> c_char,
+</span></span><span style=display:flex><span>    value: <span style=color:#a6e22e>c_int</span>,
+</span></span><span style=display:flex><span>) -&gt; <span style=color:#a6e22e>c_int</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> hashtable <span style=color:#f92672>=</span> <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> <span style=color:#f92672>*</span>htab;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> key <span style=color:#f92672>=</span> CStr::from_ptr(key).to_owned();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    hashtable.<span style=color:#ae81ff>0.</span>insert(key, Item::integer(value));
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// the only time insertion can fail is if allocation fails. In that case
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#75715e>// we&#39;ll abort the process anyway, so if this function returns we can
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#75715e>// assume it was successful (0 = success).
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#ae81ff>0</span>
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[no_mangle]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>tvm_htab_add_ref</span>(
+</span></span><span style=display:flex><span>    htab: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> HashTable,
+</span></span><span style=display:flex><span>    key: <span style=color:#f92672>*</span><span style=color:#66d9ef>const</span> c_char,
+</span></span><span style=display:flex><span>    value_ptr: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> c_void,
+</span></span><span style=display:flex><span>    length: <span style=color:#a6e22e>c_int</span>,
+</span></span><span style=display:flex><span>) -&gt; <span style=color:#a6e22e>c_int</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> hashtable <span style=color:#f92672>=</span> <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> <span style=color:#f92672>*</span>htab;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> key <span style=color:#f92672>=</span> CStr::from_ptr(key).to_owned();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    hashtable.<span style=color:#ae81ff>0.</span>insert(key, Item::from_void(value_ptr, length));
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#ae81ff>0</span>
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices note"><p>It&rsquo;s important to make sure we&rsquo;re using a <code>CString</code> as the hashtable key here
+instead of a normal <code>String</code>. A <code>*const c_char</code> can contain <em>any</em> non-null
+bytes, whereas a Rust <code>String</code> requires the string to be valid UTF-8.</p><p>We could probably get away with converting the <code>CStr</code> to a <code>&amp;str</code> and then an
+owned <code>String</code> because most input will be ASCII, but considering we&rsquo;d need one
+or two <code>unwrap()</code>s, it&rsquo;s easier to just do things correctly and store a
+<code>CString</code>.</p></div><p>The two <code>*_find()</code> functions can be delegated straight to the inner
+<code>HashMap&lt;CString, Item></code>.</p><p>The only thing we need to be careful about is making sure the right value is
+returned when an item can&rsquo;t be found. In this case, by looking at
+<code>tvm_htab.c</code> we can see that <code>tvm_htab_find()</code> returns <code>-1</code> and
+<code>tvm_htab_find_ref()</code> returns <code>NULL</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/hmap.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[no_mangle]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>tvm_htab_find</span>(
+</span></span><span style=display:flex><span>    htab: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> HashTable,
+</span></span><span style=display:flex><span>    key: <span style=color:#f92672>*</span><span style=color:#66d9ef>const</span> c_char,
+</span></span><span style=display:flex><span>) -&gt; <span style=color:#a6e22e>c_int</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> hashtable <span style=color:#f92672>=</span> <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> <span style=color:#f92672>*</span>htab;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> key <span style=color:#f92672>=</span> CStr::from_ptr(key);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>match</span> hashtable.get(key) {
+</span></span><span style=display:flex><span>        Some(item) <span style=color:#f92672>=&gt;</span> item.value,
+</span></span><span style=display:flex><span>        None <span style=color:#f92672>=&gt;</span> <span style=color:#f92672>-</span><span style=color:#ae81ff>1</span>,
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[no_mangle]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>tvm_htab_find_ref</span>(
+</span></span><span style=display:flex><span>    htab: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> HashTable,
+</span></span><span style=display:flex><span>    key: <span style=color:#f92672>*</span><span style=color:#66d9ef>const</span> c_char,
+</span></span><span style=display:flex><span>) -&gt; <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> c_char {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> hashtable <span style=color:#f92672>=</span> <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> <span style=color:#f92672>*</span>htab;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> key <span style=color:#f92672>=</span> CStr::from_ptr(key);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>match</span> hashtable.<span style=color:#ae81ff>0.</span>get(key) {
+</span></span><span style=display:flex><span>        Some(item) <span style=color:#f92672>=&gt;</span> item.value_ptr <span style=color:#66d9ef>as</span> <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> c_char,
+</span></span><span style=display:flex><span>        None <span style=color:#f92672>=&gt;</span> ptr::null_mut(),
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Now we&rsquo;ve actually implemented the stubbed out functions, everything should work
+again.</p><p>The easiest way to check is by running our example.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span>cargo run <span style=color:#f92672>--</span>example tvmi <span style=color:#f92672>--</span> vendor<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>/</span>programs<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>/</span>fact.vm
+</span></span><span style=display:flex><span>    Finished dev [unoptimized <span style=color:#f92672>+</span> debuginfo] target(s) <span style=color:#66d9ef>in</span> <span style=color:#ae81ff>0.02</span>s
+</span></span><span style=display:flex><span>     Running <span style=color:#960050;background-color:#1e0010>`</span>target<span style=color:#f92672>/</span>debug<span style=color:#f92672>/</span>examples<span style=color:#f92672>/</span>tvmi vendor<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>/</span>programs<span style=color:#f92672>/</span>tinyvm<span style=color:#f92672>/</span>fact.vm<span style=color:#960050;background-color:#1e0010>`</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>1</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>2</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>6</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>24</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>120</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>720</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>5040</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>40320</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>362880</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>3628800</span>
+</span></span></code></pre></div><p>And to double-check we can run it through <code>valgrind</code> to make sure we aren&rsquo;t
+leaking memory or doing anything dodgy with pointers.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ valgrind target/debug/examples/tvmi vendor/tinyvm/programs/tinyvm/fact.vm
+</span></span><span style=display:flex><span>==1492== Memcheck, a memory error detector
+</span></span><span style=display:flex><span>==1492== Copyright (C) 2002-2017, and GNU GPL&#39;d, by Julian Seward et al.
+</span></span><span style=display:flex><span>==1492== Using Valgrind-3.15.0 and LibVEX; rerun with -h for copyright info
+</span></span><span style=display:flex><span>==1492== Command: target/debug/examples/tvmi vendor/tinyvm/programs/tinyvm/fact.vm
+</span></span><span style=display:flex><span>==1492==
+</span></span><span style=display:flex><span>1
+</span></span><span style=display:flex><span>2
+</span></span><span style=display:flex><span>6
+</span></span><span style=display:flex><span>24
+</span></span><span style=display:flex><span>120
+</span></span><span style=display:flex><span>720
+</span></span><span style=display:flex><span>5040
+</span></span><span style=display:flex><span>40320
+</span></span><span style=display:flex><span>362880
+</span></span><span style=display:flex><span>3628800
+</span></span><span style=display:flex><span>==1492==
+</span></span><span style=display:flex><span>==1492== HEAP SUMMARY:
+</span></span><span style=display:flex><span>==1492==     in use at exit: 0 bytes in 0 blocks
+</span></span><span style=display:flex><span>==1492==   total heap usage: 270 allocs, 270 frees, 67,129,392 bytes allocated
+</span></span><span style=display:flex><span>==1492==
+</span></span><span style=display:flex><span>==1492== All heap blocks were freed -- no leaks are possible
+</span></span><span style=display:flex><span>==1492==
+</span></span><span style=display:flex><span>==1492== For lists of detected and suppressed errors, rerun with: -s
+</span></span><span style=display:flex><span>==1492== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+</span></span></code></pre></div><p>Success!</p><h2 id=implementing-preprocessing>Implementing Preprocessing
+<a class=heading-link href=#implementing-preprocessing><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>The <code>tinyvm</code> virtual machine consumes <a href=https://github.com/jakogut/tinyvm/blob/10c25d83e442caf0c1fc4b0ab29a91b3805d72ec/SYNTAX class=external-link target=_blank rel=noopener>a simplified form of assembly</a>
+similar to traditional Intel x86 assembly. The first step in parsing <code>tinyvm</code>
+assembly is to run a preprocessor which interprets <code>%include filename</code> and
+<code>%define identifier value</code> statements.</p><p>This sort of text manipulation should be a lot easier to accomplish using
+Rust&rsquo;s <code>&amp;str</code> types, so let&rsquo;s have a look at the interface our crate needs to
+implement.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c><span style=display:flex><span><span style=color:#75715e>// vendor/tinyvm/include/tvm/tvm_preprocessor.h
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#ifndef TVM_PREPROCESSOR_H_
+</span></span></span><span style=display:flex><span><span style=color:#75715e>#define TVM_PREPROCESSOR_H_
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#include</span> <span style=color:#75715e>&#34;tvm_htab.h&#34;</span><span style=color:#75715e>
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>int</span> <span style=color:#a6e22e>tvm_preprocess</span>(<span style=color:#66d9ef>char</span> <span style=color:#f92672>**</span>src, <span style=color:#66d9ef>int</span> <span style=color:#f92672>*</span>src_len, <span style=color:#66d9ef>struct</span> tvm_htab_ctx <span style=color:#f92672>*</span>defines);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#endif
+</span></span></span></code></pre></div><p>Using <code>char **</code> and <code>int *</code> for the <code>src</code> and <code>src_len</code> variables may seem a
+bit odd at first, but if you were to write the equivalent in Rust you&rsquo;d get
+something like this:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>tvm_preprocess</span>(
+</span></span><span style=display:flex><span>    src: String,
+</span></span><span style=display:flex><span>    defines: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> HashTable,
+</span></span><span style=display:flex><span>) -&gt; Result<span style=color:#f92672>&lt;</span>String, PreprocessorError<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The C code is just using output parameters to swap the <code>src</code> string in-place
+because it can&rsquo;t return both a new string and an error code.</p><p>Before we do anything else, we should write a test for <code>tvm_preprocess()</code>. That
+way we can ensure our Rust function is functionally equivalent to the original.</p><p>We&rsquo;re interacting with the filesystem so we&rsquo;ll want to pull in
+<a href=https://crates.io/crates/tempfile class=external-link target=_blank rel=noopener>the <code>tempfile</code> crate</a>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cargo add --dev tempfile
+</span></span><span style=display:flex><span>    Updating &#39;https://github.com/rust-lang/crates.io-index&#39; index
+</span></span><span style=display:flex><span>      Adding tempfile v3.1.0 to dev-dependencies
+</span></span></code></pre></div><p>We&rsquo;ll also need the <code>libc</code> crate because we&rsquo;re going to be passing <code>libtvm</code>
+strings which it may need to free.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>cargo add libc
+</span></span><span style=display:flex><span>    Updating &#39;https://github.com/rust-lang/crates.io-index&#39; index
+</span></span><span style=display:flex><span>      Adding libc v0.2.66 to dev-dependencies
+</span></span></code></pre></div><p>Looking at the source code, we can see that the <code>tvm_preprocess()</code> function
+will keep resolving <code>%include</code>s and <code>%define</code>s until there are none left.</p><p>First let&rsquo;s create a test to make sure the preprocessor handles <code>%define</code>s. We
+know this code already works (it&rsquo;s the code from <code>tinyvm</code> after all), so there
+shouldn&rsquo;t be any surprises.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/preprocessing.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[cfg(test)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>mod</span> tests {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>use</span> <span style=color:#66d9ef>crate</span>::ffi;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>use</span> std::{
+</span></span><span style=display:flex><span>        ffi::{CStr, CString},
+</span></span><span style=display:flex><span>        io::Write,
+</span></span><span style=display:flex><span>        os::raw::c_int,
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>find_all_defines</span>() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> src <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;%define true 1</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>some random text</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>%define FOO_BAR -42</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>;
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> original_length <span style=color:#f92672>=</span> src.len();
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> src <span style=color:#f92672>=</span> CString::new(src).unwrap();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// get a copy of `src` that was allocated using C&#39;s malloc
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> src <span style=color:#f92672>=</span> libc::strdup(src.as_ptr());
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> len <span style=color:#f92672>=</span> original_length <span style=color:#66d9ef>as</span> c_int;
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> defines <span style=color:#f92672>=</span> ffi::tvm_htab_create();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> ret <span style=color:#f92672>=</span> ffi::tvm_preprocess(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> src, <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> len, defines);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// preprocessing should have been successful
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            assert_eq!(ret, <span style=color:#ae81ff>0</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// make sure the define lines were removed
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#66d9ef>let</span> preprocessed <span style=color:#f92672>=</span> CStr::from_ptr(src).to_bytes();
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> preprocessed <span style=color:#f92672>=</span>
+</span></span><span style=display:flex><span>                std::<span style=color:#66d9ef>str</span>::from_utf8(<span style=color:#f92672>&amp;</span>preprocessed[<span style=color:#f92672>..</span>len <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>usize</span>]).unwrap();
+</span></span><span style=display:flex><span>            assert_eq!(preprocessed, <span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>some random text</span><span style=color:#ae81ff>\n\n</span><span style=color:#e6db74>&#34;</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// make sure the &#34;true&#34; and &#34;FOO_BAR&#34; defines were set
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#66d9ef>let</span> true_define <span style=color:#f92672>=</span>
+</span></span><span style=display:flex><span>                ffi::tvm_htab_find_ref(defines, <span style=color:#e6db74>b</span><span style=color:#e6db74>&#34;true</span><span style=color:#ae81ff>\0</span><span style=color:#e6db74>&#34;</span>.as_ptr().cast());
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> got <span style=color:#f92672>=</span> CStr::from_ptr(true_define).to_str().unwrap();
+</span></span><span style=display:flex><span>            assert_eq!(got, <span style=color:#e6db74>&#34;1&#34;</span>);
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> foo_bar <span style=color:#f92672>=</span>
+</span></span><span style=display:flex><span>                ffi::tvm_htab_find_ref(defines, <span style=color:#e6db74>b</span><span style=color:#e6db74>&#34;FOO_BAR</span><span style=color:#ae81ff>\0</span><span style=color:#e6db74>&#34;</span>.as_ptr().cast());
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> got <span style=color:#f92672>=</span> CStr::from_ptr(foo_bar).to_str().unwrap();
+</span></span><span style=display:flex><span>            assert_eq!(got, <span style=color:#e6db74>&#34;-42&#34;</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// clean up our hashtable and copied source text
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            ffi::tvm_htab_destroy(defines);
+</span></span><span style=display:flex><span>            libc::free(src.cast());
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Weighing in at 45 lines that&rsquo;s a lot more than I usually like when writing
+tests, but there&rsquo;s a fair amount of extra code required to convert back and
+forth between C strings.</p><p>We also need to test including another file.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/preprocessing.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[cfg(test)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>mod</span> tests {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>include_another_file</span>() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>TOP_LEVEL</span>: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;first line</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>%include nested</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>last line</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>;
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>NESTED</span>: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;nested</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// the preprocessor imports files from the filesystem, so we need to
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#75715e>// copy NESTED to a temporary location
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> nested <span style=color:#f92672>=</span> NamedTempFile::new().unwrap();
+</span></span><span style=display:flex><span>        nested.write_all(<span style=color:#66d9ef>NESTED</span>.as_bytes()).unwrap();
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> nested_filename <span style=color:#f92672>=</span> nested.path().display().to_string();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// substitute the full path to the &#34;nested&#34; file
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>let</span> top_level_src <span style=color:#f92672>=</span> <span style=color:#66d9ef>TOP_LEVEL</span>.replace(<span style=color:#e6db74>&#34;nested&#34;</span>, <span style=color:#f92672>&amp;</span>nested_filename);
+</span></span><span style=display:flex><span>        std::fs::write(<span style=color:#f92672>&amp;</span>nested, <span style=color:#66d9ef>NESTED</span>).unwrap();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> top_level_src <span style=color:#f92672>=</span> CString::new(top_level_src).unwrap();
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// create a copy of the top_level_src which can be freed by C
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> src <span style=color:#f92672>=</span> libc::strdup(top_level_src.as_ptr());
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> len <span style=color:#f92672>=</span> libc::strlen(src) <span style=color:#66d9ef>as</span> c_int;
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> defines <span style=color:#f92672>=</span> ffi::tvm_htab_create();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// after all that setup code we can *finally* call the preprocessor
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#66d9ef>let</span> ret <span style=color:#f92672>=</span> ffi::tvm_preprocess(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> src, <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> len, defines);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            assert_eq!(ret, <span style=color:#ae81ff>0</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// make sure the define and import lines were removed
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#66d9ef>let</span> preprocessed <span style=color:#f92672>=</span> CStr::from_ptr(src).to_bytes();
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> got <span style=color:#f92672>=</span>
+</span></span><span style=display:flex><span>                std::<span style=color:#66d9ef>str</span>::from_utf8(<span style=color:#f92672>&amp;</span>preprocessed[<span style=color:#f92672>..</span>len <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>usize</span>]).unwrap();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// after preprocessing, all include and define lines should have
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#75715e>// been removed
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            assert_eq!(got, <span style=color:#e6db74>&#34;first line</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>nested</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>last line</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            ffi::tvm_htab_destroy(defines);
+</span></span><span style=display:flex><span>            libc::free(src.cast());
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span></code></pre></div><div class="notices note"><p>As an aside, this test was originally written to nest things three layers
+deep (e.g. <code>top_level.vm</code> includes <code>nested.vm</code> which includes <code>really_nested.vm</code>)
+to make sure it handles more than one level of <code>%include</code>, but no matter how
+it was written the test kept segfaulting.</p><p>Then I tried running the original C <code>tvmi</code> binary&mldr;</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cd vendor/tinyvm/
+</span></span><span style=display:flex><span>$ cat top_level.vm
+</span></span><span style=display:flex><span>  %include nested
+</span></span><span style=display:flex><span>$ cat nested.vm
+</span></span><span style=display:flex><span>  %include really_nested
+</span></span><span style=display:flex><span>$ cat really_nested.vm
+</span></span><span style=display:flex><span>  Hello World
+</span></span><span style=display:flex><span>$ ./bin/tvmi top_level.vm
+</span></span><span style=display:flex><span>  [1]    10607 segmentation fault (core dumped)  ./bin/tvmi top_level.vm
+</span></span></code></pre></div><p>Turns out the original <code>tinyvm</code> will crash for some reason when you have
+multiple layers of includes 😕</p></div><p>Okay, so now we&rsquo;ve got some tests we can start to implement
+<code>tvm_preprocess()</code>.</p><p>First off we should define an error type.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/preprocessing.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>PreprocessingError</span> {
+</span></span><span style=display:flex><span>    FailedInclude {
+</span></span><span style=display:flex><span>        name: String,
+</span></span><span style=display:flex><span>        inner: <span style=color:#a6e22e>IoError</span>,
+</span></span><span style=display:flex><span>    },
+</span></span><span style=display:flex><span>    DuplicateDefine {
+</span></span><span style=display:flex><span>        name: String,
+</span></span><span style=display:flex><span>        original_value: String,
+</span></span><span style=display:flex><span>        new_value: String,
+</span></span><span style=display:flex><span>    },
+</span></span><span style=display:flex><span>    EmptyDefine,
+</span></span><span style=display:flex><span>    DefineWithoutValue(String),
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Looking at the <a href=https://github.com/jakogut/tinyvm/blob/10c25d83e442caf0c1fc4b0ab29a91b3805d72ec/libtvm/tvm_preprocessor.c class=external-link target=_blank rel=noopener><code>process_includes()</code> and <code>process_derives()</code>
+functions</a>, both seem to scan through a string looking for a
+particular directive, then replace that line with something else (either the
+contents of a file or nothing if the line should be removed).</p><p>We should be able to extract that logic into a helper and avoid unnecessary
+duplication.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/preprocessing.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Scan through the input string looking for a line starting with some
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// directive, using a callback to figure out what to replace the directive line
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// with.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>process_line_starting_with_directive</span><span style=color:#f92672>&lt;</span>F<span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>mut</span> src: String,
+</span></span><span style=display:flex><span>    directive: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>,
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>mut</span> replace_line: <span style=color:#a6e22e>F</span>,
+</span></span><span style=display:flex><span>) -&gt; Result<span style=color:#f92672>&lt;</span>(String, <span style=color:#66d9ef>usize</span>), PreprocessingError<span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    F: FnMut(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>str</span>) -&gt; Result<span style=color:#f92672>&lt;</span>String, PreprocessingError<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// try to find the first instance of the directive
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> directive_delimiter <span style=color:#f92672>=</span> <span style=color:#66d9ef>match</span> src.find(directive) {
+</span></span><span style=display:flex><span>        Some(ix) <span style=color:#f92672>=&gt;</span> ix,
+</span></span><span style=display:flex><span>        None <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>return</span> Ok((src, <span style=color:#ae81ff>0</span>)),
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// calculate the span from the directive to the end of the line
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> end_ix <span style=color:#f92672>=</span> src[directive_delimiter<span style=color:#f92672>..</span>]
+</span></span><span style=display:flex><span>        .find(<span style=color:#e6db74>&#39;\n&#39;</span>)
+</span></span><span style=display:flex><span>        .map(<span style=color:#f92672>|</span>ix<span style=color:#f92672>|</span> ix <span style=color:#f92672>+</span> directive_delimiter)
+</span></span><span style=display:flex><span>        .unwrap_or(src.len());
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// the rest of the line after the directive
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> directive_line <span style=color:#f92672>=</span>
+</span></span><span style=display:flex><span>        src[directive_delimiter <span style=color:#f92672>+</span> directive.len()<span style=color:#f92672>..</span>end_ix].trim();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// use the callback to figure out what we should replace the line with
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> replacement <span style=color:#f92672>=</span> replace_line(directive_line)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// remove the original line
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> _ <span style=color:#f92672>=</span> src.drain(directive_delimiter<span style=color:#f92672>..</span>end_ix);
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// then insert our replacement
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    src.insert_str(directive_delimiter, <span style=color:#f92672>&amp;</span>replacement);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    Ok((src, <span style=color:#ae81ff>1</span>))
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Now we&rsquo;ve got our <code>process_line_starting_with_directive()</code> helper we can
+implement include parsing.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/preprocessing.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>process_includes</span>(
+</span></span><span style=display:flex><span>    src: String,
+</span></span><span style=display:flex><span>) -&gt; Result<span style=color:#f92672>&lt;</span>(String, <span style=color:#66d9ef>usize</span>), PreprocessingError<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>TOK_INCLUDE</span>: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;%include&#34;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    process_line_starting_with_directive(src, <span style=color:#66d9ef>TOK_INCLUDE</span>, <span style=color:#f92672>|</span>line<span style=color:#f92672>|</span> {
+</span></span><span style=display:flex><span>        std::fs::read_to_string(line).map_err(<span style=color:#f92672>|</span>e<span style=color:#f92672>|</span> {
+</span></span><span style=display:flex><span>            PreprocessingError::FailedInclude {
+</span></span><span style=display:flex><span>                name: <span style=color:#a6e22e>line</span>.to_string(),
+</span></span><span style=display:flex><span>                inner: <span style=color:#a6e22e>e</span>,
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        })
+</span></span><span style=display:flex><span>    })
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Unfortunately, <code>%define</code> parsing is a little more involved.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/preprocessing.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>n process_defines(
+</span></span><span style=display:flex><span>    src: String,
+</span></span><span style=display:flex><span>    defines: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> HashTable,
+</span></span><span style=display:flex><span>) -&gt; Result<span style=color:#f92672>&lt;</span>(String, <span style=color:#66d9ef>usize</span>), PreprocessingError<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>TOK_DEFINE</span>: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;%define&#34;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    process_line_starting_with_directive(src, <span style=color:#66d9ef>TOK_DEFINE</span>, <span style=color:#f92672>|</span>line<span style=color:#f92672>|</span> {
+</span></span><span style=display:flex><span>        parse_define(line, defines)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>        Ok(String::new())
+</span></span><span style=display:flex><span>    })
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>parse_define</span>(
+</span></span><span style=display:flex><span>    line: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>,
+</span></span><span style=display:flex><span>    defines: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> HashTable,
+</span></span><span style=display:flex><span>) -&gt; Result<span style=color:#f92672>&lt;</span>(), PreprocessingError<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> line.is_empty() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>return</span> Err(PreprocessingError::EmptyDefine);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// The syntax is &#34;%define key value&#34;, so after removing the leading
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#75715e>// &#34;%define&#34; everything after the next space is the value
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> first_space <span style=color:#f92672>=</span> line.find(<span style=color:#e6db74>&#39; &#39;</span>).ok_or_else(<span style=color:#f92672>||</span> {
+</span></span><span style=display:flex><span>        PreprocessingError::DefineWithoutValue(line.to_string())
+</span></span><span style=display:flex><span>    })<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// split the rest of the line into key and value
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> (key, value) <span style=color:#f92672>=</span> line.split_at(first_space);
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> value <span style=color:#f92672>=</span> value.trim();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>match</span> defines.<span style=color:#ae81ff>0.</span>entry(
+</span></span><span style=display:flex><span>        CString::new(key).expect(<span style=color:#e6db74>&#34;The text shouldn&#39;t contain null bytes&#34;</span>),
+</span></span><span style=display:flex><span>    ) {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// the happy case, this symbol hasn&#39;t been defined before so we can just
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#75715e>// insert it.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        Entry::Vacant(vacant) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>            vacant.insert(Item::opaque(value));
+</span></span><span style=display:flex><span>        },
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// looks like this key has already been defined, report an error
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        Entry::Occupied(occupied) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>return</span> Err(PreprocessingError::DuplicateDefine {
+</span></span><span style=display:flex><span>                name: <span style=color:#a6e22e>key</span>.to_string(),
+</span></span><span style=display:flex><span>                original_value: <span style=color:#a6e22e>occupied</span>
+</span></span><span style=display:flex><span>                    .get()
+</span></span><span style=display:flex><span>                    .opaque_value_str()
+</span></span><span style=display:flex><span>                    .unwrap_or(<span style=color:#e6db74>&#34;&lt;invalid&gt;&#34;</span>)
+</span></span><span style=display:flex><span>                    .to_string(),
+</span></span><span style=display:flex><span>                new_value: <span style=color:#a6e22e>value</span>.to_string(),
+</span></span><span style=display:flex><span>            });
+</span></span><span style=display:flex><span>        },
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    Ok(())
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>To access the text stored in our hashtable, we&rsquo;ll need to give <code>Item</code> a
+couple helper methods:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/htab.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Item {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>opaque_value</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>&amp;</span>[<span style=color:#66d9ef>u8</span>] { <span style=color:#f92672>&amp;</span>self.opaque_value }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>opaque_value_str</span>(<span style=color:#f92672>&amp;</span>self) -&gt; Option<span style=color:#f92672>&lt;&amp;</span><span style=color:#66d9ef>str</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        std::<span style=color:#66d9ef>str</span>::from_utf8(self.opaque_value()).ok()
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>At this point it&rsquo;s a good idea to add some more tests.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/preprocessing.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[cfg(test)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>mod</span> tests {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>empty_string</span>() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> src <span style=color:#f92672>=</span> String::from(<span style=color:#e6db74>&#34;&#34;</span>);
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> hashtable <span style=color:#f92672>=</span> HashTable::default();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> (got, replacements) <span style=color:#f92672>=</span> process_defines(src, <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> hashtable).unwrap();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        assert!(got.is_empty());
+</span></span><span style=display:flex><span>        assert_eq!(replacements, <span style=color:#ae81ff>0</span>);
+</span></span><span style=display:flex><span>        assert!(hashtable.<span style=color:#ae81ff>0.</span>is_empty());
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>false_percent</span>() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> src <span style=color:#f92672>=</span> String::from(<span style=color:#e6db74>&#34;this string contains a % symbol&#34;</span>);
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> hashtable <span style=color:#f92672>=</span> HashTable::default();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> (got, replacements) <span style=color:#f92672>=</span>
+</span></span><span style=display:flex><span>            process_defines(src.clone(), <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> hashtable).unwrap();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        assert_eq!(got, src);
+</span></span><span style=display:flex><span>        assert_eq!(replacements, <span style=color:#ae81ff>0</span>);
+</span></span><span style=display:flex><span>        assert!(hashtable.<span style=color:#ae81ff>0.</span>is_empty());
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>define_without_key_and_value</span>() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> src <span style=color:#f92672>=</span> String::from(<span style=color:#e6db74>&#34;%define</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>);
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> hashtable <span style=color:#f92672>=</span> HashTable::default();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> err <span style=color:#f92672>=</span> process_defines(src.clone(), <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> hashtable).unwrap_err();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> err {
+</span></span><span style=display:flex><span>            PreprocessingError::EmptyDefine <span style=color:#f92672>=&gt;</span> {},
+</span></span><span style=display:flex><span>            other <span style=color:#f92672>=&gt;</span> panic!(<span style=color:#e6db74>&#34;Expected EmptyDefine, found </span><span style=color:#e6db74>{:?}</span><span style=color:#e6db74>&#34;</span>, other),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>define_without_value</span>() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> src <span style=color:#f92672>=</span> String::from(<span style=color:#e6db74>&#34;%define key</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>);
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> hashtable <span style=color:#f92672>=</span> HashTable::default();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> err <span style=color:#f92672>=</span> process_defines(src.clone(), <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> hashtable).unwrap_err();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> err {
+</span></span><span style=display:flex><span>            PreprocessingError::DefineWithoutValue(key) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                assert_eq!(key, <span style=color:#e6db74>&#34;key&#34;</span>)
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            other <span style=color:#f92672>=&gt;</span> panic!(<span style=color:#e6db74>&#34;Expected DefineWithoutValue, found </span><span style=color:#e6db74>{:?}</span><span style=color:#e6db74>&#34;</span>, other),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>valid_define</span>() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> src <span style=color:#f92672>=</span> String::from(<span style=color:#e6db74>&#34;%define key value</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>);
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> hashtable <span style=color:#f92672>=</span> HashTable::default();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> (got, num_defines) <span style=color:#f92672>=</span> process_defines(src.clone(), <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> hashtable).unwrap();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        assert_eq!(got, <span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>);
+</span></span><span style=display:flex><span>        assert_eq!(num_defines, <span style=color:#ae81ff>1</span>);
+</span></span><span style=display:flex><span>        assert_eq!(hashtable.<span style=color:#ae81ff>0.</span>len(), <span style=color:#ae81ff>1</span>);
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> key <span style=color:#f92672>=</span> CString::new(<span style=color:#e6db74>&#34;key&#34;</span>).unwrap();
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> item <span style=color:#f92672>=</span> hashtable.<span style=color:#ae81ff>0.</span>get(<span style=color:#f92672>&amp;</span>key).unwrap();
+</span></span><span style=display:flex><span>        assert_eq!(item.opaque_value_str().unwrap(), <span style=color:#e6db74>&#34;value&#34;</span>);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>At this point we&rsquo;ve reproduced most of the preprocessing logic, so now we just
+need a function which will keep expanding <code>%include</code> statements and handling
+<code>%define</code>s until there&rsquo;s nothing more to do.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/preprocessing.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>preprocess</span>(
+</span></span><span style=display:flex><span>    src: String,
+</span></span><span style=display:flex><span>    defines: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> HashTable,
+</span></span><span style=display:flex><span>) -&gt; Result<span style=color:#f92672>&lt;</span>String, PreprocessingError<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> src <span style=color:#f92672>=</span> src;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>loop</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> (modified, num_includes) <span style=color:#f92672>=</span> process_includes(src)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> (modified, num_defines) <span style=color:#f92672>=</span> process_defines(modified, defines)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> num_includes <span style=color:#f92672>+</span> num_defines <span style=color:#f92672>==</span> <span style=color:#ae81ff>0</span> {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>return</span> Ok(modified);
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        src <span style=color:#f92672>=</span> modified;
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Of course, this <code>preprocess()</code> function is only accessible to Rust. We need to
+create an <code>extern "C" fn</code> which translates arguments from C types to something
+Rust can handle, then translate back to C land at the end.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/preprocessing.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[no_mangle]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>tvm_preprocess</span>(
+</span></span><span style=display:flex><span>    src: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> c_char,
+</span></span><span style=display:flex><span>    src_len: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> c_int,
+</span></span><span style=display:flex><span>    defines: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> tvm_htab_ctx,
+</span></span><span style=display:flex><span>) -&gt; <span style=color:#a6e22e>c_int</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> src.is_null() <span style=color:#f92672>||</span> src_len.is_null() <span style=color:#f92672>||</span> defines.is_null() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>return</span> <span style=color:#f92672>-</span><span style=color:#ae81ff>1</span>;
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// Safety: This assumes the tvm_htab_ctx is actually our ported HashTable
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> defines <span style=color:#f92672>=</span> <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> <span style=color:#f92672>*</span>(defines <span style=color:#66d9ef>as</span> <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> HashTable);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// convert the input string to an owned Rust string so it can be
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#75715e>// preprocessed
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> rust_src <span style=color:#f92672>=</span> <span style=color:#66d9ef>match</span> CStr::from_ptr(<span style=color:#f92672>*</span>src).to_str() {
+</span></span><span style=display:flex><span>        Ok(s) <span style=color:#f92672>=&gt;</span> s.to_string(),
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// just error out if it&#39;s not valid UTF-8
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        Err(_) <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>return</span> <span style=color:#f92672>-</span><span style=color:#ae81ff>1</span>,
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>match</span> preprocess(rust_src, defines) {
+</span></span><span style=display:flex><span>        Ok(s) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> preprocessed <span style=color:#f92672>=</span> CString::new(s).unwrap();
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// create a copy of the preprocessed string that can be free&#39;d by C
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#75715e>// and use the output arguments to pass it to the caller
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#f92672>*</span>src <span style=color:#f92672>=</span> libc::strdup(preprocessed.as_ptr());
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// the original C implementation didn&#39;t add a null terminator to the
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#75715e>// preprocessed string, so we&#39;re required to set the length as well.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#f92672>*</span>src_len <span style=color:#f92672>=</span> libc::strlen(<span style=color:#f92672>*</span>src) <span style=color:#66d9ef>as</span> c_int;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// returning 0 indicates success
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#ae81ff>0</span>
+</span></span><span style=display:flex><span>        },
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// tell the caller &#34;an error occurred&#34;
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        Err(_) <span style=color:#f92672>=&gt;</span> <span style=color:#f92672>-</span><span style=color:#ae81ff>1</span>,
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices tip"><p>You may have noticed that our <code>tvm_preprocess()</code> doesn&rsquo;t have any preprocessing
+logic, and is more like an adapter to translate arguments and return values, and
+make sure errors are propagated correctly.</p><p>This is no accident.</p><p>The secret to FFI code is to write as little as possible, and avoid <em>&ldquo;clever&rdquo;</em>
+tricks. Unlike most Rust code, making mistakes in these sorts of interop
+functions can lead to unsound logic and memory bugs.</p><p>Creating a thin wrapper around our <code>preprocess()</code> function also makes things
+easier later on, because when more of the codebase is written in Rust we can
+delete the wrapper and call <code>preprocess()</code> directly.</p></div><p>Now the <code>tvm_preprocess()</code> function is defined we should be good to go.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span> Compiling tinyvm v0.1.0 (/home/michael/Documents/tinyvm-rs)
+</span></span><span style=display:flex><span>error: linking with `/usr/bin/clang` failed: exit code: 1
+</span></span><span style=display:flex><span>  |
+</span></span><span style=display:flex><span>  = note: &#34;/usr/bin/clang&#34; &#34;-Wl,--as-needed&#34; &#34;-Wl,-z,noexecstack&#34; &#34;-m64&#34; &#34;-L&#34; &#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.13h6j6k0dzqf6zi2.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.13l2b4uvr7p3ht4k.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.14bdbjhozo3id49g.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.14fw2gyd6mrq5730.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.19xc7n0bb25uaxgk.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.1duzy573vjvyihco.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.1e0yejy24qufh7ie.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.1k4xuir9ezt4vkzp.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.1mqdnrarww1zjlt.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.1ubflbxzxkx7grpn.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.1vtvcpzzusyku3mk.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.1wal3ebwyfg4qllf.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.235k75fk09i43ba3.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.253rt7mnjcp3n8ex.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.27phuscrye2lmkyq.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2bwv51h7gucjizh0.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2ghuai4hs88aroml.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2gqnd9h4nmhvgxbn.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2hjvtf620gtog0qz.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2hq7kc2w3vix8i5q.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2ibwag4iedx494ft.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2jdt9fes53g5mxlp.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2kv4bwega1wfr8z6.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2lja418hz58xlryz.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2o0foimqe73p8ujt.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2ouuhyii88vg8tqs.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2tnynvvdxge4sv9a.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2u1hzhj3v0d8kn4s.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2v1ii2legejcp3ir.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2vkkoofkb7zs04v1.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2w5mgql1gpr1f9uz.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2wdyioq7lxh9uxu7.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2wokgurbjsmgz12r.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.2wwcrmvusj07mx2n.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.310mxv7piqfbf4tr.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.3352aele91geo33m.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.36f4wrjtv0x5y00b.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.38f6o2m900r5q63j.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.3b67z5wg30f9te4l.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.3gyajmii4500y81t.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.3ovwslgcz03sp0ov.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.3vwhwp967j90qfpp.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.41ox17npnikcezii.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4472ut4qn508rg19.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4bbcvjauqmyr7tjc.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4c9lrc1xbvaru030.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4fzwdkjhjtwv5uik.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4gy2dy14zw2o60sh.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4i8qxpi0pmwn8d2e.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4isstj7ytb9d9yep.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4isz4o5d1flv8pme.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4lnnaom9zd4u3xmv.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4mgvbbhn4jewmy60.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4q7wf9d53jp9j6y6.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4qimnegzmsif2zbr.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4scm7492lh4yspgt.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4ten9b8okg10ap4i.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4vrj7dhlet4j6oe.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4wtf4i2ggbrvqt63.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4zsqxnhj8yusiplh.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.50o8i1bmvqwd5eg7.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.50urmck1r52hucuw.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.51w3uc6agh3gynn3.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.55o6ad6nlq4o2zyt.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.57gih8p2bu1jbo0l.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.57rpuf5wpgkfmf1z.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.5920w55mlosqy9aj.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.5c1ra5cheein740g.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.5cuuq0m7tzehyrti.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.5e85z18y46lhofte.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.6yu7c01lw47met2.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.cn69np51jgriev2.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.d224rq9cs4mbv0q.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.e0vaqgnhc25c4ox.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.edm0ce3nfzegp4d.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.elxjhifv4wlzkc2.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.ifqyaukx6gnbb0a.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.kr8s9rcy6ux2d02.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.ley637x8c2etn66.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.njyqsm0frvb1j4d.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.r9ttxk3s5kacz9k.rcgu.o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.xrorvssabbgfjqz.rcgu.o&#34; &#34;-o&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.1iplfu0pt8fy07e4.rcgu.o&#34; &#34;-Wl,--gc-sections&#34; &#34;-pie&#34; &#34;-Wl,-zrelro&#34; &#34;-Wl,-znow&#34; &#34;-nodefaultlibs&#34; &#34;-L&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps&#34; &#34;-L&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/build/tinyvm-3f1a2766f78b5580/out&#34; &#34;-L&#34; &#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib&#34; &#34;-Wl,-Bstatic&#34; &#34;-Wl,--whole-archive&#34; &#34;-ltvm&#34; &#34;-Wl,--no-whole-archive&#34; &#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libtest-a39a3e9a77b17f55.rlib&#34; &#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libterm-97a69cd310ff0925.rlib&#34; &#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libgetopts-66a42b1d94e3e6f9.rlib&#34; &#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libunicode_width-dd7761d848144e0d.rlib&#34; &#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_std_workspace_std-f722acdb78755ba0.rlib&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/libtempfile-b08849d192e5c2e1.rlib&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/librand-c85ceffb304c7385.rlib&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/librand_chacha-4e4839e3036afe89.rlib&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/libc2_chacha-7555b62a53de8bdf.rlib&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/libppv_lite86-0097c0f425957d6e.rlib&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/librand_core-de2208c863d15e9b.rlib&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/libgetrandom-c696cd809d660e17.rlib&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/liblibc-d52d0b97a33a5f02.rlib&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/libremove_dir_all-4035fb46dbd6fb92.rlib&#34; &#34;/home/michael/Documents/tinyvm-rs/target/debug/deps/libcfg_if-6adeb646d05b676c.rlib&#34; &#34;-Wl,--start-group&#34; &#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd-974c3c08f6def4b3.rlib&#34; &#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libpanic_unwind-eb49676f33a2c8a6.rlib&#34; &#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libhashbrown-7ae0446feecc60f2.rlib&#34; &#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_std_workspace_alloc-2de299b65d7f5721.rlib&#34; &#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libbacktrace-64514775bc06309a.rlib&#34; &#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libbacktrace_sys-1ed8aa185c63b9a5.rlib&#34; &#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_demangle-a839df87f563fba5.rlib&#34; &#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libunwind-8e726bdc2018d836.rlib&#34; &#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcfg_if-5285f42cbadf207d.rlib&#34; &#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/liblibc-b0362d20f8aa58fa.rlib&#34; &#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/liballoc-f3dd7051708453a4.rlib&#34; &#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_std_workspace_core-83744846c43307ce.rlib&#34; &#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcore-d5565a3a0f4cfe21.rlib&#34; &#34;-Wl,--end-group&#34; &#34;/home/michael/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcompiler_builtins-ea790e85415e3bbf.rlib&#34; &#34;-Wl,-Bdynamic&#34; &#34;-lutil&#34; &#34;-lutil&#34; &#34;-ldl&#34; &#34;-lrt&#34; &#34;-lpthread&#34; &#34;-lgcc_s&#34; &#34;-lc&#34; &#34;-lm&#34; &#34;-lrt&#34; &#34;-lpthread&#34; &#34;-lutil&#34; &#34;-lutil&#34; &#34;-fuse-ld=lld&#34;
+</span></span><span style=display:flex><span>  = note: ld.lld: error: duplicate symbol: tvm_preprocess
+</span></span><span style=display:flex><span>          &gt;&gt;&gt; defined at preprocessing.rs:13 (src/preprocessing.rs:13)
+</span></span><span style=display:flex><span>          &gt;&gt;&gt;            /home/michael/Documents/tinyvm-rs/target/debug/deps/tinyvm-8eca24ff9a1cde88.4mgvbbhn4jewmy60.rcgu.o:(tvm_preprocess)
+</span></span><span style=display:flex><span>          &gt;&gt;&gt; defined at tvm_preprocessor.c:135 (vendor/tinyvm/libtvm/tvm_preprocessor.c:135)
+</span></span><span style=display:flex><span>          &gt;&gt;&gt;            tvm_preprocessor.o:(.text.tvm_preprocess+0x0) in archive /home/michael/Documents/tinyvm-rs/target/debug/build/tinyvm-3f1a2766f78b5580/out/libtvm.a
+</span></span><span style=display:flex><span>          clang: error: linker command failed with exit code 1 (use -v to see invocation)
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span>error: aborting due to previous error
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span>error: could not compile `tinyvm`.
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span>To learn more, run the command again with --verbose.
+</span></span></code></pre></div><p>Oh, the linker is complaining because both <code>preprocessing.rs</code> and
+<code>tvm_preprocessor.c</code> define a <code>tvm_preprocess()</code> function. Looks like we forgot
+to remove <code>tvm_preprocessor.c</code> from the build&mldr;</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-diff data-lang=diff><span style=display:flex><span>diff --git a/build.rs b/build.rs
+</span></span><span style=display:flex><span>index 0ed012c..42b8fa0 100644
+</span></span><span style=display:flex><span><span style=color:#f92672>--- a/build.rs
+</span></span></span><span style=display:flex><span><span style=color:#f92672></span><span style=color:#a6e22e>+++ b/build.rs
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span><span style=color:#75715e>@@ -14,6 +14,7 @@ fn main() {
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>         .file(src.join(&#34;tvm_memory.c&#34;))
+</span></span><span style=display:flex><span>         .file(src.join(&#34;tvm_parser.c&#34;))
+</span></span><span style=display:flex><span>         .file(src.join(&#34;tvm_program.c&#34;))
+</span></span><span style=display:flex><span><span style=color:#f92672>-        .file(src.join(&#34;tvm_preprocessor.c&#34;))
+</span></span></span><span style=display:flex><span><span style=color:#f92672></span>         .file(src.join(&#34;tvm.c&#34;))
+</span></span><span style=display:flex><span>         .include(&amp;include)
+</span></span><span style=display:flex><span>         .compile(&#34;tvm&#34;);
+</span></span><span style=display:flex><span>(END)
+</span></span></code></pre></div><p>Let&rsquo;s try again.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>cargo run --example tvmi -- vendor/tinyvm/programs/tinyvm/fact.vm
+</span></span><span style=display:flex><span>    Finished dev [unoptimized + debuginfo] target(s) in 0.02s
+</span></span><span style=display:flex><span>     Running `target/debug/examples/tvmi vendor/tinyvm/programs/tinyvm/fact.vm`
+</span></span><span style=display:flex><span>1
+</span></span><span style=display:flex><span>2
+</span></span><span style=display:flex><span>6
+</span></span><span style=display:flex><span>24
+</span></span><span style=display:flex><span>120
+</span></span><span style=display:flex><span>720
+</span></span><span style=display:flex><span>5040
+</span></span><span style=display:flex><span>40320
+</span></span><span style=display:flex><span>362880
+</span></span><span style=display:flex><span>3628800
+</span></span></code></pre></div><p>Much better!</p><p>Remember that example from before where <code>tvmi</code> would crash when encountering
+includes three levels deep? As a happy side-effect, porting to Rust means nested
+includes <em>Just Work</em>.</p><div class="notices note"><p>You may have also noticed that our <code>preprocess()</code> function doesn&rsquo;t use any of
+the hashtable functions from <code>tvm_htab.h</code>. Instead we take advantage of the fact
+that the module has already been ported to Rust and just use the Rust types
+directly.</p><p>That&rsquo;s the beauty of this process. Once you&rsquo;ve moved something to Rust you can
+leverage that to use the types/functions directly to get some easy wins in
+error handling and ergonomics.</p></div><h2 id=conclusion>Conclusion
+<a class=heading-link href=#conclusion><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>If you&rsquo;re still reading by this point, congratulations, we&rsquo;ve just ported two
+modules from <code>tinyvm</code> to Rust.</p><p>Unfortunately this article is already long enough, but hopefully by now you
+can see the general pattern,</p><ol><li>Look through the application&rsquo;s header files and find an easy function/module</li><li>Write some tests so you understand how the existing function should work</li><li>Write equivalent functions in Rust and make sure they pass the same tests</li><li>Create a thin shim which exports the Rust function with the same C interface,
+making sure to remove the original function/module from the build so the
+linker uses the Rust code instead of C</li><li>Go to step 1</li></ol><p>The best thing about this method is you are incrementally improving a
+codebase while while ensuring the application still works and avoiding a
+ground-up rewrite.</p><p>Kinda like changing your tyre while driving down the highway.</p><figure><img src=/img/changing-tyre.gif alt="Changing tyres while driving"><figcaption><p>The preferred method of porting an application from C to Rust</p></figcaption></figure></div><footer></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Best Practices on Michael-F-Bryan</title><link>https://adventures.michaelfbryan.com/tags/best-practices/</link><description>Recent content in Best Practices on Michael-F-Bryan</description><generator>Hugo</generator><language>en</language><lastBuildDate>Tue, 01 Apr 2025 09:19:10 +0800</lastBuildDate><atom:link href="https://adventures.michaelfbryan.com/tags/best-practices/index.xml" rel="self" type="application/rss+xml"/><item><title>Common Newbie Mistakes and Bad Practices in Rust: Bad Habits</title><link>https://adventures.michaelfbryan.com/posts/rust-best-practices/bad-habits/</link><pubDate>Mon, 27 Sep 2021 18:30:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/rust-best-practices/bad-habits/</guid><description>&lt;p>When you are coming to Rust from another language you bring all your previous
+experiences with you.&lt;/p>
+&lt;p>Often this is awesome because it means you aren&amp;rsquo;t learning programming from
+scratch! However, you can also bring along bad habits which can lead you down
+the wrong rabbit hole or make you write bad code.&lt;/p>
+
+&lt;div class="notices note" >
+ &lt;p>The code written in this article is available on the Rust Playground using the
+various &lt;a href="https://play.rust-lang.org/" class="external-link" target="_blank" rel="noopener">(playground)&lt;/a> links dotted throughout. Feel free to browse
+through and steal code or inspiration.&lt;/p></description></item></channel></rss>

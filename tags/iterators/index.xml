@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Iterators on Michael-F-Bryan</title><link>https://adventures.michaelfbryan.com/tags/iterators/</link><description>Recent content in Iterators on Michael-F-Bryan</description><generator>Hugo</generator><language>en</language><lastBuildDate>Tue, 01 Apr 2025 09:19:10 +0800</lastBuildDate><atom:link href="https://adventures.michaelfbryan.com/tags/iterators/index.xml" rel="self" type="application/rss+xml"/><item><title>Daily Rust: Iterators</title><link>https://adventures.michaelfbryan.com/posts/daily/iterators/</link><pubDate>Tue, 24 Aug 2021 03:55:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/daily/iterators/</guid><description>&lt;p>Iterators are part of Rust&amp;rsquo;s secret sauce. They power things from the humble
+for-loop to the elegant iterator chain, but have you ever stopped to think how
+they work?&lt;/p>
+&lt;p>Let&amp;rsquo;s find out more about Rust&amp;rsquo;s iterators by implementing our own versions of
+common iterators and reading the standard library&amp;rsquo;s source code.&lt;/p>
+
+&lt;div class="notices info" >
+ &lt;p>The code written in this article is available on the Rust Playground using the
+various &lt;a href="https://play.rust-lang.org/" class="external-link" target="_blank" rel="noopener">(playground)&lt;/a> links dotted throughout. Feel free to browse
+through and steal code or inspiration.&lt;/p></description></item></channel></rss>

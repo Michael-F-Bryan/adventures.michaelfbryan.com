@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Ecs on Michael-F-Bryan</title><link>https://adventures.michaelfbryan.com/tags/ecs/</link><description>Recent content in Ecs on Michael-F-Bryan</description><generator>Hugo</generator><language>en</language><lastBuildDate>Tue, 01 Apr 2025 09:19:10 +0800</lastBuildDate><atom:link href="https://adventures.michaelfbryan.com/tags/ecs/index.xml" rel="self" type="application/rss+xml"/><item><title>A Thought Experiment: Using the ECS Pattern Outside of Game Engines</title><link>https://adventures.michaelfbryan.com/posts/ecs-outside-of-games/</link><pubDate>Sat, 28 Dec 2019 00:00:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/ecs-outside-of-games/</guid><description>&lt;p>It&amp;rsquo;s been about 6 months since I watched Catherine West&amp;rsquo;s excellent &lt;a href="https://www.youtube.com/watch?v=aKLntZcp27M" class="external-link" target="_blank" rel="noopener">Using
+Rust for Game Development&lt;/a> sent me down the &lt;em>Entity-Component-System&lt;/em>
+(ECS) rabbit hole, and I thought I&amp;rsquo;d share some of my findings.&lt;/p>
+&lt;p>I&amp;rsquo;ve been meaning to write about this for quite a while now but it took a
+while to put my thoughts into a cohesive article without throwing massive
+walls of code at you.&lt;/p>
+
+&lt;div class="notices note" >
+ &lt;p>This article is mainly focused around the high-level decisions you make when
+designing a project, so there won&amp;rsquo;t be as much code as normal. That said, all
+code written in this article is available &lt;a href="https://github.com/Michael-F-Bryan/arcs" class="external-link" target="_blank" rel="noopener">on GitHub&lt;/a>. Feel free to
+browse through and steal code or inspiration.&lt;/p></description></item></channel></rss>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>I Made a Thing on Michael-F-Bryan</title><link>https://adventures.michaelfbryan.com/tags/i-made-a-thing/</link><description>Recent content in I Made a Thing on Michael-F-Bryan</description><generator>Hugo</generator><language>en</language><lastBuildDate>Tue, 01 Apr 2025 09:19:10 +0800</lastBuildDate><atom:link href="https://adventures.michaelfbryan.com/tags/i-made-a-thing/index.xml" rel="self" type="application/rss+xml"/><item><title>Creating a Robust, Reusable Link-Checker</title><link>https://adventures.michaelfbryan.com/posts/linkchecker/</link><pubDate>Sat, 02 May 2020 19:20:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/linkchecker/</guid><description>&lt;p>With over 68,842 downloads, one of my most successful Rust projects is a
+nondescript little program called &lt;a href="https://github.com/Michael-F-Bryan/mdbook-linkcheck" class="external-link" target="_blank" rel="noopener">mdbook-linkcheck&lt;/a>. This
+is a link-checker for &lt;a href="https://github.com/rust-lang/mdBook" class="external-link" target="_blank" rel="noopener">mdbook&lt;/a>, the tool powering a lot of
+documentation in the Rust community, including &lt;a href="https://doc.rust-lang.org/book/" class="external-link" target="_blank" rel="noopener">&lt;em>The Rust Programming
+Language&lt;/em>&lt;/a> and &lt;a href="https://rustc-dev-guide.rust-lang.org/" class="external-link" target="_blank" rel="noopener">&lt;em>The Rustc Dev Book&lt;/em>&lt;/a>.&lt;/p>
+&lt;p>As an example of what it looks like, I recently found &lt;a href="https://github.com/rust-lang/chalk/pull/408/" class="external-link" target="_blank" rel="noopener">a couple&lt;/a>
+broken links in &lt;a href="https://rust-lang.github.io/chalk/book/html/index.html" class="external-link" target="_blank" rel="noopener">the documentation&lt;/a> for Chalk. When the tool
+detects broken links in your markdown it&amp;rsquo;ll emit error messages that point
+you at the place the link is defined and explain what the issue is.&lt;/p></description></item><item><title>How I Reverse Engineered the LastPass CLI Tool</title><link>https://adventures.michaelfbryan.com/posts/lastpass/</link><pubDate>Tue, 14 Apr 2020 22:40:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/lastpass/</guid><description>&lt;p>A couple days ago I was writing an install script for &lt;a href="https://github.com/Michael-F-Bryan/dotfiles" class="external-link" target="_blank" rel="noopener">my dotfiles&lt;/a>
+and reached a point where I wanted to grab some secrets (my SSH keys) from my
+LastPass vault and copy them to the file system.&lt;/p>
+&lt;p>This is easy enough to do using the browser plugin, or even when working with
+their &lt;a href="https://github.com/lastpass/lastpass-cli" class="external-link" target="_blank" rel="noopener">command line tool (&lt;code>lpass&lt;/code>)&lt;/a> in an interactive way, but
+I found there was no way to ask &lt;code>lpass&lt;/code> which files are attached to a secret,
+and get the output in a machine readable format.&lt;/p></description></item><item><title>I Made A Thing: Markedit</title><link>https://adventures.michaelfbryan.com/posts/markedit/</link><pubDate>Sun, 09 Feb 2020 04:40:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/markedit/</guid><description>&lt;p>A couple days ago I released &lt;a href="https://crates.io/crates/markedit" class="external-link" target="_blank" rel="noopener">markedit&lt;/a>, a small crate for editing
+unstructured markdown documents. This is a useful enough library that I
+thought I&amp;rsquo;d explain the main ideas behind it and potential use cases.&lt;/p>
+&lt;p>This originally came about when I was at work, preparing our application&amp;rsquo;s
+change log before a release for the umpteenth time (we&amp;rsquo;ve found the &lt;a href="https://keepachangelog.com/en/1.0.0/" class="external-link" target="_blank" rel="noopener">keep a
+changelog&lt;/a> format really useful) and on the drive home I started thinking
+of ways to automate things.&lt;/p></description></item></channel></rss>

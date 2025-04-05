@@ -1,0 +1,1002 @@
+<!doctype html><html lang=en><head><title>Writing Non-Trivial Macros in Rust · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="Macros in Rust tend to have a reputation for being complex and magical, the
+likes which only seasoned wizards like @dtolnay can hope to
+understand, let alone master.
+Rust&rsquo;s declarative macros provide a mechanism for pattern matching on
+arbitrary syntax to generate valid Rust code at compile time. I use them all
+the time for simple search/replace style operations like generating tests
+that have a lot of boilerplate, or straightforward trait implementations for
+a large number of types."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="Writing Non-Trivial Macros in Rust"><meta name=twitter:description content="Macros in Rust tend to have a reputation for being complex and magical, the likes which only seasoned wizards like @dtolnay can hope to understand, let alone master.
+Rust’s declarative macros provide a mechanism for pattern matching on arbitrary syntax to generate valid Rust code at compile time. I use them all the time for simple search/replace style operations like generating tests that have a lot of boilerplate, or straightforward trait implementations for a large number of types."><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/non-trivial-macros/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="Writing Non-Trivial Macros in Rust"><meta property="og:description" content="Macros in Rust tend to have a reputation for being complex and magical, the likes which only seasoned wizards like @dtolnay can hope to understand, let alone master.
+Rust’s declarative macros provide a mechanism for pattern matching on arbitrary syntax to generate valid Rust code at compile time. I use them all the time for simple search/replace style operations like generating tests that have a lot of boilerplate, or straightforward trait implementations for a large number of types."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2020-06-21T01:15:00+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Rust"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/non-trivial-macros/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/non-trivial-macros/>Writing Non-Trivial Macros in Rust</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2020-06-21T01:15:00+08:00>June 21, 2020
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+27-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/rust/>Rust</a></span></div></div></header><div class=post-content><p>Macros in Rust tend to have a reputation for being complex and magical, the
+likes which only seasoned wizards like <a href=https://github.com/dtolnay class=external-link target=_blank rel=noopener><code>@dtolnay</code></a> can hope to
+understand, let alone master.</p><p>Rust&rsquo;s declarative macros provide a mechanism for pattern matching on
+arbitrary syntax to generate valid Rust code at compile time. I use them all
+the time for simple search/replace style operations like generating tests
+that have a lot of boilerplate, or straightforward trait implementations for
+a large number of types.</p><p>This is copied directly from a DSL parser I wrote many moons ago.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> AstNode {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The location of this node in its source document.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>span</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#a6e22e>ByteSpan</span>;
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>macro_rules<span style=color:#f92672>!</span> impl_ast_node {
+</span></span><span style=display:flex><span>    (<span style=color:#75715e>$($name</span>:<span style=color:#a6e22e>ty</span>,)<span style=color:#f92672>*</span>) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$(</span>
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>impl</span> AstNode <span style=color:#66d9ef>for</span> <span style=color:#75715e>$name</span> {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>span</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#a6e22e>ByteSpan</span> { self.span }
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// these types all have a `span` field.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>impl_ast_node!(
+</span></span><span style=display:flex><span>    Literal,
+</span></span><span style=display:flex><span>    Assignment,
+</span></span><span style=display:flex><span>    Declaration,
+</span></span><span style=display:flex><span>    Identifier,
+</span></span><span style=display:flex><span>    BinaryExpression,
+</span></span><span style=display:flex><span>    IfStatement,
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>);
+</span></span></code></pre></div><p>Unfortunately once you need to do more than these trivial macros, the
+difficulty tends to go through the roof&mldr;</p><p>I recently encountered a situation at work where a non-trivial technical
+problem could be solved by writing an equally non-trivial macro. There are a
+number of tricks and techniques I employed along the way that helped keep the
+code manageable and easy to implement, so I thought I&rsquo;d help the next adventurer
+by writing them down.</p><div class="notices note"><p>The code written in this article is available <a href=https://github.com/Michael-F-Bryan/non-trivial-macros class=external-link target=_blank rel=noopener>on GitHub</a>. Feel free to
+browse through and steal code or inspiration.</p><p>If you found this useful or spotted a bug, let me know on the blog&rsquo;s
+<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com class=external-link target=_blank rel=noopener>issue tracker</a>!</p></div><h2 id=the-back-story>The Back-Story
+<a class=heading-link href=#the-back-story><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>In one of the big projects I work on, we made a design decisions you won&rsquo;t
+see in most typical Rust codebases:</p><blockquote><p>Major systems must be isolated in their own crate with all requirements
+declared via traits, and <strong>where possible these traits should be
+<a href=https://doc.rust-lang.org/book/ch17-02-trait-objects.html#object-safety-is-required-for-trait-objects class=external-link target=_blank rel=noopener>object-safe</a></strong>.</p></blockquote><p>The reasoning for this is quite straightforward, the application may need to
+reconfigure both its behaviour and hardware bindings at runtime, and allowing
+the possibility of dynamic dispatch makes this a lot easier.</p><p>This is a soft-realtime motion controller which can control several related
+families of machine using the same electronics and electrical components, but
+with different mechanical configurations.</p><p>Now, imagine the controller is initially configured to run machine A with
+particular assumptions about the world (which inputs things are attached to,
+available optional components, etc.) and the user changes some settings to
+make it behave like machine B with its own assumptions about the world.</p><p>You have a couple options for how to implement this:</p><ol><li>Load the machine configuration on startup and jump to the corresponding
+code&mldr; This requires a restart for any settings changes to take effect</li><li>Use enums to encapsulate the different IO layouts or business logic&mldr;
+Congratulations, your code now has 10x more <code>match</code> statements</li><li>Take an object-oriented approach, replacing the conditionals from option 2
+<a href=https://refactoring.guru/replace-conditional-with-polymorphism class=external-link target=_blank rel=noopener>with polymorphism</a> (i.e. dynamic dispatch)&mldr; Adds
+constraints on the behaviour you can expect from dependencies, but reduces
+cognitive load and lets you switch between things at runtime by pointing at
+a different object</li></ol><p>The last option looked like the least-bad of the 3, but no doubt you&rsquo;ll find
+out if it doesn&rsquo;t work for us&mldr; Just look out for the blog post exploring
+different architectures for complicated systems 😛</p><p>Making allowances for dynamic dispatch where possible adds its own set of
+interesting challenge, though.</p><p>Imagine you&rsquo;re programming the flashing lights on an operator console and come
+up with something like this:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#e6db74>/// Port A of the on-board General Purpose IOs.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>GPIOA</span> { <span style=color:#f92672>..</span>. }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>flash_periodically</span>(gpio: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> <span style=color:#66d9ef>GPIOA</span>, pin: <span style=color:#66d9ef>usize</span>, interval: <span style=color:#a6e22e>Duration</span>) {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> current_state <span style=color:#f92672>=</span> <span style=color:#66d9ef>false</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>loop</span> {
+</span></span><span style=display:flex><span>        gpio.set_state(pin, current_state);
+</span></span><span style=display:flex><span>        current_state <span style=color:#f92672>=</span> <span style=color:#f92672>!</span>current_state;
+</span></span><span style=display:flex><span>        sleep(interval);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Now, being a good developer you pull the hardware-specific logic out into its
+own trait.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#66d9ef>trait</span> DigitalInput {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>set_state</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, new_state: <span style=color:#66d9ef>bool</span>);
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>flash_periodically</span><span style=color:#f92672>&lt;</span>D<span style=color:#f92672>&gt;</span>(lamp: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> D, interval: <span style=color:#a6e22e>Duration</span>)
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>where</span> D: <span style=color:#a6e22e>DigitalInput</span>
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> current_state <span style=color:#f92672>=</span> <span style=color:#66d9ef>false</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>loop</span> {
+</span></span><span style=display:flex><span>        lamp.set_state(current_state);
+</span></span><span style=display:flex><span>        current_state <span style=color:#f92672>=</span> <span style=color:#f92672>!</span>current_state;
+</span></span><span style=display:flex><span>        sleep(interval);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>On the surface this looks quite good, we are only coupling to the functionality
+declared by the trait.</p><p>We can even make our own <code>DigitalInput</code> and verify it compiles as expected.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Pin</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> DigitalInput <span style=color:#66d9ef>for</span> Pin {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>set_state</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, new_state: <span style=color:#66d9ef>bool</span>) { unimplemented!() }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>main</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> pin <span style=color:#f92672>=</span> Pin;
+</span></span><span style=display:flex><span>    flash_periodically(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> pin, Duration::from_millis(<span style=color:#ae81ff>100</span>));
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>However, the <code>DigitalInput</code> trait has a couple quirks that prevent it from doing
+dynamic dispatch. The easiest way to see this is by creating an
+<code>assert_is_digital_input()</code> function.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>assert_is_digital_input</span><span style=color:#f92672>&lt;</span>D<span style=color:#f92672>&gt;</span>() <span style=color:#66d9ef>where</span> D: <span style=color:#a6e22e>DigitalInput</span> <span style=color:#f92672>+</span> <span style=color:#f92672>?</span>Sized {}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>main</span>() {
+</span></span><span style=display:flex><span>    assert_is_digital_input::<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>dyn</span> DigitalInput<span style=color:#f92672>&gt;</span>();
+</span></span><span style=display:flex><span>    assert_is_digital_input::<span style=color:#f92672>&lt;</span>Box<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>dyn</span> DigitalInput<span style=color:#f92672>&gt;&gt;</span>();
+</span></span><span style=display:flex><span>    assert_is_digital_input::<span style=color:#f92672>&lt;&amp;</span><span style=color:#66d9ef>mut</span> <span style=color:#66d9ef>dyn</span> DigitalInput<span style=color:#f92672>&gt;</span>();
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>This fails to compile.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-mysql data-lang=mysql><span style=display:flex><span>error[E0277]: the trait bound <span style=color:#f92672>`</span>std::boxed::Box<span style=color:#f92672>&lt;</span>dyn DigitalInput<span style=color:#f92672>&gt;</span>: DigitalInput<span style=color:#f92672>`</span> <span style=color:#66d9ef>is</span> <span style=color:#66d9ef>not</span> satisfied
+</span></span><span style=display:flex><span>  <span style=color:#f92672>--&gt;</span> src<span style=color:#f92672>/</span>main.rs:<span style=color:#ae81ff>23</span>:<span style=color:#ae81ff>5</span>
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>19</span> <span style=color:#f92672>|</span> fn assert_is_digital_input<span style=color:#f92672>&lt;</span>D<span style=color:#f92672>&gt;</span>() <span style=color:#66d9ef>where</span> D: DigitalInput <span style=color:#f92672>+</span> <span style=color:#f92672>?</span>Sized <span style=color:#960050;background-color:#1e0010>{}</span>
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>                                          <span style=color:#f92672>----------</span><span style=color:#75715e>-- required by this bound in `assert_is_digital_input`
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>...
+</span></span><span style=display:flex><span><span style=color:#ae81ff>23</span> <span style=color:#f92672>|</span>     assert_is_digital_input::<span style=color:#f92672>&lt;</span>Box<span style=color:#f92672>&lt;</span>dyn DigitalInput<span style=color:#f92672>&gt;&gt;</span>();
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>     <span style=color:#f92672>^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span> the trait <span style=color:#f92672>`</span>DigitalInput<span style=color:#f92672>`</span> <span style=color:#66d9ef>is</span> <span style=color:#66d9ef>not</span> implemented <span style=color:#66d9ef>for</span> <span style=color:#f92672>`</span>std::boxed::Box<span style=color:#f92672>&lt;</span>dyn DigitalInput<span style=color:#f92672>&gt;`</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>error[E0277]: the trait bound <span style=color:#f92672>`&amp;</span>mut dyn DigitalInput: DigitalInput<span style=color:#f92672>`</span> <span style=color:#66d9ef>is</span> <span style=color:#66d9ef>not</span> satisfied
+</span></span><span style=display:flex><span>  <span style=color:#f92672>--&gt;</span> src<span style=color:#f92672>/</span>main.rs:<span style=color:#ae81ff>24</span>:<span style=color:#ae81ff>5</span>
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>19</span> <span style=color:#f92672>|</span> fn assert_is_digital_input<span style=color:#f92672>&lt;</span>D<span style=color:#f92672>&gt;</span>() <span style=color:#66d9ef>where</span> D: DigitalInput <span style=color:#f92672>+</span> <span style=color:#f92672>?</span>Sized <span style=color:#960050;background-color:#1e0010>{}</span>
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>                                          <span style=color:#f92672>----------</span><span style=color:#75715e>-- required by this bound in `assert_is_digital_input`
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>...
+</span></span><span style=display:flex><span><span style=color:#ae81ff>24</span> <span style=color:#f92672>|</span>     assert_is_digital_input::<span style=color:#f92672>&lt;&amp;</span>mut dyn DigitalInput<span style=color:#f92672>&gt;</span>();
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>     <span style=color:#f92672>^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span> the trait <span style=color:#f92672>`</span>DigitalInput<span style=color:#f92672>`</span> <span style=color:#66d9ef>is</span> <span style=color:#66d9ef>not</span> implemented <span style=color:#66d9ef>for</span> <span style=color:#f92672>`&amp;</span>mut dyn DigitalInput<span style=color:#f92672>`</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>error: aborting due <span style=color:#66d9ef>to</span> <span style=color:#ae81ff>2</span> previous errors
+</span></span></code></pre></div><p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2018&amp;gist=d9293c605ba8fd1fc6c656b5155410b0" class=external-link target=_blank rel=noopener>(playground)</a></p><div class="notices tip"><p>This <code>assert_is_digital_input()</code> function is a nice little trick you can use
+to make sure something implements a particular trait. By using
+<a href=https://turbo.fish/ class=external-link target=_blank rel=noopener>turbofish</a> we can specify <em>exactly</em> which type we&rsquo;re trying to check,
+avoiding things like auto-defer and coercion.</p><p>You can find more gems like this in <a href=https://docs.rs/static_assertions class=external-link target=_blank rel=noopener>the <code>static_assertions</code> crate</a>,</p></div><p>The key bits to look out for in thiserror message:</p><blockquote><p>the trait bound <code>std::boxed::Box&lt;dyn DigitalInput>: DigitalInput</code> is not satisfied</p></blockquote><blockquote><p>the trait bound <code>&amp;mut dyn DigitalInput: DigitalInput</code> is not satisfied</p></blockquote><p>Trait objects don&rsquo;t natively implement their own traits!</p><p>The workaround is to manually implement <code>DigitalInput</code> for the types you need
+(i.e. <code>Box&lt;dyn DigitalInput></code> and <code>&amp;mut dyn DigitalInput</code>).</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>D: <span style=color:#a6e22e>DigitalInput</span> <span style=color:#f92672>+</span> <span style=color:#f92672>?</span>Sized<span style=color:#f92672>&gt;</span> DigitalInput <span style=color:#66d9ef>for</span> Box<span style=color:#f92672>&lt;</span>D<span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>set_state</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, new_state: <span style=color:#66d9ef>bool</span>) { (<span style=color:#f92672>**</span>self).set_state(new_state) }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;d</span>, D: <span style=color:#a6e22e>DigitalInput</span> <span style=color:#f92672>+</span> <span style=color:#f92672>?</span>Sized<span style=color:#f92672>&gt;</span> DigitalInput <span style=color:#66d9ef>for</span> <span style=color:#f92672>&amp;</span><span style=color:#a6e22e>&#39;d</span> <span style=color:#66d9ef>mut</span> D
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>set_state</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, new_state: <span style=color:#66d9ef>bool</span>) { (<span style=color:#f92672>**</span>self).set_state(new_state) }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>This works, but it leads to <em>loads</em> of copy/paste code. For example, adding a
+new method to a trait means you need to fix the trait object impls as well as
+any other real downstream implementations. Multiply by half a dozen systems
+with 2 or 3 traits each (each with their own set of methods) and this
+copy-pasta gets annoying pretty quickly.</p><p>My solution is to use a macro (i.e. compile-time codegen) to automatically
+generate the necessary impl blocks.</p><p>This <em>could</em> be implemented using procedural macros, but they can have a
+negative impact on compile times and I&rsquo;d like an excuse to play around with
+Rust&rsquo;s declarative macros.</p><h2 id=getting-started>Getting Started
+<a class=heading-link href=#getting-started><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now you have a better understanding of the problem we&rsquo;re trying to solve, the
+end goal I have in mind is being able to write something like this&mldr;</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span>trait_with_dyn_impls! {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// An interesting trait.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> InterestingTrait {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>u32</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>/// Do some sort of mutation.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>mutate</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, y: String);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>&mldr; And have it automatically implement the trait for <code>&amp;mut dyn InterestingTrait</code>
+and <code>Box&lt;dyn InterestingTrait></code>.</p><p>You can think of Rust&rsquo;s declarative (<code>macro_rules</code>) macros as a form of
+pattern matching which, instead of relying on the type system, uses parsing
+machinery from the compiler itself. For example, when you write <code>$value:expr</code>
+in a macro, that asks the compiler to try and parse some tokens as an
+expression, and assign the AST node to <code>$value</code> on success.</p><p>Our first step is to write a macro that can match a method signature.</p><p>Matching something like <code>fn get_x(&amp;self) -> u32;</code> isn&rsquo;t too difficult. The only
+bits that will change are <code>get_x</code> and <code>u32</code>, where <code>get_x</code> is some identifier
+for the item name and <code>u32</code> is our return type.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>macro_rules<span style=color:#f92672>!</span> visit_members {
+</span></span><span style=display:flex><span>    ( <span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#75715e>$ret</span>:<span style=color:#a6e22e>ty</span>; ) <span style=color:#f92672>=&gt;</span>  {}
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We can even write a test for it.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[cfg(test)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>mod</span> tests {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>use</span> <span style=color:#66d9ef>super</span>::<span style=color:#f92672>*</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>visit_simple_getter_method</span>() {
+</span></span><span style=display:flex><span>        visit_members! { <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>u32</span>; }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Testing this sort of thing is really simple. If the code compiles, it works 👍</p><p>We can also use repetition to match a function with 0 or more arguments.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>macro_rules<span style=color:#f92672>!</span> visit_members {
+</span></span><span style=display:flex><span>    ( <span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span>(<span style=color:#f92672>&amp;</span>self <span style=color:#75715e>$(,</span> <span style=color:#75715e>$arg_name</span>:<span style=color:#a6e22e>ident</span> : <span style=color:#75715e>$arg_ty</span>:<span style=color:#a6e22e>ty</span> )<span style=color:#f92672>*</span>) -&gt; <span style=color:#75715e>$ret</span>:<span style=color:#a6e22e>ty</span>; ) <span style=color:#f92672>=&gt;</span> {};
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>visit_method_with_multiple_parameters</span>() {
+</span></span><span style=display:flex><span>    visit_members! { <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self, foo: <span style=color:#66d9ef>usize</span>) -&gt; <span style=color:#66d9ef>u32</span>; }
+</span></span><span style=display:flex><span>    visit_members! { <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self, bar: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>, baz: <span style=color:#a6e22e>impl</span> FnOnce()) -&gt; <span style=color:#66d9ef>u32</span>; }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>In the same way you can use <code>$( ... )*</code> for zero or more repeats, you can use
+<code>$( ... )?</code> to match exactly zero or one items. This gives us a nice way to handle
+functions which don&rsquo;t return anything (i.e. the implicit <code>-> ()</code>).</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>macro_rules<span style=color:#f92672>!</span> visit_members {
+</span></span><span style=display:flex><span>    ( <span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span>(<span style=color:#f92672>&amp;</span>self <span style=color:#75715e>$(,</span> <span style=color:#75715e>$arg_name</span>:<span style=color:#a6e22e>ident</span> : <span style=color:#75715e>$arg_ty</span>:<span style=color:#a6e22e>ty</span> )<span style=color:#f92672>*</span>) <span style=color:#75715e>$(</span>-&gt; <span style=color:#75715e>$ret</span>:<span style=color:#a6e22e>ty</span>)<span style=color:#f92672>?</span>; ) <span style=color:#f92672>=&gt;</span> {};
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>visit_method_without_return_type</span>() {
+</span></span><span style=display:flex><span>    visit_members! { <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self); }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We can also use the <code>meta</code> specifier to handle an arbitrary number of
+attributes or docs-comment attached to a function.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>macro_rules<span style=color:#f92672>!</span> visit_members {
+</span></span><span style=display:flex><span>    (
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$(</span> <span style=color:#75715e>#[$attr:meta]</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span>(<span style=color:#f92672>&amp;</span>self <span style=color:#75715e>$(,</span> <span style=color:#75715e>$arg_name</span>:<span style=color:#a6e22e>ident</span> : <span style=color:#75715e>$arg_ty</span>:<span style=color:#a6e22e>ty</span> )<span style=color:#f92672>*</span>) <span style=color:#75715e>$(</span>-&gt; <span style=color:#75715e>$ret</span>:<span style=color:#a6e22e>ty</span>)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>    ) <span style=color:#f92672>=&gt;</span> {};
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>visit_method_with_attributes</span>() {
+</span></span><span style=display:flex><span>    visit_members! {
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>/// Get `x`.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>        <span style=color:#75715e>#[allow(bad_style)]</span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>u32</span>;
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices note"><p>You&rsquo;ll notice that I introduced a couple line breaks to help make the pattern
+expression look similar to the code we&rsquo;re trying to match. Something you&rsquo;ll
+learn in this article is that readability is super important.</p><p>Rust&rsquo;s declarative macros are similar to <a href=https://en.wikipedia.org/wiki/APL_%28programming_language%29 class=external-link target=_blank rel=noopener>APL</a> in that they&rsquo;re really
+powerful and let you accomplish a lot with not much code&mldr; but it&rsquo;s also the
+kind of code that will only be written once. Then when a bug shows up you
+throw it away and start again instead of trying to understand the mess of
+punctuation, words, and symbols.</p></div><div class="notices info"><p>I&rsquo;m going to skip the problem of handling <code>&amp;self</code> versus <code>&amp;mut self</code> for the
+time being. The macro system has a couple&mldr; quirks&mldr; which make dealing
+with <code>self</code> kinda awkward.</p></div><p>This <code>visit_members!()</code> forms the core part of our <code>trait_with_dyn_impls!()</code>
+macro. Now we&rsquo;re able to match the method signatures you&rsquo;re likely to see in
+object-safe traits we can start building on this foundation.</p><h2 id=incremental-tt-munching>Incremental TT Munching
+<a class=heading-link href=#incremental-tt-munching><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>One of the most powerful tools in your Rust macro arsenal is the
+<a href=https://danielkeep.github.io/tlborm/book/pat-incremental-tt-munchers.html class=external-link target=_blank rel=noopener>Incremental TT Muncher</a>. This is perfect for when you have a stream of
+input and want to apply different logic based on what each item looks like.</p><p><em>The Little Book of Rust Macros</em> does a pretty good job of explaining how it
+works:</p><blockquote><p>A &ldquo;TT muncher&rdquo; is a recursive macro that works by incrementally processing
+its input one step at a time. At each step, it matches and removes (munches)
+some sequence of tokens from the start of its input, generates some
+intermediate output, then recurses on the input tail.</p></blockquote><p>We&rsquo;re going to use a TT muncher to match multiple function signatures. The idea
+is that we&rsquo;ll adapt our existing <code>visit_members!()</code> macro to match the function
+signature at the start of our input stream, then recurse on the rest.</p><p>The first step is to add something which will match any tokens after our
+signature.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>macro_rules<span style=color:#f92672>!</span> visit_members {
+</span></span><span style=display:flex><span>    (
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$(</span> <span style=color:#75715e>#[$attr:meta]</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span>(<span style=color:#f92672>&amp;</span>self <span style=color:#75715e>$(,</span> <span style=color:#75715e>$arg_name</span>:<span style=color:#a6e22e>ident</span> : <span style=color:#75715e>$arg_ty</span>:<span style=color:#a6e22e>ty</span> )<span style=color:#f92672>*</span>) <span style=color:#75715e>$(</span>-&gt; <span style=color:#75715e>$ret</span>:<span style=color:#a6e22e>ty</span>)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$(</span> <span style=color:#75715e>$rest</span>:<span style=color:#a6e22e>tt</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>    ) <span style=color:#f92672>=&gt;</span> {};
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>(note the <code>\$( $rest:tt )*</code>)</p><p>At this point all our existing tests still pass because they don&rsquo;t have any
+trailing tokens.</p><p>While we&rsquo;re at it let&rsquo;s actually add in the recursion call, otherwise we&rsquo;d be
+matching everything after our first method signature and silently throwing it
+away.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>macro_rules<span style=color:#f92672>!</span> visit_members {
+</span></span><span style=display:flex><span>    (
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$(</span> <span style=color:#75715e>#[$attr:meta]</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span>(<span style=color:#f92672>&amp;</span>self <span style=color:#75715e>$(,</span> <span style=color:#75715e>$arg_name</span>:<span style=color:#a6e22e>ident</span> : <span style=color:#75715e>$arg_ty</span>:<span style=color:#a6e22e>ty</span> )<span style=color:#f92672>*</span>) <span style=color:#75715e>$(</span>-&gt; <span style=color:#75715e>$ret</span>:<span style=color:#a6e22e>ty</span>)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$(</span> <span style=color:#75715e>$rest</span>:<span style=color:#a6e22e>tt</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>    ) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// TODO: do something with the signature we just matched
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>        visit_members! { <span style=color:#75715e>$($rest</span>)<span style=color:#f92672>*</span> }
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>I have <a href=https://crates.io/crates/cargo-watch class=external-link target=_blank rel=noopener><code>cargo watch</code></a> running on a background terminal to
+automatically recompile whenever something changes, and immediately after
+hitting save I started seeing lots of red&mldr;</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback><span style=display:flex><span>    Finished dev [unoptimized + debuginfo] target(s) in 0.00s
+</span></span><span style=display:flex><span>   Compiling non-trivial-macros v0.1.0 (/home/michael/Documents/non-trivial-macros)
+</span></span><span style=display:flex><span>error: unexpected end of macro invocation
+</span></span><span style=display:flex><span>  --&gt; src/lib.rs:11:9
+</span></span><span style=display:flex><span>   |
+</span></span><span style=display:flex><span>2  | macro_rules! visit_members {
+</span></span><span style=display:flex><span>   | -------------------------- when calling this macro
+</span></span><span style=display:flex><span>...
+</span></span><span style=display:flex><span>11 |         visit_members! { $($rest)* }
+</span></span><span style=display:flex><span>   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+</span></span><span style=display:flex><span>...
+</span></span><span style=display:flex><span>21 |         visit_members! { fn get_x(&amp;self) -&gt; u32; }
+</span></span><span style=display:flex><span>   |         ------------------------------------------ in this macro invocation
+</span></span><span style=display:flex><span>   |
+</span></span><span style=display:flex><span>   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>...
+</span></span></code></pre></div><p>The important bit is that <em>&ldquo;unexpected end of macro invocation&rdquo;</em> message. It&rsquo;s
+saying the macro ran out of tokens when it was expecting to match something.</p><p>Just like with normal programming, when you do recursion you need to add a
+base case so you can stop recursing. The error message is telling us that it
+matched the function signature, then when trying to match the rest of the
+input (of which there is none) it didn&rsquo;t have enough tokens.</p><p>The solution is easy enough, just add a base case which matches exactly nothing.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>macro_rules<span style=color:#f92672>!</span> visit_members {
+</span></span><span style=display:flex><span>    (
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$(</span> <span style=color:#75715e>#[$attr:meta]</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span>(<span style=color:#f92672>&amp;</span>self <span style=color:#75715e>$(,</span> <span style=color:#75715e>$arg_name</span>:<span style=color:#a6e22e>ident</span> : <span style=color:#75715e>$arg_ty</span>:<span style=color:#a6e22e>ty</span> )<span style=color:#f92672>*</span>) <span style=color:#75715e>$(</span>-&gt; <span style=color:#75715e>$ret</span>:<span style=color:#a6e22e>ty</span>)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$(</span> <span style=color:#75715e>$rest</span>:<span style=color:#a6e22e>tt</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>    ) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>        visit_members! { <span style=color:#75715e>$($rest</span>)<span style=color:#f92672>*</span> }
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span>    () <span style=color:#f92672>=&gt;</span> {}
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Now that&rsquo;s solved, let&rsquo;s add a test with two signatures and see what happens.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>match_two_getters</span>() {
+</span></span><span style=display:flex><span>    visit_members! {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>u32</span>;
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_y</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>u32</span>;
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Looking back at the output from my terminal, it seems like it all just
+works</p><p>Don&rsquo;t you love it when you write something based on theory and it all works
+perfectly first time? It doesn&rsquo;t happen often, so I like to cherish these
+moments 🎉</p><h2 id=callbacks>Callbacks
+<a class=heading-link href=#callbacks><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p><em>The Little Book of Rust Macros</em> also includes a couple techniques for
+generating code. Most notable among them for our purposes is the
+<a href=https://danielkeep.github.io/tlborm/book/pat-callbacks.html class=external-link target=_blank rel=noopener>Callback</a>.</p><p>This lets us pass the name of a macro into a macro so it can be invoked later
+with the results of our pattern matching.</p><p>Passing in the callback&rsquo;s name is easy enough. Just add it to the start of the
+macro input.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>macro_rules<span style=color:#f92672>!</span> visit_members {
+</span></span><span style=display:flex><span>    (
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$callback</span>:<span style=color:#a6e22e>ident</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$(</span> <span style=color:#75715e>#[$attr:meta]</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span>(<span style=color:#f92672>&amp;</span>self <span style=color:#75715e>$(,</span> <span style=color:#75715e>$arg_name</span>:<span style=color:#a6e22e>ident</span> : <span style=color:#75715e>$arg_ty</span>:<span style=color:#a6e22e>ty</span> )<span style=color:#f92672>*</span>) <span style=color:#75715e>$(</span>-&gt; <span style=color:#75715e>$ret</span>:<span style=color:#a6e22e>ty</span>)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$(</span> <span style=color:#75715e>$rest</span>:<span style=color:#a6e22e>tt</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>    ) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>        visit_members! { <span style=color:#75715e>$callback</span>; <span style=color:#75715e>$($rest</span>)<span style=color:#f92672>*</span> }
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span>    (<span style=color:#75715e>$callback</span>:<span style=color:#a6e22e>ident</span>;) <span style=color:#f92672>=&gt;</span> {}
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices note"><p>Make sure you update the base case now we&rsquo;re always passing a <code>$callback;</code> at
+the start of recursive call.</p></div><p>At this point we&rsquo;ll need to update all our tests to start with the callback
+name. I&rsquo;m using the name <code>print</code>, but the callback doesn&rsquo;t matter for now
+because it&rsquo;s not used.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>visit_simple_getter_method</span>() {
+</span></span><span style=display:flex><span>    visit_members! { print; <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>u32</span>; }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>match_two_getters</span>() {
+</span></span><span style=display:flex><span>    visit_members! {
+</span></span><span style=display:flex><span>        print;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>u32</span>;
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_y</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>u32</span>;
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Now we can make the macro invoke our callback with the matched signature.</p><p>To begin with, I just want to swallow the tokens and do nothing. If the code
+compiles, we can be pretty sure we&rsquo;re invoking the callback correctly.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>macro_rules<span style=color:#f92672>!</span> visit_members {
+</span></span><span style=display:flex><span>    (
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$callback</span>:<span style=color:#a6e22e>ident</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$(</span> <span style=color:#75715e>#[$attr:meta]</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span>(<span style=color:#f92672>&amp;</span>self <span style=color:#75715e>$(,</span> <span style=color:#75715e>$arg_name</span>:<span style=color:#a6e22e>ident</span> : <span style=color:#75715e>$arg_ty</span>:<span style=color:#a6e22e>ty</span> )<span style=color:#f92672>*</span>) <span style=color:#75715e>$(</span>-&gt; <span style=color:#75715e>$ret</span>:<span style=color:#a6e22e>ty</span>)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$(</span> <span style=color:#75715e>$rest</span>:<span style=color:#a6e22e>tt</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>    ) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$callback</span><span style=color:#f92672>!</span>(
+</span></span><span style=display:flex><span>            <span style=color:#75715e>$(</span> <span style=color:#75715e>#[$attr]</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>(<span style=color:#f92672>&amp;</span>self <span style=color:#75715e>$(,</span> <span style=color:#75715e>$arg_name</span> : <span style=color:#75715e>$arg_ty</span> )<span style=color:#f92672>*</span>) <span style=color:#75715e>$(</span>-&gt; <span style=color:#75715e>$ret</span>)<span style=color:#f92672>?</span>
+</span></span><span style=display:flex><span>        );
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        visit_members! { <span style=color:#75715e>$callback</span>; <span style=color:#75715e>$($rest</span>)<span style=color:#f92672>*</span> }
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span>    (<span style=color:#75715e>$callback</span>:<span style=color:#a6e22e>ident</span>;) <span style=color:#f92672>=&gt;</span> {};
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>macro_rules<span style=color:#f92672>!</span> my_callback {
+</span></span><span style=display:flex><span>    ( <span style=color:#75715e>$($whatever</span>:<span style=color:#a6e22e>tt</span>)<span style=color:#f92672>*</span> ) <span style=color:#f92672>=&gt;</span> {}
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices tip"><p>If you ever get stuck and are wanting some sort of &ldquo;print statement&rdquo; to see what
+a macro is doing, have a look at the <code>compile_error!()</code> macro.</p><p>By combining <code>compile_error!()</code> with <code>stringify!()</code> and <code>concat!()</code> you can
+concatenate the stringified form of arbitrary tokens to create an error message
+containing the tokens you&rsquo;ve matched.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span>macro_rules<span style=color:#f92672>!</span> my_callback {
+</span></span><span style=display:flex><span>    ( <span style=color:#75715e>$($tokens</span>:<span style=color:#a6e22e>tt</span>)<span style=color:#f92672>*</span> ) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>        compile_error!(
+</span></span><span style=display:flex><span>            concat!(
+</span></span><span style=display:flex><span>                <span style=color:#75715e>$(</span>
+</span></span><span style=display:flex><span>                    stringify!(<span style=color:#75715e>$tokens</span>), <span style=color:#e6db74>&#34; &#34;</span>
+</span></span><span style=display:flex><span>                ),<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>            )
+</span></span><span style=display:flex><span>        );
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>When passing <code>my_callback</code> to the <code>match_two_getters</code> test, we get a compile
+error like this:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback><span style=display:flex><span>error: fn get_x (&amp; self) -&gt; u32
+</span></span><span style=display:flex><span>  --&gt; src/lib.rs:27:13
+</span></span><span style=display:flex><span>   |
+</span></span><span style=display:flex><span>27 | /             compile_error!(
+</span></span><span style=display:flex><span>28 | |                 concat!(
+</span></span><span style=display:flex><span>29 | |                     $(
+</span></span><span style=display:flex><span>30 | |                         stringify!($tokens), &#34; &#34;
+</span></span><span style=display:flex><span>31 | |                     ),*
+</span></span><span style=display:flex><span>32 | |                 )
+</span></span><span style=display:flex><span>33 | |             );
+</span></span><span style=display:flex><span>   |
+</span></span><span style=display:flex><span>...
+</span></span><span style=display:flex><span>39 |           visit_members! { echo; fn get_x(&amp;self) -&gt; u32; }
+</span></span><span style=display:flex><span>   |           ------------------------------------------------ in this macro invocation
+</span></span><span style=display:flex><span>   |
+</span></span><span style=display:flex><span>   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
+</span></span></code></pre></div><p>It&rsquo;s not particularly elegant, but this (ab)use of the <code>compile_error!()</code>
+macro lets us see that <code>fn get_x (& self) -> u32</code> was passed to the callback.</p></div><h2 id=generating-our-impl-blocks>Generating Our Impl Blocks
+<a class=heading-link href=#generating-our-impl-blocks><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now we&rsquo;ve got a way to invoke a macro on each method we can actually start
+generating some code!</p><p>If you look back towards the beginning, we&rsquo;re trying to take something like
+this&mldr;</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>u32</span>;
+</span></span></code></pre></div><p>&mldr; and expand it to some code that dereferences <code>&amp;self</code> twice (once to get
+past <code>&amp;self</code> and a second time to dereference the pointer that is <code>self</code>) then
+invokes the method.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>u32</span> {
+</span></span><span style=display:flex><span>    (<span style=color:#f92672>**</span>self).get_x()
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>First off, I&rsquo;m going to create a new macro to use as our callback. We know
+ahead of time that we&rsquo;ll be passed a valid method signature, so we can steal the
+matching code from <code>visit_members!()</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>macro_rules<span style=color:#f92672>!</span> call_via_deref {
+</span></span><span style=display:flex><span>    (
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$(</span> <span style=color:#75715e>#[$attr:meta]</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span>(<span style=color:#f92672>&amp;</span>self <span style=color:#75715e>$(,</span> <span style=color:#75715e>$arg_name</span>:<span style=color:#a6e22e>ident</span> : <span style=color:#75715e>$arg_ty</span>:<span style=color:#a6e22e>ty</span> )<span style=color:#f92672>*</span>) <span style=color:#75715e>$(</span>-&gt; <span style=color:#75715e>$ret</span>:<span style=color:#a6e22e>ty</span>)<span style=color:#f92672>?</span>
+</span></span><span style=display:flex><span>    ) <span style=color:#f92672>=&gt;</span> { };
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>(note the lack of a trailing semicolon)</p><p>Now we can generate the method body.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>macro_rules<span style=color:#f92672>!</span> call_via_deref {
+</span></span><span style=display:flex><span>    (
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$(</span> <span style=color:#75715e>#[$attr:meta]</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span>(<span style=color:#f92672>&amp;</span>self <span style=color:#75715e>$(,</span> <span style=color:#75715e>$arg_name</span>:<span style=color:#a6e22e>ident</span> : <span style=color:#75715e>$arg_ty</span>:<span style=color:#a6e22e>ty</span> )<span style=color:#f92672>*</span>) <span style=color:#75715e>$(</span>-&gt; <span style=color:#75715e>$ret</span>:<span style=color:#a6e22e>ty</span>)<span style=color:#f92672>?</span>
+</span></span><span style=display:flex><span>    ) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>(<span style=color:#f92672>&amp;</span>self <span style=color:#75715e>$(,</span> <span style=color:#75715e>$arg_name</span> : <span style=color:#75715e>$arg_ty</span> )<span style=color:#f92672>*</span>) <span style=color:#75715e>$(</span>-&gt; <span style=color:#75715e>$ret</span>)<span style=color:#f92672>?</span> {
+</span></span><span style=display:flex><span>            (<span style=color:#f92672>**</span>self).<span style=color:#75715e>$name</span>( <span style=color:#75715e>$($arg_name</span>),<span style=color:#f92672>*</span> )
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We can test this by using it in the same place it&rsquo;s intended for.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>defer_impl_to_item_behind_pointer</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>trait</span> GetX {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>u32</span>;
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>impl</span> GetX <span style=color:#66d9ef>for</span> <span style=color:#66d9ef>u32</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>u32</span> { <span style=color:#f92672>*</span>self }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>impl</span> GetX <span style=color:#66d9ef>for</span> Box<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>u32</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        call_via_deref!( <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>u32</span> );
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>assert_is_get_x</span><span style=color:#f92672>&lt;</span>G: <span style=color:#a6e22e>GetX</span><span style=color:#f92672>&gt;</span>() {}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    assert_is_get_x::<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>u32</span><span style=color:#f92672>&gt;</span>();
+</span></span><span style=display:flex><span>    assert_is_get_x::<span style=color:#f92672>&lt;</span>Box<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>u32</span><span style=color:#f92672>&gt;&gt;</span>();
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We&rsquo;re on the home stretch now. We just need to tie together our callback and
+TT muncher to generate <code>GetX</code> impls for <code>Box&lt;dyn GetX></code>.</p><p>Here&rsquo;s the macro for working with boxed trait objects. All it really does is
+wrap everything in an <code>impl Trait for Box&lt;dyn Trait></code> block then defer to
+<code>visit_members!()</code> and <code>call_via_deref!()</code> for the hard work.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>macro_rules<span style=color:#f92672>!</span> impl_trait_for_boxed {
+</span></span><span style=display:flex><span>    (
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$(</span> <span style=color:#75715e>#[$attr:meta]</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$vis</span>:<span style=color:#a6e22e>vis</span> <span style=color:#66d9ef>trait</span> <span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span> {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>$(</span> <span style=color:#75715e>$body</span>:<span style=color:#a6e22e>tt</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    ) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>F: <span style=color:#75715e>$name</span> <span style=color:#f92672>+</span> <span style=color:#f92672>?</span>Sized<span style=color:#f92672>&gt;</span> <span style=color:#75715e>$name</span> <span style=color:#66d9ef>for</span> Box<span style=color:#f92672>&lt;</span>F<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>            visit_members!( call_via_deref; <span style=color:#75715e>$($body</span>)<span style=color:#f92672>*</span> );
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We can also test this by creating a trait, implementing it for one type, then
+copy/pasting the trait definition into an <code>impl_trait_for_boxed!()</code> call and
+making sure it generates the desired impls.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>impl_trait_for_boxed</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>trait</span> Foo {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>u32</span>;
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>execute</span>(<span style=color:#f92672>&amp;</span>self, expression: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>impl</span> Foo <span style=color:#66d9ef>for</span> <span style=color:#66d9ef>u32</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>u32</span> { unimplemented!() }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>execute</span>(<span style=color:#f92672>&amp;</span>self, _expression: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>) { unimplemented!() }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    impl_trait_for_boxed! {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>trait</span> Foo {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>u32</span>;
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>execute</span>(<span style=color:#f92672>&amp;</span>self, expression: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>);
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>assert_is_foo</span><span style=color:#f92672>&lt;</span>F: <span style=color:#a6e22e>Foo</span><span style=color:#f92672>&gt;</span>() {}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    assert_is_foo::<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>u32</span><span style=color:#f92672>&gt;</span>();
+</span></span><span style=display:flex><span>    assert_is_foo::<span style=color:#f92672>&lt;</span>Box<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>u32</span><span style=color:#f92672>&gt;&gt;</span>();
+</span></span><span style=display:flex><span>    assert_is_foo::<span style=color:#f92672>&lt;</span>Box<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>dyn</span> Foo<span style=color:#f92672>&gt;&gt;</span>();
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Once you&rsquo;ve got your head around the <code>Box</code> version, you&rsquo;ll notice it&rsquo;s almost
+identical to the macro for references.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[macro_export]</span>
+</span></span><span style=display:flex><span>macro_rules<span style=color:#f92672>!</span> impl_trait_for_ref {
+</span></span><span style=display:flex><span>    (
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$(</span> <span style=color:#75715e>#[$attr:meta]</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$vis</span>:<span style=color:#a6e22e>vis</span> <span style=color:#66d9ef>trait</span> <span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span> {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>$(</span> <span style=color:#75715e>$body</span>:<span style=color:#a6e22e>tt</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    ) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;f</span>, F: <span style=color:#75715e>$name</span> <span style=color:#f92672>+</span> <span style=color:#f92672>?</span>Sized<span style=color:#f92672>&gt;</span> <span style=color:#75715e>$name</span> <span style=color:#66d9ef>for</span> <span style=color:#f92672>&amp;</span><span style=color:#a6e22e>&#39;f</span> F {
+</span></span><span style=display:flex><span>            visit_members!( call_via_deref; <span style=color:#75715e>$($body</span>)<span style=color:#f92672>*</span> );
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[macro_export]</span>
+</span></span><span style=display:flex><span>macro_rules<span style=color:#f92672>!</span> impl_trait_for_mut_ref {
+</span></span><span style=display:flex><span>    (
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$(</span> <span style=color:#75715e>#[$attr:meta]</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$vis</span>:<span style=color:#a6e22e>vis</span> <span style=color:#66d9ef>trait</span> <span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span> {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>$(</span> <span style=color:#75715e>$body</span>:<span style=color:#a6e22e>tt</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    ) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;f</span>, F: <span style=color:#75715e>$name</span> <span style=color:#f92672>+</span> <span style=color:#f92672>?</span>Sized<span style=color:#f92672>&gt;</span> <span style=color:#75715e>$name</span> <span style=color:#66d9ef>for</span> <span style=color:#f92672>&amp;</span><span style=color:#a6e22e>&#39;f</span> <span style=color:#66d9ef>mut</span> F {
+</span></span><span style=display:flex><span>            visit_members!( call_via_deref; <span style=color:#75715e>$($body</span>)<span style=color:#f92672>*</span> );
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>From here the full <code>trait_with_dyn_impls!()</code> macro just falls out. We make sure
+the trait gets declared, then pass it to <code>impl_trait_for_boxed!()</code> and friends
+to generate the appropriate impls.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[macro_export]</span>
+</span></span><span style=display:flex><span>macro_rules<span style=color:#f92672>!</span> trait_with_dyn_impls {
+</span></span><span style=display:flex><span>    (
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$(</span> <span style=color:#75715e>#[$attr:meta]</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$vis</span>:<span style=color:#a6e22e>vis</span> <span style=color:#66d9ef>trait</span> <span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span> { <span style=color:#75715e>$(</span> <span style=color:#75715e>$body</span>:<span style=color:#a6e22e>tt</span> )<span style=color:#f92672>*</span> }
+</span></span><span style=display:flex><span>    ) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// emit the trait declaration
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#75715e>$(</span> <span style=color:#75715e>#[$attr]</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$vis</span> <span style=color:#66d9ef>trait</span> <span style=color:#75715e>$name</span> { <span style=color:#75715e>$(</span> <span style=color:#75715e>$body</span> )<span style=color:#f92672>*</span> }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        impl_trait_for_ref! {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>$(</span> <span style=color:#75715e>#[$attr]</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e>$vis</span> <span style=color:#66d9ef>trait</span> <span style=color:#75715e>$name</span> { <span style=color:#75715e>$(</span> <span style=color:#75715e>$body</span> )<span style=color:#f92672>*</span> }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>        impl_trait_for_mut_ref! {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>$(</span> <span style=color:#75715e>#[$attr]</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e>$vis</span> <span style=color:#66d9ef>trait</span> <span style=color:#75715e>$name</span> { <span style=color:#75715e>$(</span> <span style=color:#75715e>$body</span> )<span style=color:#f92672>*</span> }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>        impl_trait_for_boxed! {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>$(</span> <span style=color:#75715e>#[$attr]</span> )<span style=color:#f92672>*</span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e>$vis</span> <span style=color:#66d9ef>trait</span> <span style=color:#75715e>$name</span> { <span style=color:#75715e>$(</span> <span style=color:#75715e>$body</span> )<span style=color:#f92672>*</span> }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=non-identifier-identifiers>Non-Identifier Identifiers
+<a class=heading-link href=#non-identifier-identifiers><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Do you remember how we deferred dealing with traits that have <code>&amp;mut self</code>
+methods, claiming there are a couple quirks that make handling <code>&amp;self</code> or
+<code>&amp;mut self</code> awkward?</p><p>Now that you&rsquo;ve got a couple more tools in your <code>macro_rules</code> toolbox, we&rsquo;re
+better positioned to talk about these quirks.</p><p>So, how do you write a macro that matches both <code>&amp;self</code> and <code>&amp;mut self</code> and pass
+that to a callback?</p><p><code>&amp;self</code> looks like a valid expression as far as the language grammar is
+concerned, so we could define a macro like this:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span>macro_rules<span style=color:#f92672>!</span> match_self {
+</span></span><span style=display:flex><span>    (<span style=color:#75715e>$callback</span>:<span style=color:#a6e22e>ident</span>, <span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span>(<span style=color:#75715e>$self</span>:<span style=color:#a6e22e>expr</span>)) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$callback</span><span style=color:#f92672>!</span>(<span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>(<span style=color:#75715e>$self</span>));
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Then our <code>$callback</code> is a macro that attaches a method to some type, <code>Foo</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span>macro_rules<span style=color:#f92672>!</span> callback {
+</span></span><span style=display:flex><span>    (<span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span>(<span style=color:#75715e>$self</span>:<span style=color:#a6e22e>expr</span>)) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>impl</span> Foo {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>(<span style=color:#75715e>$self</span>) {}
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Foo</span>;
+</span></span></code></pre></div><p>And in theory we should be able to use it like this, right?</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span>match_self!(callback, <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>foo</span>(<span style=color:#f92672>&amp;</span>self));
+</span></span></code></pre></div><p>However <code>rustc</code> doesn&rsquo;t agree. Instead, we get the following&mldr; less than
+optimal&mldr; compile error.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span>error: <span style=color:#a6e22e>expected</span> one of <span style=color:#960050;background-color:#1e0010>`</span><span style=color:#f92672>..</span>.<span style=color:#960050;background-color:#1e0010>`</span>, <span style=color:#960050;background-color:#1e0010>`</span><span style=color:#f92672>..=</span><span style=color:#960050;background-color:#1e0010>`</span>, <span style=color:#960050;background-color:#1e0010>`</span><span style=color:#f92672>..</span><span style=color:#960050;background-color:#1e0010>`</span>, <span style=color:#960050;background-color:#1e0010>`</span>:<span style=color:#960050;background-color:#1e0010>`</span>, or <span style=color:#960050;background-color:#1e0010>`</span><span style=color:#f92672>|</span><span style=color:#960050;background-color:#1e0010>`</span>, found <span style=color:#960050;background-color:#1e0010>`</span>)<span style=color:#960050;background-color:#1e0010>`</span>
+</span></span><span style=display:flex><span>   <span style=color:#f92672>-</span>-&gt; <span style=color:#a6e22e>src</span><span style=color:#f92672>/</span>lib.rs:<span style=color:#ae81ff>215</span>:<span style=color:#ae81ff>35</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>|</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>206</span> <span style=color:#f92672>|</span> <span style=color:#f92672>/</span>         macro_rules<span style=color:#f92672>!</span> match_self {
+</span></span><span style=display:flex><span><span style=color:#ae81ff>207</span> <span style=color:#f92672>|</span> <span style=color:#f92672>|</span>             (<span style=color:#75715e>$callback</span>:<span style=color:#a6e22e>ident</span>, <span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span>(<span style=color:#75715e>$self</span>:<span style=color:#a6e22e>expr</span>)) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span><span style=color:#ae81ff>208</span> <span style=color:#f92672>|</span> <span style=color:#f92672>|</span>                 <span style=color:#75715e>$callback</span><span style=color:#f92672>!</span>(<span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>(<span style=color:#75715e>$self</span>));
+</span></span><span style=display:flex><span>    <span style=color:#f92672>|</span> <span style=color:#f92672>|</span>                 <span style=color:#f92672>----------------------------</span> <span style=color:#66d9ef>in</span> this <span style=color:#66d9ef>macro</span> invocation
+</span></span><span style=display:flex><span><span style=color:#ae81ff>209</span> <span style=color:#f92672>|</span> <span style=color:#f92672>|</span>             }
+</span></span><span style=display:flex><span><span style=color:#ae81ff>210</span> <span style=color:#f92672>|</span> <span style=color:#f92672>|</span>         }
+</span></span><span style=display:flex><span>    <span style=color:#f92672>|</span> <span style=color:#f92672>|</span>_________<span style=color:#f92672>-</span> <span style=color:#66d9ef>in</span> this expansion of <span style=color:#960050;background-color:#1e0010>`</span>match_self<span style=color:#f92672>!</span><span style=color:#960050;background-color:#1e0010>`</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>211</span> <span style=color:#f92672>|</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>212</span> <span style=color:#f92672>|</span> <span style=color:#f92672>/</span>         macro_rules<span style=color:#f92672>!</span> callback {
+</span></span><span style=display:flex><span><span style=color:#ae81ff>213</span> <span style=color:#f92672>|</span> <span style=color:#f92672>|</span>             (<span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span>(<span style=color:#75715e>$self</span>:<span style=color:#a6e22e>expr</span>)) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span><span style=color:#ae81ff>214</span> <span style=color:#f92672>|</span> <span style=color:#f92672>|</span>                 <span style=color:#66d9ef>impl</span> Foo {
+</span></span><span style=display:flex><span><span style=color:#ae81ff>215</span> <span style=color:#f92672>|</span> <span style=color:#f92672>|</span>                     <span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>(<span style=color:#75715e>$self</span>) {}
+</span></span><span style=display:flex><span>    <span style=color:#f92672>|</span> <span style=color:#f92672>|</span>                                   <span style=color:#f92672>^</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>216</span> <span style=color:#f92672>|</span> <span style=color:#f92672>|</span>                 }
+</span></span><span style=display:flex><span><span style=color:#ae81ff>217</span> <span style=color:#f92672>|</span> <span style=color:#f92672>|</span>             };
+</span></span><span style=display:flex><span><span style=color:#ae81ff>218</span> <span style=color:#f92672>|</span> <span style=color:#f92672>|</span>         }
+</span></span><span style=display:flex><span>    <span style=color:#f92672>|</span> <span style=color:#f92672>|</span>_________<span style=color:#f92672>-</span> <span style=color:#66d9ef>in</span> this expansion of <span style=color:#960050;background-color:#1e0010>`</span>callback<span style=color:#f92672>!</span><span style=color:#960050;background-color:#1e0010>`</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span><span style=color:#ae81ff>222</span> <span style=color:#f92672>|</span>           match_self!(callback, <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>foo</span>(<span style=color:#f92672>&amp;</span>self));
+</span></span><span style=display:flex><span>    <span style=color:#f92672>|</span>           <span style=color:#f92672>-------------------------------------</span> <span style=color:#66d9ef>in</span> this <span style=color:#66d9ef>macro</span> invocation
+</span></span></code></pre></div><p>It looks like the callback is expecting some sort of pattern (e.g.
+<code>self ..= other</code>) when it tries to use <code>$self</code> as the method&rsquo;s <code>self</code> parameter.</p><p>So what if we try matching on <code>$self:pat</code> instead of <code>$self:expr</code>?</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-diff data-lang=diff><span style=display:flex><span> macro_rules! match_self {
+</span></span><span style=display:flex><span><span style=color:#f92672>-    ($callback:ident, fn $name:ident($self:expr)) =&gt; {
+</span></span></span><span style=display:flex><span><span style=color:#f92672></span><span style=color:#a6e22e>+    ($callback:ident, fn $name:ident($self:pat)) =&gt; {
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span>         $callback!(fn $name($self));
+</span></span><span style=display:flex><span>     }
+</span></span><span style=display:flex><span> }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span> macro_rules! callback {
+</span></span><span style=display:flex><span><span style=color:#f92672>-    (fn $name:ident($self:expr)) =&gt; {
+</span></span></span><span style=display:flex><span><span style=color:#f92672></span><span style=color:#a6e22e>+    (fn $name:ident($self:pat)) =&gt; {
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span>         impl Foo {
+</span></span><span style=display:flex><span>             fn $name($self) {}
+</span></span><span style=display:flex><span>         }
+</span></span><span style=display:flex><span>     };
+</span></span><span style=display:flex><span> }
+</span></span></code></pre></div><p>We get the same error, except the list of expected tokens has shortened a bit.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-text data-lang=text><span style=display:flex><span>error: expected one of `:` or `|`, found `)`
+</span></span><span style=display:flex><span>   --&gt; src/lib.rs:215:35
+</span></span><span style=display:flex><span>    |
+</span></span><span style=display:flex><span>206 | /         macro_rules! match_self {
+</span></span><span style=display:flex><span>207 | |             ($callback:ident, fn $name:ident($self:pat)) =&gt; {
+</span></span><span style=display:flex><span>208 | |                 $callback!(fn $name($self));
+</span></span><span style=display:flex><span>    | |                 ---------------------------- in this macro invocation
+</span></span><span style=display:flex><span>209 | |             }
+</span></span><span style=display:flex><span>210 | |         }
+</span></span><span style=display:flex><span>    | |_________- in this expansion of `match_self!`
+</span></span><span style=display:flex><span>211 |
+</span></span><span style=display:flex><span>212 | /         macro_rules! callback {
+</span></span><span style=display:flex><span>213 | |             (fn $name:ident($self:pat)) =&gt; {
+</span></span><span style=display:flex><span>214 | |                 impl Foo {
+</span></span><span style=display:flex><span>215 | |                     fn $name($self) {}
+</span></span><span style=display:flex><span>    | |                                   ^
+</span></span><span style=display:flex><span>216 | |                 }
+</span></span><span style=display:flex><span>217 | |             };
+</span></span><span style=display:flex><span>218 | |         }
+</span></span><span style=display:flex><span>    | |_________- in this expansion of `callback!`
+</span></span><span style=display:flex><span>...
+</span></span><span style=display:flex><span>222 |           match_self!(callback, fn foo(&amp;self));
+</span></span><span style=display:flex><span>    |           ------------------------------------- in this macro invocation
+</span></span></code></pre></div><p>Another option is to combine the <code>$(...)?</code> syntax for matching something zero or
+one times with the fact that <code>self</code> is a valid Rust identifier.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-diff data-lang=diff><span style=display:flex><span> macro_rules! match_self {
+</span></span><span style=display:flex><span><span style=color:#f92672>-    ($callback:ident, fn $name:ident($self:pat)) =&gt; {
+</span></span></span><span style=display:flex><span><span style=color:#f92672></span><span style=color:#a6e22e>+    ($callback:ident, fn $name:ident(&amp; $(mut)? $self:ident)) =&gt; {
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span>         $callback!(fn $name(&amp; $self));
+</span></span><span style=display:flex><span>     }
+</span></span><span style=display:flex><span> }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span> macro_rules! callback {
+</span></span><span style=display:flex><span><span style=color:#f92672>-    (fn $name:ident($self:pat)) =&gt; {
+</span></span></span><span style=display:flex><span><span style=color:#f92672></span><span style=color:#a6e22e>+    (fn $name:ident(&amp; $(mut)? $self:ident)) =&gt; {
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span>         impl Foo {
+</span></span><span style=display:flex><span>             fn $name($self) {}
+</span></span><span style=display:flex><span>         }
+</span></span><span style=display:flex><span>     };
+</span></span><span style=display:flex><span> }
+</span></span></code></pre></div><p>Our <code>match_self!(callback, fn foo(&amp;self))</code> example even compiles and will
+define a <code>foo</code> method on <code>Foo</code>. However, if you look carefully you&rsquo;ll see the
+new <code>foo()</code> method silently drops the leading <code>&</code> or <code>&amp;mut</code> and takes <code>self</code>
+by value.</p><p>You can verify this by trying to store <code>Foo::foo</code> in a variable expecting
+<code>fn(&amp;Foo)</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#66d9ef>let</span> _: <span style=color:#a6e22e>fn</span>(<span style=color:#f92672>&amp;</span>Foo) <span style=color:#f92672>=</span> Foo::foo;
+</span></span></code></pre></div><p>The compiler throws up a <em>&ldquo;mismatched types&rdquo;</em> compile error upon seeing this.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-text data-lang=text><span style=display:flex><span>error[E0308]: mismatched types
+</span></span><span style=display:flex><span>   --&gt; src/lib.rs:224:27
+</span></span><span style=display:flex><span>    |
+</span></span><span style=display:flex><span>224 |         let _: fn(&amp;Foo) = Foo::foo;
+</span></span><span style=display:flex><span>    |                --------   ^^^^^^^^
+</span></span><span style=display:flex><span>    |                |
+</span></span><span style=display:flex><span>    |                expected due to this
+</span></span><span style=display:flex><span>    |
+</span></span><span style=display:flex><span>    = note: expected fn pointer `for&lt;&#39;r&gt; fn(&amp;&#39;r tests::match_on_self::Foo)`
+</span></span><span style=display:flex><span>                  found fn item `fn(tests::match_on_self::Foo) {tests::match_on_self::Foo::foo}`
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>error: aborting due to previous error
+</span></span></code></pre></div><p>Even if we <em>did</em> write our callback to not drop the leading <code>&</code>, we&rsquo;d run
+into issues trying to pass the optional <code>mut</code> through to the callback.
+Because we can&rsquo;t store <code>mut</code> in a macro variable (you can&rsquo;t bind to literal
+tokens and using something like <code>$mut:ident</code> would match the <code>self</code> token
+when <code>mut</code> isn&rsquo;t present) we don&rsquo;t really have a way to refer to it or pass
+the token around any more.</p><div class="notices tip"><p><a href=https://danielkeep.github.io/tlborm/book/mbe-min-non-identifier-identifiers.html class=external-link target=_blank rel=noopener>Non-Identifier Identifiers</a> from <em>The Little Book of Rust Macros</em>
+explains in a lot more detail what we&rsquo;re seeing here, so I&rsquo;d recommend
+checking out that page if you want to know more.</p></div><p>After banging my head against a wall for half an hour or so I gave up on
+trying to match both <code>&amp;self</code> and <code>&amp;mut self</code> methods in a single pattern and
+decided to take advantage of another tool that I have at my disposal&mldr; My
+editor&rsquo;s ability to copy and paste 🙃</p><p>My solution to making <code>visit_members</code> and its <code>callback</code> handle both <code>&amp;self</code>
+and <code>&amp;mut self</code> is to just copy the entire pattern and make the second version
+handle the <code>mut</code> token.</p><p>That way, when the TT muncher tries to match the next function signature
+it&rsquo;ll be able to take one branch for <code>&amp;self</code> methods and another for <code>&amp;mut self</code>. The callback will also need to use the same trick because it needs to
+somehow emit <code>&amp;self</code> or <code>&amp;mut self</code> as the receiver for each generated
+method.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-diff data-lang=diff><span style=display:flex><span> // src/lib.rs
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span> macro_rules! visit_members {
+</span></span><span style=display:flex><span>     (
+</span></span><span style=display:flex><span>         $callback:ident;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>         $( #[$attr:meta] )*
+</span></span><span style=display:flex><span>         fn $name:ident(&amp;self $(, $arg_name:ident : $arg_ty:ty )*) $(-&gt; $ret:ty)?;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>         $( $rest:tt )*
+</span></span><span style=display:flex><span>     ) =&gt; {
+</span></span><span style=display:flex><span>         $callback!(
+</span></span><span style=display:flex><span>             $( #[$attr] )*
+</span></span><span style=display:flex><span>             fn $name(&amp;self $(, $arg_name : $arg_ty )*) $(-&gt; $ret)?
+</span></span><span style=display:flex><span>         );
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>         visit_members! { $callback; $($rest)* }
+</span></span><span style=display:flex><span>     };
+</span></span><span style=display:flex><span><span style=color:#a6e22e>+    (
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        $callback:ident;
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>+        $( #[$attr:meta] )*
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        fn $name:ident(&amp;mut self $(, $arg_name:ident : $arg_ty:ty )*) $(-&gt; $ret:ty)?;
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>+        $( $rest:tt )*
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+    ) =&gt; {
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        $callback!(
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+            $( #[$attr] )*
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+            fn $name(&amp;mut self $(, $arg_name : $arg_ty )*) $(-&gt; $ret)?
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        );
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>+        visit_members! { $callback; $($rest)* }
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+    };
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span>     ($callback:ident;) =&gt; {};
+</span></span><span style=display:flex><span> }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span> macro_rules! call_via_deref {
+</span></span><span style=display:flex><span>     (
+</span></span><span style=display:flex><span>         $( #[$attr:meta] )*
+</span></span><span style=display:flex><span>         fn $name:ident(&amp;self $(, $arg_name:ident : $arg_ty:ty )*) $(-&gt; $ret:ty)?
+</span></span><span style=display:flex><span>     ) =&gt; {
+</span></span><span style=display:flex><span>         fn $name(&amp;self $(, $arg_name : $arg_ty )*) $(-&gt; $ret)? {
+</span></span><span style=display:flex><span>             (**self).$name( $($arg_name),* )
+</span></span><span style=display:flex><span>         }
+</span></span><span style=display:flex><span>     };
+</span></span><span style=display:flex><span><span style=color:#a6e22e>+    (
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        $( #[$attr:meta] )*
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        fn $name:ident(&amp;mut self $(, $arg_name:ident : $arg_ty:ty )*) $(-&gt; $ret:ty)?
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+    ) =&gt; {
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        fn $name(&amp;mut self $(, $arg_name : $arg_ty )*) $(-&gt; $ret)? {
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+            (**self).$name( $($arg_name),* )
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        }
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+    };
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span> }
+</span></span></code></pre></div><p>Amongst all that copy-pasta, you <em>might</em> even be able to spot the three
+letter change that was made to the second copy (<code>mut</code>).</p><div class="notices info"><p>If you know of an easy way to match both <code>&amp;self</code> and <code>&amp;mut self</code> methods,
+<em>please</em> let me know!</p><p>The solution I&rsquo;ve proposed here (i.e. copy/paste) far from elegant and you
+can already tell that someone will be cursing your name 6 months from now
+when they need to come in and make a minor change.</p></div><p>As ugly as it is&mldr; our tests show that it works.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle_mutable_and_immutable_self</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>trait</span> Foo {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>u32</span>;
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>execute</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, expression: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    impl_trait_for_boxed! {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>trait</span> Foo {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>u32</span>;
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>execute</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, expression: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>);
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=deciding-which-impl-blocks-to-generate>Deciding Which Impl Blocks to Generate
+<a class=heading-link href=#deciding-which-impl-blocks-to-generate><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now we&rsquo;re able to handle both mutable and immutable methods we run into an
+interesting problem.</p><p>Let&rsquo;s create a variant of the <code>full_implementation</code> test which has a <code>&amp;mut self</code>
+method.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>full_implementation_with_mut_methods</span>() {
+</span></span><span style=display:flex><span>    trait_with_dyn_impls! {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>trait</span> Foo {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>u32</span>;
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>execute</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, expression: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>);
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>assert_is_foo</span><span style=color:#f92672>&lt;</span>F: <span style=color:#a6e22e>Foo</span><span style=color:#f92672>&gt;</span>() {}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    assert_is_foo::<span style=color:#f92672>&lt;&amp;</span><span style=color:#66d9ef>dyn</span> Foo<span style=color:#f92672>&gt;</span>();
+</span></span><span style=display:flex><span>    assert_is_foo::<span style=color:#f92672>&lt;</span>Box<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>dyn</span> Foo<span style=color:#f92672>&gt;&gt;</span>();
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>It&rsquo;s identical to <code>full_implementation</code>, except <code>execute()</code> takes <code>&amp;mut self</code>&mldr;
+and it fails to compile:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-text data-lang=text><span style=display:flex><span>error[E0596]: cannot borrow `**self` as mutable, as it is behind a `&amp;` reference
+</span></span><span style=display:flex><span>   --&gt; src/lib.rs:51:13
+</span></span><span style=display:flex><span>    |
+</span></span><span style=display:flex><span>2   |  / macro_rules! visit_members {
+</span></span><span style=display:flex><span>3   |  |     (
+</span></span><span style=display:flex><span>4   |  |         $callback:ident;
+</span></span><span style=display:flex><span>5   |  |
+</span></span><span style=display:flex><span>...    |
+</span></span><span style=display:flex><span>16  |  |         visit_members! { $callback; $($rest)* }
+</span></span><span style=display:flex><span>    |  |         --------------------------------------- in this macro invocation (#4)
+</span></span><span style=display:flex><span>...    |
+</span></span><span style=display:flex><span>26  | /|         $callback!(
+</span></span><span style=display:flex><span>27  | ||             $( #[$attr] )*
+</span></span><span style=display:flex><span>28  | ||             fn $name(&amp;mut self $(, $arg_name : $arg_ty )*) $(-&gt; $ret)?
+</span></span><span style=display:flex><span>29  | ||         );
+</span></span><span style=display:flex><span>    | ||__________- in this macro invocation (#5)
+</span></span><span style=display:flex><span>...    |
+</span></span><span style=display:flex><span>33  |  |     ($callback:ident;) =&gt; {};
+</span></span><span style=display:flex><span>34  |  | }
+</span></span><span style=display:flex><span>    |  | -
+</span></span><span style=display:flex><span>    |  | |
+</span></span><span style=display:flex><span>    |  |_in this expansion of `visit_members!` (#3)
+</span></span><span style=display:flex><span>    |    in this expansion of `visit_members!` (#4)
+</span></span><span style=display:flex><span>...
+</span></span><span style=display:flex><span>37  | /  macro_rules! call_via_deref {
+</span></span><span style=display:flex><span>38  | |      (
+</span></span><span style=display:flex><span>39  | |          $( #[$attr:meta] )*
+</span></span><span style=display:flex><span>40  | |          fn $name:ident(&amp;self $(, $arg_name:ident : $arg_ty:ty )*) $(-&gt; $ret:ty)?
+</span></span><span style=display:flex><span>...   |
+</span></span><span style=display:flex><span>51  | |              (**self).$name( $($arg_name),* )
+</span></span><span style=display:flex><span>    | |              ^^^^^^^^
+</span></span><span style=display:flex><span>52  | |          }
+</span></span><span style=display:flex><span>53  | |      };
+</span></span><span style=display:flex><span>54  | |  }
+</span></span><span style=display:flex><span>    | |__- in this expansion of `call_via_deref!` (#5)
+</span></span></code></pre></div><p>It&rsquo;s a little hard to see, but if you look at the error text we get a
+familiar message: <em>&ldquo;cannot borrow <code>**self</code> as mutable, as it is behind a <code>&</code>
+reference&rdquo;</em>.</p><p>This isn&rsquo;t a macro problem, the borrow checker is complaining about one of our
+generated methods!</p><p>Other than the error text, the rest of this compile error is kinda useless.
+There&rsquo;s a problem with our generated code, and because generated code doesn&rsquo;t
+actually exist in the source file (i.e. <code>src/lib.rs</code>), <code>rustc</code> can&rsquo;t point at
+a specific line to tell the programmer where the problem is.</p><p>The <a href=https://crates.io/crates/cargo-expand class=external-link target=_blank rel=noopener><code>cargo expand</code></a> tool is designed for just these occasions.
+Its entire purpose is to ask the compiler to expand all macros and display the
+expanded source code to the user.</p><p>Here&rsquo;s what <code>full_implementation_with_mut_methods</code> expands to:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>full_implementation_with_mut_methods</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>trait</span> Foo {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>u32</span>;
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>execute</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, expression: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;f</span>, F: <span style=color:#a6e22e>Foo</span> <span style=color:#f92672>+</span> <span style=color:#f92672>?</span>Sized<span style=color:#f92672>&gt;</span> Foo <span style=color:#66d9ef>for</span> <span style=color:#f92672>&amp;</span><span style=color:#a6e22e>&#39;f</span> F {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>u32</span> {
+</span></span><span style=display:flex><span>            (<span style=color:#f92672>**</span>self).get_x()
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>execute</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, expression: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>) {
+</span></span><span style=display:flex><span>            (<span style=color:#f92672>**</span>self).execute(expression)
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;f</span>, F: <span style=color:#a6e22e>Foo</span> <span style=color:#f92672>+</span> <span style=color:#f92672>?</span>Sized<span style=color:#f92672>&gt;</span> Foo <span style=color:#66d9ef>for</span> <span style=color:#f92672>&amp;</span><span style=color:#a6e22e>&#39;f</span> <span style=color:#66d9ef>mut</span> F {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>u32</span> {
+</span></span><span style=display:flex><span>            (<span style=color:#f92672>**</span>self).get_x()
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>execute</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, expression: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>) {
+</span></span><span style=display:flex><span>            (<span style=color:#f92672>**</span>self).execute(expression)
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>F: <span style=color:#a6e22e>Foo</span> <span style=color:#f92672>+</span> <span style=color:#f92672>?</span>Sized<span style=color:#f92672>&gt;</span> Foo <span style=color:#66d9ef>for</span> Box<span style=color:#f92672>&lt;</span>F<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_x</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>u32</span> {
+</span></span><span style=display:flex><span>            (<span style=color:#f92672>**</span>self).get_x()
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>execute</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, expression: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>) {
+</span></span><span style=display:flex><span>            (<span style=color:#f92672>**</span>self).execute(expression)
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>assert_is_foo</span><span style=color:#f92672>&lt;</span>F: <span style=color:#a6e22e>Foo</span><span style=color:#f92672>&gt;</span>() {}
+</span></span><span style=display:flex><span>    assert_is_foo::<span style=color:#f92672>&lt;&amp;</span><span style=color:#66d9ef>dyn</span> Foo<span style=color:#f92672>&gt;</span>();
+</span></span><span style=display:flex><span>    assert_is_foo::<span style=color:#f92672>&lt;</span>Box<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>dyn</span> Foo<span style=color:#f92672>&gt;&gt;</span>();
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The output is a little dense, but look at the <code>&'f F</code> impl. We&rsquo;ve got an
+immutable reference to some <code>F: Foo</code> and are invoking a method which takes
+<code>&amp;mut self</code>.</p><p>This is a pretty trivial borrowing error and indicates there&rsquo;s a bug in our
+<code>trait_with_dyn_impls!()</code> macro. We shouldn&rsquo;t be emitting the <code>&'f F</code> impl if
+<em>any</em> trait method takes <code>&amp;mut self</code>&mldr; but how do you make these sorts of
+decisions, its not like <code>macro_rules</code> macros let you use <code>if</code>-statements!</p><p>The answer has been under our noses this entire time. Pattern matching is just
+a fancy chain of <code>if-else</code> statements, and we can use callbacks to invoke
+caller-defined behaviour depending on which branch matches, and a TT muncher to
+scan through the input tokens one at a time until we find <code>&amp;mut self</code>.</p><p>If you are familiar with functional programming, this is sometimes called
+<a href=https://en.wikipedia.org/wiki/Continuation-passing_style class=external-link target=_blank rel=noopener><em>Continuation Passing Style</em></a> (CPS).</p><p>Here&rsquo;s my attempt.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Scans through a stream of tokens looking for `&amp;mut self`. If nothing is
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// found a callback is invoked.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>macro_rules<span style=color:#f92672>!</span> search_for_mut_self {
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// if we see `&amp;mut self`, stop and don&#39;t invoke the callback
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    (<span style=color:#75715e>$callback</span>:<span style=color:#a6e22e>ident</span><span style=color:#f92672>!</span>(<span style=color:#75715e>$($callback_args</span>:<span style=color:#a6e22e>tt</span>)<span style=color:#f92672>*</span>); <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self <span style=color:#75715e>$($rest</span>:<span style=color:#a6e22e>tt</span>)<span style=color:#f92672>*</span>) <span style=color:#f92672>=&gt;</span> { };
+</span></span><span style=display:flex><span>    (<span style=color:#75715e>$callback</span>:<span style=color:#a6e22e>ident</span><span style=color:#f92672>!</span>(<span style=color:#75715e>$($callback_args</span>:<span style=color:#a6e22e>tt</span>)<span style=color:#f92672>*</span>); (<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self <span style=color:#75715e>$($other_args</span>:<span style=color:#a6e22e>tt</span>)<span style=color:#f92672>*</span>) <span style=color:#75715e>$($rest</span>:<span style=color:#a6e22e>tt</span>)<span style=color:#f92672>*</span>) <span style=color:#f92672>=&gt;</span> { };
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// haven&#39;t found it yet, drop the first item and keep searching
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    (<span style=color:#75715e>$callback</span>:<span style=color:#a6e22e>ident</span><span style=color:#f92672>!</span>(<span style=color:#75715e>$($callback_args</span>:<span style=color:#a6e22e>tt</span>)<span style=color:#f92672>*</span>); <span style=color:#75715e>$_head</span>:<span style=color:#a6e22e>tt</span> <span style=color:#75715e>$($tokens</span>:<span style=color:#a6e22e>tt</span>)<span style=color:#f92672>*</span>) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>        search_for_mut_self!(<span style=color:#75715e>$callback</span><span style=color:#f92672>!</span>( <span style=color:#75715e>$($callback_args</span>)<span style=color:#f92672>*</span> ); <span style=color:#75715e>$($tokens</span>)<span style=color:#f92672>*</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// we completed without hitting `&amp;mut self`, invoke the callback and exit
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    (<span style=color:#75715e>$callback</span>:<span style=color:#a6e22e>ident</span><span style=color:#f92672>!</span>(<span style=color:#75715e>$($callback_args</span>:<span style=color:#a6e22e>tt</span>)<span style=color:#f92672>*</span>);) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>$callback</span><span style=color:#f92672>!</span>( <span style=color:#75715e>$($callback_args</span>)<span style=color:#f92672>*</span> )
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>I also wrote up a couple tests.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>dont_invoke_the_callback_when_mut_self_found</span>() {
+</span></span><span style=display:flex><span>    search_for_mut_self! {
+</span></span><span style=display:flex><span>        compile_error!(<span style=color:#e6db74>&#34;This callback shouldn&#39;t have been invoked&#34;</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self asdf
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle_mut_self_inside_parens</span>() {
+</span></span><span style=display:flex><span>    search_for_mut_self! {
+</span></span><span style=display:flex><span>        compile_error!(<span style=color:#e6db74>&#34;This callback shouldn&#39;t have been invoked&#34;</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>foo</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>invoke_the_callback_if_search_for_mut_self_found</span>() {
+</span></span><span style=display:flex><span>    macro_rules<span style=color:#f92672>!</span> declare_struct {
+</span></span><span style=display:flex><span>        (<span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span>) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>struct</span> <span style=color:#75715e>$name</span>;
+</span></span><span style=display:flex><span>        };
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    search_for_mut_self! {
+</span></span><span style=display:flex><span>        declare_struct!(Foo);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        blah blah <span style=color:#f92672>..</span>. blah
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// we should have declared Foo as a unit struct
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> _: <span style=color:#a6e22e>Foo</span>;
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>This gives us what we need to conditionally call <code>impl_trait_for_ref!()</code>. By
+letting the caller provide arguments for the callback, we can copy the old
+<code>impl_trait_for_ref!()</code> invocation across verbatim.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-diff data-lang=diff><span style=display:flex><span> macro_rules! trait_with_dyn_impls {
+</span></span><span style=display:flex><span>     (
+</span></span><span style=display:flex><span>         $( #[$attr:meta] )*
+</span></span><span style=display:flex><span>         $vis:vis trait $name:ident { $( $body:tt )* }
+</span></span><span style=display:flex><span>     ) =&gt; {
+</span></span><span style=display:flex><span>         // emit the trait declaration
+</span></span><span style=display:flex><span>         $( #[$attr] )*
+</span></span><span style=display:flex><span>         $vis trait $name { $( $body )* }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#f92672>-        impl_trait_for_ref! {
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-            $( #[$attr] )*
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-            $vis trait $name { $( $body )* }
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-        }
+</span></span></span><span style=display:flex><span><span style=color:#f92672></span>         impl_trait_for_mut_ref! {
+</span></span><span style=display:flex><span>             $( #[$attr] )*
+</span></span><span style=display:flex><span>             $vis trait $name { $( $body )* }
+</span></span><span style=display:flex><span>         }
+</span></span><span style=display:flex><span>         impl_trait_for_boxed! {
+</span></span><span style=display:flex><span>             $( #[$attr] )*
+</span></span><span style=display:flex><span>             $vis trait $name { $( $body )* }
+</span></span><span style=display:flex><span>         }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>+        // we can only implement the trait for `&amp;T` if there are NO `&amp;mut self`
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        // methods
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        search_for_mut_self! {
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+            impl_trait_for_ref!( $( #[$attr] )* $vis trait $name { $( $body )* } );
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>+            $( $body )*
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        }
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+    };
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span> }
+</span></span></code></pre></div><h2 id=conclusions>Conclusions
+<a class=heading-link href=#conclusions><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>It&rsquo;s been a long journey but this crate now lets us do everything I wanted so
+I think we can finally call it done 🙂</p><p>Some tips:</p><ul><li>Tests are great for iterating and providing examples later on</li><li>Start as simple as possible and take tiny steps</li><li>Make an effort to keep things simple and not fit all the logic into a single
+macro</li><li>Sometimes you&rsquo;ll need to think outside the box or use concepts from different
+paradigms/languages (e.g. CPS)</li></ul><p>As a bonus, unlike a lot of complex macros I&rsquo;ve written in the past, I have a
+fairly high degree of confidence in its implementation because of the
+comprehensive test suite we built along the way. It really makes a difference
+in demystifying how the macro works.</p></div><footer></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>

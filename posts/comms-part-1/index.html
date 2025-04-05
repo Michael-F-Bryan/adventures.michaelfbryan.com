@@ -1,0 +1,317 @@
+<!doctype html><html lang=en><head><title>The Communications System: Part 1 · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="
+  Prelude
+  
+    
+    Link to heading
+  
+
+The Communications system is arguably one of the most important parts of
+our simulator. After all, it&rsquo;s kinda hard to debug a program when you can&rsquo;t
+ask it why something isn&rsquo;t working.
+The user will interact with our simulated motion controller via a single
+Serial Port, which we&rsquo;ll be modelling as a simple thing which sends and
+receives bytes. Serial ports are a fairly old technology, and have several
+drawbacks compared to the Ethernet and TCP protocols that most programmers
+are familiar with."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="The Communications System: Part 1"><meta name=twitter:description content="Prelude Link to heading The Communications system is arguably one of the most important parts of our simulator. After all, it’s kinda hard to debug a program when you can’t ask it why something isn’t working.
+The user will interact with our simulated motion controller via a single Serial Port, which we’ll be modelling as a simple thing which sends and receives bytes. Serial ports are a fairly old technology, and have several drawbacks compared to the Ethernet and TCP protocols that most programmers are familiar with."><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/comms-part-1/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="The Communications System: Part 1"><meta property="og:description" content="Prelude Link to heading The Communications system is arguably one of the most important parts of our simulator. After all, it’s kinda hard to debug a program when you can’t ask it why something isn’t working.
+The user will interact with our simulated motion controller via a single Serial Port, which we’ll be modelling as a simple thing which sends and receives bytes. Serial ports are a fairly old technology, and have several drawbacks compared to the Ethernet and TCP protocols that most programmers are familiar with."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2019-09-06T23:00:00+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Adventures-in-Motion-Control"><meta property="article:tag" content="Rust"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/comms-part-1/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/comms-part-1/>The Communications System: Part 1</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2019-09-06T23:00:00+08:00>September 6, 2019
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+9-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/adventures-in-motion-control/>Adventures-in-Motion-Control</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/rust/>Rust</a></span></div></div></header><div class=post-content><h2 id=prelude>Prelude
+<a class=heading-link href=#prelude><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>The <em>Communications</em> system is arguably one of the most important parts of
+our simulator. After all, it&rsquo;s kinda hard to debug a program when you can&rsquo;t
+ask it why something isn&rsquo;t working.</p><p>The user will interact with our simulated motion controller via a single
+<em>Serial Port</em>, which we&rsquo;ll be modelling as a simple thing which sends and
+receives bytes. Serial ports are a fairly old technology, and have several
+drawbacks compared to the Ethernet and TCP protocols that most programmers
+are familiar with.</p><ul><li>There are no &ldquo;packets&rdquo; (i.e. bring your own <a href=https://en.wikipedia.org/wiki/Frame_%28networking%29 class=external-link target=_blank rel=noopener>frames</a>)</li><li>There&rsquo;s no guarantee the other side has received a message (i.e. bring your
+own <a href=https://en.wikipedia.org/wiki/Acknowledgement_%28data_networks%29 class=external-link target=_blank rel=noopener>ACKs</a>) - or even that there&rsquo;s anyone on the other end!</li><li>If you receive data, there&rsquo;s no guarantee it wasn&rsquo;t garbled during
+transmission (i.e. bring your own <a href=https://en.wikipedia.org/wiki/Error_detection_and_correction class=external-link target=_blank rel=noopener>error detection and correction</a>)</li></ul><p>This all combines to make the <em>Serial</em> protocol an <a href=https://en.wikipedia.org/wiki/Reliability_%28computer_networking%29 class=external-link target=_blank rel=noopener>unreliable</a>
+one. Reliable protocols can be built on top of unreliable ones, we just need to
+be smarter.</p><p>For simplicity, we&rsquo;ll design the communications system using request-response
+pairs. This means:</p><ul><li>For every message sent to the simulator, there will be a corresponding
+response message<ul><li>This implies that no response means the request wasn&rsquo;t received and should
+be resent (or ignored if non-critical)</li></ul></li><li>Responses will always be sent in the order their requests arrived in</li></ul><h2 id=building-reliability>Building Reliability
+<a class=heading-link href=#building-reliability><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>The way we&rsquo;ll be adding reliability to the underlying error-prone stream of
+bytes received from the <em>Serial</em> connection is by using a protocol called the
+<em>Advanced Navigation Packet Protocol</em> (ANPP). This is a handly little protocol
+*published by <a href=https://www.advancednavigation.com/ class=external-link target=_blank rel=noopener><em>Advanced Navigation</em></a> under the MIT license, with an
+<a href=https://crates.io/crates/anpp class=external-link target=_blank rel=noopener>open-source Rust port</a>.</p><p>Each message sent using ANPP will be laid out as:</p><table><thead><tr><th>Offset</th><th>Size</th><th>Description</th></tr></thead><tbody><tr><td><code>0x0</code></td><td>1</td><td>Packet ID</td></tr><tr><td><code>0x1</code></td><td>1</td><td>Length</td></tr><tr><td><code>0x2</code></td><td>2</td><td>CRC-16 checksum</td></tr><tr><td><code>0x4</code></td><td>1</td><td>Header check-byte (XOR of bytes <code>0..4</code>)</td></tr><tr><td><code>0x5</code></td><td>&lt; 256</td><td>Body</td></tr></tbody></table><p>This lets us receive bytes one-by-one over the <em>Serial</em> port, then we can
+periodically scan through the received bytes looking for a valid header
+(sequence of 5 bytes which equal <code>0</code> when XOR&rsquo;d together). From there we can
+identify the message body (the next <code>Length</code> bytes) and identify transmission
+errors using the CRC-16 checksum.</p><p>ANPP gives us a nice way of detecting when a message has been recieved
+successfully, but we also need a higher-level mechanism for detecting
+transmission failures and correcting them.</p><p>The easiest way to do this is called <a href=https://en.wikipedia.org/wiki/Error_detection_and_correction#Automatic_repeat_request_%28ARQ%29 class=external-link target=_blank rel=noopener>Automatic Repeat reQuest</a>, i.e. tell
+the sender to resend because an error was detected, and/or automatically resend
+the previous message if it hasn&rsquo;t been answered after X seconds.</p><h2 id=sending-data-to-the-communications-system>Sending Data to the Communications System
+<a class=heading-link href=#sending-data-to-the-communications-system><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Data can be received at any time in a normal microcontroller. The typical way to
+handle this is by either frequently polling the pins wired up to our serial
+port, or to configure the microcontroller to automatically invoke a callback
+whenever a byte is received.</p><p>In this case the interrupt approach seems quite natural due to JavaScript&rsquo;s
+callback-based nature.</p><p>All bytes the simulator receives will need to be stored in a buffer until the
+next tick.</p><p>We can model the way data is passed to the <code>Communications</code> system by giving
+the new <code>comms</code> crate a <code>Rx</code> trait:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// comms/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// The receiving end of a *Serial Connection*.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> Rx {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Get all bytes received by the simulator since the last tick.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// # Note to Implementors
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// To prevent reading data twice, this buffer should be cleared after every
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// tick.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>receive</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>&amp;</span>[<span style=color:#66d9ef>u8</span>];
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We&rsquo;ll also give the WASM code a way to write data to a buffer owned by our
+<code>App</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// sim/src/app.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[wasm_bindgen]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> App {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_data_received</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, data: <span style=color:#66d9ef>&amp;</span>[<span style=color:#66d9ef>u8</span>]) {
+</span></span><span style=display:flex><span>        self.inputs.on_data_received(data);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// sim/src/inputs.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Clone, Default)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Inputs</span> {
+</span></span><span style=display:flex><span>    clock: <span style=color:#a6e22e>PerformanceClock</span>,
+</span></span><span style=display:flex><span>    last_tick: <span style=color:#a6e22e>Cell</span><span style=color:#f92672>&lt;</span>Duration<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    rx_buffer: <span style=color:#a6e22e>ArrayVec</span><span style=color:#f92672>&lt;</span>[<span style=color:#66d9ef>u8</span>; <span style=color:#ae81ff>256</span>]<span style=color:#f92672>&gt;</span>, <span style=color:#75715e>// &lt;-- new field!
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Inputs {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_data_received</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, data: <span style=color:#66d9ef>&amp;</span>[<span style=color:#66d9ef>u8</span>]) {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// writes up to `capacity` bytes to the buffer. Extra items are
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#75715e>// silently dropped on the floor.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        self.rx_buffer.extend(data.into_iter().copied());
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices note"><p>In most microcontrollers an <em>Interrupt Service Routine</em> is a function that
+takes no arguments and returns nothing (<code>fn()</code>), meaning the only way to send
+data from the ISR to the main application is via <code>static</code> memory.</p><p>This is more of an implementation detail than anything else. For our purposes
+using a method on <code>App</code> makes things simpler and easier to test, so we&rsquo;ll do
+that. At the end of the day, thanks to the <code>Rx</code> trair our <code>Communications</code>
+system doesn&rsquo;t really care <em>where</em> bytes come from, just that we can give it
+a buffer of recently received data.</p></div><h2 id=decoding-received-data>Decoding Received Data
+<a class=heading-link href=#decoding-received-data><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now we&rsquo;ve got a way to send data between the frontend and the backend, lets
+start coding the <code>Communications</code> system which is in charge of decoding packets.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// comms/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> aimc_hal::System;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> anpp::Decoder;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Default, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Communications</span> {
+</span></span><span style=display:flex><span>    decoder: <span style=color:#a6e22e>Decoder</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>I: <span style=color:#a6e22e>Rx</span>, O<span style=color:#f92672>&gt;</span> System<span style=color:#f92672>&lt;</span>I, O<span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> Communications {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>poll</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, inputs: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>I</span>, outputs: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> O) {
+</span></span><span style=display:flex><span>        unimplemented!();
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The <code>poll()</code> method for <code>Communications</code> is really simple. You copy data from
+<code>inputs.received()</code> into <code>self.decoder</code> (using
+<a href=https://docs.rs/anpp/1.0.1/anpp/struct.Decoder.html#method.push_data class=external-link target=_blank rel=noopener><code>Decoder::push_data()</code></a>), then keep calling
+<a href=https://docs.rs/anpp/1.0.1/anpp/struct.Decoder.html#method.decode class=external-link target=_blank rel=noopener><code>Decoder::decode()</code></a> to read packets until it returns a
+<a href=https://docs.rs/anpp/1.0.1/anpp/errors/enum.DecodeError.html#variant.RequiresMoreData class=external-link target=_blank rel=noopener><code>DecodeError::RequiresMoreData</code></a>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// comms/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>I: <span style=color:#a6e22e>Rx</span>, O<span style=color:#f92672>&gt;</span> System<span style=color:#f92672>&lt;</span>I, O<span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> Communications {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>poll</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, inputs: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>I</span>, _outputs: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> O) {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// A: how do we want to handle overflows?
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>let</span> _ <span style=color:#f92672>=</span> self.decoder.push_data(inputs.receive());
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>loop</span> {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>match</span> self.decoder.decode() {
+</span></span><span style=display:flex><span>                Ok(pkt) <span style=color:#f92672>=&gt;</span> unimplemented!(<span style=color:#e6db74>&#34;B: What do we do now?&#34;</span>),
+</span></span><span style=display:flex><span>                Err(DecodeError::InvalidCRC) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                    unimplemented!(<span style=color:#e6db74>&#34;C: How do we handle corrupted packets?&#34;</span>)
+</span></span><span style=display:flex><span>                },
+</span></span><span style=display:flex><span>                Err(DecodeError::RequiresMoreData) <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>break</span>,
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>This looks fairly straightforward, but it&rsquo;s raised three questions:</p><ul><li><strong>A:</strong> how do we want to handle decoder buffer overflows? If we&rsquo;re
+receiving more data than we can process and can&rsquo;t increase the buffer size
+(buffers have a size defined at compile-time) then we need to drop data. The
+question then becomes whether to drop data already in the buffer, or drop
+data we haven&rsquo;t had a chance to look at yet?</li><li><strong>B:</strong> We&rsquo;ve got a valid packet&mldr; now what?</li><li><strong>C:</strong> Invalid CRCs indicate that a message was garbled in transit. Should we
+just ignore the error, or do we want to keep track of how many CRC errors
+we&rsquo;ve had and report it to the frontend at some point?</li></ul><p>For now, lets handle <strong>A</strong> by clearing the <code>Decoder</code> buffer. This lets us get
+rid of garbled data left over from previous <code>poll()</code>s and start with a clean
+slate.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// comms/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>I: <span style=color:#a6e22e>Rx</span>, O<span style=color:#f92672>&gt;</span> System<span style=color:#f92672>&lt;</span>I, O<span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> Communications {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>poll</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, inputs: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>I</span>, _outputs: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> O) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> received <span style=color:#f92672>=</span> inputs.receive();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> self.decoder.push_data(received).is_err() {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// we&#39;ve run out of space in the decoder buffer, clear out leftovers
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#75715e>// from previous runs and copy in as much new data as possible
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            self.decoder.clear();
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> len <span style=color:#f92672>=</span> core::cmp::min(
+</span></span><span style=display:flex><span>                received.len(),
+</span></span><span style=display:flex><span>                self.decoder.remaining_capacity(),
+</span></span><span style=display:flex><span>            );
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> _ <span style=color:#f92672>=</span> self.decoder.push_data(<span style=color:#f92672>&amp;</span>received[<span style=color:#f92672>..</span>len]);
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices tip"><p>Either way, this situation isn&rsquo;t ideal. We don&rsquo;t want to drop data at all, so
+ideally the frontend wouldn&rsquo;t send more data than the <code>Communications</code> system
+can handle.</p><p>This gives us an effective limit of
+<a href=https://docs.rs/anpp/1.0.1/anpp/struct.Decoder.html#associatedconstant.DEFAULT_DECODER_BUFFER_SIZE class=external-link target=_blank rel=noopener><code>anpp::Decoder::DEFAULT_DECODER_BUFFER_SIZE</code></a> (512 bytes) per
+<code>poll()</code> of the <code>Communications</code> system. Considering will be polling the
+simulator from <code>requestAnimationFrame()</code>, and <code>requestAnimationFrame()</code> only
+fires when the browser redraws (about 60Hz, or every 16ms), this limits the
+entire application to a maximum transfer rate of <code>512*60 = 30720</code> bytes per
+second.</p></div><p><strong>B</strong> is easy enough to solve. The <code>Communications</code> system is only concerned
+with the receiving and transmitting of messages, so it should let the rest of
+the application decide <em>how</em> a message should be handled and what to reply with.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// comms/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> MessageHandler {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle_message</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, msg: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Packet</span>) -&gt; Result<span style=color:#f92672>&lt;</span>Packet, CommsError<span style=color:#f92672>&gt;</span>;
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Copy, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>CommsError</span> {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The [`MessageHandler`] doesn&#39;t know how to handle the message.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    UnknownMessageType,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Now we can handle the message and send back a response.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// comms/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>I, T, M<span style=color:#f92672>&gt;</span> System<span style=color:#f92672>&lt;</span>I, Outputs<span style=color:#f92672>&lt;</span>T, M<span style=color:#f92672>&gt;&gt;</span> <span style=color:#66d9ef>for</span> Communications
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    I: <span style=color:#a6e22e>Rx</span>,
+</span></span><span style=display:flex><span>    T: <span style=color:#a6e22e>Tx</span>,
+</span></span><span style=display:flex><span>    M: <span style=color:#a6e22e>MessageHandler</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>poll</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, inputs: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>I</span>, outputs: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Outputs<span style=color:#f92672>&lt;</span>T, M<span style=color:#f92672>&gt;</span>) {
+</span></span><span style=display:flex><span>        <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>loop</span> {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>match</span> self.decoder.decode() {
+</span></span><span style=display:flex><span>                Ok(request) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                    <span style=color:#66d9ef>let</span> response <span style=color:#f92672>=</span> outputs
+</span></span><span style=display:flex><span>                        .message_handler
+</span></span><span style=display:flex><span>                        .handle_message(<span style=color:#f92672>&amp;</span>request)
+</span></span><span style=display:flex><span>                        .expect(<span style=color:#e6db74>&#34;Unhandled message&#34;</span>);
+</span></span><span style=display:flex><span>                    outputs.send(response);
+</span></span><span style=display:flex><span>                },
+</span></span><span style=display:flex><span>                <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// The receiving end of a *Serial Connection*.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> Rx {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Get all bytes received by the simulator since the last tick.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// # Note to Implementors
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// To prevent reading data twice, this buffer should be cleared after every
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// tick.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>receive</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>&amp;</span>[<span style=color:#66d9ef>u8</span>];
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// The transmitting end of a *Serial Connection*.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> Tx {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Queue some data to be sent to the frontend.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// There is no guarantee that the data will all be sent. This may happen if
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// the receiver isn&#39;t listening or they aren&#39;t able to receive at this
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// time.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>send</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, data: <span style=color:#66d9ef>&amp;</span>[<span style=color:#66d9ef>u8</span>]);
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Outputs</span><span style=color:#f92672>&lt;</span>T, M<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    message_handler: <span style=color:#a6e22e>M</span>,
+</span></span><span style=display:flex><span>    tx: <span style=color:#a6e22e>T</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T: <span style=color:#a6e22e>Tx</span>, M<span style=color:#f92672>&gt;</span> Outputs<span style=color:#f92672>&lt;</span>T, M<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>send</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, packet: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Packet</span>) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> buffer <span style=color:#f92672>=</span> [<span style=color:#ae81ff>0</span>; Packet::<span style=color:#66d9ef>MAX_PACKET_SIZE</span> <span style=color:#f92672>+</span> <span style=color:#ae81ff>5</span>];
+</span></span><span style=display:flex><span>        debug_assert!(buffer.len() <span style=color:#f92672>&gt;=</span> packet.total_length());
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> bytes_written <span style=color:#f92672>=</span> packet
+</span></span><span style=display:flex><span>            .write_to_buffer(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> buffer)
+</span></span><span style=display:flex><span>            .expect(<span style=color:#e6db74>&#34;our buffer should always be big enough&#34;</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        self.tx.send(<span style=color:#f92672>&amp;</span>buffer[<span style=color:#f92672>..</span>bytes_written]);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices note"><p>Later on we may want to deal with a <code>CommsError::UnknownMessageType</code> by sending
+back some sort of <em>&ldquo;Not Acknowledged&rdquo;</em> message, but for now we&rsquo;ll panic.</p></div><p>To represent the transfer side of a serial port we&rsquo;ll introduce a <code>Tx</code> trait.
+We <em>could</em> have merged <code>handle_message()</code> and <code>send()</code> into a single trait,
+but that wouldn&rsquo;t make logical sense. The <code>Tx</code> trait is implemented by some
+bit of hardware that connects to the outside world, while a <code>MessageHandler</code>
+is used to communicate with the rest of the application.</p><p>To make things more ergonomic, <code>Tx</code> and <code>MessageHandler</code> are implemented for
+mutable references. That lets a caller just pass in a mutable reference to
+existing types, i.e. <code>Outputs::new(&amp;mut some_tx, &amp;mut some_handler)</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// comms/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, T: <span style=color:#a6e22e>Tx</span><span style=color:#f92672>&gt;</span> Tx <span style=color:#66d9ef>for</span> <span style=color:#f92672>&amp;</span><span style=color:#a6e22e>&#39;a</span> <span style=color:#66d9ef>mut</span> T {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>send</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, data: <span style=color:#66d9ef>&amp;</span>[<span style=color:#66d9ef>u8</span>]) { (<span style=color:#f92672>*</span>self).send(data); }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, M: <span style=color:#a6e22e>MessageHandler</span><span style=color:#f92672>&gt;</span> MessageHandler <span style=color:#66d9ef>for</span> <span style=color:#f92672>&amp;</span><span style=color:#a6e22e>&#39;a</span> <span style=color:#66d9ef>mut</span> M {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle_message</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, msg: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Packet</span>) -&gt; Result<span style=color:#f92672>&lt;</span>Packet, CommsError<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        (<span style=color:#f92672>*</span>self).handle_message(msg)
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>To handle <strong>C</strong> (CRC errors), we&rsquo;ll give the <code>MessageHandler</code> a method that&rsquo;ll
+be called whenever a CRC error occurs. That way the component in charge of
+routing messages can note down how many errors have occurred within a single
+run.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// comms/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>I, T, M<span style=color:#f92672>&gt;</span> System<span style=color:#f92672>&lt;</span>I, Outputs<span style=color:#f92672>&lt;</span>T, M<span style=color:#f92672>&gt;&gt;</span> <span style=color:#66d9ef>for</span> Communications
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span> <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>poll</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, inputs: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>I</span>, outputs: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Outputs<span style=color:#f92672>&lt;</span>T, M<span style=color:#f92672>&gt;</span>) {
+</span></span><span style=display:flex><span>        <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>loop</span> {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>match</span> self.decoder.decode() {
+</span></span><span style=display:flex><span>                <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>                Err(DecodeError::InvalidCRC) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                    outputs.message_handler.on_crc_error()
+</span></span><span style=display:flex><span>                },
+</span></span><span style=display:flex><span>                <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> MessageHandler {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle_message</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, msg: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Packet</span>) -&gt; Result<span style=color:#f92672>&lt;</span>Packet, CommsError<span style=color:#f92672>&gt;</span>;
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Callback used to notify the application whenever a CRC error occurs.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_crc_error</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) {}
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=the-next-step>The Next Step
+<a class=heading-link href=#the-next-step><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>We&rsquo;ve now set things up so we can receive input from the frontend and decode the
+data into raw <code>Packet</code>s, the next step is to start defining the various messages
+our system will use and wire up a <code>MessageHandler</code>.</p></div><footer></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>

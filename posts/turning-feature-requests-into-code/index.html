@@ -1,0 +1,209 @@
+<!doctype html><html lang=en><head><title>How I Translate Feature Requests into Code · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="As part of my previous job I worked on a CAD/CAM package, and a very common
+task would be to take a vague feature description, rephrase it as a more
+formal software problem, then use computational geometry algorithms to turn
+it into code which can be integrated into the overall application.
+I eventually got quite good at this, so I&rsquo;m going to write down the system I
+came up with. This process works especially well for larger features which
+add new functionality with minimal coupling to existing code."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="How I Translate Feature Requests into Code"><meta name=twitter:description content="As part of my previous job I worked on a CAD/CAM package, and a very common task would be to take a vague feature description, rephrase it as a more formal software problem, then use computational geometry algorithms to turn it into code which can be integrated into the overall application.
+I eventually got quite good at this, so I’m going to write down the system I came up with. This process works especially well for larger features which add new functionality with minimal coupling to existing code."><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/turning-feature-requests-into-code/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="How I Translate Feature Requests into Code"><meta property="og:description" content="As part of my previous job I worked on a CAD/CAM package, and a very common task would be to take a vague feature description, rephrase it as a more formal software problem, then use computational geometry algorithms to turn it into code which can be integrated into the overall application.
+I eventually got quite good at this, so I’m going to write down the system I came up with. This process works especially well for larger features which add new functionality with minimal coupling to existing code."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2020-12-02T16:10:00+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Architecture"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/turning-feature-requests-into-code/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/turning-feature-requests-into-code/>How I Translate Feature Requests into Code</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2020-12-02T16:10:00+08:00>December 2, 2020
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+15-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/architecture/>Architecture</a></span></div></div></header><div class=post-content><p>As part of my previous job I worked on a CAD/CAM package, and a very common
+task would be to take a vague feature description, rephrase it as a more
+formal software problem, then use computational geometry algorithms to turn
+it into code which can be integrated into the overall application.</p><p>I eventually got quite good at this, so I&rsquo;m going to write down the system I
+came up with. This process works especially well for larger features which
+add new functionality with minimal coupling to existing code.</p><div class="notices note"><p>If you found this useful or spotted a bug, let me know on the blog&rsquo;s
+<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com class=external-link target=_blank rel=noopener>issue tracker</a>!</p></div><h2 id=step-1-research>Step 1: Research
+<a class=heading-link href=#step-1-research><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>While you <em>can</em> dive into the code immediately, a lot of the time creating your
+own solution from scratch will lead to an implementation with logic/design
+flaws.</p><p>This is especially the case when you are working on things requiring complex
+algorithms or mathematical concepts.</p><h3 id=understanding-the-problem>Understanding the Problem
+<a class=heading-link href=#understanding-the-problem><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>Often the problem you are given won&rsquo;t be something straightforward like
+<em>&ldquo;implement A* path finding&rdquo;</em>. Feature descriptions normally come from a
+non-programmer and will be something a lot less precise, like</p><blockquote><p>I want to display a CAD drawing in the background, then when I click points
+on the drawing you should create a path which goes from A to B to C taking the
+shortest path along that drawing without doubling back on itself.</p></blockquote><p>Often important bits will be left out, too.</p><blockquote><p>Oh, and this background drawing may have points added or removed at any time.</p></blockquote><p>(i.e. we need to deal with mutation)</p><p>Unfortunately, that&rsquo;s a bit too vague to turn into code and Googling a
+problem statement like that won&rsquo;t be very helpful! What we want is a
+description of the problem which can be phrased as computer operations.</p><p>When I&rsquo;m given a vague feature description the first thing I&rsquo;ll do is draw it
+out. Seeing something visualised is often enough to summon the correct keywords
+to rephrase the problem in a more searchable form.</p><p>I don&rsquo;t know about you, but when I see something like this, my first thought is
+that we&rsquo;re doing pathfinding. We&rsquo;re also trying to optimise for the shortest
+distance while preferring untraversed edges.</p><figure><img src=/img/link-lines.gif alt="Animation of the expected interaction" width=75%><figcaption><p>Problem visualised (black lines are the background image, red X means click, red lines are the desired path)</p></figcaption></figure><p>Don&rsquo;t forget to come up with an unambiguous definition of <em>&ldquo;done&rdquo;</em>. This lets
+you determine when the feature request has been fulfilled, and gives you a way
+to ward off <a href=https://www.wrike.com/project-management-guide/faq/what-is-scope-creep-in-project-management/ class=external-link target=_blank rel=noopener>scope creep</a>.</p><div class="notices info"><p>This example came was one of the feature requests which taught me the
+importance of getting the full picture up front and leaving yourself room to
+make changes down the track.</p><p>In this case, I&rsquo;d created a component for doing pathfinding by converting the
+&ldquo;background drawing&rdquo; into a graph and passing it to <em>A*</em>, but neglected to
+ask whether the background drawing would change.</p><p>Only after I&rsquo;d finished integrating the component into the overall CAD/CAM
+package did I find out that we need a way to add a path midway along an edge
+of the background drawing (mutating the graph by removing an edge and
+replacing it with two smaller edges). I&rsquo;m a big fan of immutability, so you
+can see how this might be a problem.</p><p>We ended up needing to rewrite the component because immutability was so
+deeply ingrained into its implementation&mldr; I&rsquo;d engineered myself into a
+corner!</p></div><p>If your problem involves a lot of maths (like a lot of my computational
+geometry work) it&rsquo;s a good idea to draw sketches and try to work out the
+solution by hand. This also lets you derive equations that you&rsquo;ll need later
+on.</p><h2 id=searching-for-prior-art>Searching for Prior Art
+<a class=heading-link href=#searching-for-prior-art><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Once you can phrase the problem in computer terms it&rsquo;s time to pull out the
+programmer&rsquo;s most powerful tool&mldr; The internet.</p><p>You&rsquo;re looking anything relevant to the problem at hand. This may take the form
+of:</p><ul><li>Wikipedia - usually my first port of call</li><li>Blog posts exploring similar problems</li><li>Academic Papers - tend to be quite information-dense and go into <em>much</em> more
+detail than you care about, but a quick skim through will often find pictures
+or algorithms that are useful</li><li>Existing Products or Libraries - why waste weeks reimplementing the wheel?</li></ul><p>I&rsquo;ll often end up with 20-40 open tabs with promising items from the first
+couple pages of search results, then I&rsquo;ll skim through the content on each
+tab, also checking out interesting things <em>those</em> pages link to.</p><p>Continuing with our example from before where we&rsquo;re wanting to find the path
+from one point to another preferring to use unvisited edges, I might search
+for things like:</p><ul><li>Pathfinding</li><li>Pathfinding preferred</li><li>Pathfinding algorithm</li><li>Incremental pathfinding (because it&rsquo;ll happen over multiple user interactions)</li><li>Undirected weighted graph traversal</li></ul><p>My definition of &ldquo;interesting&rdquo; is anything which seems to mention keywords from
+my problem. Algorithm names are particularly useful.</p><p>This <a href=https://www.redblobgames.com/pathfinding/a-star/introduction.html class=external-link target=_blank rel=noopener><em>Introduction to the A* Algorithm</em></a> link ticks a lot
+of those boxes. Plus it seems to be a tutorial with lots of code snippets and
+pictures, which will be handy when it gets to the implementation.</p><p><img src=/img/pathfinding-search-results.png alt="Search result showing &ldquo;Introduction to the A* Algorithm&rdquo; with certain words highlighted"></p><h2 id=step-2-thinking-about-the-public-api>Step 2: Thinking About the Public API
+<a class=heading-link href=#step-2-thinking-about-the-public-api><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>No code exists in a vacuum, so knowing how the outside world will use your
+feature has a big effect on how it will be integrated into the rest of the
+application.</p><p>In this stage you develop a big picture view of the feature and how it will
+expose its functionality to the outside world.</p><div class="notices note"><p>The feature&rsquo;s public API also acts as a natural seam that you can use for
+testing (e.g. mocking out the component when testing the application) and to
+allow you to restructure the feature&rsquo;s implementation (or swap it out
+entirely) without breaking the rest of the application.</p></div><p>Every feature will be used differently so it&rsquo;s hard to provide concrete
+examples, but here some questions to ask yourself:</p><ul><li>Is this a well-contained batch process or is the feature interactive?</li><li>What are my inputs and outputs?</li><li>Are there any hard constraints imposed by the implementation?</li><li>If the process will take a long time (i.e. more than 100ms), does it need to
+report progress or support cancellation?</li><li>Do I need to let the caller update the feature&rsquo;s internal state? (e.g. when
+altering the &ldquo;background drawing&rdquo; from the earlier example)</li><li>How are we going to report failure?</li><li>Is there information the caller will need to provide? (see <a href=https://www.freecodecamp.org/news/a-quick-intro-to-dependency-injection-what-it-is-and-when-to-use-it-7578c84fa88f/ class=external-link target=_blank rel=noopener><em>Dependency
+Injection</em></a> and the <a href=https://refactoring.guru/design-patterns/strategy class=external-link target=_blank rel=noopener>Strategy Pattern</a>)</li><li>Is this a thin interface, or will I need to leak a lot of implementation
+details to the caller? (see <a href=https://www.joelonsoftware.com/2002/11/11/the-law-of-leaky-abstractions/ class=external-link target=_blank rel=noopener><em>The Law of Leaky Abstractions</em></a>)</li><li>Would I reasonably want to reuse this component elsewhere?</li><li>Does my language promote patterns or abstractions that would make the code
+more ergonomic to use if written in a certain way? (C# has events as
+first-class citizens, Go&rsquo;s goroutines and channels are great for creating
+streams of events, etc.)</li><li>Does the larger application provide natural mechanisms or extension points
+that we can use?</li></ul><p>Answering these questions should give you an idea of how your feature will
+interact with the rest of the application, and from there you can start
+thinking in more concrete terms like interfaces and data types.</p><div class="notices tip"><p>You actually don&rsquo;t need to write code for this step.</p><p>My normal approach was to turn away from my computer and stare at a random
+patch of wall on the other side of the office. This lets me think about how I
+want to interact with the feature without being bogged down with the precise
+details you get when writing code.</p></div><p>If your research indicated the feature&rsquo;s implementation will be quite
+complex, there are a couple tools at your disposal for limiting how much of
+that complexity leaks into the wider application. Namely, by encapsulating
+the problem you can paper over the complexity (see the <a href=https://refactoring.guru/design-patterns/facade class=external-link target=_blank rel=noopener><em>Facade
+Pattern</em></a>) or adding another level of <a href=https://wiki.c2.com/?OneMoreLevelOfIndirection class=external-link target=_blank rel=noopener><em>Indirection</em></a>
+(e.g. introduce a middle-man).</p><p>Try to avoid creating a &ldquo;chatty&rdquo; API, if possible. Making the caller go back
+and forth into your code to do complex operations leads to increased coupling
+and more bugs down the track.</p><h2 id=step-3-initial-implementation>Step 3: Initial Implementation
+<a class=heading-link href=#step-3-initial-implementation><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now you&rsquo;ve done some background research and thought about the feature&rsquo;s API,
+it&rsquo;s time to actually start implementing it. Depending on how your research
+went, this stage can be either very easy or very hard.</p><h3 id=the-easy-case>The Easy Case
+<a class=heading-link href=#the-easy-case><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>If you are lucky, you may have stumbled upon a similar solution during your
+research that you can reuse or adapt to fit your purposes. This was the case
+with our from earlier, by analysing the feature request we were able to
+reduce it to a pathfinding issue; a solved problem in computer science.</p><p>It&rsquo;s really nice when this happens. Often implementation is just a case of
+going to the Wikipedia page, scrolling down to <a href=https://en.wikipedia.org/wiki/A*_search_algorithm#Pseudocode class=external-link target=_blank rel=noopener>the pseudocode section</a>,
+and adapting it fit the API you developed earlier.</p><p>Just remember to sprinkle in enough tests to make sure the implementation is
+correct and edge cases are handled gracefully.</p><p>There&rsquo;s not much more to be said here.</p><h3 id=the-not-so-easy-case>The Not-So-Easy Case
+<a class=heading-link href=#the-not-so-easy-case><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>Unfortunately, most &ldquo;interesting&rdquo; feature requests won&rsquo;t have libraries or
+tutorials you can use directly, requiring you to do a bit of original work.</p><p>A lot of the work I do has a visual or mathematical element to it, so you can
+simulate the feature using pen and paper.</p><p>I&rsquo;ll often start with the top-most level first, stubbing out the public API
+with code that just blows up (i.e. <code>throw new NotImplementedException()</code> in C#
+or <code>todo!()</code> in Rust).</p><p>From there you can start decomposing each of the functions into
+sub-functions, recursively decomposing the problem into smaller problems
+until you eventually reach a problem you know the solution to.</p><p>Whenever you get stuck, look back over the resources you found while
+researching. You may have missed some gem of knowledge which will make
+everything <em>click</em>.</p><p>An alternative to this top-down approach is attacking the problem bottom-up.
+You&rsquo;ll often take this approach when you know how something deep down is done,
+but aren&rsquo;t quite sure how to connect that with the public API.</p><p>When taking the bottom-up approach I&rsquo;ll first implement the thing I know and
+make sure to develop a solid foundation. Then you add higher and higher level
+layers, slowly working your way towards that public API you want to expose.</p><p>In practice you&rsquo;ll often use a hybrid approach, doing a little work from the
+top down, then a bit more from the bottom up, until eventually you meet in
+the middle and everything fits together.</p><h2 id=step-4-integration>Step 4: Integration
+<a class=heading-link href=#step-4-integration><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Integration is the process of merging new functionality into an existing
+application. This is the point where new code meets old and tests how
+suitable your public API from step 2 is.</p><p>Again, it&rsquo;s a bit tricky to provide examples when everyone&rsquo;s scenarios are
+different, but we can still discuss integration in the abstract.</p><p>If you are lucky, your application will already provide places new
+functionality can naturally be added to. For example, most CAD applications
+are modal (e.g. you might be in the <em>&ldquo;add arc&rdquo;</em> mode, then switch to <em>&ldquo;select
+mode&rdquo;</em>) and adding a new mode is often just a case of creating a button which
+calls some <code>SetCurrentMode()</code> function with an instance of your new mode.</p><p>Other times you&rsquo;ll be adding to existing functionality and need to be a bit
+more careful.</p><p>Either way, this step tends to be rather straightforward. You&rsquo;ve got some
+existing code and some new code, and you need to wire up the existing code to
+use the new code. You may need to rewrite/restructure pieces so they fit
+together more nicely, but that&rsquo;s the general gist.</p><div class="notices tip"><p>Don&rsquo;t forget that you have a variety of tools at your disposal for connecting
+two pieces of code while keeping the overall codebase maintainable.</p><p><em>The Refactoring Guru</em>&rsquo;s section on <a href=https://refactoring.guru/design-patterns class=external-link target=_blank rel=noopener><em>Design Patterns</em></a> may be
+helpful here. These patterns aren&rsquo;t restricted to Object Oriented languages,
+with a bit of ingenuity they can be adapted to more procedural or functional
+languages too.</p><p><a href=https://wiki.c2.com/?ClosuresAndObjectsAreEquivalent class=external-link target=_blank rel=noopener>Objects are a poor man&rsquo;s closure, after all</a>.</p></div><p>The integration stage is also where you need to think about how users will
+interact with this new functionality (the buzz word is <a href=https://www.interaction-design.org/literature/topics/ux-design class=external-link target=_blank rel=noopener><em>&ldquo;User
+Experience&rdquo;</em></a>). While the feature&rsquo;s public API determines how
+code interacts, the integration code is usually the part which takes input
+from users and triggers the feature&rsquo;s functionality.</p><p>You&rsquo;ll want to think of the intended workflow (your feature&rsquo;s <em>&ldquo;happy path&rdquo;</em>)
+and make sure that is intuitive for users. Some questions to ask yourself are,</p><ul><li>How many knobs and levers do we want to expose to the user?</li><li>Can we use some sort of <a href=https://www.shopify.com.au/partners/blog/progressive-disclosure class=external-link target=_blank rel=noopener><em>Progressive Disclosure</em></a> mechanism to
+simplify the process?</li><li>What norms and conventions can we build on to lower the barrier-to-entry?</li><li>Can users get &ldquo;stuck&rdquo; in confusing or unintuitive situations when they go
+off the beaten path?</li></ul><p>Something that goes hand-in-hand with user experience is testing. While I&rsquo;m
+sure you&rsquo;ve been writing integration tests as you go (<em>*hint, hint*</em>), the
+best way to make sure a feature has been properly integrated into your
+application is still to use a regular human tester.</p><div class="notices tip"><p>It&rsquo;s a good idea to make sure your testers <em>aren&rsquo;t</em> the same people that
+develop a feature.</p><p>On more than one occasion, I&rsquo;ve been showing a newly implemented feature to
+someone and we&rsquo;ll have an exchange like this:</p><ul><li><strong>Michael:</strong> (draws something in a non-intuitive way)</li><li><strong>Co-Worker:</strong> Why did you draw it like that instead of doing X?</li><li><strong>Michael:</strong> Oh, because if I drew it that way the maths would make my arc&rsquo;s
+radius blow out to infinity, and that&rsquo;ll mess up my drawing.</li></ul><p>What just happened is the software developer unconsciously avoided a known
+edge case (AKA buggy behaviour) because they wanted the demonstration to go
+smoothly. This scenario sounds ridiculous, but I&rsquo;ve been called out for
+unconsciously avoiding &ldquo;problem&rdquo; areas by non-technical co-workers several
+times <em>even when I&rsquo;m aware of it</em>.</p><p>A lot of people (particularly management!) see the bug tester role as an
+unnecessary overhead or laziness on the part of the developer, especially in
+this era of CI and suites of unit tests. I believe bug testers are a crucial
+part of creating anything user-facing, a good bug tester will hold developers
+accountable and help to make the user experience as smooth as possible.</p></div><h2 id=step-5-review>Step 5: Review
+<a class=heading-link href=#step-5-review><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>So now you&rsquo;ve implemented a feature and rolled it out to production. For most
+features you are done and can move on to other things, but it&rsquo;s worth setting
+up a paper trail for anything that&rsquo;s taken more than a couple days to
+implement.</p><p>When merging in the PR which &ldquo;activates&rdquo; a new feature (e.g. adds a new item
+to the UI which lets users access it) I&rsquo;ll write up a brief summary containing:</p><ul><li>What has been implemented</li><li>Design decisions and constraints</li><li>Possible areas of concern (<em>&ldquo;I feel like this area isn&rsquo;t overly robust and we
+may find bugs later on&rdquo;</em>)</li><li>Ways you could extend the feature to give the user more value</li><li>Should we come back later on and re-implement the feature? (e.g. we came up
+with a better design later on or a minor design flaw was found)</li></ul><p>There&rsquo;s a good chance you didn&rsquo;t achieve perfection and there are points that
+could be improved, or extensions that could be made to make the feature even
+more useful.</p><p>It&rsquo;s important to note down all those thoughts now while they&rsquo;re still fresh in
+your mind!</p><p>You can also create tickets for new features which extend this one, possibly
+adding thoughts on how you would attack the problem and links to significant
+parts of the codebase.</p><p>Tasks like <em>&ldquo;add a checkbox to the window which will make the feature do X
+slightly differently&rdquo;</em> are great for on-boarding new developers, giving them
+a chance to learn the codebase without the pressure of fixing bugs in
+production or working to a hard deadline.</p><div class="notices tip"><p>Issue labels work great for this sort of triage. We used GitLab&rsquo;s <a href=https://docs.gitlab.com/ee/user/project/labels.html#scoped-labels class=external-link target=_blank rel=noopener>scoped
+labels</a> to help prioritise how urgent a ticket is.</p><ul><li><code>priority::on-demand</code> - Waiting for some external prompt before allocating
+time to it (e.g. a customer asks about it or requests from the product development
+team)</li><li><code>priority::low</code> - This low priority and can be safely left on the back burner</li><li><code>priority::normal</code> - Normal priority</li><li><code>priority::urgent</code> - This needed to be done yesterday and customers are
+demonstrably impacted (e.g. lost revenue due to downtime)</li></ul><p>We used to have <code>priority::high</code>, but found it got abused. When people run
+into a bug or missing feature that impacts their workflow, the knee-jerk
+reaction is to give it a high priority (<em>&ldquo;it&rsquo;s breaking my workflow and needs
+to be fixed right now, damn-it!&rdquo;</em>).</p><p>The end result was that 3/4 of open issues were marked as <code>priority::high</code>
+(man-years worth of effort) with the rest marked as <code>priority::low</code>&mldr; Which
+makes it extremely difficult to find out which items were <em>actually</em>
+important.</p></div><p>While it sounds like a bunch of useless paperwork, your future self will
+thank you for it. It&rsquo;s a real pleasure when you go to work on an issue and
+see someone has already done some research and planning.</p><p>If you are crafty, you could also use this to gain brownie points with your
+manager. Being able say <em>&ldquo;I&rsquo;ve got some ideas for how we can make X better&rdquo;</em>
+and pointing to some initial research or plans shows initiative and that you
+care about giving the customer value.</p><h2 id=conclusions>Conclusions
+<a class=heading-link href=#conclusions><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>There are definitely other approaches which you might take depending on the
+feature scope and how much it interacts with other components, but the
+workflow I&rsquo;ve outlined works quite well for self-contained, mid-sized
+features (e.g. 5-10 man-days of effort).</p><p>Most of the examples I&rsquo;ve provided are from a professional environment where
+customers will directly interact with the product you are working on, because
+that&rsquo;s what I&rsquo;ve got experience with, but there&rsquo;s no reason why it wouldn&rsquo;t
+apply to micro-service architectures or a large library. Just replace the
+word <em>&ldquo;customer&rdquo;</em> with <em>&ldquo;fellow developer&rdquo;</em>.</p><p>I love hearing war stories from other people who create software for a
+living. If you&rsquo;ve got a different approach or want to share your own
+experiences, please let me know via <a href="https://www.reddit.com/r/programming/comments/k55l1j/how_i_translate_feature_requests_into_code/?utm_source=share&amp;utm_medium=web2x&amp;context=3" class=external-link target=_blank rel=noopener>the accompanying Reddit thread</a>.</p></div><footer></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>

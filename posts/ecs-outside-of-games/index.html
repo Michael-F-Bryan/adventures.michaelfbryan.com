@@ -1,0 +1,559 @@
+<!doctype html><html lang=en><head><title>A Thought Experiment: Using the ECS Pattern Outside of Game Engines · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="It&rsquo;s been about 6 months since I watched Catherine West&rsquo;s excellent Using
+Rust for Game Development sent me down the Entity-Component-System
+(ECS) rabbit hole, and I thought I&rsquo;d share some of my findings.
+I&rsquo;ve been meaning to write about this for quite a while now but it took a
+while to put my thoughts into a cohesive article without throwing massive
+walls of code at you.
+
+
+    This article is mainly focused around the high-level decisions you make when
+designing a project, so there won&rsquo;t be as much code as normal. That said, all
+code written in this article is available on GitHub. Feel free to
+browse through and steal code or inspiration."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="A Thought Experiment: Using the ECS Pattern Outside of Game Engines"><meta name=twitter:description content="It’s been about 6 months since I watched Catherine West’s excellent Using Rust for Game Development sent me down the Entity-Component-System (ECS) rabbit hole, and I thought I’d share some of my findings.
+I’ve been meaning to write about this for quite a while now but it took a while to put my thoughts into a cohesive article without throwing massive walls of code at you.
+This article is mainly focused around the high-level decisions you make when designing a project, so there won’t be as much code as normal. That said, all code written in this article is available on GitHub. Feel free to browse through and steal code or inspiration."><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/ecs-outside-of-games/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="A Thought Experiment: Using the ECS Pattern Outside of Game Engines"><meta property="og:description" content="It’s been about 6 months since I watched Catherine West’s excellent Using Rust for Game Development sent me down the Entity-Component-System (ECS) rabbit hole, and I thought I’d share some of my findings.
+I’ve been meaning to write about this for quite a while now but it took a while to put my thoughts into a cohesive article without throwing massive walls of code at you.
+This article is mainly focused around the high-level decisions you make when designing a project, so there won’t be as much code as normal. That said, all code written in this article is available on GitHub. Feel free to browse through and steal code or inspiration."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2019-12-28T00:00:00+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Rust"><meta property="article:tag" content="Ecs"><meta property="article:tag" content="Architecture"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/ecs-outside-of-games/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/ecs-outside-of-games/>A Thought Experiment: Using the ECS Pattern Outside of Game Engines</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2019-12-28T00:00:00+08:00>December 28, 2019
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+17-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/rust/>Rust</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/ecs/>Ecs</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/architecture/>Architecture</a></span></div></div></header><div class=post-content><p>It&rsquo;s been about 6 months since I watched Catherine West&rsquo;s excellent <a href="https://www.youtube.com/watch?v=aKLntZcp27M" class=external-link target=_blank rel=noopener>Using
+Rust for Game Development</a> sent me down the <em>Entity-Component-System</em>
+(ECS) rabbit hole, and I thought I&rsquo;d share some of my findings.</p><p>I&rsquo;ve been meaning to write about this for quite a while now but it took a
+while to put my thoughts into a cohesive article without throwing massive
+walls of code at you.</p><div class="notices note"><p>This article is mainly focused around the high-level decisions you make when
+designing a project, so there won&rsquo;t be as much code as normal. That said, all
+code written in this article is available <a href=https://github.com/Michael-F-Bryan/arcs class=external-link target=_blank rel=noopener>on GitHub</a>. Feel free to
+browse through and steal code or inspiration.</p><p>If you found this useful or spotted a bug, let me know on the blog&rsquo;s
+<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com class=external-link target=_blank rel=noopener>issue tracker</a>!</p></div><h2 id=what-is-an-entity-component-system>What Is An Entity-Component-System?
+<a class=heading-link href=#what-is-an-entity-component-system><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>I hope you&rsquo;ll forgive a little copy-paste, but the <a href=https://en.wikipedia.org/wiki/Entity_component_system#Characteristics class=external-link target=_blank rel=noopener>Wikipedia definition</a>
+gives a fairly decent summary of the topic:</p><blockquote><p>ECS follows the <em>composition over inheritance</em> principle that allows greater
+flexibility in defining entities where every object in a game&rsquo;s scene is an
+entity (e.g. enemies, bullets, vehicles, etc.). Every entity consists of one
+or more components which add behavior or functionality. Therefore, the
+behavior of an entity can be changed at runtime by adding or removing
+components.</p><p>&mldr;</p><ul><li><strong>Entity:</strong> The entity is a general purpose object. Usually, it only
+consists of a unique id. They &ldquo;tag every coarse gameobject as a separate
+item&rdquo;. Implementations typically use a plain integer for this.</li><li><strong>Component:</strong> The raw data for one aspect of the object, and how it
+interacts with the world. &ldquo;Labels the Entity as possessing this particular
+aspect&rdquo;. Implementations typically use structs, classes, or associative
+arrays.</li><li><strong>System:</strong> &ldquo;Each System runs continuously (as though each System had its
+own private thread) and performs global actions on every Entity that
+possesses a Component of the same aspect as that System.&rdquo;</li></ul></blockquote><p>There are several high-quality ECS implementations, but <a href=https://crates.io/crates/specs class=external-link target=_blank rel=noopener>specs</a> crate
+is widely accepted as one of the best ECS libraries in Rust.</p><p>For me an ECS is an architectural pattern for data-heavy applications which
+enforces a clear distinction between behaviour and data, and embodies the
+<em>Composition over Inheritance</em> way of doing things.</p><h2 id=inheritance-isnt-always-the-best-tool-for-the-job>Inheritance isn&rsquo;t Always the Best Tool for the Job
+<a class=heading-link href=#inheritance-isnt-always-the-best-tool-for-the-job><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>The inspiration for trying the ECS architecture outside of games comes from
+one of my work projects.</p><p>Without going into too much detail, the CAD/CAM program we&rsquo;ve written at work
+is built on top of a 3rd party CAD engine. This CAD engine is a native library
+which exposes a heavily object-oriented interface, and there are a quite a few
+places where the inadequacies of structuring everything around inheritance show
+through.</p><p>CAD libraries are composed of many <a href=https://en.wikipedia.org/wiki/Cross-cutting_concern class=external-link target=_blank rel=noopener>cross-cutting concerns</a>, you have:</p><ul><li>Graphical entities (e.g. <code>Point</code>, <code>Line</code>, <code>Spline</code>) which are rendered to the
+screen</li><li>Non-graphical entities which impart semantics to the drawing (e.g. graphical
+entities can be grouped into <code>Layer</code>s which be individually managed)</li><li>Both graphical and non-graphical entities can be <code>frozen</code> (made immutable) or
+<code>hidden</code> (made invisible)</li><li>Entities (both graphical and non-graphical) can be given a <code>name</code> so users
+associate them with a concept (e.g. you may put all dimension lines on the
+<code>"dimensions"</code> layer), allowing easy lookup and letting the UI differentiate
+between different entities of the same type</li><li>Different graphical entities need different information for how to be rendered
+(e.g. a <code>Line</code> might just have a <code>stroke_colour</code>, while a <code>Circle</code> may also
+have a <code>fill_colour</code>)</li></ul><p>Trying to model all of this using a typical object-oriented architecture is
+really tricky.</p><p>Let&rsquo;s say you create a <code>GraphicalEntity</code> base class for all types which can be
+rendered to the screen. Types like <code>Line</code>, <code>Circle</code>, and <code>Spline</code> are all drawn
+using lines so it makes sense to have some <code>stroke</code> property (imagine it
+contains the line width and colour). Instead of adding the <code>stroke</code> property to
+all three classes individually, you decide to pull the property up into the
+parent class to avoid duplication and let us set <code>some_graphical_entity.stroke</code>
+without caring whether it is a <code>Line</code> or a <code>Circle</code> or a <code>Spline</code>.</p><p>But this introduces a bit of a problem. We want to display images on a drawing
+so there&rsquo;s an <code>Image</code> class which inherits from <code>GraphicalEntity</code>. However an
+<code>Image</code> is drawn completely differently to a <code>Line</code> or <code>Circle</code>, so the <code>stroke</code>
+property we introduced earlier is just bloat.</p><div class=mermaid align=center>classDiagram
+GraphicalEntity <|-- Line
+GraphicalEntity <|-- Spline
+GraphicalEntity <|-- Circle
+GraphicalEntity <|-- Image
+GraphicalEntity: Stroke stroke
+GraphicalEntity: void render()
+Circle: Colour fill_colour
+Image: byte[] pixel_buffer</div><p>Okay, so maybe our original inheritance hierarchy adds some unnecessary bloat
+but it&rsquo;s not the end of the world&mldr; right?</p><p>We also want to draw points, zero-dimension dots on the drawing. We can just
+add a <code>Point</code> class which inherits from <code>GraphicalEntity</code>. So far, so good.</p><p>It&rsquo;d be nice to have a function for decomposing complex graphical entities into
+simpler ones (e.g. to approximate a <code>Spline</code> using arcs and lines). We can&rsquo;t
+give the <code>GraphicalEntity</code> class some <code>decompose()</code> method because that just
+wouldn&rsquo;t make sense for <code>Image</code>, so let&rsquo;s introduce an intermediate
+<code>DecomposeableEntity</code>.</p><div class=mermaid align=center>classDiagram
+GraphicalEntity <|-- DecomposeableEntity
+GraphicalEntity <|-- Image
+GraphicalEntity: Stroke stroke
+GraphicalEntity: void render()
+DecomposeableEntity <|-- Line
+DecomposeableEntity <|-- Spline
+DecomposeableEntity <|-- Circle
+class DecomposeableEntity {
+GraphicalEntity[] decompose()
+}
+Circle: Colour fill_colour
+Image: byte[] pixel_buffer</div><p>While we&rsquo;re at it we also want to have <a href=https://en.wikipedia.org/wiki/Hatching#Representation_of_materials class=external-link target=_blank rel=noopener>hatching</a>, a common drafting
+technique used to show which areas of a drawing are part of the same thing.
+Hatches are really just a set of diagonal lines, so it makes sense that the
+class should inherit from <code>DecomposeableEntity</code>. It&rsquo;s not uncommon for hatching
+to colour the background a different colour, so let&rsquo;s give it a <code>fill_colour</code>
+property.</p><p>But hang on&mldr; doesn&rsquo;t <code>Circle</code> also have a <code>fill_colour</code> property? What if we
+DRY things up by creating a new class called <code>DecomposeableEntityWithFill</code>?</p><div class=mermaid align=center>classDiagram
+GraphicalEntity <|-- DecomposeableEntity
+GraphicalEntity <|-- Image
+GraphicalEntity: Stroke stroke
+GraphicalEntity: void render()
+DecomposeableEntity <|-- Line
+DecomposeableEntity <|-- Spline
+DecomposeableEntity <|-- DecomposeableEntityWithFill
+DecomposeableEntityWithFill <|-- Circle
+DecomposeableEntityWithFill <|-- Hatch
+class DecomposeableEntity {
+GraphicalEntity[] decompose()
+}
+Image: byte[] pixel_buffer
+DecomposeableEntityWithFill: Colour fill_colour</div><p>The diagonal lines in a <code>Hatch</code> don&rsquo;t actually exist on the drawing though.
+Instead they&rsquo;re rendered a fixed distance apart regardless of the zoom level,
+so we&rsquo;ll also need to add a <code>zoom_level</code> parameter to the <code>decompose()</code>
+function. It&rsquo;s a little annoying because things like <code>Line</code> and <code>Circle</code>
+don&rsquo;t actually care about how far we&rsquo;re zoomed in, but we&rsquo;re already bloating
+the <code>GraphicalEntity</code> class with unused properties like <code>stroke</code> so what harm
+will a little extra bloat do?</p><p>You can see where this is going. For every new property we could try to reuse
+code by introducing intermediate classes, but it won&rsquo;t be long before we
+code ourselves into a corner. Unfortunately, the real world doesn&rsquo;t fit into a
+tidy inheritance hierarchy.</p><p>It&rsquo;s not long before your class hierarchy is ten levels deep, bloated with
+loads of unnecessary data and methods, and there are so many levels of
+&ldquo;abstraction&rdquo; it&rsquo;s hard to figure out what&rsquo;s actually going on.</p><p>Another problem is you&rsquo;ll frequently fall into the <a href=https://refactoring.guru/smells/refused-bequest class=external-link target=_blank rel=noopener>Refused Bequest
+anti-pattern</a>. This is where a parent class exposes a method that doesn&rsquo;t
+actually make sense for some child classes so the child class overrides it to
+always throw a <code>throw new InvalidOperationException()</code>. Everything still
+compiles, but now every time you invoke the method on the parent class
+there&rsquo;ll be a niggling feeling in the back of your head that things may blow
+up at runtime.</p><p>That&rsquo;s not a fun feeling. Especially when you&rsquo;re letting your project manager
+demo the application and he starts experimenting with combinations of operations
+you never anticipated or tested for&mldr; Don&rsquo;t ask me how I know this 😑</p><p>As an aside, have you ever heard of the
+<a href=https://wiki.c2.com/?CircleAndEllipseProblem class=external-link target=_blank rel=noopener>Circle-Ellipse Problem</a>?</p><blockquote><p>If we have an application that uses circles and ellipses (e.g. a graphics
+program), should we have two classes <code>Circle</code> and <code>Ellipse</code>? Which should
+inherit from which, if at all? A circle is a special kind of ellipse, viz.
+one where the two foci coincide. But if an <code>Ellipse</code> is mutable, a <code>Circle</code> is
+mutable too, and can be made a non-circle.</p><p>Or should we only have an <code>Ellipse</code>? But if we then create an <code>Ellipse</code> that
+happens to represent a circle, we cannot ask it for its radius, because
+<code>Ellipse</code> has no <code>radius()</code> method.</p></blockquote><p>Most object-oriented languages are designed so that an object&rsquo;s underlying type
+will be the same for its entire lifetime. This makes things interesting when
+users want to scale a <code>Circle</code> without maintaining aspect ratio. It means you
+can&rsquo;t just give the <code>GraphicalEntity</code> a <code>scale()</code> method which mutates the
+object in-place, you need to change the entire API so a <code>Circle</code> can return an
+<code>Ellipse</code> when the <code>x</code> and <code>y</code> scale factors aren&rsquo;t the same.</p><p>If you&rsquo;ve been programming for a while you will have probably come across the
+mantra, <em>&ldquo;Composition over Inheritance&rdquo;</em>. It&rsquo;s exactly these sorts of design
+problems composition is attempting to solve, and ECS is just one way to
+formalise composition&mldr; By breaking the world up into <code>Components</code> (data that
+can be attached to things) and <code>Systems</code> (behaviour).</p><h2 id=creating-an-ecs-based-cad-library>Creating an ECS-based CAD Library
+<a class=heading-link href=#creating-an-ecs-based-cad-library><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>I&rsquo;m a big fan of the <a href=https://crates.io/crates/specs class=external-link target=_blank rel=noopener><code>specs</code></a> crate, so that&rsquo;s what I used when trying
+to implement an ECS-based CAD library.</p><p>I&rsquo;m also really boring when it comes to naming things, so the project is
+simply called <a href=https://github.com/Michael-F-Bryan/arcs class=external-link target=_blank rel=noopener><em>A Rust CAD System</em></a>, or <code>arcs</code> for short. This is also a
+nice pun on the fact that one of the basic drawing primitives of any CAD library
+is the <em>Arc</em> 😁</p><p>All graphical entities have a <code>DrawingObject</code> component which contains the data
+which is needed while rendering.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// arcs/src/components/drawing_object.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Something which can be drawn on the screen.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>DrawingObject</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> geometry: <span style=color:#a6e22e>Geometry</span>,
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The [`Layer`] this [`DrawingObject`] is attached to.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> layer: <span style=color:#a6e22e>Entity</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Component <span style=color:#66d9ef>for</span> DrawingObject {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Storage</span> <span style=color:#f92672>=</span> FlaggedStorage<span style=color:#f92672>&lt;</span>Self, DenseVecStorage<span style=color:#f92672>&lt;</span>Self<span style=color:#f92672>&gt;&gt;</span>;
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// The geometry of a [`DrawingObject`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[non_exhaustive]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>Geometry</span> {
+</span></span><span style=display:flex><span>    Line(Line),
+</span></span><span style=display:flex><span>    Arc(Arc),
+</span></span><span style=display:flex><span>    Point(Point),
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices note"><p>You may have noticed that we&rsquo;re explicitly implementing <code>Component</code> for
+<code>DrawingObject</code> instead of using the custom derive. This is because we want to
+store this component using <code>FlaggedStorage</code>, a wrapper type which lets you
+subscribe to change notifications.</p><p>You&rsquo;ll see why change notifications are useful later on.</p></div><h2 id=rendering>Rendering
+<a class=heading-link href=#rendering><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>I&rsquo;m using the <a href=https://crates.io/crates/piet class=external-link target=_blank rel=noopener><code>piet</code> crate </a>as an abstraction over a drawing canvas.
+This is awesome because not only has all the hard work been implemented,
+including tricky things like fonts and gradients, but there are also backends
+for all the major platforms. Including the browser. This means we can create a
+an online demo later on by compiling to WebAssembly, which is a massive boon
+when trying to show other people your work&mldr; It&rsquo;s also just a well-written
+library and does exactly what I need.</p><p>The <code>piet-web</code> backend introduces a minor complication (in the form of mental
+overhead) because its <code>RenderContext</code> borrows JavaScript objects. That means
+every time we need to render we&rsquo;ll have to create a temporary <code>System</code> which
+holds a reference to a particular piet backend, instead of implementing
+<code>System</code> on the <code>Renderer</code> directly.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// arcs/render/renderer.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Long-lived state used when rendering.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug, Clone)]</span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[non_exhaustive]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Renderer</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> viewport: <span style=color:#a6e22e>Viewport</span>,
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> background: <span style=color:#a6e22e>Color</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Renderer {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new</span>(viewport: <span style=color:#a6e22e>Viewport</span>, background: <span style=color:#a6e22e>Color</span>) -&gt; <span style=color:#a6e22e>Self</span> {
+</span></span><span style=display:flex><span>        Renderer {
+</span></span><span style=display:flex><span>            viewport,
+</span></span><span style=display:flex><span>            background,
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Get a [`System`] which will render using a particular [`RenderContext`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>system</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, R<span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#a6e22e>&#39;a</span> <span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        backend: <span style=color:#a6e22e>R</span>,
+</span></span><span style=display:flex><span>        window_size: <span style=color:#a6e22e>Size</span>,
+</span></span><span style=display:flex><span>    ) -&gt; <span style=color:#a6e22e>impl</span> System<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> <span style=color:#f92672>+</span> <span style=color:#a6e22e>&#39;a</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>        R: <span style=color:#a6e22e>RenderContext</span> <span style=color:#f92672>+</span> <span style=color:#a6e22e>&#39;a</span>,
+</span></span><span style=display:flex><span>    {
+</span></span><span style=display:flex><span>        RenderSystem { backend, window_size, renderer: <span style=color:#a6e22e>self</span> }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Viewport</span> {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The location (in drawing units) this viewport is centred on.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> centre: <span style=color:#a6e22e>Vector</span>,
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The number of pixels each drawing unit should take up on the screen.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> pixels_per_drawing_unit: <span style=color:#66d9ef>f64</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// The [`System`] which actually renders things.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// This needs to be a temporary object &#34;closing over&#34; the [`Renderer`] and some
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// [`RenderContext`] due to lifetimes.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// In particular, the `RenderContext` for the `piet_web` crate takes the HTML5
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// canvas by `&amp;mut` reference instead of owning it, and we don&#39;t want to tie our
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// [`Renderer`] to a particular stack frame because it&#39;s so long lived (we&#39;d end
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// up fighting the borrow checker and have self-referential types).
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>RenderSystem</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;renderer</span>, B<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    backend: <span style=color:#a6e22e>B</span>,
+</span></span><span style=display:flex><span>    window_size: <span style=color:#a6e22e>Size</span>,
+</span></span><span style=display:flex><span>    renderer: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;renderer</span> <span style=color:#a6e22e>mut</span> Renderer,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Going through the entire rendering system is out of scope for this article,
+but I&rsquo;ll walk you through how we use specs <code>Component</code>s to nicely manage
+things like the different styling information attached to the various
+graphical entities.</p><p>The <code>RenderSystem</code>&rsquo;s <code>System</code> impl is surprisingly simple. We break the task
+up into calculating the draw order (the user can specify that certain objects
+should be drawn on top of others) and then iterating through each entity to be
+drawn and calling <code>self.render()</code> on them.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// arcs/render/renderer.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;world</span>, <span style=color:#a6e22e>&#39;renderer</span>, B: <span style=color:#a6e22e>RenderContext</span><span style=color:#f92672>&gt;</span> System<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;world</span><span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>for</span> RenderSystem<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;renderer</span>, B<span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>SystemData</span> <span style=color:#f92672>=</span> (DrawOrder<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;world</span><span style=color:#f92672>&gt;</span>, Styling<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;world</span><span style=color:#f92672>&gt;</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>run</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, data: <span style=color:#a6e22e>Self</span>::SystemData) {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// make sure we&#39;re working with a blank screen
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        self.backend.clear(self.renderer.background.clone());
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> (draw_order, styling) <span style=color:#f92672>=</span> data;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> viewport_dimensions <span style=color:#f92672>=</span> self.viewport_dimensions();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>for</span> (ent, obj) <span style=color:#66d9ef>in</span> draw_order.calculate(viewport_dimensions) {
+</span></span><span style=display:flex><span>            self.render(ent, obj, <span style=color:#f92672>&amp;</span>styling);
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We&rsquo;ve created helper struct called <code>DrawOrder</code> which holds a reference to each
+set of <code>Component</code>s we&rsquo;ll need while calculating the draw order.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// arcs/src/render/renderer.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// The state needed when calculating which order to draw things in so z-levels
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// are implemented correctly.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(SystemData)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>DrawOrder</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;world</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    entities: <span style=color:#a6e22e>Entities</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;world</span><span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    drawing_objects: <span style=color:#a6e22e>ReadStorage</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;world</span>, DrawingObject<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    layers: <span style=color:#a6e22e>ReadStorage</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;world</span>, Layer<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    bounding_boxes: <span style=color:#a6e22e>ReadStorage</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;world</span>, BoundingBox<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;world</span><span style=color:#f92672>&gt;</span> DrawOrder<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;world</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>calculate</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span>self,
+</span></span><span style=display:flex><span>        viewport_dimensions: <span style=color:#a6e22e>BoundingBox</span>,
+</span></span><span style=display:flex><span>    ) -&gt; <span style=color:#a6e22e>impl</span> Iterator<span style=color:#f92672>&lt;</span>Item <span style=color:#f92672>=</span> (Entity, <span style=color:#f92672>&amp;</span>&#39;_ DrawingObject)<span style=color:#f92672>&gt;</span> <span style=color:#f92672>+</span> &#39;_ {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>EntitiesByZLevel</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> <span style=color:#f92672>=</span>
+</span></span><span style=display:flex><span>            BTreeMap<span style=color:#f92672>&lt;</span>Reverse<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span>, Vec<span style=color:#f92672>&lt;</span>(Entity, <span style=color:#f92672>&amp;</span><span style=color:#a6e22e>&#39;a</span> DrawingObject)<span style=color:#f92672>&gt;&gt;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// Iterate through all drawing objects, grouping them by the parent
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#75715e>// layer&#39;s z-level in reverse order (we want to yield higher z-levels
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#75715e>// first)
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> drawing_objects <span style=color:#f92672>=</span> EntitiesByZLevel::new();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// PERF: This function has a massive impact on render times
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#75715e>// Some ideas:
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#75715e>//   - Use a pre-calculated quad-tree so we just need to check items
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#75715e>//     within the viewport bounds
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#75715e>//   - use a entities-to-layers cache so we can skip checking whether to
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#75715e>//     draw an object on a hidden layer
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>for</span> (ent, obj, bounds) <span style=color:#66d9ef>in</span> (
+</span></span><span style=display:flex><span>            <span style=color:#f92672>&amp;</span>self.entities,
+</span></span><span style=display:flex><span>            <span style=color:#f92672>&amp;</span>self.drawing_objects,
+</span></span><span style=display:flex><span>            MaybeJoin(<span style=color:#f92672>&amp;</span>self.bounding_boxes),
+</span></span><span style=display:flex><span>        )
+</span></span><span style=display:flex><span>            .join()
+</span></span><span style=display:flex><span>        {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> Layer { z_level, visible } <span style=color:#f92672>=</span> self
+</span></span><span style=display:flex><span>                .layers
+</span></span><span style=display:flex><span>                .get(obj.layer)
+</span></span><span style=display:flex><span>                .expect(<span style=color:#e6db74>&#34;The object&#39;s layer was deleted&#34;</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// try to use the cached bounds, otherwise re-calculate them
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#66d9ef>let</span> bounds <span style=color:#f92672>=</span> bounds
+</span></span><span style=display:flex><span>                .copied()
+</span></span><span style=display:flex><span>                .unwrap_or_else(<span style=color:#f92672>||</span> obj.geometry.bounding_box());
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>if</span> <span style=color:#f92672>*</span>visible <span style=color:#f92672>&amp;&amp;</span> viewport_dimensions.intersects_with(bounds) {
+</span></span><span style=display:flex><span>                drawing_objects
+</span></span><span style=display:flex><span>                    .entry(Reverse(<span style=color:#f92672>*</span>z_level))
+</span></span><span style=display:flex><span>                    .or_default()
+</span></span><span style=display:flex><span>                    .push((ent, obj));
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        drawing_objects.into_iter().flat_map(<span style=color:#f92672>|</span>(_, items)<span style=color:#f92672>|</span> items)
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices info"><p>It&rsquo;s not uncommon for a drawing to contain hundreds of thousands of graphical
+entities, so it&rsquo;s really important to reduce the amount of work that gets done.
+You can see from the <code>PERF</code> comment that we&rsquo;re willing to trade off extra memory
+usage if it means we can reduce the rendering system&rsquo;s execution time.</p><p>Let me know if you can see possible bugs or other improvements by making an
+issue against <a href=https://github.com/Michael-F-Bryan/arcs/issues class=external-link target=_blank rel=noopener>the project&rsquo;s issue tracker</a>. I&rsquo;m especially keen
+to hear if you&rsquo;ve had to tackle these sorts of problems before!</p></div><p>When rendering a <code>Point</code>, there are a couple pieces of information we&rsquo;ll need.
+These are stored using the <code>PointStyle</code> component.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// arcs/components/styles.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Clone, Component)]</span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[storage(DenseVecStorage)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>PointStyle</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> colour: <span style=color:#a6e22e>Color</span>,
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> radius: <span style=color:#a6e22e>Dimension</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Default <span style=color:#66d9ef>for</span> PointStyle {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>default</span>() -&gt; <span style=color:#a6e22e>PointStyle</span> {
+</span></span><span style=display:flex><span>        PointStyle {
+</span></span><span style=display:flex><span>            colour: <span style=color:#a6e22e>Color</span>::<span style=color:#66d9ef>BLACK</span>,
+</span></span><span style=display:flex><span>            radius: <span style=color:#a6e22e>Dimension</span>::default(),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// A dimension on the canvas.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug, Copy, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>Dimension</span> {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The dimension should always be the same size in pixels, regardless of
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// the zoom level.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    Pixels(<span style=color:#66d9ef>f64</span>),
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// A &#34;real&#34; dimension defined in *Drawing Space*, which should be scaled
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// appropriately when we zoom.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    DrawingUnits(<span style=color:#66d9ef>f64</span>),
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Dimension {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>in_pixels</span>(self, pixels_per_drawing_unit: <span style=color:#66d9ef>f64</span>) -&gt; <span style=color:#66d9ef>f64</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> self {
+</span></span><span style=display:flex><span>            Dimension::Pixels(px) <span style=color:#f92672>=&gt;</span> px,
+</span></span><span style=display:flex><span>            Dimension::DrawingUnits(units) <span style=color:#f92672>=&gt;</span> units <span style=color:#f92672>*</span> pixels_per_drawing_unit,
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Default <span style=color:#66d9ef>for</span> Dimension {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>default</span>() -&gt; <span style=color:#a6e22e>Dimension</span> { Dimension::Pixels(<span style=color:#ae81ff>1.0</span>) }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Rendering a <code>Point</code> then becomes a process of:</p><ol><li>Find the <code>PointStyle</code> to use for this entity</li><li>Define a <code>kurbo::Shape</code> for the point&rsquo;s outline, in this case a <code>Circle</code></li><li>Tell the backend to fill the <code>Circle</code> with the desired colour</li></ol><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// arcs/src/render/renderer.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;world</span>, <span style=color:#a6e22e>&#39;renderer</span>, B: <span style=color:#a6e22e>RenderContext</span><span style=color:#f92672>&gt;</span> RenderSystem<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;renderer</span>, B<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>render</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        ent: <span style=color:#a6e22e>Entity</span>,
+</span></span><span style=display:flex><span>        drawing_object: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>DrawingObject</span>,
+</span></span><span style=display:flex><span>        styles: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Styling</span>,
+</span></span><span style=display:flex><span>    ) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> drawing_object.geometry {
+</span></span><span style=display:flex><span>            Geometry::Point(<span style=color:#66d9ef>ref</span> point) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                self.render_point(ent, point, drawing_object.layer, styles)
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Draw a [`Point`] as a circle on the canvas.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>render_point</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        entity: <span style=color:#a6e22e>Entity</span>,
+</span></span><span style=display:flex><span>        point: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Point</span>,
+</span></span><span style=display:flex><span>        layer: <span style=color:#a6e22e>Entity</span>,
+</span></span><span style=display:flex><span>        styles: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Styling</span>,
+</span></span><span style=display:flex><span>    ) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> fallback <span style=color:#f92672>=</span> PointStyle::default();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> style <span style=color:#f92672>=</span> styles
+</span></span><span style=display:flex><span>            .point_styles
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// the style for this point may have been overridden explicitly
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            .get(entity)
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// otherwise fall back to the layer&#39;s PointStyle
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            .or_else(<span style=color:#f92672>||</span> styles.point_styles.get(layer))
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// fall back to the global default if the layer didn&#39;t specify one
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            .unwrap_or(<span style=color:#f92672>&amp;</span>fallback);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> point <span style=color:#f92672>=</span> Circle {
+</span></span><span style=display:flex><span>            center: <span style=color:#a6e22e>self</span>.to_viewport_coordinates(point.location),
+</span></span><span style=display:flex><span>            radius: <span style=color:#a6e22e>style</span>
+</span></span><span style=display:flex><span>                .radius
+</span></span><span style=display:flex><span>                .in_pixels(self.renderer.viewport.pixels_per_drawing_unit),
+</span></span><span style=display:flex><span>        };
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        self.backend.fill(point, <span style=color:#f92672>&amp;</span>style.colour);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Translates a [`Vector`] from drawing space to a [`kurbo::Point`] on the
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// canvas.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>to_viewport_coordinates</span>(<span style=color:#f92672>&amp;</span>self, point: <span style=color:#a6e22e>Vector</span>) -&gt; <span style=color:#a6e22e>kurbo</span>::Point {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>super</span>::to_canvas_coordinates(
+</span></span><span style=display:flex><span>            point,
+</span></span><span style=display:flex><span>            <span style=color:#f92672>&amp;</span>self.renderer.viewport,
+</span></span><span style=display:flex><span>            self.window_size,
+</span></span><span style=display:flex><span>        )
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=bounding-boxes>Bounding Boxes
+<a class=heading-link href=#bounding-boxes><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>To make sure we only try to draw things within the rendering system&rsquo;s
+viewport each graphical object is given an <a href=https://stackoverflow.com/questions/22512319/what-is-aabb-collision-detection class=external-link target=_blank rel=noopener>axis-aligned
+<code>BoundingBox</code>es</a> component. To avoid needing to remember to update this
+<code>BoundingBox</code> component every time an object is updated we can make use of
+the <code>DrawingObject</code>&rsquo;s <code>FlaggedStorage</code> and create a <code>SyncBounds</code> system which
+will subscribe to changes and ensure object bounds are kept in sync.</p><p>The <code>SyncBounds</code> implementation is copied almost directly from the docs for
+<code>FlaggedStorage</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// arcs/systems/bounds.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Lets us keep track of a [`DrawingObject`]&#39;s rough location in *Drawing
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// Space*.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>SyncBounds</span> {
+</span></span><span style=display:flex><span>    changes: <span style=color:#a6e22e>ReaderId</span><span style=color:#f92672>&lt;</span>ComponentEvent<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    to_update: <span style=color:#a6e22e>BitSet</span>,
+</span></span><span style=display:flex><span>    removed: <span style=color:#a6e22e>BitSet</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> SyncBounds {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>NAME</span>: <span style=color:#66d9ef>&amp;</span>&#39;static <span style=color:#66d9ef>str</span> <span style=color:#f92672>=</span> module_path!();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new</span>(world: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>World</span>) -&gt; <span style=color:#a6e22e>SyncBounds</span> {
+</span></span><span style=display:flex><span>        SyncBounds {
+</span></span><span style=display:flex><span>            changes: <span style=color:#a6e22e>world</span>.write_storage::<span style=color:#f92672>&lt;</span>DrawingObject<span style=color:#f92672>&gt;</span>().register_reader(),
+</span></span><span style=display:flex><span>            to_update: <span style=color:#a6e22e>BitSet</span>::new(),
+</span></span><span style=display:flex><span>            removed: <span style=color:#a6e22e>BitSet</span>::new(),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;world</span><span style=color:#f92672>&gt;</span> System<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;world</span><span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> SyncBounds {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>SystemData</span> <span style=color:#f92672>=</span> (
+</span></span><span style=display:flex><span>        WriteStorage<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;world</span>, BoundingBox<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>        ReadStorage<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;world</span>, DrawingObject<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>        Entities<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;world</span><span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    );
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>run</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, data: <span style=color:#a6e22e>Self</span>::SystemData) {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// clear any left-over flags
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        self.to_update.clear();
+</span></span><span style=display:flex><span>        self.removed.clear();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> (<span style=color:#66d9ef>mut</span> bounds, drawing_objects, entities) <span style=color:#f92672>=</span> data;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// find out which items have changed since we were last polled
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>for</span> event <span style=color:#66d9ef>in</span> drawing_objects.channel().read(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self.changes) {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>match</span> <span style=color:#f92672>*</span>event {
+</span></span><span style=display:flex><span>                ComponentEvent::Inserted(id) <span style=color:#f92672>|</span> ComponentEvent::Modified(id) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                    self.to_update.add(id);
+</span></span><span style=display:flex><span>                },
+</span></span><span style=display:flex><span>                ComponentEvent::Removed(id) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                    self.removed.add(id);
+</span></span><span style=display:flex><span>                },
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>for</span> (ent, drawing_object, _) <span style=color:#66d9ef>in</span>
+</span></span><span style=display:flex><span>            (<span style=color:#f92672>&amp;</span>entities, <span style=color:#f92672>&amp;</span>drawing_objects, <span style=color:#f92672>&amp;</span>self.to_update).join()
+</span></span><span style=display:flex><span>        {
+</span></span><span style=display:flex><span>            bounds
+</span></span><span style=display:flex><span>                .insert(ent, drawing_object.geometry.bounding_box())
+</span></span><span style=display:flex><span>                .unwrap();
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>for</span> (ent, _) <span style=color:#66d9ef>in</span> (<span style=color:#f92672>&amp;</span>entities, <span style=color:#f92672>&amp;</span>self.removed).join() {
+</span></span><span style=display:flex><span>            bounds.remove(ent);
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices tip"><p>We may also want to override the <code>System::setup()</code> method to go through all
+<code>DrawingObject</code> entities and make sure they&rsquo;ve got a <code>BoundingBox</code> component.</p></div><p>In general, if we ever need to cache something we&rsquo;ll create one of these
+bookkeeping <code>System</code>s. We can take advantage of the <code>DispatcherBuilder</code> to
+register any necessary bookkeeping tasks with a <code>Dispatcher</code> using a function
+defined in the <code>systems</code> module.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// arcs/systems/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Register any necessary background tasks with a [`DispatcherBuilder`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>register_background_tasks</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, <span style=color:#a6e22e>&#39;b</span><span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>    builder: <span style=color:#a6e22e>DispatcherBuilder</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, <span style=color:#a6e22e>&#39;b</span><span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    world: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>World</span>,
+</span></span><span style=display:flex><span>) -&gt; <span style=color:#a6e22e>DispatcherBuilder</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, <span style=color:#a6e22e>&#39;b</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    builder.with(SyncBounds::new(world), SyncBounds::<span style=color:#66d9ef>NAME</span>, <span style=color:#f92672>&amp;</span>[])
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=conclusion>Conclusion
+<a class=heading-link href=#conclusion><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>As far as I can tell, using an ECS for managing the data in a CAD library
+seems to work pretty well. I&rsquo;m thinking of building an online editor for
+<a href=https://en.wikipedia.org/wiki/Ladder_logic class=external-link target=_blank rel=noopener>Ladder Logic</a> programs (<code>specs</code> can be compiled to WebAssembly without a
+problem), so I&rsquo;ll hopefully make another article later on telling you how
+things go.</p><p>I&rsquo;ve also <a href=https://github.com/Michael-F-Bryan/iec class=external-link target=_blank rel=noopener>experimented</a> with using <code>specs</code> as the backend for
+a compiler in the past. When writing a compiler you often end up implementing
+a poor man&rsquo;s ECS anyway (i.e. IR nodes are entities, each &ldquo;pass&rdquo; is a
+<code>System</code>, and the various side-tables and metadata can be attached to IR
+nodes as <code>Components</code>) so from a theoretical perspective using a proper ECS
+in a compiler makes a lot of sense.</p><p>Once I&rsquo;ve got a basic editor for Ladder Logic programs I&rsquo;m planning to
+revisit this way idea when compiling programs to an executable form (e.g.
+<a href=https://adventures.michaelfbryan.com/posts/wasm-as-a-platform-for-abstraction/>WebAssembly</a>).</p><p>See Also:</p><ul><li><a href=https://specs.amethyst.rs/docs/tutorials/ class=external-link target=_blank rel=noopener>The Specs Book</a></li><li><a href="https://www.youtube.com/watch?v=aKLntZcp27M" class=external-link target=_blank rel=noopener>Using Rust for Game Development</a> - 10/10 would recommend watching
+if you&rsquo;re interested in this sort of thing. Which, considering you read all
+down to here, I assume you are 😜</li><li><a href="https://www.reddit.com/r/rust/comments/9dw26w/ecs_design_outside_gaming_systems/?utm_source=share&amp;utm_medium=web2x" class=external-link target=_blank rel=noopener>ECS design outside gaming systems?</a></li><li><a href=https://github.com/redox-os/orbtk class=external-link target=_blank rel=noopener><code>redox-os/orbtk</code></a> - an ECS-based GUI
+toolkit developed by the people behind the <code>redox</code> OS</li><li><a href=https://gitlab.redox-os.org/redox-os/dces-rust class=external-link target=_blank rel=noopener><code>redox-os/dces</code></a> - a
+library that provides a variant of the Entity Component System</li><li><a href=https://skypjack.github.io/2019-02-14-ecs-baf-part-1/ class=external-link target=_blank rel=noopener>ECS Back and Forth</a> -
+a blog series exploring the ECS pattern</li><li><a href=https://github.com/dakom/wasm-app-boilerplate class=external-link target=_blank rel=noopener><code>dakom/wasm-app-boilerplate</code></a> -
+a scaffold repository for creating high-performance web apps built using the
+ECS pattern</li><li><a href=https://github.com/dakom/todo-shipyard-lit class=external-link target=_blank rel=noopener><code>dakom/todo-shipyard-lit</code></a> - a
+basic to-do web app build using the <code>shipyard</code> ECS</li><li><a href=https://github.com/almindor/texel class=external-link target=_blank rel=noopener><code>almindor/texel</code></a> - an ASCII Art and
+landscape editor built using the <code>specs</code> crate</li></ul></div><footer></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=https://cdn.jsdelivr.net/npm/mermaid@9.3.0/dist/mermaid.min.js integrity="sha256-QdTG1YTLLTwD3b95jLqFxpQX9uYuJMNAtVZgwKX4oYU=" crossorigin=anonymous></script><script>mermaid.initialize({startOnLoad:!0})</script><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>

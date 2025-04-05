@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>People Skills on Michael-F-Bryan</title><link>https://adventures.michaelfbryan.com/tags/people-skills/</link><description>Recent content in People Skills on Michael-F-Bryan</description><generator>Hugo</generator><language>en</language><lastBuildDate>Tue, 01 Apr 2025 09:19:10 +0800</lastBuildDate><atom:link href="https://adventures.michaelfbryan.com/tags/people-skills/index.xml" rel="self" type="application/rss+xml"/><item><title>Reflections on What Motivates a Person</title><link>https://adventures.michaelfbryan.com/posts/motivation/</link><pubDate>Sun, 05 Apr 2020 19:15:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/motivation/</guid><description>&lt;p>Motivation is a funny thing.&lt;/p>
+&lt;p>I&amp;rsquo;m someone who&amp;rsquo;s productivity levels change wildly depending on my
+motivation levels. When I work on something which I&amp;rsquo;m passionate about or
+which interests me on an intellectual level (e.g. computational geometry or
+systems programming), I&amp;rsquo;m routinely 5-10x more productive than my peers.&lt;/p>
+&lt;p>However, if I&amp;rsquo;m working on something which is less personally interesting
+(e.g. tracking down GUI bugs or creating yet another CRUD app) I&amp;rsquo;ll tend to
+drag my feet and not work as hard.&lt;/p></description></item><item><title>Words Are Hard - An Essay on Communicating With Non-Programmers</title><link>https://adventures.michaelfbryan.com/posts/words-are-hard/</link><pubDate>Mon, 27 Jan 2020 10:20:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/words-are-hard/</guid><description>&lt;p>There&amp;rsquo;s a well-known saying about the hard problems in computer science, of
+which I think this is my favourite variant,&lt;/p>
+&lt;blockquote class="twitter-tweet">&lt;p lang="en" dir="ltr">There are 2 hard problems in computer science: cache invalidation, naming things, and off-by-1 errors.&lt;/p>&amp;mdash; Leon Bambrick (@secretGeek) &lt;a href="https://twitter.com/secretGeek/status/7269997868?ref_src=twsrc%5Etfw">January 1, 2010&lt;/a>&lt;/blockquote>
+&lt;script async src="https://platform.twitter.com/widgets.js" charset="utf-8">&lt;/script>
+
+
+&lt;p>I&amp;rsquo;ve been writing software long enough to be burned by all three at some
+point, but as someone working in a small business who represents the software
+side of our product and is constantly rubbing shoulders with non-programmers,
+I believe the ability to correctly communicate an idea or concept in a way
+that others can understand (i.e. to name things) is by far the most
+important.&lt;/p></description></item></channel></rss>

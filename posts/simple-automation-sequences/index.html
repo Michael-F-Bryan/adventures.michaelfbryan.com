@@ -1,0 +1,371 @@
+<!doctype html><html lang=en><head><title>Simple Automation Sequences · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="Now we can communicate with the outside world, let&rsquo;s start interacting with the
+&ldquo;hardware&rdquo; attached to our motion controller. This will be the beginning of our
+Motion system.
+The simplest way to interact with the world is by executing a pre-defined
+routine, and one of the simplest useful routines is to move all axes to the
+home position.
+
+  System Inputs and Outputs
+  
+    
+    Link to heading
+  
+
+From our initial requirements gathering we know that our 3D
+printer will have three linear axes (X, Y, and Z), with limit switches at the
+ends of each axis. This gives our new Motion system six inputs to deal with."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="Simple Automation Sequences"><meta name=twitter:description content="Now we can communicate with the outside world, let’s start interacting with the “hardware” attached to our motion controller. This will be the beginning of our Motion system.
+The simplest way to interact with the world is by executing a pre-defined routine, and one of the simplest useful routines is to move all axes to the home position.
+System Inputs and Outputs Link to heading From our initial requirements gathering we know that our 3D printer will have three linear axes (X, Y, and Z), with limit switches at the ends of each axis. This gives our new Motion system six inputs to deal with."><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/simple-automation-sequences/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="Simple Automation Sequences"><meta property="og:description" content="Now we can communicate with the outside world, let’s start interacting with the “hardware” attached to our motion controller. This will be the beginning of our Motion system.
+The simplest way to interact with the world is by executing a pre-defined routine, and one of the simplest useful routines is to move all axes to the home position.
+System Inputs and Outputs Link to heading From our initial requirements gathering we know that our 3D printer will have three linear axes (X, Y, and Z), with limit switches at the ends of each axis. This gives our new Motion system six inputs to deal with."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2019-09-14T23:55:00+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Adventures-in-Motion-Control"><meta property="article:tag" content="Rust"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/simple-automation-sequences/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/simple-automation-sequences/>Simple Automation Sequences</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2019-09-14T23:55:00+08:00>September 14, 2019
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+9-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/adventures-in-motion-control/>Adventures-in-Motion-Control</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/rust/>Rust</a></span></div></div></header><div class=post-content><p>Now we can communicate with the outside world, let&rsquo;s start interacting with the
+&ldquo;hardware&rdquo; attached to our motion controller. This will be the beginning of our
+<em>Motion</em> system.</p><p>The simplest way to interact with the world is by executing a pre-defined
+routine, and one of the simplest useful routines is to move all axes to the
+home position.</p><h2 id=system-inputs-and-outputs>System Inputs and Outputs
+<a class=heading-link href=#system-inputs-and-outputs><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>From our <a href=https://adventures.michaelfbryan.com/posts/announcing-adventures-in-motion-control/#identifying-requirements-and-subsystems>initial requirements gathering</a> we know that our 3D
+printer will have three linear axes (X, Y, and Z), with limit switches at the
+ends of each axis. This gives our new <em>Motion</em> system six inputs to deal with.</p><p>Stepper motors don&rsquo;t usually come with an <a href=https://en.wikipedia.org/wiki/Encoder class=external-link target=_blank rel=noopener>encoder</a> (a device for
+tracking position), meaning we don&rsquo;t really have any way of determining where
+an axis is other than by counting the number of stepper pulses sent. Let&rsquo;s
+assume that the actual sending of pulses is done by a stepper motor driver
+component, and it tells us how many pulses it has sent since the last <code>poll()</code>
+of the application.</p><div class="notices note"><p>For technical reasons (the browser won&rsquo;t trigger our <code>App::poll()</code> more
+frequently than 60Hz) we won&rsquo;t be implementing a &ldquo;true&rdquo; stepper motor driver
+component. Instead, we can emulate its behaviour from JavaScript.</p></div><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// (not real code)
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>trait</span> Inputs {
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// the number of pulses sent since the last tick
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>x_pulses_sent</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>i32</span>;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>y_pulses_sent</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>i32</span>;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>z_pulses_sent</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>i32</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>at_x_lower_limit</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>bool</span>;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>at_x_upper_limit</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>bool</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>at_y_lower_limit</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>bool</span>;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>at_y_upper_limit</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>bool</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>at_z_lower_limit</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>bool</span>;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>at_z_upper_limit</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>bool</span>;
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Stepper are controlled by sending pulses to the motor, and the frequency these
+pulses are sent out (e.g. 42 pulses/second) is the parameter usually used to
+control this motion. This will typically be done on a motion controller using
+timers, setting the timer period to trigger an interrupt <em>exactly</em> when the
+next pulse needs to be sent.</p><p>This means we&rsquo;ll be using a control regime called <em>Velocity Control</em>. This is
+essentially where you control the system purely via velocity, as opposed to
+controlling the position or acceleration (or rather motor torque/force).</p><div class="notices tip"><p>You may want to read <a href=https://robotics.stackexchange.com/questions/10052/position-control-vs-velocity-control-vs-torque-control class=external-link target=_blank rel=noopener>Position Control vs Velocity Control vs Torque Control</a>
+on the <em>Robotics</em> section of <em>StackExchange</em> to find out about the other
+control regimes, and where one particular regime might be chosen over another.</p></div><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// (not real code)
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>trait</span> Outputs {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>set_x_motion</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, steps_per_second: <span style=color:#66d9ef>f32</span>);
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>set_y_motion</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, steps_per_second: <span style=color:#66d9ef>f32</span>);
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>set_z_motion</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, steps_per_second: <span style=color:#66d9ef>f32</span>);
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>One downside of <em>Velocity Control</em> is that you have less control over position
+and unless you have specific hardware which provides feedback (e.g. an
+<a href=https://en.wikipedia.org/wiki/Encoder class=external-link target=_blank rel=noopener>encoder</a>), the only way to know an axis&rsquo; position is by counting it
+yourself based on time between ticks and the current speed (i.e.
+<code>position += velocity*dt</code>).</p><p>Keep in mind that positional accuracy will depend directly on the <code>poll()</code>
+frequency. This is one of the big differentiators between realtime systems
+and &ldquo;normal&rdquo; systems, <code>poll()</code> frequency (and by extension performance in
+general) is a determining factor in whether something will fulfill its
+requirements.</p><h2 id=planning>Planning
+<a class=heading-link href=#planning><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now we&rsquo;ve got a better idea of the inputs and outputs available to our
+system, we need to figure out how to implement <em>&ldquo;Go To Home&rdquo;</em>. We&rsquo;ll want to
+choose a consistent well-known spot for our home position, and based on the
+inputs available moving all axes to the end of travel seems logical.</p><p>There are a couple ways we could implement this:</p><ol><li>Move one axis to its home position at a time</li><li>Move all axes simultaneously, stopping each axis when it reaches its
+corresponding limit in turn</li></ol><p>The former would be simpler to implement, but for a small increase in complexity
+the latter could potentially take 1/3 the time.</p><p>In pseudo-code, this would look something like:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python><span style=display:flex><span><span style=color:#66d9ef>while</span> <span style=color:#f92672>not</span> (at_x_lower_limit <span style=color:#f92672>and</span> at_y_lower_limit <span style=color:#f92672>and</span> at_z_lower_limit):
+</span></span><span style=display:flex><span>    move_x_backwards()
+</span></span><span style=display:flex><span>    move_y_backwards()
+</span></span><span style=display:flex><span>    move_z_backwards()
+</span></span></code></pre></div><h2 id=implementing-a-go-to-home-sequence>Implementing a <em>Go To Home</em> Sequence
+<a class=heading-link href=#implementing-a-go-to-home-sequence><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>There are a couple tricks we&rsquo;ll use to make the implementation if this homing
+sequence easier.</p><p>First we&rsquo;ll abstract over the exact type of axis this sequence works on. That
+means it doesn&rsquo;t matter whether we&rsquo;re controlling a stepper motor attached to
+a gearbox or a simple servo. We should be able to tell the axis to move home
+at a particular velocity in human-friendly units like mm/sec, and leave the
+calculation of stepper frequency and trauma speeds to some <em>Stepper Motor
+Driver</em> component.</p><div class="notices note"><p>From here on we&rsquo;ll also be using the <a href=https://docs.rs/uom/ class=external-link target=_blank rel=noopener>uom</a> crate for all dimensions and
+motion parameters. It helps to document what a particular variable
+corresponds to (i.e. the <code>speed = distance/time</code> calculation would be done
+with <code>Velocity</code>, <code>Length</code>, and <code>Time</code>, instead of <code>f32</code>, <code>f32</code>, and <code>f32</code>)
+and makes it almost impossible to mess up units (e.g. <code>mm</code> vs <code>in</code>, or <code>mm/s</code>
+vs <code>m/s</code>).</p></div><p>The interface for our limit switches and axes is rather simple:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// hal/src/axes.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> uom::si::<span style=color:#66d9ef>f32</span>::Velocity;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// A driver for controlling axis motion using *velocity control*.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> Axes {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Tell the specified axis to move at a desired velocity.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>set_target_velocity</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, axis_number: <span style=color:#66d9ef>usize</span>, velocity: <span style=color:#a6e22e>Velocity</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Get the actual velocity a particular axis is moving at.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>velocity</span>(<span style=color:#f92672>&amp;</span>self, axis_number: <span style=color:#66d9ef>usize</span>) -&gt; Option<span style=color:#f92672>&lt;</span>Velocity<span style=color:#f92672>&gt;</span>;
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// A driver which tracks the limit switch state.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> Limits {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>limit_switches</span>(<span style=color:#f92672>&amp;</span>self, axis_number: <span style=color:#66d9ef>usize</span>) -&gt; Option<span style=color:#f92672>&lt;</span>LimitSwitchState<span style=color:#f92672>&gt;</span>;
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// The state of a set of limit switches.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>LimitSwitchState</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> at_lower_limit: <span style=color:#66d9ef>bool</span>,
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> at_upper_limit: <span style=color:#66d9ef>bool</span>,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We&rsquo;ll also create a generic automation sequence which moves just one axis
+to its home position.</p><p>Automation sequences work by being polled frequently in order to make
+progress, eventually reaching a <em>Success</em> state or stopping early with some
+sort of <em>Fault</em>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// hal/src/automation.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// An automation sequence which will either be polled to completion or abort
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// early with a fault.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> AutomationSequence<span style=color:#f92672>&lt;</span>Input, Output<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Extra info attached to a fault.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>FaultInfo</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>poll</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, inputs: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Input</span>, outputs: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Output) -&gt; <span style=color:#a6e22e>Transition</span><span style=color:#f92672>&lt;</span>Self::FaultInfo<span style=color:#f92672>&gt;</span>;
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Copy, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>Transition</span><span style=color:#f92672>&lt;</span>F<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The [`AutomationSequence`] completed successfully.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    Complete,
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The [`AutomationSequence`] failed with a particular fault code.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    Fault(F),
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The [`AutomationSequence`] is still running.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    Incomplete,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Next we&rsquo;ll create a <code>MoveAxisHome</code> automation sequence which will try to move
+the <code>axis_number</code>&lsquo;th axis to its lower limit (in the negative direction) at
+a specific <code>homing_speed</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>MoveAxisHome</span> {
+</span></span><span style=display:flex><span>    homing_speed: <span style=color:#a6e22e>Velocity</span>,
+</span></span><span style=display:flex><span>    axis_number: <span style=color:#66d9ef>usize</span>,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>When neither limit switch is actuated our <code>MoveAxisHome</code> automation sequence
+should tell the corresponding axis to move backwards.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>polling_without_hitting_limits_makes_an_axis_move_backwards</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> seq <span style=color:#f92672>=</span> MoveAxisHome::new(Velocity::new::<span style=color:#f92672>&lt;</span>millimeter_per_second<span style=color:#f92672>&gt;</span>(<span style=color:#ae81ff>100.0</span>), <span style=color:#ae81ff>7</span>);
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> axes <span style=color:#f92672>=</span> DummyAxes::default();
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> limits <span style=color:#f92672>=</span> DummyLimits::default();
+</span></span><span style=display:flex><span>    limits.<span style=color:#ae81ff>0.</span>insert(<span style=color:#ae81ff>7</span>, LimitSwitchState::default());
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> trans <span style=color:#f92672>=</span> seq.poll(<span style=color:#f92672>&amp;</span>limits, <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> axes);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    assert_eq!(trans, Transition::Incomplete);
+</span></span><span style=display:flex><span>    assert_eq!(axes.<span style=color:#ae81ff>0.</span>len(), <span style=color:#ae81ff>1</span>);
+</span></span><span style=display:flex><span>    assert_eq!(axes.<span style=color:#ae81ff>0.</span>get(<span style=color:#f92672>&amp;</span><span style=color:#ae81ff>7</span>).copied(), Some(<span style=color:#f92672>-</span><span style=color:#ae81ff>1.0</span> <span style=color:#f92672>*</span> seq.homing_speed));
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Additionally, we want to be moving towards the lower limit so hitting the upper
+limit means something has gone wrong. Typically this means the limits are wired
+backwards.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>actuating_the_upper_limit_is_a_fault</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> seq <span style=color:#f92672>=</span> MoveAxisHome::new(Velocity::new::<span style=color:#f92672>&lt;</span>millimeter_per_second<span style=color:#f92672>&gt;</span>(<span style=color:#ae81ff>100.0</span>), <span style=color:#ae81ff>7</span>);
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> axes <span style=color:#f92672>=</span> DummyAxes::default();
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> limits <span style=color:#f92672>=</span> DummyLimits::default();
+</span></span><span style=display:flex><span>    limits.<span style=color:#ae81ff>0.</span>insert(
+</span></span><span style=display:flex><span>        <span style=color:#ae81ff>7</span>,
+</span></span><span style=display:flex><span>        LimitSwitchState { at_lower_limit: <span style=color:#a6e22e>false</span>, at_upper_limit: <span style=color:#a6e22e>true</span> },
+</span></span><span style=display:flex><span>    );
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> trans <span style=color:#f92672>=</span> seq.poll(<span style=color:#f92672>&amp;</span>limits, <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> axes);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    assert_eq!(trans, Transition::Fault(Fault::unexpected_upper_limit(<span style=color:#ae81ff>7</span>)));
+</span></span><span style=display:flex><span>    assert_eq!(axes.velocity(<span style=color:#ae81ff>7</span>), Some(Velocity::default()));
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>And finally, reaching the lower limit should complete the sequence.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>actuating_the_lower_limit_completes_the_sequence</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> seq <span style=color:#f92672>=</span> MoveAxisHome::new(Velocity::new::<span style=color:#f92672>&lt;</span>millimeter_per_second<span style=color:#f92672>&gt;</span>(<span style=color:#ae81ff>100.0</span>), <span style=color:#ae81ff>7</span>);
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> axes <span style=color:#f92672>=</span> DummyAxes::default();
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> limits <span style=color:#f92672>=</span> DummyLimits::default();
+</span></span><span style=display:flex><span>    limits.<span style=color:#ae81ff>0.</span>insert(
+</span></span><span style=display:flex><span>        <span style=color:#ae81ff>7</span>,
+</span></span><span style=display:flex><span>        LimitSwitchState { at_lower_limit: <span style=color:#a6e22e>true</span>, at_upper_limit: <span style=color:#a6e22e>false</span> },
+</span></span><span style=display:flex><span>    );
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> trans <span style=color:#f92672>=</span> seq.poll(<span style=color:#f92672>&amp;</span>limits, <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> axes);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    assert_eq!(trans, Transition::Complete);
+</span></span><span style=display:flex><span>    assert_eq!(axes.velocity(<span style=color:#ae81ff>7</span>), Some(Velocity::default()));
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We&rsquo;ve now got enough tests to implement a basic <code>MoveAxisHome</code> sequence. There
+are still a couple edge cases to cover (e.g. what happens if we start the
+sequence on the upper limit?) but they can be an exercise for the reader.</p><p>A quick&rsquo;n&rsquo;dirty implementation that makes all the tests pass:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>L: <span style=color:#a6e22e>Limits</span>, A: <span style=color:#a6e22e>Axes</span><span style=color:#f92672>&gt;</span> AutomationSequence<span style=color:#f92672>&lt;</span>L, A<span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> MoveAxisHome {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>FaultInfo</span> <span style=color:#f92672>=</span> Fault;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>poll</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, inputs: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>L</span>, outputs: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> A) -&gt; <span style=color:#a6e22e>Transition</span><span style=color:#f92672>&lt;</span>Self::FaultInfo<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> limits <span style=color:#f92672>=</span> <span style=color:#66d9ef>match</span> inputs.limit_switches(self.axis_number) {
+</span></span><span style=display:flex><span>            Some(l) <span style=color:#f92672>=&gt;</span> l,
+</span></span><span style=display:flex><span>            None <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>return</span> Transition::Fault(Fault::axis_not_found(self.axis_number))
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>        };
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> limits.at_upper_limit {
+</span></span><span style=display:flex><span>            outputs.set_target_velocity(self.axis_number, Velocity::default());
+</span></span><span style=display:flex><span>            Transition::Fault(Fault::unexpected_upper_limit(self.axis_number))
+</span></span><span style=display:flex><span>        } <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span> limits.at_lower_limit {
+</span></span><span style=display:flex><span>            outputs.set_target_velocity(self.axis_number, Velocity::default());
+</span></span><span style=display:flex><span>            Transition::Complete
+</span></span><span style=display:flex><span>        } <span style=color:#66d9ef>else</span> {
+</span></span><span style=display:flex><span>            outputs.set_target_velocity(self.axis_number, <span style=color:#f92672>-</span><span style=color:#ae81ff>1.0</span> <span style=color:#f92672>*</span> self.homing_speed);
+</span></span><span style=display:flex><span>            Transition::Incomplete
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=combining-automation-sequences>Combining Automation Sequences
+<a class=heading-link href=#combining-automation-sequences><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Because we&rsquo;re moving multiple axes at a time, it&rsquo;d be nice to have a helper
+that lets us execute several <code>AutomationSequence</code>s simultaneously. A good
+analogy would be the <code>and_then()</code> and <code>join()</code> combinators commonly used with
+<code>futures</code>.</p><p>The general idea is:</p><ul><li>Create an array of <code>Option&lt;AutomationSequence></code>s</li><li>to implement <code>AutomationSequence::poll()</code>, iterate over the sequences, polling
+each sequence that is present</li><li>If any sequence returns a <code>Transition::Fault</code>, halt immediately with that
+fault</li><li>If a sequence returns <code>Transition::Complete</code>, &ldquo;remove&rdquo; it from the array using
+<code>Option::take()</code></li><li>Repeat until all sequences are completed</li></ul><p>The actual declaration for this <code>All</code> combinator gets a little messy because
+we need to use <code>AsMut</code> and some other trait-level trickery to work around the
+lack of proper const generics. It also leaks some implementation details like
+needing to provide the <code>[Option&lt;A>; N]</code> storage buffer in the constructor
+instead of just taking a list of <code>AutomationSequence</code>s.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// hal/src/automation.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>All</span><span style=color:#f92672>&lt;</span>A, V, I, O<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    sequences: <span style=color:#a6e22e>V</span>,
+</span></span><span style=display:flex><span>    _automation_type: <span style=color:#a6e22e>PhantomData</span><span style=color:#f92672>&lt;</span>A<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    _input_type: <span style=color:#a6e22e>PhantomData</span><span style=color:#f92672>&lt;</span>I<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    _output_type: <span style=color:#a6e22e>PhantomData</span><span style=color:#f92672>&lt;</span>O<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>A, V, I, O<span style=color:#f92672>&gt;</span> All<span style=color:#f92672>&lt;</span>A, V, I, O<span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    V: AsMut<span style=color:#f92672>&lt;</span>[Option<span style=color:#f92672>&lt;</span>A<span style=color:#f92672>&gt;</span>]<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    A: <span style=color:#a6e22e>AutomationSequence</span><span style=color:#f92672>&lt;</span>I, O<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new</span>(items: <span style=color:#a6e22e>V</span>) -&gt; <span style=color:#a6e22e>Self</span> {
+</span></span><span style=display:flex><span>        All {
+</span></span><span style=display:flex><span>            sequences: <span style=color:#a6e22e>items</span>,
+</span></span><span style=display:flex><span>            _automation_type: <span style=color:#a6e22e>PhantomData</span>,
+</span></span><span style=display:flex><span>            _input_type: <span style=color:#a6e22e>PhantomData</span>,
+</span></span><span style=display:flex><span>            _output_type: <span style=color:#a6e22e>PhantomData</span>,
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The <code>AutomationSequence::poll()</code> method itself isn&rsquo;t overly complicated though.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// hal/src/automation.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>I, O, A: <span style=color:#a6e22e>AutomationSequence</span><span style=color:#f92672>&lt;</span>I, O<span style=color:#f92672>&gt;</span>, V: AsMut<span style=color:#f92672>&lt;</span>[Option<span style=color:#f92672>&lt;</span>A<span style=color:#f92672>&gt;</span>]<span style=color:#f92672>&gt;&gt;</span>
+</span></span><span style=display:flex><span>    AutomationSequence<span style=color:#f92672>&lt;</span>I, O<span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> All<span style=color:#f92672>&lt;</span>A, V, I, O<span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>FaultInfo</span> <span style=color:#f92672>=</span> A::FaultInfo;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>poll</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        inputs: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>I</span>,
+</span></span><span style=display:flex><span>        outputs: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> O,
+</span></span><span style=display:flex><span>    ) -&gt; <span style=color:#a6e22e>Transition</span><span style=color:#f92672>&lt;</span>Self::FaultInfo<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> variants <span style=color:#f92672>=</span> self.sequences.as_mut();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>for</span> variant <span style=color:#66d9ef>in</span> variants.iter_mut() {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> Transition::Fault(f) <span style=color:#f92672>=</span> poll_variant(variant, inputs, outputs)
+</span></span><span style=display:flex><span>            {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>return</span> Transition::Fault(f);
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> variants.iter().all(<span style=color:#f92672>|</span>v<span style=color:#f92672>|</span> v.is_none()) {
+</span></span><span style=display:flex><span>            Transition::Complete
+</span></span><span style=display:flex><span>        } <span style=color:#66d9ef>else</span> {
+</span></span><span style=display:flex><span>            Transition::Incomplete
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>poll_variant</span><span style=color:#f92672>&lt;</span>I, O, A<span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>    variant: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Option<span style=color:#f92672>&lt;</span>A<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    inputs: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>I</span>,
+</span></span><span style=display:flex><span>    outputs: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> O,
+</span></span><span style=display:flex><span>) -&gt; <span style=color:#a6e22e>Transition</span><span style=color:#f92672>&lt;</span>A::FaultInfo<span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    A: <span style=color:#a6e22e>AutomationSequence</span><span style=color:#f92672>&lt;</span>I, O<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> trans <span style=color:#f92672>=</span> <span style=color:#66d9ef>match</span> variant {
+</span></span><span style=display:flex><span>        Some(<span style=color:#66d9ef>ref</span> <span style=color:#66d9ef>mut</span> sequence) <span style=color:#f92672>=&gt;</span> sequence.poll(inputs, outputs),
+</span></span><span style=display:flex><span>        None <span style=color:#f92672>=&gt;</span> Transition::Complete,
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> trans.at_end_state() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> _ <span style=color:#f92672>=</span> variant.take();
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    trans
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Now we&rsquo;ve got a useable <code>All</code> combinator, it&rsquo;s almost trivial to make a wrapper
+that runs our <em>Go To Home</em> sequence on each axis concurrently.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Home</span><span style=color:#f92672>&lt;</span>L: <span style=color:#a6e22e>Limits</span>, A: <span style=color:#a6e22e>Axes</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    inner: <span style=color:#a6e22e>All</span><span style=color:#f92672>&lt;</span>MoveAxisHome, [Option<span style=color:#f92672>&lt;</span>MoveAxisHome<span style=color:#f92672>&gt;</span>; <span style=color:#ae81ff>3</span>], L, A<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>L: <span style=color:#a6e22e>Limits</span>, A: <span style=color:#a6e22e>Axes</span><span style=color:#f92672>&gt;</span> Home<span style=color:#f92672>&lt;</span>L, A<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new</span>(
+</span></span><span style=display:flex><span>        x_axis: <span style=color:#66d9ef>usize</span>,
+</span></span><span style=display:flex><span>        y_axis: <span style=color:#66d9ef>usize</span>,
+</span></span><span style=display:flex><span>        z_axis: <span style=color:#66d9ef>usize</span>,
+</span></span><span style=display:flex><span>        homing_speed: <span style=color:#a6e22e>Velocity</span>,
+</span></span><span style=display:flex><span>    ) -&gt; <span style=color:#a6e22e>Self</span> {
+</span></span><span style=display:flex><span>        Home {
+</span></span><span style=display:flex><span>            inner: <span style=color:#a6e22e>All</span>::new([
+</span></span><span style=display:flex><span>                Some(MoveAxisHome::new(homing_speed, x_axis)),
+</span></span><span style=display:flex><span>                Some(MoveAxisHome::new(homing_speed, y_axis)),
+</span></span><span style=display:flex><span>                Some(MoveAxisHome::new(homing_speed, z_axis)),
+</span></span><span style=display:flex><span>            ]),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>L: <span style=color:#a6e22e>Limits</span>, A: <span style=color:#a6e22e>Axes</span><span style=color:#f92672>&gt;</span> AutomationSequence<span style=color:#f92672>&lt;</span>L, A<span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> Home<span style=color:#f92672>&lt;</span>L, A<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>FaultInfo</span> <span style=color:#f92672>=</span> Fault;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>poll</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        inputs: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>L</span>,
+</span></span><span style=display:flex><span>        outputs: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> A,
+</span></span><span style=display:flex><span>    ) -&gt; <span style=color:#a6e22e>Transition</span><span style=color:#f92672>&lt;</span>Self::FaultInfo<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        self.inner.poll(inputs, outputs)
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=the-next-step>The Next Step
+<a class=heading-link href=#the-next-step><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now we&rsquo;re able to work with automation sequences we should create a <em>Motion</em>
+system which can invoke those sequences in response to requests from the
+frontend.</p></div><footer></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>

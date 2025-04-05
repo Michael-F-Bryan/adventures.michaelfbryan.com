@@ -1,0 +1,852 @@
+<!doctype html><html lang=en><head><title>Implementing ArrayVec Using Const Generics · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="If you&rsquo;ve ever done much embedded programming in Rust, you&rsquo;ve most probably run
+across the arrayvec crate before. It&rsquo;s awesome. The main purpose
+of the crate is to provide the ArrayVec type, which is essentially like
+Vec<T> from the standard library, but backed by an array instead of some
+memory on the heap.
+One of the problems I ran into while writing the Motion Planning chapter of my
+Adventures in Motion Control was deciding how far ahead my motion
+planner should plan."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="Implementing ArrayVec Using Const Generics"><meta name=twitter:description content="If you’ve ever done much embedded programming in Rust, you’ve most probably run across the arrayvec crate before. It’s awesome. The main purpose of the crate is to provide the ArrayVec type, which is essentially like Vec<T> from the standard library, but backed by an array instead of some memory on the heap.
+One of the problems I ran into while writing the Motion Planning chapter of my Adventures in Motion Control was deciding how far ahead my motion planner should plan."><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/const-arrayvec/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="Implementing ArrayVec Using Const Generics"><meta property="og:description" content="If you’ve ever done much embedded programming in Rust, you’ve most probably run across the arrayvec crate before. It’s awesome. The main purpose of the crate is to provide the ArrayVec type, which is essentially like Vec<T> from the standard library, but backed by an array instead of some memory on the heap.
+One of the problems I ran into while writing the Motion Planning chapter of my Adventures in Motion Control was deciding how far ahead my motion planner should plan."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2019-11-15T00:57:00+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Rust"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/const-arrayvec/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/const-arrayvec/>Implementing ArrayVec Using Const Generics</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2019-11-15T00:57:00+08:00>November 15, 2019
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+21-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/rust/>Rust</a></span></div></div></header><div class=post-content><p>If you&rsquo;ve ever done much embedded programming in Rust, you&rsquo;ve most probably run
+across the <a href=https://crates.io/crates/arrayvec class=external-link target=_blank rel=noopener><code>arrayvec</code></a> crate before. It&rsquo;s awesome. The main purpose
+of the crate is to provide the <code>ArrayVec</code> type, which is essentially like
+<code>Vec&lt;T></code> from the standard library, but backed by an array instead of some
+memory on the heap.</p><p>One of the problems I ran into while writing the <em>Motion Planning</em> chapter of my
+<a href=http://adventures.michaelfbryan.com/tags/adventures-in-motion-control/ class=external-link target=_blank rel=noopener>Adventures in Motion Control</a> was deciding how far ahead my motion
+planner should plan.</p><p>The <em>Adventures in Motion Control</em> series is targeting a platform without an
+allocator, so the number of moves will be determined at compile time. I <em>could</em>
+pluck a number out of thin air and say <em>&ldquo;she&rsquo;ll be right&rdquo;</em>, but there&rsquo;s also
+this neat feature on <em>nightly</em> at the moment called <a href=https://github.com/rust-lang/rust/issues/44580 class=external-link target=_blank rel=noopener><em>&ldquo;Const Generics&rdquo;</em></a>&mldr;</p><figure><a href=https://xkcd.com/356/><img src=https://imgs.xkcd.com/comics/nerd_sniping.png alt="Nerd Sniping"></a><figcaption><p>(obligatory XKCD reference)</p></figcaption></figure><div class="notices note"><p>The code written in this article is available <a href=https://github.com/Michael-F-Bryan/const-arrayvec class=external-link target=_blank rel=noopener>on GitHub</a>. Feel free to
+browse through and steal code or inspiration. It&rsquo;s also been published as a
+crate <a href=https://crates.io/crates/const-arrayvec class=external-link target=_blank rel=noopener>on crates.io</a>.</p><p>I&rsquo;d also like to give a shout out to the original <code>arrayvec</code> author,
+<a href=https://github.com/bluss class=external-link target=_blank rel=noopener>@bluss</a>. This project takes a <strong>lot</strong> of ideas and inspiration from
+<code>arrayvec</code>, and it would have made things a lot harder (and more error-prone)
+if there wasn&rsquo;t prior art to refer to.</p><p>If you found this useful or spotted a bug, let me know on the blog&rsquo;s
+<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com class=external-link target=_blank rel=noopener>issue tracker</a>. I <em>especially</em> want to hear from you if you feel a piece
+of <code>unsafe</code> code is unsound!</p></div><h2 id=getting-started>Getting Started
+<a class=heading-link href=#getting-started><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Okay, so the first thing we&rsquo;ll need to do is create a crate and enable this
+<code>const_generics</code> feature.</p><p>When creating a new project I like to use <a href=https://crates.io/crates/cargo-generate class=external-link target=_blank rel=noopener><code>cargo generate</code></a>
+and a template repository. It just saves needing to manually copy license info
+from another project.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cargo generate --git https://github.com/Michael-F-Bryan/github-template --name const-arrayvec
+</span></span><span style=display:flex><span> Creating project called `const-arrayvec`...
+</span></span><span style=display:flex><span> Done! New project created /home/michael/Documents/const-arrayvec
+</span></span></code></pre></div><p>And we&rsquo;ll need to update <code>lib.rs</code>:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>//! An implementation of the [arrayvec](https://crates.io/crates/arrayvec) crate
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>//! using *Const Generics*.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#![no_std]</span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#![feature(const_generics)]</span>
+</span></span></code></pre></div><p>It&rsquo;s around this time that I&rsquo;ll start a second terminal and use <a href=https://crates.io/crates/cargo-watch class=external-link target=_blank rel=noopener><code>cargo watch</code></a>
+to run <code>cargo build</code>, <code>cargo test</code>, and <code>cargo doc</code> in the background.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cargo watch --clear
+</span></span><span style=display:flex><span>    -x &#34;check --all&#34;
+</span></span><span style=display:flex><span>    -x &#34;test --all&#34;
+</span></span><span style=display:flex><span>    -x &#34;doc --document-private-items --all&#34;
+</span></span><span style=display:flex><span>    -x &#34;build --release --all&#34;
+</span></span><span style=display:flex><span>warning: the feature `const_generics` is incomplete and may cause the compiler to crash
+</span></span><span style=display:flex><span> --&gt; src/lib.rs:2:12
+</span></span><span style=display:flex><span>  |
+</span></span><span style=display:flex><span>2 | #![feature(const_generics)]
+</span></span><span style=display:flex><span>  |            ^^^^^^^^^^^^^^
+</span></span><span style=display:flex><span>  |
+</span></span><span style=display:flex><span>  = note: `#[warn(incomplete_features)]` on by default
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span>    Finished dev [unoptimized + debuginfo] target(s) in 0.02s
+</span></span></code></pre></div><p>Well that&rsquo;s encouraging. You know a feature <em>must</em> be unstable when even
+<em>nightly</em> warns you it may crash the compiler&mldr;</p><div class="notices tip"><p>You can &ldquo;fix&rdquo; this compiler warning by adding a <code>#![allow(incomplete_features)]</code>
+to the top of <code>lib.rs</code>.</p></div><p>Now we&rsquo;ve got a crate, we can start implementing our <code>ArrayVec</code> type.</p><p>The first decision we need to make is how values will be stored within our
+<code>ArrayVec</code> the naive implementation would use a simple <code>[T; N]</code> array, but that
+only works when <code>T</code> has a nice default value and no destructor. Instead, what
+we&rsquo;re really doing is storing an array of possibly initialized <code>T</code>&rsquo;s&mldr; Which
+is exactly what <a href=https://doc.rust-lang.org/core/mem/union.MaybeUninit.html class=external-link target=_blank rel=noopener><code>core::mem::MaybeUninit</code></a> is designed for.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> core::mem::MaybeUninit;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>ArrayVec</span><span style=color:#f92672>&lt;</span>T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    items: [MaybeUninit<span style=color:#f92672>&lt;</span>T<span style=color:#f92672>&gt;</span>; N],
+</span></span><span style=display:flex><span>    length: <span style=color:#66d9ef>usize</span>,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Next we&rsquo;ll need to give <code>ArrayVec</code> a constructor. This is what I <em>would</em> like
+to write&mldr;</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> core::mem::MaybeUninit;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new</span>() -&gt; <span style=color:#a6e22e>ArrayVec</span><span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        ArrayVec {
+</span></span><span style=display:flex><span>            items: [MaybeUninit::uninit(); N],
+</span></span><span style=display:flex><span>            length: <span style=color:#ae81ff>0</span>,
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>&mldr; But unfortunately it doesn&rsquo;t seem to be implemented yet (see
+<a href=https://users.rust-lang.org/t/array-lengths-cant-depend-on-generic-parameters-with-const-generics-bug-or-expected-behavior/30579 class=external-link target=_blank rel=noopener>this u.rl.o post</a>).</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-gdscript3 data-lang=gdscript3><span style=display:flex><span>    Checking <span style=color:#66d9ef>const</span><span style=color:#f92672>-</span>arrayvec v0<span style=color:#f92672>.</span><span style=color:#ae81ff>1.0</span> (<span style=color:#f92672>/</span>home<span style=color:#f92672>/</span>michael<span style=color:#f92672>/</span>Documents<span style=color:#f92672>/</span><span style=color:#66d9ef>const</span><span style=color:#f92672>-</span>arrayvec)
+</span></span><span style=display:flex><span>error: array lengths can<span style=color:#e6db74>&#39;t depend on generic parameters</span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>--&gt;</span> src<span style=color:#f92672>/</span>lib<span style=color:#f92672>.</span>rs:<span style=color:#ae81ff>15</span>:<span style=color:#ae81ff>44</span>
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>15</span> <span style=color:#f92672>|</span>             items: [MaybeUninit::uninit(); N],
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>                                            <span style=color:#f92672>^</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>error: aborting due to previous error
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>error: could <span style=color:#f92672>not</span> compile <span style=color:#960050;background-color:#1e0010>`</span><span style=color:#66d9ef>const</span><span style=color:#f92672>-</span>arrayvec<span style=color:#960050;background-color:#1e0010>`</span><span style=color:#f92672>.</span>
+</span></span></code></pre></div><p>Instead we&rsquo;ll need to drop the <code>const fn</code> for now and find a different way of
+creating our array of uninitialized data.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> core::mem::MaybeUninit;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new</span>() -&gt; <span style=color:#a6e22e>ArrayVec</span><span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>            ArrayVec {
+</span></span><span style=display:flex><span>                <span style=color:#75715e>// this is safe because we&#39;ve asked for a big block of
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                <span style=color:#75715e>// uninitialized memory which will be treated as
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                <span style=color:#75715e>// an array of uninitialized items,
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                <span style=color:#75715e>// which perfectly valid for [MaybeUninit&lt;_&gt;; N]
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                items: <span style=color:#a6e22e>MaybeUninit</span>::uninit().assume_init(),
+</span></span><span style=display:flex><span>                length: <span style=color:#ae81ff>0</span>,
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>While we&rsquo;re at it, because we&rsquo;re implementing a collection we should add <code>len()</code>
+and friends.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>len</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>usize</span> { self.length }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>is_empty</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>bool</span> { self.len() <span style=color:#f92672>==</span> <span style=color:#ae81ff>0</span> }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>capacity</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>usize</span> { N }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>remaining_capacity</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>usize</span> {
+</span></span><span style=display:flex><span>        self.capacity() <span style=color:#f92672>-</span> self.len()
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>is_full</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>bool</span> { self.len() <span style=color:#f92672>==</span> self.capacity() }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We also want a way to get a raw pointer to the first element in the underlying
+buffer. This will be important when we actually need to read data.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>as_ptr</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#f92672>*</span><span style=color:#66d9ef>const</span> T { self.items.as_ptr() <span style=color:#66d9ef>as</span> <span style=color:#f92672>*</span><span style=color:#66d9ef>const</span> T }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>as_mut_ptr</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> T { self.items.as_mut_ptr() <span style=color:#66d9ef>as</span> <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> T }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=the-basic-operations>The Basic Operations
+<a class=heading-link href=#the-basic-operations><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>About the most basic operation for a <code>Vec</code>-like container to support is adding
+and removing items, so that&rsquo;s what we&rsquo;ll be implementing next.</p><p>As you may have guessed, this crate will do a lot of work with possibly
+initialized memory so there&rsquo;ll be a decent chunk of <code>unsafe</code> code.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Add an item to the end of the array without checking the capacity.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// # Safety
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// It is up to the caller to ensure the vector&#39;s capacity is suitably
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// large.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// This method uses *debug assertions* to detect overflows in debug builds.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>push_unchecked</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, item: <span style=color:#a6e22e>T</span>) {
+</span></span><span style=display:flex><span>        debug_assert!(<span style=color:#f92672>!</span>self.is_full());
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> len <span style=color:#f92672>=</span> self.len();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// index into the underlying array using pointer arithmetic and write
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#75715e>// the item to the correct spot
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        self.as_mut_ptr().add(len).write(item);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// only now can we update the length
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        self.set_len(len <span style=color:#f92672>+</span> <span style=color:#ae81ff>1</span>);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Set the vector&#39;s length without dropping or moving out elements.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// # Safety
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// This method is `unsafe` because it changes the number of &#34;valid&#34;
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// elements the vector thinks it contains, without adding or removing any
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// elements. Use with care.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>set_len</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, new_length: <span style=color:#66d9ef>usize</span>) {
+</span></span><span style=display:flex><span>        debug_assert!(new_length <span style=color:#f92672>&lt;=</span> self.capacity());
+</span></span><span style=display:flex><span>        self.length <span style=color:#f92672>=</span> new_length;
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The <code>push_unchecked()</code> and <code>set_len()</code> methods should be fairly descriptive,
+so I&rsquo;ll just let you read the code. Something to note</p><div class="notices note"><p>You would have noticed that the <code>unsafe</code> functions have a <code># Safety</code> section in
+their doc-comments specifying various assumptions and invariants that must be
+upheld.</p><p>This is quite common when writing <code>unsafe</code> code, and is actually
+<a href=https://rust-lang.github.io/api-guidelines/documentation.html#c-failure class=external-link target=_blank rel=noopener>part of the Rust API guidelines</a>. I would recommend giving that
+document a quick read if you haven&rsquo;t already.</p></div><p>We also need to expose a safe method way to push items. Preferably also
+providing a way to get the original item back when there is no more space.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> core::fmt::{self, Display, Formatter};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Add an item to the end of the vector.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// # Panics
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// The vector must have enough room for the new item.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// # Examples
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// ```rust
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// use const_arrayvec::ArrayVec;
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// let mut vector: ArrayVec&lt;u32, 5&gt; = ArrayVec::new();
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// assert!(vector.is_empty());
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// vector.push(42);
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// assert_eq!(vector.len(), 1);
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// assert_eq!(vector[0], 42);
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// ```
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>push</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, item: <span style=color:#a6e22e>T</span>) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> self.try_push(item) {
+</span></span><span style=display:flex><span>            Ok(_) <span style=color:#f92672>=&gt;</span> {},
+</span></span><span style=display:flex><span>            Err(e) <span style=color:#f92672>=&gt;</span> panic!(<span style=color:#e6db74>&#34;Push failed: </span><span style=color:#e6db74>{}</span><span style=color:#e6db74>&#34;</span>, e),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Try to add an item to the end of the vector, returning the original item
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// if there wasn&#39;t enough room.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// # Examples
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// ```rust
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// use const_arrayvec::{ArrayVec, CapacityError};
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// let mut vector: ArrayVec&lt;u32, 2&gt; = ArrayVec::new();
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// assert!(vector.try_push(1).is_ok());
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// assert!(vector.try_push(2).is_ok());
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// assert!(vector.is_full());
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// assert_eq!(vector.try_push(42), Err(CapacityError(42)));
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// ```
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>try_push</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, item: <span style=color:#a6e22e>T</span>) -&gt; Result<span style=color:#f92672>&lt;</span>(), CapacityError<span style=color:#f92672>&lt;</span>T<span style=color:#f92672>&gt;&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> self.is_full() {
+</span></span><span style=display:flex><span>            Err(CapacityError(item))
+</span></span><span style=display:flex><span>        } <span style=color:#66d9ef>else</span> {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>                self.push_unchecked(item);
+</span></span><span style=display:flex><span>                Ok(())
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>CapacityError</span><span style=color:#f92672>&lt;</span>T<span style=color:#f92672>&gt;</span>(<span style=color:#66d9ef>pub</span> T);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T<span style=color:#f92672>&gt;</span> Display <span style=color:#66d9ef>for</span> CapacityError<span style=color:#f92672>&lt;</span>T<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>fmt</span>(<span style=color:#f92672>&amp;</span>self, f: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Formatter<span style=color:#f92672>&lt;</span>&#39;_<span style=color:#f92672>&gt;</span>) -&gt; <span style=color:#a6e22e>fmt</span>::Result {
+</span></span><span style=display:flex><span>        write!(f, <span style=color:#e6db74>&#34;Insufficient capacity&#34;</span>)
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>While we&rsquo;re at it, we should add a <code>pop()</code> method. This one is quite similar,
+except implemented in reverse (i.e. the length is decremented and we read from
+the array).</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> core::ptr;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Remove an item from the end of the vector.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// # Examples
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// ```rust
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// # use const_arrayvec::ArrayVec;
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// let mut vector: ArrayVec&lt;u32, 5&gt; = ArrayVec::new();
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// vector.push(12);
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// vector.push(34);
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// assert_eq!(vector.len(), 2);
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// let got = vector.pop();
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// assert_eq!(got, Some(34));
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// assert_eq!(vector.len(), 1);
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// ```
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>pop</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; Option<span style=color:#f92672>&lt;</span>T<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> self.is_empty() {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>return</span> None;
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> new_length <span style=color:#f92672>=</span> self.len() <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>;
+</span></span><span style=display:flex><span>            self.set_len(new_length);
+</span></span><span style=display:flex><span>            Some(ptr::read(self.as_ptr().add(new_length)))
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Some more relatively straightforward methods are <code>clear()</code> and <code>truncate()</code> for
+shortening the vector and dropping any items after the new end.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> core::{ptr, slice};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Shorten the vector, keeping the first `new_length` elements and dropping
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// the rest.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>truncate</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, new_length: <span style=color:#66d9ef>usize</span>) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>if</span> new_length <span style=color:#f92672>&lt;</span> self.len() {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> start <span style=color:#f92672>=</span> self.as_mut_ptr().add(new_length);
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> num_elements_to_remove <span style=color:#f92672>=</span> self.len() <span style=color:#f92672>-</span> new_length;
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> tail: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> [T] <span style=color:#f92672>=</span>
+</span></span><span style=display:flex><span>                    slice::from_raw_parts_mut(start, num_elements_to_remove);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>                self.set_len(new_length);
+</span></span><span style=display:flex><span>                ptr::drop_in_place(tail);
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Remove all items from the vector.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>clear</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) { self.truncate(<span style=color:#ae81ff>0</span>); }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices note"><p>Note the use of <code>core::ptr::drop_in_place()</code>, this will call the destructor of
+every item in the <code>tail</code> and leave them in a logically uninitialized state.</p></div><p>Next comes one of the trickier methods for our collection, <code>try_insert()</code>. When
+inserting, after doing a couple bounds checks we&rsquo;ll need to move everything
+after the insertion point over one space. Because the memory we&rsquo;re copying
+<em>from</em> overlaps with the memory we&rsquo;re copying <em>to</em>, we need to use the less
+performant <code>core::ptr::copy()</code> (the Rust version of C&rsquo;s <code>memmove()</code>) instead of
+<code>core::ptr::copy_non_overlapping()</code> (equivalent of C&rsquo;s <code>memcpy()</code>).</p><p>Most of this code is lifted straight from <a href=https://github.com/rust-lang/rust/blob/a19f93410d4315408f8775e1be29536302adc223/src/liballoc/vec.rs#L993-L1016 class=external-link target=_blank rel=noopener><code>alloc::vec::Vec::insert()</code></a>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> core::ptr;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>macro_rules<span style=color:#f92672>!</span> out_of_bounds {
+</span></span><span style=display:flex><span>    (<span style=color:#75715e>$method</span>:<span style=color:#a6e22e>expr</span>, <span style=color:#75715e>$index</span>:<span style=color:#a6e22e>expr</span>, <span style=color:#75715e>$len</span>:<span style=color:#a6e22e>expr</span>) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>        panic!(
+</span></span><span style=display:flex><span>            concat!(
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#34;ArrayVec::&#34;</span>,
+</span></span><span style=display:flex><span>                <span style=color:#75715e>$method</span>,
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#34;(): index {} is out of bounds in vector of length {}&#34;</span>
+</span></span><span style=display:flex><span>            ),
+</span></span><span style=display:flex><span>            <span style=color:#75715e>$index</span>, <span style=color:#75715e>$len</span>
+</span></span><span style=display:flex><span>        );
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>try_insert</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        index: <span style=color:#66d9ef>usize</span>,
+</span></span><span style=display:flex><span>        item: <span style=color:#a6e22e>T</span>,
+</span></span><span style=display:flex><span>    ) -&gt; Result<span style=color:#f92672>&lt;</span>(), CapacityError<span style=color:#f92672>&lt;</span>T<span style=color:#f92672>&gt;&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> len <span style=color:#f92672>=</span> self.len();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// bounds checks
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>if</span> index <span style=color:#f92672>&gt;</span> self.len() {
+</span></span><span style=display:flex><span>            out_of_bounds!(<span style=color:#e6db74>&#34;try_insert&#34;</span>, index, len);
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> self.is_full() {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>return</span> Err(CapacityError(item));
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// The spot to put the new value
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#66d9ef>let</span> p <span style=color:#f92672>=</span> self.as_mut_ptr().add(index);
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// Shift everything over to make space. (Duplicating the
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#75715e>// `index`th element into two consecutive places.)
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            ptr::copy(p, p.offset(<span style=color:#ae81ff>1</span>), len <span style=color:#f92672>-</span> index);
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// Write it in, overwriting the first copy of the `index`th
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#75715e>// element.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            ptr::write(p, item);
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// update the length
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            self.set_len(len <span style=color:#f92672>+</span> <span style=color:#ae81ff>1</span>);
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        Ok(())
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>insert</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, index: <span style=color:#66d9ef>usize</span>, item: <span style=color:#a6e22e>T</span>) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> self.try_insert(index, item) {
+</span></span><span style=display:flex><span>            Ok(_) <span style=color:#f92672>=&gt;</span> {},
+</span></span><span style=display:flex><span>            Err(e) <span style=color:#f92672>=&gt;</span> panic!(<span style=color:#e6db74>&#34;Insert failed: </span><span style=color:#e6db74>{}</span><span style=color:#e6db74>&#34;</span>, e),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Something we haven&rsquo;t done up until now is make sure destructors are called for
+the items in our collection. Leaking memory is bad, so we need to add a <code>Drop</code>
+impl.</p><p>This is easier than you&rsquo;d think because we can just use the <code>clear()</code> method.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> Drop <span style=color:#66d9ef>for</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>drop</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// Makes sure the destructors for all items are run.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        self.clear();
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=implementing-useful-traits>Implementing Useful Traits
+<a class=heading-link href=#implementing-useful-traits><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>We&rsquo;re now at the point where should start making our <code>ArrayVec</code> easier to use.</p><p>The implementation itself is quite boring (we just call
+<code>core::slice::from_raw_parts()</code>), but this is the first step on the way to being
+a first class vec-like container.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> core::{ops::{Deref, DerefMut}, slice};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> Deref <span style=color:#66d9ef>for</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Target</span> <span style=color:#f92672>=</span> [T];
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>deref</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Self</span>::Target {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>unsafe</span> { slice::from_raw_parts(self.as_ptr(), self.len()) }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> DerefMut <span style=color:#66d9ef>for</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>deref_mut</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Self::Target {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>unsafe</span> { slice::from_raw_parts_mut(self.as_mut_ptr(), self.len()) }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>From here we get things like <code>as_slice()</code> and <code>AsRef&lt;[T]></code> for free.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>as_slice</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>&amp;</span>[T] { self.deref() }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>as_slice_mut</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> [T] { self.deref_mut() }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> AsRef<span style=color:#f92672>&lt;</span>[T]<span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>as_ref</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>&amp;</span>[T] { self.as_slice() }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> AsMut<span style=color:#f92672>&lt;</span>[T]<span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>as_mut</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> [T] { self.as_slice_mut() }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>You may have noticed that we didn&rsquo;t use any custom derives when declaring
+<code>ArrayVec</code>. Now we can use <code>as_slice()</code> it&rsquo;s easy enough to defer the
+implementation of traits you&rsquo;d normally <code>#[derive]</code> to their <code>&[T]</code>
+implementation.</p><p>The traits we&rsquo;re going to implement manually:</p><ul><li>Debug</li><li>PartialEq/Eq</li><li>PartialOrd/Ord</li><li>Hash</li><li>Clone</li><li>Default (just calls <code>ArrayVec::new()</code>)</li></ul><p>We&rsquo;ll leave <code>Copy</code> and <code>Clone</code> for later.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> core::{
+</span></span><span style=display:flex><span>    hash::Hasher,
+</span></span><span style=display:flex><span>    fmt::{self, Debug, Formatter},
+</span></span><span style=display:flex><span>    cmp::Ordering,
+</span></span><span style=display:flex><span>};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T: <span style=color:#a6e22e>Debug</span>, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> Debug <span style=color:#66d9ef>for</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>fmt</span>(<span style=color:#f92672>&amp;</span>self, f: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Formatter<span style=color:#f92672>&lt;</span>&#39;_<span style=color:#f92672>&gt;</span>) -&gt; <span style=color:#a6e22e>fmt</span>::Result {
+</span></span><span style=display:flex><span>        self.as_slice().fmt(f)
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T: PartialEq, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> PartialEq<span style=color:#f92672>&lt;</span>[T]<span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>eq</span>(<span style=color:#f92672>&amp;</span>self, other: <span style=color:#66d9ef>&amp;</span>[T]) -&gt; <span style=color:#66d9ef>bool</span> { self.as_slice() <span style=color:#f92672>==</span> other }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T: PartialEq, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span>, <span style=color:#66d9ef>const</span> M: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> PartialEq<span style=color:#f92672>&lt;</span>ArrayVec<span style=color:#f92672>&lt;</span>T, { M }<span style=color:#f92672>&gt;&gt;</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>for</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>eq</span>(<span style=color:#f92672>&amp;</span>self, other: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>ArrayVec</span><span style=color:#f92672>&lt;</span>T, { M }<span style=color:#f92672>&gt;</span>) -&gt; <span style=color:#66d9ef>bool</span> {
+</span></span><span style=display:flex><span>        self.as_slice() <span style=color:#f92672>==</span> other.as_slice()
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T: Eq, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> Eq <span style=color:#66d9ef>for</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T: PartialOrd, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> PartialOrd <span style=color:#66d9ef>for</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>partial_cmp</span>(<span style=color:#f92672>&amp;</span>self, other: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Self</span>) -&gt; Option<span style=color:#f92672>&lt;</span>Ordering<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        self.as_slice().partial_cmp(other.as_slice())
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T: Ord, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> Ord <span style=color:#66d9ef>for</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>cmp</span>(<span style=color:#f92672>&amp;</span>self, other: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Self</span>) -&gt; <span style=color:#a6e22e>Ordering</span> {
+</span></span><span style=display:flex><span>        self.as_slice().cmp(other.as_slice())
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T: <span style=color:#a6e22e>Hash</span>, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> Hash <span style=color:#66d9ef>for</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>hash</span><span style=color:#f92672>&lt;</span>H: <span style=color:#a6e22e>Hasher</span><span style=color:#f92672>&gt;</span>(<span style=color:#f92672>&amp;</span>self, hasher: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> H) { self.as_slice().hash(hasher); }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> Default <span style=color:#66d9ef>for</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>default</span>() -&gt; <span style=color:#a6e22e>Self</span> { ArrayVec::new() }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T: Clone, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> Clone <span style=color:#66d9ef>for</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>clone</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#a6e22e>ArrayVec</span><span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> other: <span style=color:#a6e22e>ArrayVec</span><span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> <span style=color:#f92672>=</span> ArrayVec::new();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>for</span> item <span style=color:#66d9ef>in</span> self.as_slice() {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>                <span style=color:#75715e>// if it fit into the original, it&#39;ll fit into the clone
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                other.push_unchecked(item.clone());
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        other
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices tip"><p>I imagine we could use <a href=https://github.com/rust-lang/rust/issues/31844 class=external-link target=_blank rel=noopener>specialization</a> to convert the <code>Clone</code> impl to
+a simple <code>memcpy()</code> when <code>T: Copy</code> to give us a nice speed boost, but there&rsquo;s
+a good chance LLVM will figure out what we&rsquo;re doing and apply that
+optimisation anyway.</p></div><p>That&rsquo;s a pretty big wall of code, but you may have noticed instead of
+implementing <code>PartialEq</code>, we instead implemented <code>PartialEq&lt;ArrayVec&lt;T, { M }>></code>
+for <code>ArrayVec&lt;T, { N }></code>. This makes things more flexible by allowing vectors
+of different sizes can be compared for equality.</p><p>Users will want to index into our vector (i.e. <code>some_vector[i]</code>), but if you
+look at the docs <a href=https://doc.rust-lang.org/std/primitive.slice.html#impl-Index%3CI%3E class=external-link target=_blank rel=noopener>implementing <code>Index</code> for <code>[T]</code></a> you&rsquo;ll see it
+uses the unstable <a href=https://doc.rust-lang.org/std/slice/trait.SliceIndex.html class=external-link target=_blank rel=noopener><code>core::slice::SliceIndex</code></a> trait. We <em>could</em>
+enable another feature flag, but a smarter way would be to say <em>"<code>ArrayVec</code> can
+be indexed using whatever can index into a <code>[T]</code>"</em>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> core::ops::{Index, IndexMut};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>Ix, T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> Index<span style=color:#f92672>&lt;</span>Ix<span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    [T]: <span style=color:#a6e22e>Index</span><span style=color:#f92672>&lt;</span>Ix<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Output</span> <span style=color:#f92672>=</span> <span style=color:#f92672>&lt;</span>[T] <span style=color:#66d9ef>as</span> Index<span style=color:#f92672>&lt;</span>Ix<span style=color:#f92672>&gt;&gt;</span>::Output;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>index</span>(<span style=color:#f92672>&amp;</span>self, ix: <span style=color:#a6e22e>Ix</span>) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Self</span>::Output { self.as_slice().index(ix) }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>Ix, T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> IndexMut<span style=color:#f92672>&lt;</span>Ix<span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    [T]: <span style=color:#a6e22e>IndexMut</span><span style=color:#f92672>&lt;</span>Ix<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>index_mut</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, ix: <span style=color:#a6e22e>Ix</span>) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Self::Output {
+</span></span><span style=display:flex><span>        self.as_slice_mut().index_mut(ix)
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=bulk-copies-and-insertion>Bulk Copies and Insertion
+<a class=heading-link href=#bulk-copies-and-insertion><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Another useful operation is to copy items directly from another slice.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> core::ptr;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>remaining_capacity</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>usize</span> {
+</span></span><span style=display:flex><span>        self.capacity() <span style=color:#f92672>-</span> self.len()
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>try_extend_from_slice</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        other: <span style=color:#66d9ef>&amp;</span>[T],
+</span></span><span style=display:flex><span>    ) -&gt; Result<span style=color:#f92672>&lt;</span>(), CapacityError<span style=color:#f92672>&lt;</span>()<span style=color:#f92672>&gt;&gt;</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>        T: Copy,
+</span></span><span style=display:flex><span>    {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> self.remaining_capacity() <span style=color:#f92672>&lt;</span> other.len() {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>return</span> Err(CapacityError(()));
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> self_len <span style=color:#f92672>=</span> self.len();
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> other_len <span style=color:#f92672>=</span> other.len();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> dst <span style=color:#f92672>=</span> self.as_mut_ptr().offset(self_len <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>isize</span>);
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// Note: we have a mutable reference to self, so it&#39;s not possible
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#75715e>// for the two arrays to overlap
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            ptr::copy_nonoverlapping(other.as_ptr(), dst, other_len);
+</span></span><span style=display:flex><span>            self.set_len(self_len <span style=color:#f92672>+</span> other_len);
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>        Ok(())
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>It&rsquo;s also useful to add a <code>From</code> to allow construction of a vector from an
+array.</p><p>This is can be tricky to do correctly because you can&rsquo;t iterate over the items
+(<code>T</code>, not <code>&amp;T</code>) in an array <code>[T; N]</code> due to the lack of an <code>IntoIterator</code> impl
+for arrays. Instead we&rsquo;ll need to use <code>unsafe</code> to directly copy bytes into our
+buffer.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> core::{mem, ptr};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> From<span style=color:#f92672>&lt;</span>[T; N]<span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>from</span>(other: [T; N]) -&gt; <span style=color:#a6e22e>ArrayVec</span><span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> vec <span style=color:#f92672>=</span> ArrayVec::<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span>::new();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// Copy the items from the array directly to the backing buffer
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// Note: Safe because a [T; N] is identical to [MaybeUninit&lt;T&gt;; N]
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            ptr::copy_nonoverlapping(
+</span></span><span style=display:flex><span>                other.as_ptr(),
+</span></span><span style=display:flex><span>                vec.as_mut_ptr(),
+</span></span><span style=display:flex><span>                other.len(),
+</span></span><span style=display:flex><span>            );
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// ownership has been transferred to the backing buffer, make sure
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#75715e>// the original array&#39;s destructors aren&#39;t called prematurely
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            mem::forget(other);
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// the memory has now been initialized so it&#39;s safe to set the
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#75715e>// length
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            vec.set_len(N);
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        vec
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=implementing-drain>Implementing Drain
+<a class=heading-link href=#implementing-drain><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Most collections have a so-called <em>Draining Iterator</em> that removes a specified
+range from the vector and yields the removed items.</p><p>Implementing this pattern <em>correctly</em> can be a non-trivial task however, as
+Alexis Beingessner&rsquo;s insightful <a href=http://cglab.ca/~abeinges/blah/everyone-poops/ class=external-link target=_blank rel=noopener>Pre-Pooping Your Pants With Rust</a>
+demonstrates.</p><p>The way a <code>Drain</code> type usually works is:</p><ul><li>Take a <code>&amp;mut</code> reference to the parent collection and keep track of the
+requested range.</li><li>The <code>Iterator::next()</code> method should yield the item at the front of the range,
+and increment the range&rsquo;s lower bound. This leaves the item&rsquo;s original
+location logically uninitialized (<em>important!</em>).</li><li>When the <code>Drain</code> is dropped, call destructors for any unyielded items and
+clean up the logically uninitialized memory by shuffling all items after the
+end of the range forwards.</li></ul><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/drain.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Drain</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    inner: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;a</span> <span style=color:#a6e22e>mut</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The index of the first item being removed.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    drain_range_start: <span style=color:#66d9ef>usize</span>,
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The index of the first item after the drained range.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    tail_start: <span style=color:#66d9ef>usize</span>,
+</span></span><span style=display:flex><span>    tail_length: <span style=color:#66d9ef>usize</span>,
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The front of the remaining drained range.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    head: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> T,
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// One after the last item in the range being drained.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    tail: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> T,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>There are a couple invariants that must be upheld for <code>Drain</code> to be valid:</p><ol><li>The <code>head</code> pointer must point within <code>inner</code>&rsquo;s backing array</li><li>The <code>head</code> pointer must be before the <code>tail</code> pointer</li><li>The <code>tail</code> pointer must be greater than or equal to <code>head</code>, and the furthest
+it can go is one item after the end of the buffer</li><li><code>T</code> must not be a zero-sized type because we are using pointer arithmetico</li></ol><p>With those invariants in mind, let&rsquo;s give <code>Drain</code> a constructor.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/drain.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> core::{mem, ops::Range};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> Drain<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>with_range</span>(
+</span></span><span style=display:flex><span>        vector: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;a</span> <span style=color:#a6e22e>mut</span> ArrayVec<span style=color:#f92672>&lt;</span>T, { N }<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>        range: <span style=color:#a6e22e>Range</span><span style=color:#f92672>&lt;</span><span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    ) -&gt; <span style=color:#a6e22e>Self</span> {
+</span></span><span style=display:flex><span>        debug_assert!(
+</span></span><span style=display:flex><span>            range.start <span style=color:#f92672>&lt;=</span> range.end,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;The range start must be before end&#34;</span>
+</span></span><span style=display:flex><span>        );
+</span></span><span style=display:flex><span>        debug_assert!(range.end <span style=color:#f92672>&lt;=</span> vector.len(), <span style=color:#e6db74>&#34;The range is out of bounds&#34;</span>);
+</span></span><span style=display:flex><span>        debug_assert!(
+</span></span><span style=display:flex><span>            mem::size_of::<span style=color:#f92672>&lt;</span>T<span style=color:#f92672>&gt;</span>() <span style=color:#f92672>!=</span> <span style=color:#ae81ff>0</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;We can&#39;t deal with zero-sized types&#34;</span>
+</span></span><span style=display:flex><span>        );
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> head <span style=color:#f92672>=</span> vector.as_mut_ptr().add(range.start);
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> tail <span style=color:#f92672>=</span> vector.as_mut_ptr().add(range.end);
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> tail_length <span style=color:#f92672>=</span> vector.len() <span style=color:#f92672>-</span> (range.end <span style=color:#f92672>-</span> range.start);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            Drain {
+</span></span><span style=display:flex><span>                inner: <span style=color:#a6e22e>vector</span>,
+</span></span><span style=display:flex><span>                drain_range_start: <span style=color:#a6e22e>range</span>.start,
+</span></span><span style=display:flex><span>                tail_start: <span style=color:#a6e22e>range</span>.end,
+</span></span><span style=display:flex><span>                tail_length,
+</span></span><span style=display:flex><span>                head,
+</span></span><span style=display:flex><span>                tail,
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span></code></pre></div><p>From here the <code>Iterator</code> implementation for <code>Drain</code> is rather straightforward.
+We have two pointers into an array and when we&rsquo;ve finished iterating these
+pointers will come together somewhere in the middle. Getting the next item is
+just a case of checking whether we&rsquo;re done, then reading the value and
+incrementing the <code>head</code> pointer.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/drain.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> Iterator <span style=color:#66d9ef>for</span> Drain<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Item</span> <span style=color:#f92672>=</span> T;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>next</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; Option<span style=color:#f92672>&lt;</span>Self::Item<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> self.head <span style=color:#f92672>==</span> self.tail {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// No more items
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#66d9ef>return</span> None;
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// The tail points at tne end of our
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#75715e>// copy the item onto the stack. The tail
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#66d9ef>let</span> item <span style=color:#f92672>=</span> self.head.read();
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// increment the head pointer
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            self.head <span style=color:#f92672>=</span> self.head.add(<span style=color:#ae81ff>1</span>);
+</span></span><span style=display:flex><span>            Some(item)
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Implementing <code>DoubleEndedIterator</code> is almost identical, except we&rsquo;re working
+with <code>tail</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/drain.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> core::iter::DoubleEndedIterator;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> DoubleEndedIterator <span style=color:#66d9ef>for</span> Drain<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>next_back</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; Option<span style=color:#f92672>&lt;</span>Self::Item<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> self.head <span style=color:#f92672>==</span> self.tail {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// No more items
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#66d9ef>return</span> None;
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// the tail pointer is one PAST the end of our selection.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#75715e>// Pre-decrement so we&#39;re pointing at a valid item before reading
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            self.tail <span style=color:#f92672>=</span> self.tail.sub(<span style=color:#ae81ff>1</span>);
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> item <span style=color:#f92672>=</span> self.tail.read();
+</span></span><span style=display:flex><span>            Some(item)
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>There are a couple other iterator traits which we can implement. These are
+mainly used in combination with <em>specialization</em> to improve performance.</p><p>We&rsquo;ll implement the <code>ExactSizeIterator</code> because getting the iterator&rsquo;s length
+is just a case of subtracting <code>tail - head</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/drain.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> core::{iter::ExactSizedIterator, mem};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> Iterator <span style=color:#66d9ef>for</span> Drain<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>size_hint</span>(<span style=color:#f92672>&amp;</span>self) -&gt; (<span style=color:#66d9ef>usize</span>, Option<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span>) {
+</span></span><span style=display:flex><span>        (self.len(), Some(self.len()))
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> ExactSizeIterator <span style=color:#66d9ef>for</span> Drain<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>len</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>usize</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> size <span style=color:#f92672>=</span> mem::size_of::<span style=color:#f92672>&lt;</span>T<span style=color:#f92672>&gt;</span>();
+</span></span><span style=display:flex><span>        assert!(<span style=color:#ae81ff>0</span> <span style=color:#f92672>&lt;</span> size <span style=color:#f92672>&amp;&amp;</span> size <span style=color:#f92672>&lt;=</span> <span style=color:#66d9ef>isize</span>::max_value() <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>usize</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> difference <span style=color:#f92672>=</span> (self.tail <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>isize</span>) <span style=color:#f92672>-</span> (self.head <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>isize</span>);
+</span></span><span style=display:flex><span>        debug_assert!(difference <span style=color:#f92672>&gt;=</span> <span style=color:#ae81ff>0</span>, <span style=color:#e6db74>&#34;Tail should always be after head&#34;</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        difference <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>usize</span> <span style=color:#f92672>/</span> size
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices note"><p>One of the contracts that <code>ExactSizeIterator</code> specifies in <a href=https://doc.rust-lang.org/std/iter/trait.ExactSizeIterator.html class=external-link target=_blank rel=noopener>its
+documentation</a> is that the <code>Iterator::size_hint()</code> method <em>must</em> return
+the exact size of the iterator.</p><blockquote><p>When implementing an ExactSizeIterator, you must also implement Iterator.
+When doing so, the implementation of size_hint must return the exact size of
+the iterator.</p></blockquote><p>Hence the need to manually override <code>size_hint()</code> above.</p></div><p>The <code>FusedIterator</code> trait may also be handy.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/drain.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> core::iter::FusedIterator;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> FusedIterator <span style=color:#66d9ef>for</span> Drain<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, T, { N }<span style=color:#f92672>&gt;</span> {}
+</span></span></code></pre></div><p>Most importantly, we&rsquo;ll need to implement the <code>Drop</code> trait to make sure the
+remaining items within the drained range are destroyed and the other items
+shuffled forwards to fill in the space.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/drain.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> core::{mem, ptr};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, T, <span style=color:#66d9ef>const</span> N: <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> Drop <span style=color:#66d9ef>for</span> Drain<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, T, { N }<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>drop</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// remove any remaining items so their destructors can run
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>while</span> <span style=color:#66d9ef>let</span> Some(item) <span style=color:#f92672>=</span> self.next() {
+</span></span><span style=display:flex><span>            mem::drop(item);
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> self.tail_length <span style=color:#f92672>==</span> <span style=color:#ae81ff>0</span> {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// there are no items after the drained range
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#66d9ef>return</span>;
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> tail_start <span style=color:#f92672>=</span> self.inner.as_ptr().add(self.tail_start);
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> drain_range_start <span style=color:#f92672>=</span>
+</span></span><span style=display:flex><span>                self.inner.as_mut_ptr().add(self.drain_range_start);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// moves the tail (items after drained range) forwards now that the
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#75715e>// drained items are destroyed
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            ptr::copy(tail_start, drain_range_start, self.tail_length);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// we can now update the length
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            self.inner
+</span></span><span style=display:flex><span>                .set_len(self.drain_range_start <span style=color:#f92672>+</span> self.tail_length);
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Besides the usual problems associated with our (possibly uninitialized)
+backing buffer, we need to remember that the <code>ArrayVec</code> will temporarily be
+in a broken state while <code>Drain</code>-ing items, because some slots in the backing
+buffer will contain logically uninitialized data.</p><p>Normally you&rsquo;d assume this won&rsquo;t be a problem. The borrow checker should make
+sure our <code>ArrayVec</code> is inaccessible as long as the <code>Drain</code> is alive, and
+<code>Drain</code>&rsquo;s destructor should fix everything before the <code>ArrayVec</code> is
+accessible again. Right?</p><p>What about this?</p><div class=playpen><div class=buttons><a class="fa fa-play play-button" title="Run this code" target=_blank aria-label="Run this code" href="https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&code=struct%20World%20%7b%0a%20%20%20%20broken%3a%20bool%2c%0a%7d%0a%0a%2f%2f%2f%20A%20RAII%20guard%20which%20should%20be%20held%0astruct%20CleanupWorld%3c%27a%3e%28%26%27a%20mut%20World%29%3b%0a%0aimpl%3c%27a%3e%20Drop%20for%20CleanupWorld%3c%27a%3e%20%7b%0a%20%20%20%20fn%20drop%28%26mut%20self%29%20%7b%0a%20%20%20%20%20%20%20%20%2f%2f%20We%27re%20done%20updating.%20Make%20sure%20the%20world%20is%20no%20longer%20broken.%0a%20%20%20%20%20%20%20%20self.0.broken%20%3d%20false%3b%0a%20%20%20%20%7d%0a%7d%0a%0afn%20main%28%29%20%7b%0a%20%20%20%20let%20mut%20world%20%3d%20World%20%7b%20broken%3a%20false%20%7d%3b%0a%0a%20%20%20%20%7b%0a%20%20%20%20%20%20%20%20%2f%2f%20make%20a%20RAII%20guard%20that%20will%20fix%20things%20up%20after%20we%27re%20done%20updating%0a%20%20%20%20%20%20%20%20%2f%2f%20the%20world%0a%20%20%20%20%20%20%20%20let%20cleanup%20%3d%20CleanupWorld%28%26mut%20world%29%3b%0a%0a%20%20%20%20%20%20%20%20%2f%2f%20temporarily%20break%20the%20world%20while%20we%27re%20doing%20things%0a%20%20%20%20%20%20%20%20cleanup.0.broken%20%3d%20true%3b%0a%0a%20%20%20%20%20%20%20%20%2f%2f%20do%20something%20which%20causes%20cleanup%27s%20destructor%20to%20never%20be%20called%0a%20%20%20%20%20%20%20%20std%3a%3amem%3a%3aforget%28cleanup%29%3b%0a%20%20%20%20%7d%0a%0a%20%20%20%20%2f%2f%20cleanup%27s%20destructor%20never%20ran%2c%20the%20world%20is%20still%20broken%21%0a%20%20%20%20assert%21%28world.broken%29%3b%0a%7d"></a></div><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>World</span> {
+</span></span><span style=display:flex><span>    broken: <span style=color:#66d9ef>bool</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// A RAII guard which should be held
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>CleanupWorld</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span>(<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>&#39;a</span> <span style=color:#66d9ef>mut</span> World);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> Drop <span style=color:#66d9ef>for</span> CleanupWorld<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>drop</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// We&#39;re done updating. Make sure the world is no longer broken.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        self.<span style=color:#ae81ff>0.</span>broken <span style=color:#f92672>=</span> <span style=color:#66d9ef>false</span>;
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>main</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> world <span style=color:#f92672>=</span> World { broken: <span style=color:#a6e22e>false</span> };
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// make a RAII guard that will fix things up after we&#39;re done updating
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#75715e>// the world
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>let</span> cleanup <span style=color:#f92672>=</span> CleanupWorld(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> world);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// temporarily break the world while we&#39;re doing things
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        cleanup.<span style=color:#ae81ff>0.</span>broken <span style=color:#f92672>=</span> <span style=color:#66d9ef>true</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// do something which causes cleanup&#39;s destructor to never be called
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        std::mem::forget(cleanup);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// cleanup&#39;s destructor never ran, the world is still broken!
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    assert!(world.broken);
+</span></span><span style=display:flex><span>}</span></span></code></pre></div></div><p>It takes a couple seconds to realise but this seemingly innocent code snippet
+has big ramifications for Rust, or any code that makes use of the RAII pattern
+for that matter&mldr;</p><div class="notices warning"><p>With zero lines of <code>unsafe</code> code, users are able subvert any invariant upheld
+by a RAII guard!</p><p>This can cause <em>Undefined Behaviour</em> if these invariants are relied on for
+memory safety.</p></div><p>In their post Alexis proposes a rather pragmatic solution. I would highly
+recommend reading the article, but to paraphrase it&rsquo;s like the <code>Drain</code> author
+saying:</p><blockquote><p>Well if you leak my <code>Drain</code> I&rsquo;m going to go and leak the drained range, plus
+every item after it.</p></blockquote><p>This can be accomplished by adding a single line to <code>Drain</code>&rsquo;s constructor.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-diff data-lang=diff><span style=display:flex><span> impl&lt;&#39;a, T, const N: usize&gt; Drain&lt;&#39;a, T, { N }&gt; {
+</span></span><span style=display:flex><span>     pub(crate) fn with_range(
+</span></span><span style=display:flex><span>         vector: &amp;&#39;a mut ArrayVec&lt;T, { N }&gt;,
+</span></span><span style=display:flex><span>         range: Range&lt;usize&gt;,
+</span></span><span style=display:flex><span>     ) -&gt; Self {
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>         unsafe {
+</span></span><span style=display:flex><span>             ...
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>+            // prevent a leaked Drain from letting users read from
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+            // uninitialized memory
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+            vector.set_len(range.start);
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span>
+</span></span><span style=display:flex><span>             Drain { ... }
+</span></span><span style=display:flex><span>         }
+</span></span><span style=display:flex><span>     }
+</span></span><span style=display:flex><span> }
+</span></span></code></pre></div><p>Leaking destructors is definitely not ideal, but it&rsquo;s a big improvement over
+letting users access uninitialized memory or trigger a double-free.</p><h2 id=conclusion>Conclusion
+<a class=heading-link href=#conclusion><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>While <code>ArrayVec</code> isn&rsquo;t quite polished, it&rsquo;s definitely at a place where people
+can begin to use it to build cool things.</p><p>As a bonus, I didn&rsquo;t run into a single ICE while writing <code>const-arrayvec</code>!</p><p>Most of the times I&rsquo;d like to use <em>Const Generics</em> are when working on
+<code>#[no_std]</code> applications where I&rsquo;d prefer to let the caller specify a buffer
+size at compile time, so I&rsquo;m definitely going to try and use it more from now
+on.</p><p>Now what was I doing before going down this rabbit hole&mldr;</p></div><footer></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>

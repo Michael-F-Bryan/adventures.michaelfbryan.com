@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>CI/CD on Michael-F-Bryan</title><link>https://adventures.michaelfbryan.com/tags/ci/cd/</link><description>Recent content in CI/CD on Michael-F-Bryan</description><generator>Hugo</generator><language>en</language><lastBuildDate>Tue, 01 Apr 2025 09:19:10 +0800</lastBuildDate><atom:link href="https://adventures.michaelfbryan.com/tags/ci/cd/index.xml" rel="self" type="application/rss+xml"/><item><title>GitHub Actions can't access private repos? Here's how to fix it</title><link>https://adventures.michaelfbryan.com/posts/configuring-cargo-auth-in-github-actions/</link><pubDate>Tue, 13 Sep 2022 12:01:45 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/configuring-cargo-auth-in-github-actions/</guid><description>&lt;p>When developing locally, you can add a private GitHub repository to your Rust
+crate as a &lt;a href="https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#specifying-dependencies-from-git-repositories" class="external-link" target="_blank" rel="noopener">&lt;code>git&lt;/code> dependency&lt;/a> and &lt;code>cargo&lt;/code> should be able to retrieve it
+just fine.&lt;/p>
+&lt;p>However, when you push your changes to GitHub and run CI, GitHub Actions can
+run into authentication issues when trying to build your crate.&lt;/p>
+&lt;p>This is the error message I was fighting for a good part of today:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-shell" data-lang="shell">&lt;span style="display:flex;">&lt;span>$ cargo check --workspace --verbose --locked
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Updating git repository &lt;span style="color:#e6db74">`&lt;/span>https://github.com/Michael-F-Bryan/my-secret-repo.git&lt;span style="color:#e6db74">`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Running &lt;span style="color:#e6db74">`&lt;/span>git fetch --force --update-head-ok &lt;span style="color:#e6db74">&amp;#39;https://github.com/Michael-F-Bryan/my-secret-repo.git&amp;#39;&lt;/span> &lt;span style="color:#e6db74">&amp;#39;+HEAD:refs/remotes/origin/HEAD&amp;#39;&lt;/span>&lt;span style="color:#e6db74">`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>Error: failed to get &lt;span style="color:#e6db74">`&lt;/span>internal-crate&lt;span style="color:#e6db74">`&lt;/span> as a dependency of package &lt;span style="color:#e6db74">`&lt;/span>some-crate v0.1.4 &lt;span style="color:#f92672">(&lt;/span>/home/runner/work/some-crate/some-crate/crates/cli&lt;span style="color:#f92672">)&lt;/span>&lt;span style="color:#e6db74">`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>Caused by:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> failed to load source &lt;span style="color:#66d9ef">for&lt;/span> dependency &lt;span style="color:#e6db74">`&lt;/span>internal-crate&lt;span style="color:#e6db74">`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>Caused by:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Unable to update https://github.com/Michael-F-Bryan/my-secret-repo.git
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>Caused by:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> failed to clone into: /home/runner/.cargo/git/db/my-secret-repo-20c1af0756e23bf7
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>Caused by:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> process didn&lt;span style="color:#e6db74">&amp;#39;t exit successfully: `git fetch --force --update-head-ok &amp;#39;&lt;/span>https://github.com/Michael-F-Bryan/my-secret-repo.git&lt;span style="color:#e6db74">&amp;#39; &amp;#39;&lt;/span>+HEAD:refs/remotes/origin/HEAD&lt;span style="color:#e6db74">&amp;#39;` (exit status: 128)
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#e6db74"> --- stderr
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#e6db74"> fatal: could not read Username for &amp;#39;&lt;/span>https://github.com&lt;span style="color:#e6db74">&amp;#39;: No such device or address
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#e6db74">Error: The process &amp;#39;&lt;/span>/home/runner/.cargo/bin/cargo&lt;span style="color:#960050;background-color:#1e0010">&amp;#39;&lt;/span> failed with exit code &lt;span style="color:#ae81ff">101&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Cargo can&amp;rsquo;t check out my private repository!&lt;/p></description></item></channel></rss>
