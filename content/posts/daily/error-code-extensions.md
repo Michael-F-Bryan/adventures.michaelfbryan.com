@@ -131,8 +131,6 @@ mod winapi {
 }
 ```
 
-##
-
 ## Conclusions
 
 [post]: https://users.rust-lang.org/t/code-review-on-windows-api-usage/62921

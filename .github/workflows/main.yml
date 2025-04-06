@@ -4,9 +4,7 @@ on:
   push:
     branches:
       - main
-  schedule:
-    - cron: "0 0 * * *" # midnight UTC
-  workflow_dispatch:
+  pull_request:
 
 jobs:
   build:
@@ -29,15 +27,9 @@ jobs:
           extended: true
 
       - name: Build
-        run: hugo --minify
+        run: hugo --minify --enableGitInfo
 
-      - name: Update CNAME file
-        run: echo 'adventures.michaelfbryan.com' > public/CNAME
-
-      - name: GitHub Pages
-        uses: crazy-max/ghaction-github-pages@v2
+      - name: Run htmltest
+        uses: wjdp/htmltest-action@master
         with:
-          build_dir: public
-        env:
-          # GITHUB_PAT: ${{ secrets.GH_PAGES_ACCESS_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          config: .htmltest.yml

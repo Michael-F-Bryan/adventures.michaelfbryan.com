@@ -47,7 +47,7 @@ blog's [issue tracker][issue]!
 ## Public Trait Private Impl Class
 
 - Matched trait-struct "pairs".
-- Often combined with [the above](#hungarian-notation) - `impl IFoo for Foo`.
+- Often combined with *Hungarian Notation* - `impl IFoo for Foo`.
 - It won't work out the way you want
 - Common in Java and C++
 

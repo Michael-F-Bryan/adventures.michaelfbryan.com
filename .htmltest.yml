@@ -1,0 +1,12 @@
+DirectoryPath: "public/"
+CheckExternal: false
+IgnoreURLs:
+  - ^/images/favicon\.svg$
+  - ^/images/favicon-32x32\.png$
+  - ^/images/favicon-16x16\.png$
+  - ^/images/apple-touch-icon\.png$
+  - ^/images/apple-touch-icon\.png$
+  - ^/site\.webmanifest$
+  - ^/images/safari-pinned-tab\.svg$
+  - ^#$
+  - ^/livereload\.js\?
