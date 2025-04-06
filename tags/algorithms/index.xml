@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Algorithms on Michael-F-Bryan</title><link>https://adventures.michaelfbryan.com/tags/algorithms/</link><description>Recent content in Algorithms on Michael-F-Bryan</description><generator>Hugo</generator><language>en</language><lastBuildDate>Tue, 01 Apr 2025 09:19:10 +0800</lastBuildDate><atom:link href="https://adventures.michaelfbryan.com/tags/algorithms/index.xml" rel="self" type="application/rss+xml"/><item><title>Line Simplification with Ramer–Douglas–Peucker</title><link>https://adventures.michaelfbryan.com/posts/line-simplification/</link><pubDate>Sun, 23 Feb 2020 21:56:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/line-simplification/</guid><description>&lt;p>The other day I needed to do a fairly routine graphical operation, to
+&amp;ldquo;simplify&amp;rdquo; a polyline with many points into a simpler polyline which has
+roughly the same shape plus or minus some &lt;code>tolerance&lt;/code> factor.&lt;/p>
+&lt;p>My actual use case was in sending linear movements to a CNC machine. Drawings
+are defined using floating point numbers and can be &amp;ldquo;accurate&amp;rdquo; to about 7-15
+decimal places (depending on if you use floats or doubles) but when you take
+the machine&amp;rsquo;s mechanical tolerances and material effects into account the
+final cut is only really accurate to about 1 decimal place (0.1 mm). If I
+were to simplify the path with a tolerance of, say, 0.05 mm I could massively
+reduce the number of points sent to the machine (which reduces the amount of
+data sent, buffer sizes, communications overhead, etc.) with minimal effect
+on the accuracy.&lt;/p></description></item></channel></rss>

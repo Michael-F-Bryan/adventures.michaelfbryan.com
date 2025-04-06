@@ -1,0 +1,163 @@
+<!doctype html><html lang=en><head><title>Bringing include_dir Into the Modern Era · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="Way back in mid-2017 I created a crate called include_dir with
+a single goal in mind - give users an include_dir!() macro that lets them
+embed an entire directory in their binary.
+By most metrics, we&rsquo;ve been doing phenomenally well. The crate has received a
+fair amount of engagement on GitHub via pull requests and issues, and it has had
+over 1 million downloads and 127 direct dependents published to crates.io alone."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="Bringing include_dir Into the Modern Era"><meta name=twitter:description content="Way back in mid-2017 I created a crate called include_dir with a single goal in mind - give users an include_dir!() macro that lets them embed an entire directory in their binary.
+By most metrics, we’ve been doing phenomenally well. The crate has received a fair amount of engagement on GitHub via pull requests and issues, and it has had over 1 million downloads and 127 direct dependents published to crates.io alone."><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/bringing-include_dir-into-the-modern-era/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="Bringing include_dir Into the Modern Era"><meta property="og:description" content="Way back in mid-2017 I created a crate called include_dir with a single goal in mind - give users an include_dir!() macro that lets them embed an entire directory in their binary.
+By most metrics, we’ve been doing phenomenally well. The crate has received a fair amount of engagement on GitHub via pull requests and issues, and it has had over 1 million downloads and 127 direct dependents published to crates.io alone."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2022-01-06T09:57:09+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Rust"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/bringing-include_dir-into-the-modern-era/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/bringing-include_dir-into-the-modern-era/>Bringing include_dir Into the Modern Era</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2022-01-06T09:57:09+08:00>January 6, 2022
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+8-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/rust/>Rust</a></span></div></div></header><div class=post-content><p>Way back in mid-2017 I created <a href=https://crates.io/crates/include-dir class=external-link target=_blank rel=noopener>a crate called <code>include_dir</code></a> with
+a single goal in mind - give users an <code>include_dir!()</code> macro that lets them
+embed an entire directory in their binary.</p><p>By most metrics, we&rsquo;ve been doing phenomenally well. The crate has received a
+fair amount of engagement on GitHub via pull requests and issues, and it has had
+over 1 million downloads and 127 direct dependents published to crates.io alone.</p><p>However, due to work commitments and low motivation, the <code>include_dir</code> crate
+hasn&rsquo;t received as much love as I&rsquo;d like to give it over the last year or so 😞</p><p>I recently<sup id=fnref:1><a href=#fn:1 class=footnote-ref role=doc-noteref>1</a></sup>, I found myself with a free weekend and a desire to be
+productive, so I thought I&rsquo;d take advantage of how Rust has evolved since 2017
+and work through some of <code>include_dir</code>&rsquo;s backlog.</p><div class="notices note"><p>The code written in this article is available <a href=https://github.com/Michael-F-Bryan/include_dir class=external-link target=_blank rel=noopener>on GitHub</a>. Feel free to
+browse through and steal code or inspiration.</p><p>If you found this useful or spotted a bug in the article, let me know on the
+blog&rsquo;s <a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues class=external-link target=_blank rel=noopener>issue tracker</a>!</p></div><h2 id=project-goals-and-values>Project Goals and Values
+<a class=heading-link href=#project-goals-and-values><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>I&rsquo;ve written a fair amount of Rust code in my time and <a href=https://users.rust-lang.org/u/michael-f-bryan/summary class=external-link target=_blank rel=noopener>reviewed a lot
+more</a>, and that has left me with some strong opinions about authoring
+crates:</p><ol><li>Don&rsquo;t pull in unnecessary dependencies</li><li>Make the happy path simple and intuitive</li><li>Don&rsquo;t make me pay for what I don&rsquo;t use</li><li>Unless you have a good reason, cross-compilation should <em>Just Work</em> without
+any extra configuration or fiddling</li></ol><p>In the past, several people have asked if I can add a level of configurability
+to the <code>include_dir!()</code> macro (e.g. excluding files or using a different base
+directory when resolving paths), but most of these proposals involve creating
+multiple macros or overloading the existing <code>include_dir!()</code> macro with an
+optional config argument. According to rule 2, these proposals would be
+non-starters because there are now multiple ways of doing things.</p><p>Points 1, 3, and 4 all relate to how compilation and where the crate can be
+used.</p><p>At work, my main project has a component that is compiled to WebAssembly and
+deliberately doesn&rsquo;t use the standard library (i.e. it is a <code>no_std</code> crate). We
+have a second component that depends on TensorFlow and needs to be
+cross-compiled to Windows/Linux/MacOS desktops, mobile devices, and the web.</p><p>Targeting such a large variety of platforms makes you appreciate libraries that
+are platform-agnostic where cross-compiling <em>Just Works</em>, and you <em>really</em>
+notice when they don&rsquo;t. That second component reminded me just how lucky Rust
+is to have <code>cargo</code> instead of the mish-mash of Bazel, CMake, Makefiles, and
+random shell scripts.</p><h2 id=migrating-to-newer-language-features>Migrating to Newer Language Features
+<a class=heading-link href=#migrating-to-newer-language-features><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><h3 id=function-like-procedural-macros>Function-like Procedural Macros
+<a class=heading-link href=#function-like-procedural-macros><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>Procedural macros have evolved a lot since <code>include_dir</code> was first created and
+as of Rust 1.45 we no longer need hacks like <a href=https://github.com/dtolnay/proc-macro-hack class=external-link target=_blank rel=noopener>the <code>proc-macro-hack</code> crate</a>
+to use them in expressions.</p><p>Most notably, this lets the <code>include_dir!()</code> macro parse its input directly as
+a string literal instead of needing to go through a custom derive. It sounds
+boring, but this means we get to drop the <code>syn</code> dependency altogether and reduce
+our compile times quite a bit.</p><p>Once <a href=https://github.com/rust-lang/rust/issues/54722 class=external-link target=_blank rel=noopener>the <code>proc_macro_quote</code> feature</a> is stabilised we should be
+able to drop our macro&rsquo;s final two dependencies, <code>quote</code> and <code>proc_macro2</code>, and
+just use the <code>proc_macro</code> crate directly.</p><p>Either way, dropping dependencies without losing functionality is nice.</p><h3 id=const-functions>Const Functions
+<a class=heading-link href=#const-functions><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>In Rust 1.46 (September 2020), a really cool feature was stabilised - the
+ability to write functions which can be evaluated at compile time and in a
+<code>const</code> context.</p><p>Previously, the <code>include_dir!()</code> macro would take an expression like
+<code>include_dir!("./assets/")</code> and expand it to an object literal that looks
+something like this:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rs data-lang=rs><span style=display:flex><span><span style=color:#66d9ef>static</span> <span style=color:#66d9ef>ASSETS</span>: <span style=color:#a6e22e>Dir</span><span style=color:#f92672>&lt;</span>&#39;_<span style=color:#f92672>&gt;</span> <span style=color:#f92672>=</span> Dir {
+</span></span><span style=display:flex><span>  path: <span style=color:#e6db74>&#34;&#34;</span>,
+</span></span><span style=display:flex><span>  children: <span style=color:#66d9ef>&amp;</span>[
+</span></span><span style=display:flex><span>    DirEntry::File(File {
+</span></span><span style=display:flex><span>      path: <span style=color:#e6db74>&#34;index.html&#34;</span>,
+</span></span><span style=display:flex><span>      contents: <span style=color:#a6e22e>b</span><span style=color:#e6db74>&#34;&lt;html&gt;...&#34;</span>
+</span></span><span style=display:flex><span>    }),
+</span></span><span style=display:flex><span>    DirEntry::Dir(Dir {
+</span></span><span style=display:flex><span>      path: <span style=color:#e6db74>&#34;img&#34;</span>,
+</span></span><span style=display:flex><span>      children: <span style=color:#66d9ef>&amp;</span>[
+</span></span><span style=display:flex><span>        <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>      ]
+</span></span><span style=display:flex><span>    }),
+</span></span><span style=display:flex><span>  ]
+</span></span><span style=display:flex><span>};
+</span></span></code></pre></div><p>On its own this seems rather innocuous, but because macros are evaluated within
+the context of wherever they are called and because we are setting fields
+directly, it means everything needs to be publicly accessible otherwise your
+macro runs into <em>" field <code>path</code> of struct <code>Dir</code> is private"</em> errors.</p><p>However, making all your fields public means it is possible for <em>anyone</em> to use
+them and due to <a href=https://www.hyrumslaw.com/ class=external-link target=_blank rel=noopener>Hyrum&rsquo;s Law</a> we know someone will invariably depend
+on these internals. Therefore, if we ever want to restructure things or change
+assumptions made about a <em>semantically-internal-but-technically-public</em> field
+we&rsquo;ll have people complaining about broken builds.</p><figure><a href=https://xkcd.com/1172><img src=https://imgs.xkcd.com/comics/workflow.png alt=Workflow></a><figcaption><p>(obligatory XKCD reference)</p></figcaption></figure><p>As a <del>hack</del> workaround, we can use the <code>#[doc(hidden)]</code> attribute to <a href=https://github.com/Michael-F-Bryan/include_dir/blob/9fb457c1ca618a90b6e6f571c45389af9cdfada5/include_dir/src/file.rs#L7-L12 class=external-link target=_blank rel=noopener>hide our
+internal fields</a> from a crate&rsquo;s documentation. That means people can still
+technically access them, but only if they have deliberately read the source code
+and opted in to accessing those hidden fields anyway.</p><p>Now, with the ability to call functions when initializing <code>static</code> or
+<code>const</code> variables, we can just give <code>Dir</code> and <code>File</code> constructors while keeping
+internal details inaccessible from the outside.</p><h2 id=environment-variable-interpolation>Environment Variable Interpolation
+<a class=heading-link href=#environment-variable-interpolation><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>After using <code>include_dir</code> in the wild for a while, we found a couple of
+limitations with we convert the provided string into a path.</p><p>The biggest issue was that Rust doesn&rsquo;t guarantee which folder a procedural
+macro will be executed from, meaning all relative paths would be <a href=https://github.com/Michael-F-Bryan/include_dir/blob/9fb457c1ca618a90b6e6f571c45389af9cdfada5/include_dir_impl/src/lib.rs#L22-L24 class=external-link target=_blank rel=noopener>implicitly
+resolved relative to <code>$CARGO_MANIFEST_DIR</code></a>.</p><p>That meant your <code>src/lib.rs</code> file might look like this&mldr;</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rs data-lang=rs><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span><span style=color:#66d9ef>static</span> <span style=color:#66d9ef>SRC_DIR</span>: <span style=color:#a6e22e>Dir</span><span style=color:#f92672>&lt;</span>&#39;_<span style=color:#f92672>&gt;</span> <span style=color:#f92672>=</span> include_dir!(<span style=color:#e6db74>&#34;.&#34;</span>);
+</span></span></code></pre></div><p>&mldr; and looking up <code>lib.rs</code> would fail at runtime because the actual directory
+structure is something completely different.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback><span style=display:flex><span>.
+</span></span><span style=display:flex><span>├── Cargo.lock
+</span></span><span style=display:flex><span>├── Cargo.toml
+</span></span><span style=display:flex><span>├── README.md
+</span></span><span style=display:flex><span>└── src
+</span></span><span style=display:flex><span>    └── lib.rs
+</span></span></code></pre></div><p>Users also wanted to resolve paths relative to different directories, <a href=https://github.com/Michael-F-Bryan/include_dir/issues/55 class=external-link target=_blank rel=noopener>namely
+<code>$OUT_DIR</code></a>, and were proposing alternate macros like
+<code>include_dir_from_out_dir!()</code> or adding configuration arguments to
+<code>include_dir!()</code>.</p><p>However, both of those proposals complicate the crate by creating multiple ways
+to accomplish similar things, which clashes with my <em>Make the happy path simple
+and intuitive</em> goal.</p><p>I ended up choosing an alternative solution that should be familiar to anyone
+that has used a terminal before - environment variable interpolation.</p><p>The idea is you can write <code>include_dir!("$CARGO_MANIFEST_DIR/src/")</code> and avoid
+all ambiguity. It also solves the <code>$OUT_DIR</code> problem quite elegantly if I do
+say so myself.</p><h2 id=file-metadata>File Metadata
+<a class=heading-link href=#file-metadata><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Some people were asking if we could record filesystem metadata when embedding
+a directory tree.</p><p>Adding hidden fields and extra methods to a type doesn&rsquo;t have much of an impact
+on the way people use the <code>include_dir!()</code> macro, but because it adds a level of
+non-determinism to builds I opted to put this behind its own feature flag.</p><p>There are some technical difficulties in that <code>std::time::SystemTime</code> doesn&rsquo;t
+have any public <code>const fn</code> constructors so we end up storing time as a duration
+since the <code>UNIX_EPOCH</code>, but other than that it&rsquo;s pretty straightforward.</p><h2 id=nightly-features>Nightly Features
+<a class=heading-link href=#nightly-features><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>As well as all the normal functionality, we&rsquo;ve created an opt-in feature flag
+which lets people use <code>nightly</code>-only features to improve their developer
+experience.</p><h3 id=better-dependency-tracking>Better Dependency Tracking
+<a class=heading-link href=#better-dependency-tracking><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>Something I like about build scripts is that you can tell <code>cargo</code> to only re-run
+when a particular environment variable or file has changed. This helps cut down
+on unnecessary recompiles by giving tools like <code>cargo</code> and <code>rust-analyzer</code> a
+better idea of your dependencies, letting them improve caching accuracy.</p><p>Procedural macros have similar functionality that is currently unstable,
+namely&mldr;</p><ul><li><a href=https://github.com/rust-lang/rust/issues/74690 class=external-link target=_blank rel=noopener>the <code>tracked_env</code> feature</a> which enables the
+<code>proc_macro::tracked_env::var()</code> function for reading environment variables,
+and</li><li><a href=https://github.com/rust-lang/rust/issues/73921 class=external-link target=_blank rel=noopener>the <code>tracked_path</code> feature</a> which enables the
+<code>proc_macro::tracked_path::path()</code> function for telling the compiler that this
+build script depends on a specific path</li></ul><p>Personally, I would prefer if the <code>tracked_path</code> feature exposed wrappers around
+the <code>std::fs</code> module (e.g. <code>std::fs::read_dir()</code> and
+<code>std::fs::read_to_string()</code>) because it means using a resource automatically
+notifies the compiler of the dependency instead of needing to &ldquo;remember&rdquo; to
+call <code>proc_macro::tracked_path::path()</code>, but it&rsquo;s a start.</p><p>My hope is that down the track, <code>rust-analyzer</code> will be able to hook into these
+APIs and avoid unnecessarily reading a directory tree into memory and compiling
+it into Rust constants (a fairly memory-intensive task).</p><h3 id=document-feature-gated-apis>Document Feature-gated APIs
+<a class=heading-link href=#document-feature-gated-apis><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>The tool used to generate pretty HTML documentation for Rust code, <code>rustdoc</code>,
+has a feature which lets users see when particular functions and types are
+feature-gated.</p><p>If you have ever browsed the standard library&rsquo;s API docs, you will be familiar
+with the <code>This is a nightly-only experimental API</code> annotations that guard
+unstable features.</p><figure><a href=https://doc.rust-lang.org/stable/proc_macro/tracked_path/fn.path.html><img src=/img/nightly-experimental-api.png alt="A screenshot of the proc_macro::tracked_path::path() docs"></a><figcaption><p>Unstable feature annotation used in proc_macro::tracked_path::path()</p></figcaption></figure><p>By adding <code>#![feature(doc_cfg)]</code> to the top of your <code>lib.rs</code>, any crate can get
+similar annotations for code guarded by <code>#[cfg(...)]</code>.</p><figure><a href=https://docs.rs/tokio/latest/tokio/time/fn.sleep.html><img src=/img/tokio-time-sleep.png alt="The Tokio crate's time feature"></a><figcaption><p>Annotation on the Tokio crate&rsquo;s "time" feature</p></figcaption></figure><p>In version 0.7 of the <code>include_dir</code> crate I&rsquo;ve enabled this annotation whenever
+the <code>nightly</code> feature flag is enabled.</p><p>Most end users won&rsquo;t actually use this directly, instead they&rsquo;ll get the
+annotations for free whenever they visit <a href=https://docs.rs/include_dir class=external-link target=_blank rel=noopener>the online API docs</a>.</p><h2 id=conclusion>Conclusion
+<a class=heading-link href=#conclusion><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>This release introduces several big improvements, but more than that I think
+it&rsquo;s helped me solidify my goals and values for the project.</p><p>Unfortunately, that means I will probably be closing several PRs and issues as
+<em>&ldquo;won&rsquo;t fix&rdquo;</em>. I&rsquo;m apologising ahead of time to those affected because I know
+what it&rsquo;s like to really want a feature only to have the project maintainer
+reject it, however I think it&rsquo;s important in the overall goal of making this
+crate as nice to use as possible.</p><p>In my opinion, the best thing a person can say about a library or product is
+that it <em>Just Works</em>, and I&rsquo;m hoping this 0.7 release will bring us one step
+closer to that goal.</p><p>I&rsquo;d also like to use this blog post as an opportunity to ask for reviews. It
+would be really nice to have extra eyes on this crate, and using a public review
+system like <a href=https://web.crev.dev/rust-reviews/ class=external-link target=_blank rel=noopener>CREV</a> would give people more confidence that they can use
+<code>include_dir</code> in production. You can check out their <a href=https://github.com/crev-dev/cargo-crev/blob/master/cargo-crev/src/doc/getting_started.md class=external-link target=_blank rel=noopener>Getting Started
+guide</a> for more.</p><div class=footnotes role=doc-endnotes><hr><ol><li id=fn:1><p>Well&mldr; &ldquo;recently&rdquo; when I started writing this post. It&rsquo;s been about 2
+months since then 😅&#160;<a href=#fnref:1 class=footnote-backref role=doc-backlink>&#8617;&#xfe0e;</a></p></li></ol></div></div><footer></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>

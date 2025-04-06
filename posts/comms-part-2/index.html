@@ -1,0 +1,414 @@
+<!doctype html><html lang=en><head><title>The Communications System: Part 2 · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="Now we have a mechanism for transferring bytes from the frontend to the
+simulator and back again, we need to translate those bytes into higher-level
+messages. Luckily each [anpp::Packet] contains an ID field that
+is designed specifically for this purpose.
+That lets us do something like this:
+// (not real code)
+
+enum Message<'a> {
+    Ping,
+    StatusCheck,
+    ProgramChunk {
+        chunk_number: usize,
+        body: &'a [u8],
+    },
+    ...
+}
+
+struct UnknownMessageError;
+
+fn parse_packet<'a>(pkt: &'a Packet) -> Result<Message<'a>, UnknownMessageError> {
+    match pkt.id() {
+        0 => Ok(Message::Ping),
+        1 => Ok(Message::StatusCheck),
+        2 => Ok(...),
+        _ => Err(UnknownMessageError),
+    }
+}
+The top-level App can handle messages by routing them to the appropriate
+system and invoking a message handler."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="The Communications System: Part 2"><meta name=twitter:description content="Now we have a mechanism for transferring bytes from the frontend to the simulator and back again, we need to translate those bytes into higher-level messages. Luckily each [anpp::Packet] contains an ID field that is designed specifically for this purpose.
+That lets us do something like this:
+// (not real code) enum Message<'a> { Ping, StatusCheck, ProgramChunk { chunk_number: usize, body: &'a [u8], }, ... } struct UnknownMessageError; fn parse_packet<'a>(pkt: &'a Packet) -> Result<Message<'a>, UnknownMessageError> { match pkt.id() { 0 => Ok(Message::Ping), 1 => Ok(Message::StatusCheck), 2 => Ok(...), _ => Err(UnknownMessageError), } } The top-level App can handle messages by routing them to the appropriate system and invoking a message handler."><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/comms-part-2/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="The Communications System: Part 2"><meta property="og:description" content="Now we have a mechanism for transferring bytes from the frontend to the simulator and back again, we need to translate those bytes into higher-level messages. Luckily each [anpp::Packet] contains an ID field that is designed specifically for this purpose.
+That lets us do something like this:
+// (not real code) enum Message<'a> { Ping, StatusCheck, ProgramChunk { chunk_number: usize, body: &'a [u8], }, ... } struct UnknownMessageError; fn parse_packet<'a>(pkt: &'a Packet) -> Result<Message<'a>, UnknownMessageError> { match pkt.id() { 0 => Ok(Message::Ping), 1 => Ok(Message::StatusCheck), 2 => Ok(...), _ => Err(UnknownMessageError), } } The top-level App can handle messages by routing them to the appropriate system and invoking a message handler."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2019-09-08T01:20:00+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Adventures-in-Motion-Control"><meta property="article:tag" content="Rust"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/comms-part-2/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/comms-part-2/>The Communications System: Part 2</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2019-09-08T01:20:00+08:00>September 8, 2019
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+9-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/adventures-in-motion-control/>Adventures-in-Motion-Control</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/rust/>Rust</a></span></div></div></header><div class=post-content><p>Now we have a mechanism for transferring bytes from the frontend to the
+simulator and back again, we need to translate those bytes into higher-level
+messages. Luckily each [<code>anpp::Packet</code>] contains an <a href=https://docs.rs/anpp/1.0.1/anpp/struct.Packet.html#method.id class=external-link target=_blank rel=noopener><code>ID</code> field</a> that
+is designed specifically for this purpose.</p><p>That lets us do something like this:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// (not real code)
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>Message</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    Ping,
+</span></span><span style=display:flex><span>    StatusCheck,
+</span></span><span style=display:flex><span>    ProgramChunk {
+</span></span><span style=display:flex><span>        chunk_number: <span style=color:#66d9ef>usize</span>,
+</span></span><span style=display:flex><span>        body: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;a</span> [<span style=color:#66d9ef>u8</span>],
+</span></span><span style=display:flex><span>    },
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>UnknownMessageError</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>parse_packet</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span>(pkt: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;a</span> <span style=color:#a6e22e>Packet</span>) -&gt; Result<span style=color:#f92672>&lt;</span>Message<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span>, UnknownMessageError<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>match</span> pkt.id() {
+</span></span><span style=display:flex><span>        <span style=color:#ae81ff>0</span> <span style=color:#f92672>=&gt;</span> Ok(Message::Ping),
+</span></span><span style=display:flex><span>        <span style=color:#ae81ff>1</span> <span style=color:#f92672>=&gt;</span> Ok(Message::StatusCheck),
+</span></span><span style=display:flex><span>        <span style=color:#ae81ff>2</span> <span style=color:#f92672>=&gt;</span> Ok(<span style=color:#f92672>..</span>.),
+</span></span><span style=display:flex><span>        _ <span style=color:#f92672>=&gt;</span> Err(UnknownMessageError),
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The top-level <code>App</code> can handle messages by routing them to the appropriate
+system and invoking a message handler.</p><h2 id=message-routing>Message Routing
+<a class=heading-link href=#message-routing><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>A <code>Router</code> contains references to the various other systems, implementing
+<code>MessageHandler</code> and delegating the handling of a message to the corresponding
+system.</p><p>This design makes use of references to avoid the need for <code>Rc</code> and friends,
+while taking advantage of lifetimes and the ability to pass out <code>&amp;mut</code>
+references to different fields of a struct at the same time.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// sim/src/router.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> anpp::Packet;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> comms::{CommsError, MessageHandler};
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> fps_counter::FpsCounter;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Router</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) fps: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;a</span> <span style=color:#a6e22e>mut</span> FpsCounter,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> MessageHandler <span style=color:#66d9ef>for</span> Router<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle_message</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, msg: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Packet</span>) -&gt; Result<span style=color:#f92672>&lt;</span>Packet, CommsError<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> msg.id() {
+</span></span><span style=display:flex><span>            _ <span style=color:#f92672>=&gt;</span> Err(CommsError::UnknownMessageType),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>To start using the <code>Router</code> we need to add the <code>Communications</code> system to our
+<code>App</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// sim/src/app.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[wasm_bindgen]</span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>App</span> {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>    comms: <span style=color:#a6e22e>Communications</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> App {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new</span>(inputs: <span style=color:#a6e22e>Inputs</span>, browser: <span style=color:#a6e22e>Browser</span>) -&gt; <span style=color:#a6e22e>App</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> fps <span style=color:#f92672>=</span> FpsCounter::default();
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> comms <span style=color:#f92672>=</span> Communications::new();
+</span></span><span style=display:flex><span>        App { inputs, browser, fps, comms }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>poll</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) {
+</span></span><span style=display:flex><span>        self.inputs.begin_tick();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        self.handle_comms(); <span style=color:#75715e>// &lt;-- new
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        self.fps.poll(<span style=color:#f92672>&amp;</span>self.inputs, <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self.browser);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle_comms</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> router <span style=color:#f92672>=</span> Router { fps: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> self.fps };
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> outputs <span style=color:#f92672>=</span> comms::Outputs::new(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self.browser, <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> router);
+</span></span><span style=display:flex><span>        self.comms.poll(<span style=color:#f92672>&amp;</span>self.inputs, <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> outputs);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>At this point the compiler is complaining that <code>Browser</code> doesn&rsquo;t implement the
+<code>comms::Tx</code> trait (for sending bytes to the UI). We&rsquo;ll come back to this later,
+so for now just leave it <code>unimplemented!()</code>.</p><p><a name=earlier-unimplemented></a></p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// sim/src/browser.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Tx <span style=color:#66d9ef>for</span> Browser {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>send</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, _packet: <span style=color:#a6e22e>Packet</span>) { unimplemented!() }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=making-sense-of-messages>Making Sense of Messages
+<a class=heading-link href=#making-sense-of-messages><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>At the moment the only other system is the <code>FpsCounter</code>, so lets create a
+request for clearing the counter.</p><p>In the long term we&rsquo;d like to make adding a new message type and handling it as
+simple as possible. Ideally just a case of adding the message and response types
+(with derives for serializing/deserializing), implementing <code>Handle</code> so the
+system can handle the message, then adding a new arm to <code>Router</code>&rsquo;s match
+statement.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// in the my_system module
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(ParseFromPacket)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>SomeMessage</span> { <span style=color:#f92672>..</span>. }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(EncodeAsPacket)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>SomeResponse</span> { <span style=color:#f92672>..</span>. }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Handler<span style=color:#f92672>&lt;</span>SomeMessage<span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> MySystem {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, msg: <span style=color:#a6e22e>SomeMessage</span>) -&gt; <span style=color:#a6e22e>SomeResponse</span> {
+</span></span><span style=display:flex><span>        <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// then in the router
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> MessageHandler <span style=color:#66d9ef>for</span> Router<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle_message</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, msg: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Packet</span>) -&gt; Result<span style=color:#f92672>&lt;</span>Packet, CommsError<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> msg.id() {
+</span></span><span style=display:flex><span>            <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// associate this message with an ID of 42, parse the raw bytes to
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#75715e>// SomeMessage, make sure my_system handles it, then turn the
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#75715e>// response into a Packet so we can send it to the serial port
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#ae81ff>42</span> <span style=color:#f92672>=&gt;</span> dispatch(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self.my_system, msg.content()),
+</span></span><span style=display:flex><span>            <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>            _ <span style=color:#f92672>=&gt;</span> Err(CommsError::UnknownMessageType),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>For serializing and deserializing we can use the <a href=https://crates.io/crates/scroll class=external-link target=_blank rel=noopener>scroll</a> crate. This
+gives us a nice <code>#[derive]</code> for copying the contents of a struct directly to
+a byte buffer. Something that&rsquo;s very common in C programming, and boils down to
+a couple calls to <code>memcpy()</code>.</p><div class="notices tip"><p>As a bonus, this sort of encoding makes troubleshooting communications
+problems with real hardware really easy. Because we&rsquo;re not playing around
+with things like compression or variable-length integers, you can watch the
+bytes go back and forth using <a href=https://www.wireshark.org/ class=external-link target=_blank rel=noopener>Wireshark</a>, mentally translating from
+binary to the integers and strings that make up a message.</p></div><p>First we&rsquo;ll create the <code>Handler</code> trait.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// hal/src/messaging.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> anpp::Packet;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Something which can handle a request and generate a response.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> Handler<span style=color:#f92672>&lt;</span>M<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The type of response.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Response</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, msg: <span style=color:#a6e22e>M</span>) -&gt; <span style=color:#a6e22e>Self</span>::Response;
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Acknowledge a request without returning any extra information.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(
+</span></span></span><span style=display:flex><span><span style=color:#75715e>    Debug, Default, Copy, Clone, PartialEq, Eq, Pread, Pwrite, IOread, IOwrite,
+</span></span></span><span style=display:flex><span><span style=color:#75715e>    SizeWith,
+</span></span></span><span style=display:flex><span><span style=color:#75715e>)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Ack</span> {}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Ack {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The ID used when encoded as a [`Packet`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>ID</span>: <span style=color:#66d9ef>u8</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new</span>() -&gt; <span style=color:#a6e22e>Ack</span> { Ack::default() }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> From<span style=color:#f92672>&lt;</span>Ack<span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> Packet {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>from</span>(_: <span style=color:#a6e22e>Ack</span>) -&gt; <span style=color:#a6e22e>Packet</span> { Packet::new(Ack::<span style=color:#66d9ef>ID</span>) }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Now we can create a <code>Clear</code> message and give <code>FpsCounter</code> a way to handle it.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// fps_counter/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Clear the buffer used when [`FpsCounter`] calculates its rolling average.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Pread, Pwrite, IOread, IOwrite, SizeWith)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Clear</span> {}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Handler<span style=color:#f92672>&lt;</span>Clear<span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> FpsCounter {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Response</span> <span style=color:#f92672>=</span> Ack;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, _msg: <span style=color:#a6e22e>Clear</span>) -&gt; <span style=color:#a6e22e>Self</span>::Response {
+</span></span><span style=display:flex><span>        self.ticks.clear();
+</span></span><span style=display:flex><span>        Ack::new()
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We can now add the match arm to our <code>Router</code>&rsquo;s <code>handle_message()</code> method.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// sim/src/router.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> fps_counter::Clear;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> MessageHandler <span style=color:#66d9ef>for</span> Router<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle_message</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, msg: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Packet</span>) -&gt; Result<span style=color:#f92672>&lt;</span>Packet, CommsError<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> msg.id() {
+</span></span><span style=display:flex><span>            <span style=color:#ae81ff>1</span> <span style=color:#f92672>=&gt;</span> dispatch::<span style=color:#f92672>&lt;</span>_, Clear<span style=color:#f92672>&gt;</span>(self.fps, msg.contents()),
+</span></span><span style=display:flex><span>            _ <span style=color:#f92672>=&gt;</span> Err(CommsError::UnknownMessageType),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The only thing missing is that <code>dispatch()</code> function. That&rsquo;s where the magic
+really happens. Unfortunately due to the highly generic nature of what we&rsquo;re
+trying to do the signature is a bit gnarly&mldr;</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// sim/src/router.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Parse a message using [`scroll`] and send it to some [`Handler`], turning
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// the response back into an ANPP [`Packet`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>dispatch</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, H, M<span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>    handler: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> H,
+</span></span><span style=display:flex><span>    raw_msg: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;a</span> [<span style=color:#66d9ef>u8</span>],
+</span></span><span style=display:flex><span>) -&gt; Result<span style=color:#f92672>&lt;</span>Packet, CommsError<span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// M, our message, should be parseable from a slice of bytes (which we can
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#75715e>// index into using `usize`). We&#39;re also explicitly specifying the
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#75715e>// endianness
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    M: <span style=color:#a6e22e>TryFromCtx</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, scroll::Endian, Size <span style=color:#f92672>=</span> <span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// pread_with() will automatically translate parsing failures from a generic
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#75715e>// scroll error to our message&#39;s error type
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    M::Error: From<span style=color:#f92672>&lt;</span>scroll::Error<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// H should be able to handle the message
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    H: <span style=color:#a6e22e>Handler</span><span style=color:#f92672>&lt;</span>M<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// then the response can be turned into a packet
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    H::Response: Into<span style=color:#f92672>&lt;</span>Packet<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> msg: <span style=color:#a6e22e>M</span> <span style=color:#f92672>=</span> raw_msg
+</span></span><span style=display:flex><span>        .pread_with(<span style=color:#ae81ff>0</span>, scroll::<span style=color:#66d9ef>NETWORK</span>)
+</span></span><span style=display:flex><span>        .map_err(<span style=color:#f92672>|</span>_<span style=color:#f92672>|</span> CommsError::ParseFailed)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> response <span style=color:#f92672>=</span> handler.handle(msg);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    Ok(response.into())
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>That little incantation completes the guts of the <code>Router</code> type. This
+infrastructure gives our application a well-defined mechanism for transferring
+data between the frontend and the motion controller.</p><p>It also simplifies the process of adding new requests and responses as the
+application evolves.</p><h2 id=actually-sending-some-data>Actually Sending Some Data
+<a class=heading-link href=#actually-sending-some-data><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>You may have noticed that <a href=#earlier-unimplemented>earlier</a> we &ldquo;implemented&rdquo;
+the <code>Tx</code> trait for <code>Browser</code> with <code>unimplemented!()</code>, leaving the process of
+sending data to the frontend for later. Well now is later.</p><p>Transferring data to the frontend is done by registering a JavaScript callback
+with the <code>Browser</code> (via a <code>#[wasm_bindgen]</code> method on <code>App</code>) and calling it
+with a <a href=https://docs.rs/js-sys/0.3.27/js_sys/struct.Uint8Array.html class=external-link target=_blank rel=noopener><code>Uint8Array</code></a> as the only argument.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// sim/src/browser.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> js_sys::{Function, Uint8Array};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Clone)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Browser</span> {
+</span></span><span style=display:flex><span>    fps_div: <span style=color:#a6e22e>Element</span>,
+</span></span><span style=display:flex><span>    tx: Option<span style=color:#f92672>&lt;</span>Function<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Browser {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>from_element</span>(fps_selector: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>) -&gt; Result<span style=color:#f92672>&lt;</span>Browser, <span style=color:#f92672>&amp;</span>&#39;static <span style=color:#66d9ef>str</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        Ok(Browser {
+</span></span><span style=display:flex><span>            fps_div: <span style=color:#a6e22e>element</span>,
+</span></span><span style=display:flex><span>            tx: None,
+</span></span><span style=display:flex><span>        })
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Tx <span style=color:#66d9ef>for</span> Browser {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>send</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, data: <span style=color:#66d9ef>&amp;</span>[<span style=color:#66d9ef>u8</span>]) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> Some(<span style=color:#66d9ef>ref</span> tx) <span style=color:#f92672>=</span> self.tx {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// efficiently create a typed array directly from WASM memory
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#66d9ef>let</span> buffer <span style=color:#f92672>=</span> Uint8Array::from(data);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// then try to invoke the callback
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#66d9ef>let</span> outcome <span style=color:#f92672>=</span> tx.call1(<span style=color:#f92672>&amp;</span>JsValue::<span style=color:#66d9ef>NULL</span>, <span style=color:#f92672>&amp;</span>buffer);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> Err(e) <span style=color:#f92672>=</span> outcome {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> msg <span style=color:#f92672>=</span>
+</span></span><span style=display:flex><span>                    JsValue::from(<span style=color:#e6db74>&#34;An exception was thrown while sending data&#34;</span>);
+</span></span><span style=display:flex><span>                web_sys::console::error_2(<span style=color:#f92672>&amp;</span>msg, <span style=color:#f92672>&amp;</span>e);
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We also need to provide a couple setters so JavaScript can register this
+callback.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// sim/src/browser.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Browser {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>set_data_sent</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, callback: <span style=color:#a6e22e>Function</span>) {
+</span></span><span style=display:flex><span>        self.tx <span style=color:#f92672>=</span> Some(callback);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// sim/src/app.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[wasm_bindgen]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> App {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Set the callback to be invoked whenever the simulator wants to send data
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// to the frontend.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// The callback will be passed a [`Uint8Array`] as the first argument.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_data_sent</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, callback: <span style=color:#a6e22e>Function</span>) {
+</span></span><span style=display:flex><span>        self.browser.set_data_sent(callback);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Next we need to register our callback from the <code>init()</code> function in <code>index.js</code>.
+Later on we&rsquo;ll add a more realistic handler, but we&rsquo;ll use <code>console.log()</code>
+temporarily to see what&rsquo;s going on.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-js data-lang=js><span style=display:flex><span><span style=color:#75715e>// frontend/index.js
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>function</span> <span style=color:#a6e22e>init</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#e6db74>&#34;Initializing the world&#34;</span>);
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>world</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>wasm</span>.<span style=color:#a6e22e>setup_world</span>(<span style=color:#e6db74>&#34;#fps-counter&#34;</span>);
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>world</span>.<span style=color:#a6e22e>on_data_sent</span>(<span style=color:#a6e22e>data</span> =&gt; {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>str</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>TextDecoder</span>(<span style=color:#e6db74>&#34;utf-8&#34;</span>).<span style=color:#a6e22e>decode</span>(<span style=color:#a6e22e>data</span>.<span style=color:#a6e22e>slice</span>(<span style=color:#ae81ff>5</span>));
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#e6db74>&#34;Received&#34;</span>, <span style=color:#a6e22e>data</span>, <span style=color:#a6e22e>str</span>);
+</span></span><span style=display:flex><span>    });
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>requestAnimationFrame</span>(<span style=color:#a6e22e>animate</span>);
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices note"><p>Remember that the first 5 bytes of an ANPP message are the header. We use
+<code>data.slice(5)</code> to skip the first 5 bytes and then interpret the rest as a UTF-8
+string using a <code>TextDecoder</code>.</p></div><p>Lets tell the router to handle a message with ID 42 by returning the original
+message unchanged (i.e. its an <code>echo</code> command).</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// sim/src/router.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> MessageHandler <span style=color:#66d9ef>for</span> Router<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle_message</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, msg: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Packet</span>) -&gt; Result<span style=color:#f92672>&lt;</span>Packet, CommsError<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> msg.id() {
+</span></span><span style=display:flex><span>            <span style=color:#ae81ff>1</span> <span style=color:#f92672>=&gt;</span> dispatch::<span style=color:#f92672>&lt;</span>_, Clear<span style=color:#f92672>&gt;</span>(self.fps, msg.contents()),
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// echo
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#ae81ff>42</span> <span style=color:#f92672>=&gt;</span> Ok(msg.clone()),
+</span></span><span style=display:flex><span>            _ <span style=color:#f92672>=&gt;</span> Err(CommsError::UnknownMessageType),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We should also expose a helper method on <code>App</code> for generating an <code>echo</code> message
+and sending it to the backend. Remember that sending a message is asynchronous
+(it <em>won&rsquo;t</em> block) and the callback registered with <code>on_data_sent()</code> will only
+be invoked the next time <code>requestAnimationFrame()</code> runs.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// sim/src/app.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[wasm_bindgen]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> App {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Sends the backend a message (via [`App::on_data_received()`]) to echo
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// back a string of text.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>echo</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, text: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>) -&gt; Result<span style=color:#f92672>&lt;</span>(), JsValue<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> pkt <span style=color:#f92672>=</span> Packet::with_data(<span style=color:#ae81ff>42</span>, text.as_bytes())
+</span></span><span style=display:flex><span>            .map_err(<span style=color:#f92672>|</span>_<span style=color:#f92672>|</span> <span style=color:#e6db74>&#34;The input text is too long&#34;</span>)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> buffer <span style=color:#f92672>=</span> [<span style=color:#ae81ff>0</span>; Packet::<span style=color:#66d9ef>MAX_PACKET_SIZE</span> <span style=color:#f92672>+</span> <span style=color:#ae81ff>5</span>];
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> bytes_written <span style=color:#f92672>=</span> pkt
+</span></span><span style=display:flex><span>            .write_to_buffer(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> buffer)
+</span></span><span style=display:flex><span>            .map_err(<span style=color:#f92672>|</span>_<span style=color:#f92672>|</span> <span style=color:#e6db74>&#34;Unable to write the packet to a buffer&#34;</span>)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        self.on_data_received(<span style=color:#f92672>&amp;</span>buffer[<span style=color:#f92672>..</span>bytes_written]);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        Ok(())
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Finally, we&rsquo;ll register an <code>echo</code> to be sent about 500ms after initializing the
+world.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-js data-lang=js><span style=display:flex><span><span style=color:#75715e>// frontend/index.js
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>function</span> <span style=color:#a6e22e>init</span>() {
+</span></span><span style=display:flex><span>    ...
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>setTimeout</span>(() =&gt; <span style=color:#a6e22e>world</span>.<span style=color:#a6e22e>echo</span>(<span style=color:#e6db74>&#34;Hello, World!&#34;</span>), <span style=color:#ae81ff>500</span>);
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Surprisingly, reloading the <em>Adventures in Motion Control</em> tab and opening the
+dev console shows everything worked first time!</p><p><img src=echo.png alt="Don&rsquo;t you love it when things work first time?"></p><p>While we&rsquo;re at it, let&rsquo;s make sure throwing an exception in the callback doesn&rsquo;t
+break the world.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-js data-lang=js><span style=display:flex><span><span style=color:#75715e>// frontend/index.js
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>function</span> <span style=color:#a6e22e>init</span>() {
+</span></span><span style=display:flex><span>    ...
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>world</span>.<span style=color:#a6e22e>on_data_sent</span>(<span style=color:#a6e22e>data</span> =&gt; {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>str</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>TextDecoder</span>(<span style=color:#e6db74>&#34;utf-8&#34;</span>).<span style=color:#a6e22e>decode</span>(<span style=color:#a6e22e>data</span>.<span style=color:#a6e22e>slice</span>(<span style=color:#ae81ff>5</span>));
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>throw</span> <span style=color:#66d9ef>new</span> Error(<span style=color:#a6e22e>str</span>);
+</span></span><span style=display:flex><span>    });
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The <code>&lt;Browser as Tx>::send()</code> method will invoke <code>console.error()</code> whenever the
+callback returns an <code>Err</code> (<code>wasm_bindgen</code> generates shims to turn exceptions
+into a <code>Result&lt;T, JsValue></code>), so in theory it should show in the dev tools
+window with a backtrace.</p><p><img src=console_error.png alt="Error log with backtrace"></p><p>The backtrace isn&rsquo;t stellar, but it&rsquo;s definitely usable.</p><p>If you know how to set up source maps or some other tool for translating those
+opaque WASM offsets into file names and line numbers, let me know!</p><h2 id=the-next-step>The Next Step
+<a class=heading-link href=#the-next-step><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>We&rsquo;re now able to:</p><ol><li>send data from the frontend to the <code>App</code></li><li>decode it in the <code>Communications</code> system</li><li>pass that decoded message to a <code>Router</code></li><li>Recognise the message corresponds to an <code>echo</code></li><li>Generate the response (a copy of the original message)</li><li>Send the response the entire way back up the stack to the frontend</li><li>Print the binary and text representations of the response using <code>console.log()</code></li></ol><p>Talk about a convoluted way to print &ldquo;<code>Hello, World"</code> to the dev tools console!</p><p>Now we&rsquo;ve established a rudimentary communications system it&rsquo;s time to start
+implementing the next part of a motion controller. The <em>motion</em> bit.</p></div><footer></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>

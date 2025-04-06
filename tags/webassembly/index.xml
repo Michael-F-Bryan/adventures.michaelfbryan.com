@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>WebAssembly on Michael-F-Bryan</title><link>https://adventures.michaelfbryan.com/tags/webassembly/</link><description>Recent content in WebAssembly on Michael-F-Bryan</description><generator>Hugo</generator><language>en</language><lastBuildDate>Tue, 01 Apr 2025 09:19:10 +0800</lastBuildDate><atom:link href="https://adventures.michaelfbryan.com/tags/webassembly/index.xml" rel="self" type="application/rss+xml"/><item><title>Announcing Cargo WAPM</title><link>https://adventures.michaelfbryan.com/posts/announcing-cargo-wapm/</link><pubDate>Sun, 07 Aug 2022 16:14:07 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/announcing-cargo-wapm/</guid><description>&lt;p>While at Hammer of the Gods, we wrote &lt;em>a lot&lt;/em> of Rust code that gets compiled to
+WebAssembly for use in our containerization technology, Rune.&lt;/p>
+&lt;p>We have over 30 different processing blocks (chunks of code that can be used in
+a data processing pipeline) and as you can imagine, publishing and versioning
+each of WebAssembly module manually isn&amp;rsquo;t practical. For that, we lean on the
+&lt;a href="https://wapm.io/" class="external-link" target="_blank" rel="noopener">WebAssembly Package Manager&lt;/a> to do all the heavy lifting.&lt;/p></description></item><item><title>WebAssembly as a Platform for Abstraction</title><link>https://adventures.michaelfbryan.com/posts/wasm-as-a-platform-for-abstraction/</link><pubDate>Sun, 15 Dec 2019 11:55:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/wasm-as-a-platform-for-abstraction/</guid><description>&lt;p>In a project I&amp;rsquo;ve been playing around with recently, we&amp;rsquo;ve encountered the
+dilemma where you want to make it easy for users to write their own
+application logic using the system but at the same time want to keep that logic
+decoupled from the implementation details of whatever platform the
+application is running on.&lt;/p>
+&lt;p>If you&amp;rsquo;ve been programming for any amount of time your immediate reaction is
+probably &lt;em>&amp;ldquo;why bother mentioning this, doesn&amp;rsquo;t it just fall out of good
+library design?&amp;rdquo;&lt;/em>, and normally I would totally agree with you, except I
+forgot to mention a couple of important details&amp;hellip;&lt;/p></description></item><item><title>A Better Frontend</title><link>https://adventures.michaelfbryan.com/posts/a-better-frontend/</link><pubDate>Fri, 27 Sep 2019 03:47:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/a-better-frontend/</guid><description>&lt;p>Now we&amp;rsquo;ve got a half-usable motion controller, we need a graphical way for
+humans to interact with it. The controller runs in a browser, which makes
+&lt;a href="https://vuejs.org/" class="external-link" target="_blank" rel="noopener">Vue&lt;/a> a perfect candidate for the UI.&lt;/p>
+&lt;h2 id="adding-vue-to-the-frontend">
+ Adding Vue to the Frontend
+ &lt;a class="heading-link" href="#adding-vue-to-the-frontend">
+ &lt;i class="fa-solid fa-link" aria-hidden="true" title="Link to heading">&lt;/i>
+ &lt;span class="sr-only">Link to heading&lt;/span>
+ &lt;/a>
+&lt;/h2>
+&lt;p>Now, we don&amp;rsquo;t actually have much frontend code (47 lines of JavaScript to be
+exact) so it&amp;rsquo;s actually easier to delete the existing &lt;code>frontend&lt;/code> and use the
+&lt;a href="https://cli.vuejs.org/guide/installation.html" class="external-link" target="_blank" rel="noopener">&lt;code>vue&lt;/code> CLI tool&lt;/a> to create a new one.&lt;/p></description></item><item><title>FPS Counter</title><link>https://adventures.michaelfbryan.com/posts/fps-counter/</link><pubDate>Tue, 03 Sep 2019 08:50:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/fps-counter/</guid><description>&lt;p>As mentioned in &lt;a href="https://adventures.michaelfbryan.com/posts/top-level-infrastructure/#the-next-step" >the previous article&lt;/a> the next task is to
+implement our first proper &lt;code>System&lt;/code>, the &lt;code>FpsCounter&lt;/code>.&lt;/p>
+&lt;blockquote>
+&lt;p>A relatively easy, yet important, component is some sort of FPS counter.
+Ideally there’ll be a bit of text in the corner showing the number of
+&lt;code>poll()&lt;/code>s per second and the average duration. That way we can get a better
+feel for our simulator’s performance characteristics.&lt;/p>&lt;/blockquote>
+&lt;p>An &lt;code>FpsCounter&lt;/code> has two responsibilities,&lt;/p></description></item><item><title>Top-Level Infrastructure</title><link>https://adventures.michaelfbryan.com/posts/top-level-infrastructure/</link><pubDate>Mon, 02 Sep 2019 21:22:30 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/top-level-infrastructure/</guid><description>&lt;p>As mentioned in &lt;a href="https://adventures.michaelfbryan.com/posts/announcing-adventures-in-motion-control/#the-next-step" >the intro article&lt;/a>, the first task will be to set
+up the application&amp;rsquo;s structure and define how the various components will
+communicate.&lt;/p>
+&lt;h2 id="multitasking">
+ Multitasking
+ &lt;a class="heading-link" href="#multitasking">
+ &lt;i class="fa-solid fa-link" aria-hidden="true" title="Link to heading">&lt;/i>
+ &lt;span class="sr-only">Link to heading&lt;/span>
+ &lt;/a>
+&lt;/h2>
+&lt;p>Most embedded systems will implement multi-tasking by rapidly polling each
+system within an infinite loop.&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-rust" data-lang="rust">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">loop&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> poll_comms();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> poll_motion_planning();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> poll_io();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> poll_machine_events();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>A motion controller will normally spend most of its time polling, but there are
+places where polling isn&amp;rsquo;t appropriate. For example, accurate movement of a
+stepper motor relies on sending pulses at very precise times. Another scenario
+is in the handling of communication, where waiting for the next poll to read a
+byte may result in missing part of a message.&lt;/p></description></item></channel></rss>

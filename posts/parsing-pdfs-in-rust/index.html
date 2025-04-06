@@ -1,0 +1,464 @@
+<!doctype html><html lang=en><head><title>Parsing PDF Documents in Rust · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="In my spare time I&rsquo;m a volunteer with my state&rsquo;s emergency services and we
+have our own web app for managing unit-specific things like attendance, vehicle
+checks, newsletters, on-call rosters, and so on.
+It&rsquo;s actually a really useful tool, but there is one feature that really
+annoys me&mldr; The list of member contact details is only available as a PDF
+and not a format that can be imported into your phone&rsquo;s contacts."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="Parsing PDF Documents in Rust"><meta name=twitter:description content="In my spare time I’m a volunteer with my state’s emergency services and we have our own web app for managing unit-specific things like attendance, vehicle checks, newsletters, on-call rosters, and so on.
+It’s actually a really useful tool, but there is one feature that really annoys me… The list of member contact details is only available as a PDF and not a format that can be imported into your phone’s contacts."><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/parsing-pdfs-in-rust/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="Parsing PDF Documents in Rust"><meta property="og:description" content="In my spare time I’m a volunteer with my state’s emergency services and we have our own web app for managing unit-specific things like attendance, vehicle checks, newsletters, on-call rosters, and so on.
+It’s actually a really useful tool, but there is one feature that really annoys me… The list of member contact details is only available as a PDF and not a format that can be imported into your phone’s contacts."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2021-01-31T21:00:00+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Rust"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/parsing-pdfs-in-rust/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/parsing-pdfs-in-rust/>Parsing PDF Documents in Rust</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2021-01-31T21:00:00+08:00>January 31, 2021
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+13-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/rust/>Rust</a></span></div></div></header><div class=post-content><p>In my spare time I&rsquo;m a volunteer with my state&rsquo;s emergency services and we
+have our own web app for managing unit-specific things like attendance, vehicle
+checks, newsletters, on-call rosters, and so on.</p><p>It&rsquo;s actually a really useful tool, but there is one feature that really
+annoys me&mldr; The list of member contact details is only available as a PDF
+and not a format that can be imported into your phone&rsquo;s contacts.</p><p>This means if you need to contact someone you first need to:</p><ol><li>download the contact list to your phone</li><li>zoom in so you can read the table&rsquo;s rows</li><li>find the person&rsquo;s name</li><li>pan over to their phone number</li><li>Copy the number and paste it into your messaging app</li></ol><p>I need to do this infrequently enough that it&rsquo;s not worth manually creating a
+new contact, yet just often enough to be annoying. It&rsquo;d be <em>really</em> nice if I
+just needed to download the contact list once and have all the information
+available on my phone&mldr; There must be a better way!</p><p>I&rsquo;ve contacted one of the developers to see if we can get a better solution
+but in the meantime figured that, as a programmer, I should be able to
+<a href="https://www.youtube.com/watch?v=lIFE7h3m40U" class=external-link target=_blank rel=noopener>bodge</a> something together.</p><div class="notices note"><p>Unfortunately the code written in this article isn&rsquo;t publicly available
+because it contains personally identifiable information.</p><p>If you found this useful or spotted a bug, let me know on the blog&rsquo;s <a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues class=external-link target=_blank rel=noopener>issue
+tracker</a>!</p></div><h2 id=whats-in-a-pdf>What&rsquo;s in a PDF?
+<a class=heading-link href=#whats-in-a-pdf><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>So our first job is to take a PDF document like this&mldr;</p><p><img src=/img/contact-list.png alt="Screenshot of a PDF containing a table with redacted cells"></p><p>&mldr; and extract the data in the table.</p><p>That&rsquo;s easy enough, there is already a Rust crate (unsurprisingly called
+<a href=https://crates.io/crates/pdf class=external-link target=_blank rel=noopener><code>pdf</code></a>) for parsing PDF documents so we can reuse that.</p><p>For these sorts of jobs I won&rsquo;t do much planning up-front, instead I&rsquo;ll click
+around <a href=https://docs.rs/pdf/ class=external-link target=_blank rel=noopener>the crate&rsquo;s API docs</a> and figure out how to use the
+provided functionality to do what I want.</p><p>After a bit of clicking through I figured out that <a href=https://docs.rs/pdf/0.7.1/pdf/file/struct.File.html class=external-link target=_blank rel=noopener><code>pdf::file::File</code></a>
+represented the overall document and was just a fancy list of
+<a href=https://docs.rs/pdf/0.7.1/pdf/object/struct.Page.html class=external-link target=_blank rel=noopener><code>pdf::object::Page</code>s</a>, where a <code>Page</code>&rsquo;s <a href=https://docs.rs/pdf/0.7.1/pdf/content/struct.Content.html class=external-link target=_blank rel=noopener>content</a> is just a
+list of <a href=https://docs.rs/pdf/0.7.1/pdf/content/struct.Operation.html class=external-link target=_blank rel=noopener><code>Operation</code>s</a>&mldr; And that&rsquo;s where my understanding of PDF
+documents was completely turned on its head.</p><p>You see, I used to believe that a PDF was a declarative format containing a
+bunch of high-level objects like <code>Table</code> and <code>Heading</code> and so on (almost like
+HTML)&mldr; However, after skimming through <a href=https://www.adobe.com/content/dam/acom/en/devnet/pdf/pdfs/pdf_reference_archives/PDFReference.pdf class=external-link target=_blank rel=noopener>the PDF format spec</a>
+from Adobe (which is itself a PDF - how meta!) it was evident that PDF is
+more like an interpreted programming language where you&rsquo;ll go through each
+<code>Operation</code> in a page executing draw calls and updating the renderer&rsquo;s state
+as you go.</p><p>That makes things interesting. It means I can&rsquo;t just look for a
+(hypothetical) <code>Table</code> object in the DOM and iterate over its <code>cells</code> field.
+Instead I&rsquo;ll need to iterate over every instruction and keep track of the
+current state.</p><p>These instructions are pretty low-level, too. Here are (as best I can tell) the
+instructions for drawing the <em>&ldquo;Surname&rdquo;</em> and <em>&ldquo;First Name&rdquo;</em> cells.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-postscript data-lang=postscript><span style=display:flex><span><span style=color:#a6e22e>BT</span> <span style=color:#a6e22e>:</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>Td</span> <span style=color:#a6e22e>:</span> <span style=color:#a6e22e>31.19,</span> <span style=color:#ae81ff>555.43</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>Tj</span> <span style=color:#a6e22e>:</span> <span style=color:#a6e22e>&#34;Surname&#34;</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>ET</span> <span style=color:#a6e22e>:</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>Q</span> <span style=color:#a6e22e>:</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>re</span> <span style=color:#a6e22e>:</span> <span style=color:#a6e22e>184.26,</span> <span style=color:#a6e22e>566.93,</span> <span style=color:#a6e22e>155.91,</span> <span style=color:#ae81ff>-17.01</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>f</span> <span style=color:#a6e22e>:</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>m</span> <span style=color:#a6e22e>:</span> <span style=color:#a6e22e>184.26,</span> <span style=color:#ae81ff>566.93</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>l</span> <span style=color:#a6e22e>:</span> <span style=color:#a6e22e>184.26,</span> <span style=color:#ae81ff>549.92</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>S</span> <span style=color:#a6e22e>:</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>m</span> <span style=color:#a6e22e>:</span> <span style=color:#a6e22e>184.26,</span> <span style=color:#ae81ff>566.93</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>l</span> <span style=color:#a6e22e>:</span> <span style=color:#a6e22e>340.16,</span> <span style=color:#ae81ff>566.93</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>S</span> <span style=color:#a6e22e>:</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>m</span> <span style=color:#a6e22e>:</span> <span style=color:#a6e22e>340.16,</span> <span style=color:#ae81ff>566.93</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>l</span> <span style=color:#a6e22e>:</span> <span style=color:#a6e22e>340.16,</span> <span style=color:#ae81ff>549.92</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>S</span> <span style=color:#a6e22e>:</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>q</span> <span style=color:#a6e22e>:</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>g</span> <span style=color:#a6e22e>:</span> <span style=color:#ae81ff>0</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>BT</span> <span style=color:#a6e22e>:</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>Td</span> <span style=color:#a6e22e>:</span> <span style=color:#a6e22e>187.09,</span> <span style=color:#ae81ff>555.43</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>Tj</span> <span style=color:#a6e22e>:</span> <span style=color:#a6e22e>&#34;First</span> <span style=color:#a6e22e>Name&#34;</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>ET</span> <span style=color:#a6e22e>:</span>
+</span></span></code></pre></div><p>Luckily the PDF reference from earlier included a table explaining the different
+op-codes.</p><table><thead><tr><th>Op-code</th><th>Description</th></tr></thead><tbody><tr><td>BT</td><td>Begin Text</td></tr><tr><td>ET</td><td>End Text</td></tr><tr><td>g</td><td>Set Grey Level</td></tr><tr><td>l</td><td>Line To</td></tr><tr><td>m</td><td>Move To</td></tr><tr><td>Q</td><td>Restore graphics state</td></tr><tr><td>q</td><td>Save graphics state</td></tr><tr><td>re</td><td>Append rectangle to path</td></tr><tr><td>S</td><td>Stroke</td></tr><tr><td>Td</td><td>Move text position</td></tr><tr><td>Tj</td><td>Show text</td></tr></tbody></table><p>So PDF documents don&rsquo;t even contain tables, it&rsquo;s all just a lie!</p><p>To identify the rows and cells in a document I&rsquo;ll need to find each of the
+text objects (everything between <code>BT</code> and <code>ET</code> operations) and do probably
+something funky with their coordinates.</p><p>First, I&rsquo;ll create something to represent text objects and stub out a type
+which we can take a stream of <code>Operation</code>s and turn them into a stream of
+<code>TextObject</code>s.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>text_objects</span>(operations: <span style=color:#66d9ef>&amp;</span>[Operation]) -&gt; <span style=color:#a6e22e>impl</span> Iterator<span style=color:#f92672>&lt;</span>Item <span style=color:#f92672>=</span> TextObject<span style=color:#f92672>&lt;</span>&#39;_<span style=color:#f92672>&gt;&gt;</span> <span style=color:#f92672>+</span> &#39;_ {
+</span></span><span style=display:flex><span>    TextObjectParser {
+</span></span><span style=display:flex><span>        ops: <span style=color:#a6e22e>operations</span>.iter(),
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>TextObject</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> x: <span style=color:#66d9ef>f32</span>,
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> y: <span style=color:#66d9ef>f32</span>,
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> text: <span style=color:#a6e22e>Cow</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span>, <span style=color:#66d9ef>str</span><span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Clone)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>TextObjectParser</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    ops: <span style=color:#a6e22e>std</span>::slice::Iter<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span>, Operation<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Turning <code>TextObjectParser</code> into an <code>Iterator</code> turned out to be pretty easy
+thanks to pattern matching. I know ahead of time <em>exactly</em> which operations
+I&rsquo;m looking for and what their operands will be so each pattern can be its
+own branch in a big <code>match</code> statement. Then the language will automatically
+make sure I&rsquo;ve got the correct number of operands with the correct types, and
+bind the information I want to extract to local variables.</p><p>The idea is that every time someone calls <code>TextObjectParser</code>&rsquo;s <code>next()</code>
+method we&rsquo;ll keep consuming <code>Operation</code>s, matching on their operator and
+operands while updating some temporary state, then when we see an <code>"ET"</code>
+operation we yield what we&rsquo;ve seen to the caller.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span><span style=color:#f92672>&gt;</span> Iterator <span style=color:#66d9ef>for</span> TextObjectParser<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Item</span> <span style=color:#f92672>=</span> TextObject<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;src</span><span style=color:#f92672>&gt;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>next</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; Option<span style=color:#f92672>&lt;</span>Self::Item<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> last_coords <span style=color:#f92672>=</span> None;
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> last_text <span style=color:#f92672>=</span> None;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>while</span> <span style=color:#66d9ef>let</span> Some(Operation { operator, operands }) <span style=color:#f92672>=</span> self.ops.next() {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>match</span> (operator.as_str(), operands.as_slice()) {
+</span></span><span style=display:flex><span>                (<span style=color:#e6db74>&#34;BT&#34;</span>, _) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                    <span style=color:#75715e>// Clear all prior state because we&#39;ve just seen a
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                    <span style=color:#75715e>// &#34;begin text&#34; op
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                    last_coords <span style=color:#f92672>=</span> None;
+</span></span><span style=display:flex><span>                    last_text <span style=color:#f92672>=</span> None;
+</span></span><span style=display:flex><span>                }
+</span></span><span style=display:flex><span>                (<span style=color:#e6db74>&#34;Td&#34;</span>, [Primitive::Number(x), Primitive::Number(y)]) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                    <span style=color:#75715e>// &#34;Text Location&#34; contains the location of the text on the
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                    <span style=color:#75715e>// current page.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                    last_coords <span style=color:#f92672>=</span> Some((<span style=color:#f92672>*</span>x, <span style=color:#f92672>*</span>y));
+</span></span><span style=display:flex><span>                }
+</span></span><span style=display:flex><span>                (<span style=color:#e6db74>&#34;Tj&#34;</span>, [Primitive::String(text)]) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                    <span style=color:#75715e>// &#34;Show text&#34; - the operation that actually contains the
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                    <span style=color:#75715e>// text to be displayed.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                    last_text <span style=color:#f92672>=</span> text.as_str().ok();
+</span></span><span style=display:flex><span>                }
+</span></span><span style=display:flex><span>                (<span style=color:#e6db74>&#34;ET&#34;</span>, _) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                    <span style=color:#75715e>// &#34;end of text&#34; - we should have finished this text object,
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                    <span style=color:#75715e>// if we got all the right information then we can yield it
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                    <span style=color:#75715e>// to the caller. Otherwise, use take() to clear anything
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                    <span style=color:#75715e>// we&#39;ve seen so far and continue.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                    <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> (Some((x, y)), Some(text)) <span style=color:#f92672>=</span> (last_coords.take(), last_text.take()) {
+</span></span><span style=display:flex><span>                        <span style=color:#66d9ef>return</span> Some(TextObject { x, y, text });
+</span></span><span style=display:flex><span>                    }
+</span></span><span style=display:flex><span>                }
+</span></span><span style=display:flex><span>                _ <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>continue</span>,
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        None
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>This isn&rsquo;t a serious program, so it means we can tailor it to work <em>just</em> for
+the contact list PDF and not worry about recognising arbitrary tables (which
+would easily require an order of magnitude more effort).</p><p>To identify &ldquo;rows&rdquo; I&rsquo;m just going to group items by their vertical location.
+That means we&rsquo;ll be including all bits of text in the document and treating them
+as rows with one column, but they can be filtered out later.</p><p>There is a <code>group_by()</code> method in <a href=https://docs.rs/itertools/ class=external-link target=_blank rel=noopener>the <code>itertools</code> crate</a>, but I
+figured I may as well roll my own because this is just a simple project and
+<code>group_by()</code> is only 50 lines or so.</p><p>Don&rsquo;t be intimidated by the number of generics and the complicated <code>where</code>-clause,
+all will be explained in a sec.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::{iter::Peekable, marker::PhantomData};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>group_by</span><span style=color:#f92672>&lt;</span>I, F, K<span style=color:#f92672>&gt;</span>(iterator: <span style=color:#a6e22e>I</span>, grouper: <span style=color:#a6e22e>F</span>) -&gt; <span style=color:#a6e22e>impl</span> Iterator<span style=color:#f92672>&lt;</span>Item <span style=color:#f92672>=</span> Vec<span style=color:#f92672>&lt;</span>I::Item<span style=color:#f92672>&gt;&gt;</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    I: IntoIterator,
+</span></span><span style=display:flex><span>    F: FnMut(<span style=color:#f92672>&amp;</span>I::Item) -&gt; <span style=color:#a6e22e>K</span>,
+</span></span><span style=display:flex><span>    K: PartialEq,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    GroupBy {
+</span></span><span style=display:flex><span>        iter: <span style=color:#a6e22e>iterator</span>.into_iter().peekable(),
+</span></span><span style=display:flex><span>        grouper,
+</span></span><span style=display:flex><span>        _key: <span style=color:#a6e22e>PhantomData</span>,
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>GroupBy</span><span style=color:#f92672>&lt;</span>I: Iterator, F, K<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    iter: <span style=color:#a6e22e>Peekable</span><span style=color:#f92672>&lt;</span>I<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    grouper: <span style=color:#a6e22e>F</span>,
+</span></span><span style=display:flex><span>    _key: <span style=color:#a6e22e>PhantomData</span><span style=color:#f92672>&lt;</span><span style=color:#66d9ef>fn</span>() -&gt; <span style=color:#a6e22e>K</span><span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The idea is we&rsquo;ll take something which can be turned into an iterator and
+invoke the specified function to get some sort of &ldquo;key&rdquo;.</p><p>From there we can just keep popping items off the iterator until we find an
+item with a different key (or run out of items). That tells us we&rsquo;ve found
+all items in the group and can yield the group to the caller.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>I, F, K<span style=color:#f92672>&gt;</span> Iterator <span style=color:#66d9ef>for</span> GroupBy<span style=color:#f92672>&lt;</span>I, F, K<span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    I: Iterator,
+</span></span><span style=display:flex><span>    F: FnMut(<span style=color:#f92672>&amp;</span>I::Item) -&gt; <span style=color:#a6e22e>K</span>,
+</span></span><span style=display:flex><span>    K: PartialEq,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Item</span> <span style=color:#f92672>=</span> Vec<span style=color:#f92672>&lt;</span>I::Item<span style=color:#f92672>&gt;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>next</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; Option<span style=color:#f92672>&lt;</span>Self::Item<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> first_item <span style=color:#f92672>=</span> self.iter.next()<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> key <span style=color:#f92672>=</span> (self.grouper)(<span style=color:#f92672>&amp;</span>first_item);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> items <span style=color:#f92672>=</span> vec![first_item];
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>while</span> <span style=color:#66d9ef>let</span> Some(peek) <span style=color:#f92672>=</span> self.iter.peek() {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>if</span> (self.grouper)(peek) <span style=color:#f92672>!=</span> key {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>break</span>;
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            items.push(
+</span></span><span style=display:flex><span>                self.iter
+</span></span><span style=display:flex><span>                    .next()
+</span></span><span style=display:flex><span>                    .expect(<span style=color:#e6db74>&#34;Peek guarantees there is another item&#34;</span>),
+</span></span><span style=display:flex><span>            );
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        Some(items)
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices note"><p>Something I like about this implementation is that we can use the <code>?</code> operator
+at the very top to return early when the underlying stream of items is empty.</p><p>That reduces a lot of the complexity, whereas your typical for-loop
+implementation would constantly need to handle the case where there may or
+may not be a <code>key</code> yet.</p></div><h2 id=parsing-the-contact-list>Parsing the Contact List
+<a class=heading-link href=#parsing-the-contact-list><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now we&rsquo;ve got some primitives for extracting text from a page and grouping it
+into rows, let&rsquo;s make some functions for parsing member information from a
+<code>Page</code>.</p><p>I&rsquo;ve decided to represent the parsed data as a <code>ContactList</code> which contains a
+list of <code>MemberInfo</code>s.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>ContactList</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> members: Vec<span style=color:#f92672>&lt;</span>MemberInfo<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>MemberInfo</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> first_name: String,
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> surname: String,
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> email: String,
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> mobile: String,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Using the <code>text_objects()</code> and <code>group_by()</code> helpers from before, we get a
+<code>parse_members_on_page()</code> function which looks something like this.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>parse_members_on_page</span>(page: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Page</span>) -&gt; Result<span style=color:#f92672>&lt;</span>Vec<span style=color:#f92672>&lt;</span>MemberInfo<span style=color:#f92672>&gt;</span>, Error<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> content <span style=color:#f92672>=</span> <span style=color:#66d9ef>match</span> <span style=color:#f92672>&amp;</span>page.contents {
+</span></span><span style=display:flex><span>        Some(c) <span style=color:#f92672>=&gt;</span> c,
+</span></span><span style=display:flex><span>        None <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>return</span> Ok(Vec::new()),
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> text_objects <span style=color:#f92672>=</span> text_objects(<span style=color:#f92672>&amp;</span>content.operations);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> rows <span style=color:#f92672>=</span> group_by(text_objects, <span style=color:#f92672>|</span>t<span style=color:#f92672>|</span> t.y)
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// ignore everything up to the table header
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        .skip_while(<span style=color:#f92672>|</span>row<span style=color:#f92672>|</span> row[<span style=color:#ae81ff>0</span>].text <span style=color:#f92672>!=</span> <span style=color:#e6db74>&#34;Surname&#34;</span>)
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// then skip the header
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        .skip(<span style=color:#ae81ff>1</span>)
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// every row in the contact table is guaranteed to have 6 cells
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        .take_while(<span style=color:#f92672>|</span>row<span style=color:#f92672>|</span> row.len() <span style=color:#f92672>==</span> <span style=color:#ae81ff>6</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> info <span style=color:#f92672>=</span> Vec::new();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>for</span> row <span style=color:#66d9ef>in</span> rows {
+</span></span><span style=display:flex><span>        info.push(parse_row(row)<span style=color:#f92672>?</span>);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    Ok(info)
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Again, we only ever want things to work with this PDF so identifying the
+table&rsquo;s header is just a case of finding the first &ldquo;row&rdquo; where the first cell
+contains <code>"Surname"</code>.</p><p>We also know that our table has 6 columns and that every cell will have
+something in it, so that gives us a nice condition to pass to <code>take_while()</code>.</p><p>Parsing a single row and copying the individual cell text into the
+<code>MemberInfo</code> is pretty easy to do with slice patterns.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> heck::TitleCase;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>parse_row</span>(row: Vec<span style=color:#f92672>&lt;</span>TextObject<span style=color:#f92672>&lt;</span>&#39;_<span style=color:#f92672>&gt;&gt;</span>) -&gt; Result<span style=color:#f92672>&lt;</span>MemberInfo, Error<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>match</span> row.as_slice() {
+</span></span><span style=display:flex><span>        [TextObject { text: <span style=color:#a6e22e>surname</span>, <span style=color:#f92672>..</span> },
+</span></span><span style=display:flex><span>         TextObject { text: <span style=color:#a6e22e>first_name</span>, <span style=color:#f92672>..</span> },
+</span></span><span style=display:flex><span>         TextObject { text: <span style=color:#a6e22e>email</span>, <span style=color:#f92672>..</span> },
+</span></span><span style=display:flex><span>         TextObject { text: <span style=color:#a6e22e>mobile</span>, <span style=color:#f92672>..</span> },
+</span></span><span style=display:flex><span>         _, _] <span style=color:#f92672>=&gt;</span>
+</span></span><span style=display:flex><span>        {
+</span></span><span style=display:flex><span>            Ok(MemberInfo {
+</span></span><span style=display:flex><span>                surname: <span style=color:#a6e22e>surname</span>.to_title_case(),
+</span></span><span style=display:flex><span>                first_name: <span style=color:#a6e22e>first_name</span>.to_string(),
+</span></span><span style=display:flex><span>                email: <span style=color:#a6e22e>email</span>.to_string(),
+</span></span><span style=display:flex><span>                mobile: <span style=color:#a6e22e>mobile</span>.to_string(),
+</span></span><span style=display:flex><span>            })
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>        other <span style=color:#f92672>=&gt;</span> Err(anyhow::anyhow!(
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;A row should have exactly 6 text fields, found {}&#34;</span>,
+</span></span><span style=display:flex><span>            other.len()
+</span></span><span style=display:flex><span>        )),
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices note"><p>In the original document, surnames are in UPPERCASE (e.g. <code>BRYAN</code>) so we
+use <a href=https://crates.io/crates/heck class=external-link target=_blank rel=noopener>the <code>heck</code> crate</a> to convert them to the
+more useful TitleCase.</p><p>I don&rsquo;t particularly want my phone to scream a person&rsquo;s name whenever I get a
+message from them.</p></div><p>We can wrap everything up into a single <code>parse()</code> function by iterating over
+each page in a <code>pdf::file::File</code> and appending the parsed <code>MemberInfo</code> to a
+list.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::anyhow::{Context, Error};
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> pdf::file::File;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>parse</span>(pdf_blob: <span style=color:#66d9ef>&amp;</span>[<span style=color:#66d9ef>u8</span>]) -&gt; Result<span style=color:#f92672>&lt;</span>ContactList, Error<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> pdf <span style=color:#f92672>=</span> File::from_data(pdf_blob)
+</span></span><span style=display:flex><span>        .context(<span style=color:#e6db74>&#34;Unable to parse the data as a PDF&#34;</span>)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> members <span style=color:#f92672>=</span> Vec::new();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>for</span> (i, page) <span style=color:#66d9ef>in</span> pdf.pages().enumerate() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> page <span style=color:#f92672>=</span> page<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> members_on_page <span style=color:#f92672>=</span> parse_members_on_page(<span style=color:#f92672>&amp;</span>page)
+</span></span><span style=display:flex><span>            .with_context(<span style=color:#f92672>||</span> format!(<span style=color:#e6db74>&#34;Unable to parse the members on page </span><span style=color:#e6db74>{}</span><span style=color:#e6db74>&#34;</span>, i <span style=color:#f92672>+</span> <span style=color:#ae81ff>1</span>))<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        members.extend(members_on_page);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    Ok(ContactList { members })
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The code itself isn&rsquo;t overly interesting, although I&rsquo;ve chosen to use the
+<code>anyhow</code> crate for managing my errors. That way I can use the <code>Context</code>
+extension trait to attach useful context to errors so when my code (inevitably)
+fails I&rsquo;ll be greeted with something like this&mldr;</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-text data-lang=text><span style=display:flex><span>Error: Unable to parse the contacts list
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>Caused by:
+</span></span><span style=display:flex><span>    0: Unable to parse the members on page 1
+</span></span><span style=display:flex><span>    1: Found a row containing &#34;Michael&#34;
+</span></span></code></pre></div><p>&mldr; Instead of something useless like <em>&ldquo;Unable to parse the file&rdquo;</em>.</p><h2 id=exporting-to-google-contacts>Exporting to Google Contacts
+<a class=heading-link href=#exporting-to-google-contacts><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>The final part of our task is exporting the parsed data in a form that <em>Google
+Contacts</em> can handle.</p><p>Rust has a lot of useful libraries for writing command-line utilities, but for
+this application we&rsquo;ll only need <a href=https://crates.io/crates/structopt class=external-link target=_blank rel=noopener>the <code>structopt</code> crate</a> for
+declaring something our command-line arguments can be parsed into.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/bin/export-to-google-contacts.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> structopt::StructOpt;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::path::PathBuf;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Clone, StructOpt)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Args</span> {
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[structopt(short, long, parse(from_os_str),
+</span></span></span><span style=display:flex><span><span style=color:#75715e>                help = </span><span style=color:#e6db74>&#34;The file to parse, or STDIN if not provided.&#34;</span><span style=color:#75715e>)]</span>
+</span></span><span style=display:flex><span>    input: Option<span style=color:#f92672>&lt;</span>PathBuf<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[structopt(short, long, parse(from_os_str), default_value = </span><span style=color:#e6db74>&#34;contacts.csv&#34;</span><span style=color:#75715e>,
+</span></span></span><span style=display:flex><span><span style=color:#75715e>                help = </span><span style=color:#e6db74>&#34;The file to save the contacts to&#34;</span><span style=color:#75715e>)]</span>
+</span></span><span style=display:flex><span>    output: <span style=color:#a6e22e>PathBuf</span>,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We&rsquo;ll also give it a utility method for parsing the input, correctly switching
+between a file or <code>stdin</code> depending on whether a <code>--input</code> argument was
+provided.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/bin/export-to-google-contacts.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::io::Read;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> anyhow::{Context, Error};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Args {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>input</span>(<span style=color:#f92672>&amp;</span>self) -&gt; Result<span style=color:#f92672>&lt;</span>Vec<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>u8</span><span style=color:#f92672>&gt;</span>, Error<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> <span style=color:#f92672>&amp;</span>self.input {
+</span></span><span style=display:flex><span>            Some(filename) <span style=color:#f92672>=&gt;</span> std::fs::read(filename)
+</span></span><span style=display:flex><span>                .with_context(<span style=color:#f92672>||</span> format!(<span style=color:#e6db74>&#34;Couldn&#39;t read </span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>{}</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>&#34;</span>, filename.display())),
+</span></span><span style=display:flex><span>            None <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> buffer <span style=color:#f92672>=</span> Vec::new();
+</span></span><span style=display:flex><span>                io::stdin()
+</span></span><span style=display:flex><span>                    .read_to_end(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> buffer)
+</span></span><span style=display:flex><span>                    .context(<span style=color:#e6db74>&#34;Unable to read from STDIN&#34;</span>)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>                Ok(buffer)
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>According to their docs, <em>Google Contacts</em> can import contacts from
+<a href=https://en.wikipedia.org/wiki/VCard class=external-link target=_blank rel=noopener>vCards</a> or a CSV file. They&rsquo;ve provided <a href=https://storage.googleapis.com/support-kms-prod/ItcoC4pjx2kK5azWNE4zeEWEckt4W5GkSnLN class=external-link target=_blank rel=noopener>a CSV template</a>
+so that&rsquo;s what I&rsquo;ve decided to export my data as.</p><p>Inspecting the <code>contacts.csv</code> file shows we&rsquo;ve got quite a lot of fields to
+choose from.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cat ~/Downloads/contacts.csv | sed -e <span style=color:#e6db74>&#39;s/,/\n/g&#39;</span>
+</span></span><span style=display:flex><span>Name
+</span></span><span style=display:flex><span>Given Name
+</span></span><span style=display:flex><span>Additional Name
+</span></span><span style=display:flex><span>Family Name
+</span></span><span style=display:flex><span>Yomi Name
+</span></span><span style=display:flex><span>Given Name Yomi
+</span></span><span style=display:flex><span>Additional Name Yomi
+</span></span><span style=display:flex><span>Family Name Yomi
+</span></span><span style=display:flex><span>Name Prefix
+</span></span><span style=display:flex><span>Name Suffix
+</span></span><span style=display:flex><span>Initials
+</span></span><span style=display:flex><span>Nickname
+</span></span><span style=display:flex><span>Short Name
+</span></span><span style=display:flex><span>Maiden Name
+</span></span><span style=display:flex><span>Birthday
+</span></span><span style=display:flex><span>Gender
+</span></span><span style=display:flex><span>Location
+</span></span><span style=display:flex><span>Billing Information
+</span></span><span style=display:flex><span>Directory Server
+</span></span><span style=display:flex><span>Mileage
+</span></span><span style=display:flex><span>Occupation
+</span></span><span style=display:flex><span>Hobby
+</span></span><span style=display:flex><span>Sensitivity
+</span></span><span style=display:flex><span>Priority
+</span></span><span style=display:flex><span>Subject
+</span></span><span style=display:flex><span>Notes
+</span></span><span style=display:flex><span>Language
+</span></span><span style=display:flex><span>Photo
+</span></span><span style=display:flex><span>Group Membership
+</span></span><span style=display:flex><span>E-mail 1 - Type
+</span></span><span style=display:flex><span>E-mail 1 - Value
+</span></span><span style=display:flex><span>IM 1 - Type
+</span></span><span style=display:flex><span>IM 1 - Service
+</span></span><span style=display:flex><span>IM 1 - Value
+</span></span><span style=display:flex><span>Website 1 - Type
+</span></span><span style=display:flex><span>Website 1 - Value
+</span></span></code></pre></div><p>In this case we only have data for a couple fields so all the others can be
+skipped.</p><ul><li><code>Given Name</code></li><li><code>Family Name</code></li><li><code>E-mail 1 - Value</code></li><li><code>Phone 1 - Type</code> (will always be <code>"Mobile"</code>)</li><li><code>Phone 1 - Value</code></li></ul><p>Because the <code>export-to-google-contacts</code> executable is so simple, we can throw
+the argument parsing, contact list parsing, and CSV generation all into a single
+<code>main()</code> function and call it a day.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/bin/export-to-google-contacts.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> csv::Writer;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::fs::File;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>main</span>() -&gt; Result<span style=color:#f92672>&lt;</span>(), Error<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> args <span style=color:#f92672>=</span> Args::from_args();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> raw <span style=color:#f92672>=</span> args.input()<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> contacts <span style=color:#f92672>=</span> contacts_parser::parse(<span style=color:#f92672>&amp;</span>raw)
+</span></span><span style=display:flex><span>        .context(<span style=color:#e6db74>&#34;Unable to parse the contacts list&#34;</span>)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> w <span style=color:#f92672>=</span> File::create(<span style=color:#f92672>&amp;</span>args.output)
+</span></span><span style=display:flex><span>        .with_context(<span style=color:#f92672>||</span> format!(<span style=color:#e6db74>&#34;Unable to open </span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>{}</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>&#34;</span>, args.output.display()))<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> csv_writer <span style=color:#f92672>=</span> Writer::from_writer(w);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    csv_writer.write_record(<span style=color:#f92672>&amp;</span>[
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;Given Name&#34;</span>, <span style=color:#e6db74>&#34;Family Name&#34;</span>, <span style=color:#e6db74>&#34;E-mail 1 - Value&#34;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;Phone 1 - Type&#34;</span>, <span style=color:#e6db74>&#34;Phone 1 - Value&#34;</span>,
+</span></span><span style=display:flex><span>        ])
+</span></span><span style=display:flex><span>        .context(<span style=color:#e6db74>&#34;Unable to write the header&#34;</span>)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>for</span> member <span style=color:#66d9ef>in</span> <span style=color:#f92672>&amp;</span>contacts.members {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> MemberInfo { surname, first_name, email, mobile, <span style=color:#f92672>..</span> } <span style=color:#f92672>=</span> member;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> row <span style=color:#f92672>=</span> <span style=color:#f92672>&amp;</span>[
+</span></span><span style=display:flex><span>            first_name.as_str(),
+</span></span><span style=display:flex><span>            surname.as_str(),
+</span></span><span style=display:flex><span>            email.as_str(),
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;Mobile&#34;</span>,
+</span></span><span style=display:flex><span>            mobile.as_str(),
+</span></span><span style=display:flex><span>        ];
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        csv_writer
+</span></span><span style=display:flex><span>            .write_record(row)
+</span></span><span style=display:flex><span>            .with_context(<span style=color:#f92672>||</span> format!(<span style=color:#e6db74>&#34;Unable to write </span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>{}</span><span style=color:#e6db74> </span><span style=color:#e6db74>{}</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>&#34;</span>, first_name, surname))<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    Ok(())
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Once that is done, we can use <code>cargo run</code> to run the program and convert the
+contact list PDF to a CSV.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cargo run -- -i ~/Downloads/contact-list.pdf
+</span></span><span style=display:flex><span>  Finished dev [unoptimized + debuginfo] target(s) in 0.03s
+</span></span><span style=display:flex><span>   Running `target/debug/export-to-google-contacts -i /home/michael/Downloads/contact-list.pdf`
+</span></span><span style=display:flex><span>$ ls
+</span></span><span style=display:flex><span>  Cargo.lock  Cargo.toml  LICENSE_APACHE.md  LICENSE_MIT.md  README.md  src
+</span></span><span style=display:flex><span>  target tests contacts.csv
+</span></span><span style=display:flex><span>               ^^^^^^^^^^^^
+</span></span><span style=display:flex><span>$ wc contacts.csv
+</span></span><span style=display:flex><span>  57   70 3196 contacts.csv
+</span></span></code></pre></div><p>Now it&rsquo;s just a case of <a href="https://support.google.com/contacts/answer/1069522?co=GENIE.Platform%3DDesktop&amp;hl=en&amp;oco=1#zippy=%2Ccant-import-my-contacts%2Cfrom-a-file" class=external-link target=_blank rel=noopener>importing the <code>contacts.csv</code></a> on a computer
+and letting your phone pick it up next time it does a sync.</p><h2 id=conclusions>Conclusions
+<a class=heading-link href=#conclusions><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>This was a fun little experiment!</p><p>Honestly, I was expecting it to be a massive pain and that I&rsquo;d need to
+traverse some sort of DOM to extract data, something that tends to be a quite
+verbose in statically typed languages.</p><p>Taking the time to understand the PDF spec and writing that <code>text_objects()</code>
+helper really simplified things, though. Instead of needing half a weekend I
+was able to hack my way from nothing to 50+ new contacts in under 90 minutes
+and 400 lines of code.</p><p>Let me know if you find these sorts of <a href="https://www.youtube.com/watch?v=hmMbHB0zYrM&amp;t=9097s" class=external-link target=_blank rel=noopener><em>&ldquo;programming Rust in the real
+world&rdquo;</em></a> articles interesting. I always enjoy hearing war stories from
+fellow programmers!</p></div><footer></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>

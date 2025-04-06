@@ -1,0 +1,669 @@
+<!doctype html><html lang=en><head><title>Common Newbie Mistakes and Bad Practices in Rust: Bad Habits · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="When you are coming to Rust from another language you bring all your previous
+experiences with you.
+Often this is awesome because it means you aren&rsquo;t learning programming from
+scratch! However, you can also bring along bad habits which can lead you down
+the wrong rabbit hole or make you write bad code.
+
+
+    The code written in this article is available on the Rust Playground using the
+various (playground) links dotted throughout. Feel free to browse
+through and steal code or inspiration."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="Common Newbie Mistakes and Bad Practices in Rust: Bad Habits"><meta name=twitter:description content="When you are coming to Rust from another language you bring all your previous experiences with you.
+Often this is awesome because it means you aren’t learning programming from scratch! However, you can also bring along bad habits which can lead you down the wrong rabbit hole or make you write bad code.
+The code written in this article is available on the Rust Playground using the various (playground) links dotted throughout. Feel free to browse through and steal code or inspiration."><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/rust-best-practices/bad-habits/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="Common Newbie Mistakes and Bad Practices in Rust: Bad Habits"><meta property="og:description" content="When you are coming to Rust from another language you bring all your previous experiences with you.
+Often this is awesome because it means you aren’t learning programming from scratch! However, you can also bring along bad habits which can lead you down the wrong rabbit hole or make you write bad code.
+The code written in this article is available on the Rust Playground using the various (playground) links dotted throughout. Feel free to browse through and steal code or inspiration."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2021-09-27T18:30:00+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Rust"><meta property="article:tag" content="Best Practices"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/rust-best-practices/bad-habits/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/rust-best-practices/bad-habits/>Common Newbie Mistakes and Bad Practices in Rust: Bad Habits</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2021-09-27T18:30:00+08:00>September 27, 2021
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+22-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/rust/>Rust</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/best-practices/>Best Practices</a></span></div></div></header><div class=post-content><p>When you are coming to Rust from another language you bring all your previous
+experiences with you.</p><p>Often this is awesome because it means you aren&rsquo;t learning programming from
+scratch! However, you can also bring along bad habits which can lead you down
+the wrong rabbit hole or make you write bad code.</p><div class="notices note"><p>The code written in this article is available on the Rust Playground using the
+various <a href=https://play.rust-lang.org/ class=external-link target=_blank rel=noopener>(playground)</a> links dotted throughout. Feel free to browse
+through and steal code or inspiration.</p><p>If you found this useful or spotted a bug in the article, let me know on the
+blog&rsquo;s <a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues class=external-link target=_blank rel=noopener>issue tracker</a>!</p></div><h2 id=using-sentinel-values>Using Sentinel Values
+<a class=heading-link href=#using-sentinel-values><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>This one is a pet peeve of mine.</p><p>In most C-based languages (C, C#, Java, etc.), the way you indicate whether
+something failed or couldn&rsquo;t be found is by returning a &ldquo;special&rdquo; value. For
+example, C#&rsquo;s <a href="https://docs.microsoft.com/en-us/dotnet/api/system.string.indexof?view=net-5.0" class=external-link target=_blank rel=noopener><code>String.IndexOf()</code></a> method will scan an array for a
+particular element and return its index. Returning <code>-1</code> if nothing is found.</p><p>That leads to code like this:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-cs data-lang=cs><span style=display:flex><span><span style=color:#66d9ef>string</span> sentence = <span style=color:#e6db74>&#34;The fox jumps over the dog&#34;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>int</span> index = sentence.IndexOf(<span style=color:#e6db74>&#34;fox&#34;</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>if</span> (index != -<span style=color:#ae81ff>1</span>)
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>string</span> wordsAfterFox = sentence.SubString(index);
+</span></span><span style=display:flex><span>  Console.WriteLine(wordsAfterFox);
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>You see this sort of <em>&ldquo;use a sentinel value to indicate something special&rdquo;</em>
+practice all the time. Other sentinel values you might find in the wild are
+<code>""</code>, or <code>null</code> (someone once referred to this as their
+<em><a href=https://www.infoq.com/presentations/Null-References-The-Billion-Dollar-Mistake-Tony-Hoare/ class=external-link target=_blank rel=noopener>&ldquo;billion-dollar mistake&rdquo;</a></em>).</p><p>The general reason why this is a bad idea is that there is absolutely nothing to
+stop you from forgetting that check. That means you can accidentally crash your
+application with one misplaced assumption or when the code generating the
+sentinel is far away from the code using it.</p><p>We can do a lot better in Rust, though. Just use <code>Option</code>!</p><p>By design, there is no way to get the underlying value without dealing with
+the possibility that your <code>Option</code> may be <code>None</code>. This is enforced by the
+compiler at compile time, meaning code that forgets to check won&rsquo;t even compile.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rs data-lang=rs><span style=display:flex><span><span style=color:#66d9ef>let</span> sentence <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;The fox jumps over the dog&#34;</span>;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>let</span> index <span style=color:#f92672>=</span> sentence.find(<span style=color:#e6db74>&#34;fox&#34;</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// let words_after_fox = &amp;sentence[index..]; // Error: Can&#39;t index str with Option&lt;usize&gt;
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> Some(fox) <span style=color:#f92672>=</span> index {
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>let</span> words_after_fox <span style=color:#f92672>=</span> <span style=color:#f92672>&amp;</span>sentence[fox<span style=color:#f92672>..</span>];
+</span></span><span style=display:flex><span>  println!(<span style=color:#e6db74>&#34;</span><span style=color:#e6db74>{}</span><span style=color:#e6db74>&#34;</span>, words_after_fox);
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2018&amp;gist=ed6d6b8ebdd7581a95b0098258b4f371" class=external-link target=_blank rel=noopener>(playground)</a></p><h2 id=hungarian-notation>Hungarian Notation
+<a class=heading-link href=#hungarian-notation><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Back in the 70&rsquo;s, a naming convention called <a href=https://en.wikipedia.org/wiki/Hungarian_notation class=external-link target=_blank rel=noopener><em>Hungarian Notation</em></a>
+was developed by programmers writing in languages where variables are untyped or
+dynamically typed. It works by adding a mnemonic to the start of a name to
+indicate what it represents, for example the boolean <code>visited</code> variable might be
+called <code>bVisited</code> or the string <code>name</code> might be called <code>strName</code>.</p><p>You can still see this naming convention in languages Delphi where classes
+(types) start with <code>T</code>, fields start with <code>F</code>, arguments start with <code>A</code>, and
+so on.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback><span style=display:flex><span>type
+</span></span><span style=display:flex><span> TKeyValue = class
+</span></span><span style=display:flex><span>  private
+</span></span><span style=display:flex><span>    FKey: integer;
+</span></span><span style=display:flex><span>    FValue: TObject;
+</span></span><span style=display:flex><span>  public
+</span></span><span style=display:flex><span>    property Key: integer read FKey write FKey;
+</span></span><span style=display:flex><span>    property Value: TObject read FValue write FValue;
+</span></span><span style=display:flex><span>    function Frobnicate(ASomeArg: string): string;
+</span></span><span style=display:flex><span>  end;
+</span></span></code></pre></div><p>C# also has a convention that all interfaces should start with <code>I</code>, meaning
+programmers coming to Rust from C# will sometimes prefix their traits with <code>I</code>
+as well.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rs data-lang=rs><span style=display:flex><span><span style=color:#66d9ef>trait</span> IClone {
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>clone</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#a6e22e>Self</span>;
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>In this case, just drop the leading <code>I</code>. Rust&rsquo;s syntax guarantees that it just
+isn&rsquo;t possible to confuse a trait for a normal type, so it isn&rsquo;t helping anyone.
+This is in contrast with C# where interfaces and classes are largely
+interchangeable.</p><p>This is also seen inside functions where people will conjure up new names for
+something as they convert it from one form to another. Often these names are
+silly or contrived, providing negligible additional information to the reader.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rs data-lang=rs><span style=display:flex><span><span style=color:#66d9ef>let</span> account_bytes: Vec<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>u8</span><span style=color:#f92672>&gt;</span> <span style=color:#f92672>=</span> read_some_input();
+</span></span><span style=display:flex><span><span style=color:#66d9ef>let</span> account_str <span style=color:#f92672>=</span> String::from_utf8(account_bytes)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>let</span> account: <span style=color:#a6e22e>Account</span> <span style=color:#f92672>=</span> account_str.parse()<span style=color:#f92672>?</span>;
+</span></span></code></pre></div><p>I mean, if we&rsquo;re calling <code>String::from_utf8()</code> we already know <code>account_str</code>
+will be a <code>String</code> so why add the <code>_str</code> suffix?</p><p>Unlike a lot of other languages, Rust encourages shadowing variables when you
+are transforming them from one form to another, especially when the previous
+variable is no longer accessible (e.g. because it&rsquo;s been moved).</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rs data-lang=rs><span style=display:flex><span><span style=color:#66d9ef>let</span> account: Vec<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>u8</span><span style=color:#f92672>&gt;</span> <span style=color:#f92672>=</span> read_some_input();
+</span></span><span style=display:flex><span><span style=color:#66d9ef>let</span> account <span style=color:#f92672>=</span> String::from_utf8(account)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>let</span> account: <span style=color:#a6e22e>Account</span> <span style=color:#f92672>=</span> account.parse()<span style=color:#f92672>?</span>;
+</span></span></code></pre></div><p>This is arguably superior because we can use the same name for the same concept.</p><p>Other languages <a href=https://rules.sonarsource.com/cpp/RSPEC-1117 class=external-link target=_blank rel=noopener>frown on shadowing</a> because it can be easy to lose
+track of what type a variable contains (e.g. in a dynamically typed language
+like JavaScript) or you can introduce bugs where the programmer thinks a
+variable has one type but it actually contains something separate.</p><p>Neither of these is particularly relevant to a strongly typed language with
+move semantics like Rust, so you can use shadowing freely without worrying
+about shooting yourself in the foot.</p><h2 id=an-abundance-of-rcrefcellt>An Abundance of <code>Rc&lt;RefCell&lt;T>></code>
+<a class=heading-link href=#an-abundance-of-rcrefcellt><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>A common pattern in Object Oriented languages is to accept a reference to some
+object so you can call its methods later on.</p><p>On its own there is nothing wrong with this, <em>Dependency Injection</em> is a very
+good thing to do, but unlike most OO languages Rust doesn&rsquo;t have a garbage
+collector and has strong feelings on shared mutability.</p><p>Perhaps this will be easier to understand with an example.</p><p>Say we are implementing a game where the player needs to beat up a bunch of
+monsters until they have inflicted a certain amount of damage (I dunno, maybe
+it&rsquo;s for a quest or something).</p><p>We create a <code>Monster</code> class which has a <code>health</code> property and a <code>takeDamage()</code>
+method, and so we can keep track of how much damage has been inflicted we&rsquo;ll let
+people provide callbacks that get called whenever the monster receives damage.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-ts data-lang=ts><span style=display:flex><span><span style=color:#66d9ef>type</span> <span style=color:#a6e22e>OnReceivedDamage</span> <span style=color:#f92672>=</span> (<span style=color:#a6e22e>damageReceived</span>: <span style=color:#66d9ef>number</span>) <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>void</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>class</span> <span style=color:#a6e22e>Monster</span> {
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>health</span>: <span style=color:#66d9ef>number</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>50</span>;
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>receivedDamage</span>: <span style=color:#66d9ef>OnReceivedDamage</span>[] <span style=color:#f92672>=</span> [];
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>takeDamage</span>(<span style=color:#a6e22e>amount</span>: <span style=color:#66d9ef>number</span>) {
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>amount</span> <span style=color:#f92672>=</span> Math.<span style=color:#a6e22e>min</span>(<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>health</span>, <span style=color:#a6e22e>amount</span>);
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>health</span> <span style=color:#f92672>-=</span> <span style=color:#a6e22e>amount</span>;
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>receivedDamage</span>.<span style=color:#a6e22e>forEach</span>(<span style=color:#a6e22e>cb</span> <span style=color:#f92672>=&gt;</span> <span style=color:#a6e22e>cb</span>(<span style=color:#a6e22e>amount</span>));
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>on</span>(<span style=color:#a6e22e>event</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#34;damaged&#34;</span>, <span style=color:#a6e22e>callback</span>: <span style=color:#66d9ef>OnReceivedDamage</span>)<span style=color:#f92672>:</span> <span style=color:#66d9ef>void</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>receivedDamage</span>.<span style=color:#a6e22e>push</span>(<span style=color:#a6e22e>callback</span>);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Let&rsquo;s also create a <code>DamageCounter</code> class which tracks how much damage we&rsquo;ve
+inflicted and lets us know when that goal is reached.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-ts data-lang=ts><span style=display:flex><span><span style=color:#66d9ef>class</span> <span style=color:#a6e22e>DamageCounter</span> {
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>damageInflicted</span>: <span style=color:#66d9ef>number</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>reachedTargetDamage</span>()<span style=color:#f92672>:</span> <span style=color:#66d9ef>boolean</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>damageInflicted</span> <span style=color:#f92672>&gt;</span> <span style=color:#ae81ff>100</span>;
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>onDamageInflicted</span>(<span style=color:#a6e22e>amount</span>: <span style=color:#66d9ef>number</span>) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>damageInflicted</span> <span style=color:#f92672>+=</span> <span style=color:#a6e22e>amount</span>;
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Now we&rsquo;ll create some monsters and keep inflicting a random amount of damage
+until the <code>DamageCounter</code> is happy.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-ts data-lang=ts><span style=display:flex><span><span style=color:#66d9ef>const</span> <span style=color:#a6e22e>counter</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>DamageCounter</span>();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>const</span> <span style=color:#a6e22e>monsters</span> <span style=color:#f92672>=</span> [<span style=color:#66d9ef>new</span> <span style=color:#a6e22e>Monster</span>(), <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>Monster</span>(), <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>Monster</span>(), <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>Monster</span>(), <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>Monster</span>()];
+</span></span><span style=display:flex><span><span style=color:#a6e22e>monsters</span>.<span style=color:#a6e22e>forEach</span>(<span style=color:#a6e22e>m</span> <span style=color:#f92672>=&gt;</span> <span style=color:#a6e22e>m</span>.<span style=color:#a6e22e>on</span>(<span style=color:#e6db74>&#34;damaged&#34;</span>, <span style=color:#a6e22e>amount</span> <span style=color:#f92672>=&gt;</span> <span style=color:#a6e22e>counter</span>.<span style=color:#a6e22e>onDamageInflicted</span>(<span style=color:#a6e22e>amount</span>)));
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>while</span> (<span style=color:#f92672>!</span><span style=color:#a6e22e>counter</span>.<span style=color:#a6e22e>reachedTargetDamage</span>()) {
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// pick a random monster
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>index</span> <span style=color:#f92672>=</span> Math.<span style=color:#a6e22e>floor</span>(Math.<span style=color:#a6e22e>random</span>()<span style=color:#f92672>*</span><span style=color:#a6e22e>monsters</span>.<span style=color:#a6e22e>length</span>);
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>target</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>monsters</span>[<span style=color:#a6e22e>index</span>];
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// then damage it a bit
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>damage</span> <span style=color:#f92672>=</span> Math.<span style=color:#a6e22e>round</span>(Math.<span style=color:#a6e22e>random</span>() <span style=color:#f92672>*</span> <span style=color:#ae81ff>50</span>);
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>target</span>.<span style=color:#a6e22e>takeDamage</span>(<span style=color:#a6e22e>damage</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#e6db74>`Monster </span><span style=color:#e6db74>${</span><span style=color:#a6e22e>index</span><span style=color:#e6db74>}</span><span style=color:#e6db74> received </span><span style=color:#e6db74>${</span><span style=color:#a6e22e>damage</span><span style=color:#e6db74>}</span><span style=color:#e6db74> damage`</span>);
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p><a href=https://www.typescriptlang.org/play?#code/C4TwDgpgBA8gdgJQgYwgSwG4QCYBECGAtvgObQC8UAFIQFxQCyA9nAM7AQBOANFNkaQhJUmHPTgBXQgCMuASijkAfFAxM02ANwAobcgA2+Vq0Yt2XKAG9tUW1AAWEfPuD3xU2Z0VQArAAYdOyhOFHQsPAEyenhhMJwCYjIAbQBdb1SdGztgfABrCATBKiImCThgdxl5Kyyg2xKy4G8GfFcAOkI0OCpXNFY2x2dXXgbyuUC6217+wZd7KABaSlHgTTrauum2kJFwwrI2gDMmTgBRfGR7KmRpRRUbnvs+kcJSsfGNgF9dIJYqCCw5XoACJ+IkcMDeMhnPppBdctFEKFRBFwXJ6GoNDVJlMnv0dnFUYI2mAJKwrtD9LD4R8gt9vnpDMYoPsIABhN4cLzWIJgwQASTgh30aGQHGwlU83gCPzsIQujmwABV8JwyMBWVR0VBpEwmPonHBsTiQsAJJwjVs+WRBcLReKoCoAIx+GV02W2Fis20isU4YqvRqS6o8nFWyIQH32nBQADUy0D5QmtnpumQZia6caFkocAgAHcWRGOdnOFrMum2E1XlWuCZKEk84XmLWy3JeE3TK2tR2C13zG3e82M1we1BOy2B1qUjoawP+sczgqaHcoIQ2n9QRHsJDqAB9F6chTKKBZ8pcDdwb1C33igNHuQfbT5p4G6gAQjPXO2TkuOBVaoQBqEZagooa2AA9BBUBgKKuRQPgwT4HA2BMIQa4jpwGyVuwUBdNgEAAB7NK09hHPoepli07ScMhqGEFqABUc5cv0BpwCQri0nYOFNDkgFNJQLF1kk+FETOGxQVArgQEa1rQGgTSIdIinYRmfARiRNFvNgVDUWRtEoWhWpQIxvh+NxUyquqbQ5PkmryU+QQ4fqEBtBRJBUAABpOXJQAAJJYYmEZ8wTIuEAWWPJoXydQwBMDk+gaeCeE3tGEqRV+F7yVGfrYJ8XkfJ8QA class=external-link target=_blank rel=noopener>(TypeScript Playground)</a></p><p>Now let&rsquo;s port this code to Rust. Our <code>Monster</code> struct is fairly similar,
+although we need to use <code>Box&lt;dyn Fn(u32)></code> for a closure which accepts a single
+<code>u32</code> argument (all closures in JavaScript are heap allocated by default).</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rs data-lang=rs><span style=display:flex><span><span style=color:#66d9ef>type</span> <span style=color:#a6e22e>OnReceivedDamage</span> <span style=color:#f92672>=</span> Box<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>dyn</span> Fn(<span style=color:#66d9ef>u32</span>)<span style=color:#f92672>&gt;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Monster</span> {
+</span></span><span style=display:flex><span>    health: <span style=color:#66d9ef>u32</span>,
+</span></span><span style=display:flex><span>    received_damage: Vec<span style=color:#f92672>&lt;</span>OnReceivedDamage<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Monster {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>take_damage</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, amount: <span style=color:#66d9ef>u32</span>) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> damage_received <span style=color:#f92672>=</span> cmp::min(self.health, amount);
+</span></span><span style=display:flex><span>        self.health <span style=color:#f92672>-=</span> damage_received;
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>for</span> callback <span style=color:#66d9ef>in</span> <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self.received_damage {
+</span></span><span style=display:flex><span>            callback(damage_received);
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>add_listener</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, listener: <span style=color:#a6e22e>OnReceivedDamage</span>) {
+</span></span><span style=display:flex><span>        self.received_damage.push(listener);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Default <span style=color:#66d9ef>for</span> Monster {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>default</span>() -&gt; <span style=color:#a6e22e>Self</span> {
+</span></span><span style=display:flex><span>        Monster { health: <span style=color:#ae81ff>100</span>, received_damage: Vec::new() }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Next comes our <code>DamageCounter</code>, nothing interesting here.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rs data-lang=rs><span style=display:flex><span><span style=color:#75715e>#[derive(Default)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>DamageCounter</span> {
+</span></span><span style=display:flex><span>    damage_inflicted: <span style=color:#66d9ef>u32</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> DamageCounter {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>reached_target_damage</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>bool</span> {
+</span></span><span style=display:flex><span>        self.damage_inflicted <span style=color:#f92672>&gt;</span> <span style=color:#ae81ff>100</span>
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_damage_received</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, damage: <span style=color:#66d9ef>u32</span>) {
+</span></span><span style=display:flex><span>        self.damage_inflicted <span style=color:#f92672>+=</span> damage;
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>And finally our code that inflicts damage.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rs data-lang=rs><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>main</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> rng <span style=color:#f92672>=</span> rand::thread_rng();
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> counter <span style=color:#f92672>=</span> DamageCounter::default();
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> monsters: Vec<span style=color:#f92672>&lt;</span>_<span style=color:#f92672>&gt;</span> <span style=color:#f92672>=</span> (<span style=color:#ae81ff>0</span><span style=color:#f92672>..</span><span style=color:#ae81ff>5</span>).map(<span style=color:#f92672>|</span>_<span style=color:#f92672>|</span> Monster::default()).collect();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>for</span> monster <span style=color:#66d9ef>in</span> <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> monsters {
+</span></span><span style=display:flex><span>        monster.add_listener(Box::new(<span style=color:#f92672>|</span>damage<span style=color:#f92672>|</span> counter.on_damage_received(damage)));
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>while</span> <span style=color:#f92672>!</span>counter.reached_target_damage() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> index <span style=color:#f92672>=</span> rng.gen_range(<span style=color:#ae81ff>0</span><span style=color:#f92672>..</span>monsters.len());
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> target <span style=color:#f92672>=</span> <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> monsters[index];
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> damage <span style=color:#f92672>=</span> rng.gen_range(<span style=color:#ae81ff>0</span><span style=color:#f92672>..</span><span style=color:#ae81ff>50</span>);
+</span></span><span style=display:flex><span>        target.take_damage(damage);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        println!(<span style=color:#e6db74>&#34;Monster </span><span style=color:#e6db74>{}</span><span style=color:#e6db74> received </span><span style=color:#e6db74>{}</span><span style=color:#e6db74> damage&#34;</span>, index, damage);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2018&amp;gist=a8cc547728ef102bbd5dc6b9cafb0ff6" class=external-link target=_blank rel=noopener>(playground)</a></p><p>But herein lies our first problem, when we try to compile the code <code>rustc</code> gives
+us not one, but <strong>four</strong> compile errors for the <code>monster.add_listener()</code> line 🤣</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rs data-lang=rs><span style=display:flex><span>error[E0596]: <span style=color:#a6e22e>cannot</span> borrow <span style=color:#960050;background-color:#1e0010>`</span>counter<span style=color:#960050;background-color:#1e0010>`</span> <span style=color:#66d9ef>as</span> mutable, <span style=color:#66d9ef>as</span> it is a captured variable <span style=color:#66d9ef>in</span> a <span style=color:#960050;background-color:#1e0010>`</span>Fn<span style=color:#960050;background-color:#1e0010>`</span> closure
+</span></span><span style=display:flex><span>  <span style=color:#f92672>-</span>-&gt; <span style=color:#a6e22e>src</span><span style=color:#f92672>/</span>main.rs:<span style=color:#ae81ff>47</span>:<span style=color:#ae81ff>48</span>
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>47</span> <span style=color:#f92672>|</span>         monster.add_listener(Box::new(<span style=color:#f92672>|</span>damage<span style=color:#f92672>|</span> counter.on_damage_received(damage)));
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>                                                <span style=color:#f92672>^^^^^^^</span> cannot borrow <span style=color:#66d9ef>as</span> mutable
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>error[E0499]: <span style=color:#a6e22e>cannot</span> borrow <span style=color:#960050;background-color:#1e0010>`</span>counter<span style=color:#960050;background-color:#1e0010>`</span> <span style=color:#66d9ef>as</span> mutable more than once at a time
+</span></span><span style=display:flex><span>  <span style=color:#f92672>-</span>-&gt; <span style=color:#a6e22e>src</span><span style=color:#f92672>/</span>main.rs:<span style=color:#ae81ff>47</span>:<span style=color:#ae81ff>39</span>
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>47</span> <span style=color:#f92672>|</span>         monster.add_listener(Box::new(<span style=color:#f92672>|</span>damage<span style=color:#f92672>|</span> counter.on_damage_received(damage)));
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>                              <span style=color:#f92672>---------^^^^^^^^------------------------------------</span>
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>                              <span style=color:#f92672>|</span>        <span style=color:#f92672>|</span>        <span style=color:#f92672>|</span>
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>                              <span style=color:#f92672>|</span>        <span style=color:#f92672>|</span>        borrows occur due to <span style=color:#66d9ef>use</span> of <span style=color:#960050;background-color:#1e0010>`</span>counter<span style=color:#960050;background-color:#1e0010>`</span> <span style=color:#66d9ef>in</span> closure
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>                              <span style=color:#f92672>|</span>        <span style=color:#960050;background-color:#1e0010>`</span>counter<span style=color:#960050;background-color:#1e0010>`</span> was mutably borrowed here <span style=color:#66d9ef>in</span> the previous iteration of the <span style=color:#66d9ef>loop</span>
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>                              cast requires that <span style=color:#960050;background-color:#1e0010>`</span>counter<span style=color:#960050;background-color:#1e0010>`</span> is borrowed <span style=color:#66d9ef>for</span> <span style=color:#960050;background-color:#1e0010>`</span>&#39;static<span style=color:#960050;background-color:#1e0010>`</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>error[E0597]: <span style=color:#960050;background-color:#1e0010>`</span>counter<span style=color:#960050;background-color:#1e0010>`</span> does not live long enough
+</span></span><span style=display:flex><span>  <span style=color:#f92672>-</span>-&gt; <span style=color:#a6e22e>src</span><span style=color:#f92672>/</span>main.rs:<span style=color:#ae81ff>47</span>:<span style=color:#ae81ff>48</span>
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>47</span> <span style=color:#f92672>|</span>         monster.add_listener(Box::new(<span style=color:#f92672>|</span>damage<span style=color:#f92672>|</span> counter.on_damage_received(damage)));
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>                              <span style=color:#f92672>------------------^^^^^^^----------------------------</span>
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>                              <span style=color:#f92672>|</span>        <span style=color:#f92672>|</span>        <span style=color:#f92672>|</span>
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>                              <span style=color:#f92672>|</span>        <span style=color:#f92672>|</span>        borrowed value does not live long enough
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>                              <span style=color:#f92672>|</span>        value captured here
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>                              cast requires that <span style=color:#960050;background-color:#1e0010>`</span>counter<span style=color:#960050;background-color:#1e0010>`</span> is borrowed <span style=color:#66d9ef>for</span> <span style=color:#960050;background-color:#1e0010>`</span>&#39;static<span style=color:#960050;background-color:#1e0010>`</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span><span style=color:#ae81ff>60</span> <span style=color:#f92672>|</span> }
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span> <span style=color:#f92672>-</span> <span style=color:#960050;background-color:#1e0010>`</span>counter<span style=color:#960050;background-color:#1e0010>`</span> dropped here <span style=color:#66d9ef>while</span> still borrowed
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>error[E0502]: <span style=color:#a6e22e>cannot</span> borrow <span style=color:#960050;background-color:#1e0010>`</span>counter<span style=color:#960050;background-color:#1e0010>`</span> <span style=color:#66d9ef>as</span> immutable because it is also borrowed <span style=color:#66d9ef>as</span> mutable
+</span></span><span style=display:flex><span>  <span style=color:#f92672>-</span>-&gt; <span style=color:#a6e22e>src</span><span style=color:#f92672>/</span>main.rs:<span style=color:#ae81ff>50</span>:<span style=color:#ae81ff>12</span>
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>47</span> <span style=color:#f92672>|</span>         monster.add_listener(Box::new(<span style=color:#f92672>|</span>damage<span style=color:#f92672>|</span> counter.on_damage_received(damage)));
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>                              <span style=color:#f92672>-----------------------------------------------------</span>
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>                              <span style=color:#f92672>|</span>        <span style=color:#f92672>|</span>        <span style=color:#f92672>|</span>
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>                              <span style=color:#f92672>|</span>        <span style=color:#f92672>|</span>        first borrow occurs due to <span style=color:#66d9ef>use</span> of <span style=color:#960050;background-color:#1e0010>`</span>counter<span style=color:#960050;background-color:#1e0010>`</span> <span style=color:#66d9ef>in</span> closure
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>                              <span style=color:#f92672>|</span>        mutable borrow occurs here
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>                              cast requires that <span style=color:#960050;background-color:#1e0010>`</span>counter<span style=color:#960050;background-color:#1e0010>`</span> is borrowed <span style=color:#66d9ef>for</span> <span style=color:#960050;background-color:#1e0010>`</span>&#39;static<span style=color:#960050;background-color:#1e0010>`</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span><span style=color:#ae81ff>50</span> <span style=color:#f92672>|</span>     <span style=color:#66d9ef>while</span> <span style=color:#f92672>!</span>counter.reached_target_damage() {
+</span></span><span style=display:flex><span>   <span style=color:#f92672>|</span>            <span style=color:#f92672>^^^^^^^</span> immutable borrow occurs here
+</span></span></code></pre></div><p>There are a number of things wrong with this line, but it can be boiled down to:</p><ul><li>The closure captures a reference to <code>counter</code></li><li>The <code>counter.on_damage_received()</code> method takes <code>&amp;mut self</code> so our closure
+needs a <code>&amp;mut</code> reference. We add the closures in a loop so we end up taking
+multiple <code>&amp;mut</code> references to the same object at the same time</li><li>Our listener is a boxed closure without any lifetime annotations, meaning it
+needs to own any variables it closes over. We would need to <code>move</code> the
+<code>counter</code> into the closure, but because we do this in a loop we&rsquo;ll have a
+<em>&ldquo;use of moved value&rdquo;</em> error</li><li>After passing the <code>counter</code> to <code>add_listener()</code> we try to use it in our
+loop condition</li></ul><p>Overall it&rsquo;s just a bad situation.</p><p>The canonical answer to this is to wrap the <code>DamageCounter</code> in a
+reference-counted pointer so we can have multiple handles to it at the same
+time, then because we need to call a <code>&amp;mut self</code> method we also need a <code>RefCell</code>
+to &ldquo;move&rdquo; the borrow checking from compile time to run time.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-diff data-lang=diff><span style=display:flex><span> fn main() {
+</span></span><span style=display:flex><span>     let mut rng = rand::thread_rng();
+</span></span><span style=display:flex><span><span style=color:#f92672>-    let mut counter = DamageCounter::default();
+</span></span></span><span style=display:flex><span><span style=color:#f92672></span><span style=color:#a6e22e>+    let mut counter = Rc::new(RefCell::new(DamageCounter::default()));
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span>     let mut monsters: Vec&lt;_&gt; = (0..5).map(|_| Monster::default()).collect();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>     for monster in &amp;mut monsters {
+</span></span><span style=display:flex><span><span style=color:#f92672>-        monster.add_listener(Box::new(|damage| counter.on_damage_received(damage)));
+</span></span></span><span style=display:flex><span><span style=color:#f92672></span><span style=color:#a6e22e>+        let counter = Rc::clone(&amp;counter);
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        monster.add_listener(Box::new(move |damage| {
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+            counter.borrow_mut().on_damage_received(damage)
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        }));
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span>     }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#f92672>-    while !counter.reached_target_damage() {
+</span></span></span><span style=display:flex><span><span style=color:#f92672></span><span style=color:#a6e22e>+    while !counter.borrow().reached_target_damage() {
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span>         let index = rng.gen_range(0..monsters.len());
+</span></span><span style=display:flex><span>         let target = &amp;mut monsters[index];
+</span></span><span style=display:flex><span>         ...
+</span></span><span style=display:flex><span>     }
+</span></span><span style=display:flex><span> }
+</span></span></code></pre></div><p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2018&amp;gist=7aca92432f337fa29de62999ea5709b8" class=external-link target=_blank rel=noopener>(playground)</a></p><p>Well&mldr; it works. But this approach tends to get messy, especially when you are
+storing non-trivial things like a <code>Rc&lt;RefCell&lt;Vec&lt;Foo>>>></code> (or its
+multi-threaded cousin <code>Arc&lt;Mutex&lt;Vec&lt;Foo>>>></code>) inside structs <sup id=fnref:1><a href=#fn:1 class=footnote-ref role=doc-noteref>1</a></sup>.</p><p>It also opens you up to situations where the <code>RefCell</code> might be borrowed mutably
+multiple times because your code is complex and something higher up in the call
+stack is already using the <code>RefCell</code>. With a <code>Mutex</code> this will cause a deadlock
+while the <code>RefCell</code> will panic, neither of which is conducive to a reliable
+program.</p><p>A much better approach is to change your API to not hold long-lived references
+to other objects. Depending on the situation, it might make sense to take a
+callback argument in the <code>Monster::take_damage()</code> method.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rs data-lang=rs><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Monster</span> {
+</span></span><span style=display:flex><span>    health: <span style=color:#66d9ef>u32</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Monster {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>take_damage</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, amount: <span style=color:#66d9ef>u32</span>, on_damage_received: <span style=color:#a6e22e>impl</span> FnOnce(<span style=color:#66d9ef>u32</span>)) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> damage_received <span style=color:#f92672>=</span> cmp::min(self.health, amount);
+</span></span><span style=display:flex><span>        self.health <span style=color:#f92672>-=</span> damage_received;
+</span></span><span style=display:flex><span>        on_damage_received(damage_received);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Default <span style=color:#66d9ef>for</span> Monster {
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>default</span>() -&gt; <span style=color:#a6e22e>Self</span> { Monster { health: <span style=color:#ae81ff>100</span> } }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>main</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> rng <span style=color:#f92672>=</span> rand::thread_rng();
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> counter <span style=color:#f92672>=</span> DamageCounter::default();
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> monsters: Vec<span style=color:#f92672>&lt;</span>_<span style=color:#f92672>&gt;</span> <span style=color:#f92672>=</span> (<span style=color:#ae81ff>0</span><span style=color:#f92672>..</span><span style=color:#ae81ff>5</span>).map(<span style=color:#f92672>|</span>_<span style=color:#f92672>|</span> Monster::default()).collect();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>while</span> <span style=color:#f92672>!</span>counter.reached_target_damage() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> index <span style=color:#f92672>=</span> rng.gen_range(<span style=color:#ae81ff>0</span><span style=color:#f92672>..</span>monsters.len());
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> target <span style=color:#f92672>=</span> <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> monsters[index];
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> damage <span style=color:#f92672>=</span> rng.gen_range(<span style=color:#ae81ff>0</span><span style=color:#f92672>..</span><span style=color:#ae81ff>50</span>);
+</span></span><span style=display:flex><span>        target.take_damage(damage, <span style=color:#f92672>|</span>dmg<span style=color:#f92672>|</span> counter.on_damage_received(dmg));
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        println!(<span style=color:#e6db74>&#34;Monster </span><span style=color:#e6db74>{}</span><span style=color:#e6db74> received </span><span style=color:#e6db74>{}</span><span style=color:#e6db74> damage&#34;</span>, index, damage);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2018&amp;gist=52b789a7616efe6c2e24b7e1949f7c03" class=external-link target=_blank rel=noopener>(playground)</a></p><p>A nice side-effect of this is that we get rid of all the callback management
+boilerplate, meaning this version is only 47 lines long instead of the
+<code>Rc&lt;RefCell&lt;_>></code> version&rsquo;s 62.</p><p>Other times it may not be acceptable to give <code>take_damage()</code> a callback
+parameter, in which case you could return a &ldquo;summary&rdquo; of what happened so the
+caller can decide what to do next.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rs data-lang=rs><span style=display:flex><span><span style=color:#66d9ef>impl</span> Monster {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>take_damage</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, amount: <span style=color:#66d9ef>u32</span>) -&gt; <span style=color:#a6e22e>AttackSummary</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> damage_received <span style=color:#f92672>=</span> cmp::min(self.health, amount);
+</span></span><span style=display:flex><span>        self.health <span style=color:#f92672>-=</span> damage_received;
+</span></span><span style=display:flex><span>        AttackSummary { damage_received }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>AttackSummary</span> {
+</span></span><span style=display:flex><span>    damage_received: <span style=color:#66d9ef>u32</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>main</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> rng <span style=color:#f92672>=</span> rand::thread_rng();
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> counter <span style=color:#f92672>=</span> DamageCounter::default();
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> monsters: Vec<span style=color:#f92672>&lt;</span>_<span style=color:#f92672>&gt;</span> <span style=color:#f92672>=</span> (<span style=color:#ae81ff>0</span><span style=color:#f92672>..</span><span style=color:#ae81ff>5</span>).map(<span style=color:#f92672>|</span>_<span style=color:#f92672>|</span> Monster::default()).collect();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>while</span> <span style=color:#f92672>!</span>counter.reached_target_damage() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> index <span style=color:#f92672>=</span> rng.gen_range(<span style=color:#ae81ff>0</span><span style=color:#f92672>..</span>monsters.len());
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> target <span style=color:#f92672>=</span> <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> monsters[index];
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> damage <span style=color:#f92672>=</span> rng.gen_range(<span style=color:#ae81ff>0</span><span style=color:#f92672>..</span><span style=color:#ae81ff>50</span>);
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> AttackSummary { damage_received } <span style=color:#f92672>=</span> target.take_damage(damage);
+</span></span><span style=display:flex><span>        counter.on_damage_received(damage_received);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        println!(<span style=color:#e6db74>&#34;Monster </span><span style=color:#e6db74>{}</span><span style=color:#e6db74> received </span><span style=color:#e6db74>{}</span><span style=color:#e6db74> damage&#34;</span>, index, damage);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2018&amp;gist=dbd28e96a25f76eb88069c8ee6215a92" class=external-link target=_blank rel=noopener>(playground)</a></p><p>This is my preferred solution; from experience, it tends to work well for
+larger codebases or when the code is more complex.</p><h2 id=using-the-wrong-integer-type>Using the Wrong Integer Type
+<a class=heading-link href=#using-the-wrong-integer-type><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Another hang-over from writing a lot of C is using the wrong integer type and
+getting frustrated because you need to cast to/from <code>usize</code> all the time.</p><p>I&rsquo;ve seen people run into this <a href=https://users.rust-lang.org/t/type-of-array-index/53632 class=external-link target=_blank rel=noopener>so</a> <a href=https://users.rust-lang.org/t/is-there-a-way-to-allow-indexing-vec-by-i32-in-my-program/15755/ class=external-link target=_blank rel=noopener>many</a>
+<a href="https://stackoverflow.com/questions/38888724/how-to-index-vectors-with-integer-types-besides-usize-without-explicit-cast?noredirect=1&amp;lq=1" class=external-link target=_blank rel=noopener>times</a> in the wild, especially when indexing.</p><p>The underlying problem is that C programmers are all taught to use <code>int</code> for
+indexing and for-loops, so when they come to Rust and they need to store a list
+of indices, the programmer will immediately reach for a <code>Vec&lt;i32></code>. They then
+get frustrated because Rust is quite strict when it comes to indexing and
+standard types like arrays, slices, and <code>Vec</code> can only be indexed using <code>usize</code>
+(the equivalent of <code>size_t</code>), meaning their code is cluttered with casts from
+<code>i32</code> to <code>usize</code> and back again.</p><p>There are a number of perfectly legitimate reasons for why Rust only allows
+indexing by <code>usize</code>:</p><ul><li>It doesn&rsquo;t make sense to have a negative index (accessing items before the
+start of a slice is UB), so we can avoid an entire class of bugs by indexing
+with an unsigned integer</li><li>A <code>usize</code> is defined to be an integer with the same size as a normal pointer,
+meaning the pointer arithmetic won&rsquo;t have any hidden casts</li><li>The <code>std::mem::size_of()</code> and <code>std::mem::align_of()</code> functions return <code>usize</code></li></ul><p>Of course, when stated this way the solution is clear. Choose the right integer
+type for your application but when you are doing things that eventually be used
+for indexing, that &ldquo;right integer type&rdquo; is probably <code>usize</code>.</p><h2 id=unsafe---i-know-what-im-doing>Unsafe - I Know What I&rsquo;m Doing
+<a class=heading-link href=#unsafe---i-know-what-im-doing><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>&lt;rant></p><p>There&rsquo;s an old Rust koan on the <em>User Forums</em> by Daniel Keep that comes to mind
+every time I see a grizzled C programmer reach for raw pointers or
+<code>std::mem::transmute()</code> because the borrow checker keeps rejecting their code:
+<a href="https://users.rust-lang.org/t/rust-koans/2408?u=michael-f-bryan" class=external-link target=_blank rel=noopener><em>Obstacles</em></a>.</p><p>You should go read it. It&rsquo;s okay, I&rsquo;ll wait.</p><p>Too often you see people wanting to hack around privacy, create
+self-referencing structs, or create global mutable variables using <code>unsafe</code>.
+Frequently this will be accompanied by comments like <em>&ldquo;but I know this program
+will only use a single thread so accessing the <code>static mut</code> is fine&rdquo;</em> or <em>&ldquo;but
+this works perfectly fine in C&rdquo;</em>.</p><p>The reality is that <code>unsafe</code> code is nuanced and you need to have a good
+intuition for Rust&rsquo;s borrow checking rules and memory model. I hate to be a gate
+keeper and say <em>&ldquo;you must be this tall to write <del>multi-threaded</del> <code>unsafe</code>
+code&rdquo;</em> <sup id=fnref:2><a href=#fn:2 class=footnote-ref role=doc-noteref>2</a></sup>, but there&rsquo;s a good chance that if you are new to
+the language you won&rsquo;t have this intuition and are opening yourself and your
+colleagues up to a lot of pain.</p><p>It&rsquo;s fine to play around with <code>unsafe</code> if you are trying to learn more about
+Rust or you know what you are doing and are using it legitimately, but <code>unsafe</code>
+is <strong>not</strong> a magical escape hatch which will make the compiler stop complaining
+and let you write C with Rust syntax.</p><p>&lt;/rant></p><h2 id=not-using-namespaces>Not Using Namespaces
+<a class=heading-link href=#not-using-namespaces><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>A common practice in C is to prefix functions with the name of the library or
+module to help readers understand where it comes from and avoid duplicate
+symbol errors (e.g. <code>rune_wasmer_runtime_load()</code>).</p><p>However, Rust has real namespaces and lets you attach methods to types (e.g.
+<code>rune::wasmer::Runtime::load()</code>). Just use them - it&rsquo;s what they are there for.</p><h2 id=overusing-slice-indexing>Overusing Slice Indexing
+<a class=heading-link href=#overusing-slice-indexing><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>The for-loop and indexing is the bread and butter for most C-based languages.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rs data-lang=rs><span style=display:flex><span><span style=color:#66d9ef>let</span> points: Vec<span style=color:#f92672>&lt;</span>Coordinate<span style=color:#f92672>&gt;</span> <span style=color:#f92672>=</span> <span style=color:#f92672>..</span>.;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>let</span> differences <span style=color:#f92672>=</span> Vec::new();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>for</span> i <span style=color:#66d9ef>in</span> <span style=color:#ae81ff>1</span><span style=color:#f92672>..</span>points.len() [
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>let</span> current <span style=color:#f92672>=</span> points[i];
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>let</span> previous <span style=color:#f92672>=</span> points[i<span style=color:#f92672>-</span><span style=color:#ae81ff>1</span>];
+</span></span><span style=display:flex><span>  differences.push(current <span style=color:#f92672>-</span> previous);
+</span></span><span style=display:flex><span>]
+</span></span></code></pre></div><p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2018&amp;gist=62d33c91cf741e9f89b84054cf6a827d" class=external-link target=_blank rel=noopener>(playground)</a></p><p>However, it&rsquo;s easy to accidentally introduce an off-by-one error when using
+indexing (e.g. I needed to remember to start looping from <code>1</code> and subtract <code>1</code>
+to get the <code>previous</code> point) and even seasoned programmers aren&rsquo;t immune from
+crashing due to an index-out-of-bounds error.</p><p>In situations like these, Rust encourages you to reach for iterators instead.
+The slice type even comes with high-level tools like the <code>windows()</code> and
+<code>array_windows()</code> methods to let you iterate over adjacent pairs of elements.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rs data-lang=rs><span style=display:flex><span><span style=color:#66d9ef>let</span> points: Vec<span style=color:#f92672>&lt;</span>Coordinate<span style=color:#f92672>&gt;</span> <span style=color:#f92672>=</span> <span style=color:#f92672>..</span>.;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> differences <span style=color:#f92672>=</span> Vec::new();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>for</span> [previous, current] <span style=color:#66d9ef>in</span> points.array_windows().copied() {
+</span></span><span style=display:flex><span>  differences.push(current <span style=color:#f92672>-</span> previous);
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p><a href="https://play.rust-lang.org/?version=nightly&amp;mode=debug&amp;edition=2018&amp;gist=e647c18bfec0b8d629e5bcbb7b6a66f1" class=external-link target=_blank rel=noopener>(playground)</a></p><p>You could even remove the for-loop and mutation of <code>differences</code> altogether.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rs data-lang=rs><span style=display:flex><span><span style=color:#66d9ef>let</span> differences: Vec<span style=color:#f92672>&lt;</span>_<span style=color:#f92672>&gt;</span> <span style=color:#f92672>=</span> points
+</span></span><span style=display:flex><span>  .array_windows()
+</span></span><span style=display:flex><span>  .copied()
+</span></span><span style=display:flex><span>  .map(<span style=color:#f92672>|</span>[previous, current]<span style=color:#f92672>|</span> current <span style=color:#f92672>-</span> previous)
+</span></span><span style=display:flex><span>  .collect();
+</span></span></code></pre></div><p><a href="https://play.rust-lang.org/?version=nightly&amp;mode=debug&amp;edition=2018&amp;gist=030d0b491a2bc8204499f65b38f2aefd" class=external-link target=_blank rel=noopener>(playground)</a></p><p>Some would argue the version with <code>map()</code> and <code>collect()</code> is cleaner or more
+&ldquo;functional&rdquo;, but I&rsquo;ll let you be the judge there.</p><p>As a bonus, iterators can often allow better performance because checks can be
+done as part of the looping condition instead of being separate<sup id=fnref:3><a href=#fn:3 class=footnote-ref role=doc-noteref>3</a></sup>
+(Alice has a good explanation <a href="https://users.rust-lang.org/t/we-all-know-iter-is-faster-than-loop-but-why/51486/7?u=michael-f-bryan" class=external-link target=_blank rel=noopener>here</a>).</p><h2 id=overusing-iterators>Overusing Iterators
+<a class=heading-link href=#overusing-iterators><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Once you start drinking the Kool-Aid that is Rust&rsquo;s iterators you can run into
+the opposite problem - <em>when all you have is a hammer everything looks like a
+nail</em>.</p><p>Long chains of <code>map()</code>, <code>filter()</code>, and <code>and_then()</code> calls can get quite hard to
+read and keep track of what is actually going on, especially when type inference
+lets you omit a closure argument&rsquo;s type.</p><p>Other times your iterator-based solution is just unnecessarily complicated.</p><p>As an example, have a look at this snippet of code and see if you can figure
+out what it is trying to do.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rs data-lang=rs><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>functional_blur</span>(input: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Matrix</span>) -&gt; <span style=color:#a6e22e>Matrix</span> {
+</span></span><span style=display:flex><span>    assert!(input.width <span style=color:#f92672>&gt;=</span> <span style=color:#ae81ff>3</span>);
+</span></span><span style=display:flex><span>    assert!(input.height <span style=color:#f92672>&gt;=</span> <span style=color:#ae81ff>3</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// Stash away the top and bottom rows so they can be
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#75715e>// directly copied across later
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> rows <span style=color:#f92672>=</span> input.rows();
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> first_row <span style=color:#f92672>=</span> rows.next().unwrap();
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> last_row <span style=color:#f92672>=</span> rows.next_back().unwrap();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> top_row <span style=color:#f92672>=</span> input.rows();
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> middle_row <span style=color:#f92672>=</span> input.rows().skip(<span style=color:#ae81ff>1</span>);
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> bottom_row <span style=color:#f92672>=</span> input.rows().skip(<span style=color:#ae81ff>2</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> blurred_elements <span style=color:#f92672>=</span> top_row
+</span></span><span style=display:flex><span>        .zip(middle_row)
+</span></span><span style=display:flex><span>        .zip(bottom_row)
+</span></span><span style=display:flex><span>        .flat_map(<span style=color:#f92672>|</span>((top, middle), bottom)<span style=color:#f92672>|</span> blur_rows(top, middle, bottom));
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> elements: Vec<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f32</span><span style=color:#f92672>&gt;</span> <span style=color:#f92672>=</span> first_row
+</span></span><span style=display:flex><span>        .iter()
+</span></span><span style=display:flex><span>        .copied()
+</span></span><span style=display:flex><span>        .chain(blurred_elements)
+</span></span><span style=display:flex><span>        .chain(last_row.iter().copied())
+</span></span><span style=display:flex><span>        .collect();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    Matrix::new_row_major(elements, input.width, input.height)
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>blur_rows</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>    top_row: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;a</span> [<span style=color:#66d9ef>f32</span>],
+</span></span><span style=display:flex><span>    middle_row: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;a</span> [<span style=color:#66d9ef>f32</span>],
+</span></span><span style=display:flex><span>    bottom_row: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;a</span> [<span style=color:#66d9ef>f32</span>],
+</span></span><span style=display:flex><span>) -&gt; <span style=color:#a6e22e>impl</span> Iterator<span style=color:#f92672>&lt;</span>Item <span style=color:#f92672>=</span> <span style=color:#66d9ef>f32</span><span style=color:#f92672>&gt;</span> <span style=color:#f92672>+</span> <span style=color:#a6e22e>&#39;a</span> {
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// stash away the left-most and right-most elements so they can be copied across directly.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> <span style=color:#f92672>&amp;</span>first <span style=color:#f92672>=</span> middle_row.first().unwrap();
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#f92672>&amp;</span>last <span style=color:#f92672>=</span> middle_row.last().unwrap();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// Get the top, middle, and bottom row of our 3x3 sub-matrix so they can be
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#75715e>// averaged.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> top_window <span style=color:#f92672>=</span> top_row.windows(<span style=color:#ae81ff>3</span>);
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> middle_window <span style=color:#f92672>=</span> middle_row.windows(<span style=color:#ae81ff>3</span>);
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> bottom_window <span style=color:#f92672>=</span> bottom_row.windows(<span style=color:#ae81ff>3</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// slide the 3x3 window across our middle row so we can get the average
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#75715e>// of everything except the left-most and right-most elements.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> averages <span style=color:#f92672>=</span> top_window
+</span></span><span style=display:flex><span>        .zip(middle_window)
+</span></span><span style=display:flex><span>        .zip(bottom_window)
+</span></span><span style=display:flex><span>        .map(<span style=color:#f92672>|</span>((top, middle), bottom)<span style=color:#f92672>|</span> top.iter().chain(middle).chain(bottom).sum::<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f32</span><span style=color:#f92672>&gt;</span>() <span style=color:#f92672>/</span> <span style=color:#ae81ff>9.0</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    std::iter::once(first)
+</span></span><span style=display:flex><span>        .chain(averages)
+</span></span><span style=display:flex><span>        .chain(std::iter::once(last))
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2018&amp;gist=da8fa6e55ca5a0de6005b13672688c14" class=external-link target=_blank rel=noopener>(playground)</a></p><p>Believe it or not, but that&rsquo;s one of the more readable versions I&rsquo;ve seen&mldr;
+Now let&rsquo;s look at the imperative implementation.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rs data-lang=rs><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>imperative_blur</span>(input: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Matrix</span>) -&gt; <span style=color:#a6e22e>Matrix</span> {
+</span></span><span style=display:flex><span>    assert!(input.width <span style=color:#f92672>&gt;=</span> <span style=color:#ae81ff>3</span>);
+</span></span><span style=display:flex><span>    assert!(input.height <span style=color:#f92672>&gt;=</span> <span style=color:#ae81ff>3</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// allocate our output matrix, copying from the input so
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#75715e>// we don&#39;t need to worry about the edge cases.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> output <span style=color:#f92672>=</span> input.clone();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>for</span> y <span style=color:#66d9ef>in</span> <span style=color:#ae81ff>1</span><span style=color:#f92672>..</span>(input.height <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>for</span> x <span style=color:#66d9ef>in</span> <span style=color:#ae81ff>1</span><span style=color:#f92672>..</span>(input.width <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>) {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> pixel_value <span style=color:#f92672>=</span> <span style=color:#ae81ff>0.0</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            pixel_value <span style=color:#f92672>+=</span> input[[x <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>, y <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>]];
+</span></span><span style=display:flex><span>            pixel_value <span style=color:#f92672>+=</span> input[[x, y <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>]];
+</span></span><span style=display:flex><span>            pixel_value <span style=color:#f92672>+=</span> input[[x <span style=color:#f92672>+</span> <span style=color:#ae81ff>1</span>, y <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>]];
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            pixel_value <span style=color:#f92672>+=</span> input[[x <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>, y]];
+</span></span><span style=display:flex><span>            pixel_value <span style=color:#f92672>+=</span> input[[x, y]];
+</span></span><span style=display:flex><span>            pixel_value <span style=color:#f92672>+=</span> input[[x <span style=color:#f92672>+</span> <span style=color:#ae81ff>1</span>, y]];
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            pixel_value <span style=color:#f92672>+=</span> input[[x <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>, y <span style=color:#f92672>+</span> <span style=color:#ae81ff>1</span>]];
+</span></span><span style=display:flex><span>            pixel_value <span style=color:#f92672>+=</span> input[[x, y <span style=color:#f92672>+</span> <span style=color:#ae81ff>1</span>]];
+</span></span><span style=display:flex><span>            pixel_value <span style=color:#f92672>+=</span> input[[x <span style=color:#f92672>+</span> <span style=color:#ae81ff>1</span>, y <span style=color:#f92672>+</span> <span style=color:#ae81ff>1</span>]];
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            output[[x, y]] <span style=color:#f92672>=</span> pixel_value <span style=color:#f92672>/</span> <span style=color:#ae81ff>9.0</span>;
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    output
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2018&amp;gist=ed5a8cbe8cfab762c32466c551957810" class=external-link target=_blank rel=noopener>(playground)</a></p><p>I know which version I prefer.</p><h2 id=not-leveraging-pattern-matching>Not Leveraging Pattern Matching
+<a class=heading-link href=#not-leveraging-pattern-matching><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>In most other mainstream languages it is quite common to see the programmer
+write a check before they do an operation which may throw an exception. Our
+C# <code>IndexOf()</code> snippet from earlier is a good example of this:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-cs data-lang=cs><span style=display:flex><span><span style=color:#66d9ef>int</span> index = sentence.IndexOf(<span style=color:#e6db74>&#34;fox&#34;</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>if</span> (index != -<span style=color:#ae81ff>1</span>)
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>string</span> wordsAfterFox = sentence.SubString(index);
+</span></span><span style=display:flex><span>  Console.WriteLine(wordsAfterFox);
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Closer to home, you might see code like this:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rs data-lang=rs><span style=display:flex><span><span style=color:#66d9ef>let</span> opt: Option<span style=color:#f92672>&lt;</span>_<span style=color:#f92672>&gt;</span> <span style=color:#f92672>=</span> <span style=color:#f92672>..</span>.;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>if</span> opt.is_some() {
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>let</span> value <span style=color:#f92672>=</span> opt.unwrap();
+</span></span><span style=display:flex><span>  <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>or this:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rs data-lang=rs><span style=display:flex><span><span style=color:#66d9ef>let</span> list: <span style=color:#66d9ef>&amp;</span>[<span style=color:#66d9ef>f32</span>] <span style=color:#f92672>=</span> <span style=color:#f92672>..</span>.;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>if</span> <span style=color:#f92672>!</span>list.is_empty() {
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>let</span> first <span style=color:#f92672>=</span> list[<span style=color:#ae81ff>0</span>];
+</span></span><span style=display:flex><span>  <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Now both snippets are perfectly valid pieces of code and will never fail, but
+similar to <a href=#using-sentinel-values>sentinel values</a> you are making it easy
+for future refactoring to introduce a bug.</p><p>Using things like pattern matching and <code>Option</code> help you avoid this situation
+by making sure the <em>only</em> way you can access a value is if it is valid.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rs data-lang=rs><span style=display:flex><span><span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> Some(value) <span style=color:#f92672>=</span> opt {
+</span></span><span style=display:flex><span>  <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> [first, <span style=color:#f92672>..</span>] <span style=color:#f92672>=</span> list {
+</span></span><span style=display:flex><span>  <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices tip"><p>I&rsquo;m sure most of you have seen <code>if let Some(...)</code> before, but if
+<code>if let [first, ..]</code> is unfamiliar you may find my article on
+<a href=https://adventures.michaelfbryan.com/posts/daily/slice-patterns/ class=external-link target=_blank rel=noopener><em>Slice Patterns</em></a> interesting.</p></div><p>Depending on where it is used and how smart LLVM or your CPU&rsquo;s branch predictor
+are, this may also generate slower code because the fallible operation
+(<code>opt.unwrap()</code> or <code>list[index]</code> in that example) needs to do unnecessary checks
+<sup id=fnref1:3><a href=#fn:3 class=footnote-ref role=doc-noteref>3</a></sup>.</p><h2 id=initialize-after-construction>Initialize After Construction
+<a class=heading-link href=#initialize-after-construction><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>In many languages, it is normal to call an object&rsquo;s constructor and initialize
+its fields afterward (either manually or by calling some <code>init()</code> method).
+However, this goes against Rust&rsquo;s general convention of <em>&ldquo;make invalid states
+unrepresentable&rdquo;</em>.</p><p>Say you are writing an NLP application and have a dictionary containing all the
+possible words you can handle.</p><p>This is one way you could create the dictionary:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rs data-lang=rs><span style=display:flex><span><span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> dict <span style=color:#f92672>=</span> Dictionary::new();
+</span></span><span style=display:flex><span><span style=color:#75715e>// read the file and populate some internal HashMap or Vec
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>dict.load_from_file(<span style=color:#e6db74>&#34;./words.txt&#34;</span>)<span style=color:#f92672>?</span>;
+</span></span></code></pre></div><p>However, writing <code>Dictionary</code> this way means it now has two (hidden) states -
+empty and populated.</p><p>All downstream code that uses the <code>Dictionary</code> will assume it&rsquo;s been populated
+already and write code accordingly. This may include doing things like indexing
+into the dictionary with <code>dict["word"]</code> which may panic if <code>"word"</code> isn&rsquo;t there.</p><p>Now you&rsquo;ve opened yourself up to a situation where passing an empty dictionary
+to code that expects a populated dictionary may trigger a panic.</p><p>But that&rsquo;s completely unnecessary.</p><p>Just make sure the <code>Dictionary</code> is usable immediately after constructing it
+instead of populating it after the fact.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#66d9ef>let</span> dict <span style=color:#f92672>=</span> Dictionary::from_file(<span style=color:#e6db74>&#34;./words.txt&#34;</span>)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Dictionary {
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>from_file</span>(filename: <span style=color:#a6e22e>impl</span> AsRef<span style=color:#f92672>&lt;</span>Path<span style=color:#f92672>&gt;</span>) -&gt; Result<span style=color:#f92672>&lt;</span>Self, Error<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> text <span style=color:#f92672>=</span> std::fs::read_to_string(filename)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> words <span style=color:#f92672>=</span> Vec::new();
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>for</span> line <span style=color:#66d9ef>in</span> text.lines() {
+</span></span><span style=display:flex><span>      words.push(line);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>    Ok(Dictionary { words })
+</span></span><span style=display:flex><span>  }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Internally the <code>Dictionary::from_file()</code> might create an empty <code>Vec</code> and
+populate it incrementally, but it won&rsquo;t be stored in the <code>Dictionary</code>&rsquo;s <code>words</code>
+field yet so there is no assumption that it is populated and useful.</p><p>How frequently you fall into this anti-pattern depends a lot on your
+background and coding style.</p><p>Functional languages are often completely immutable so you&rsquo;ll fall into the
+idiomatic pattern naturally. After all, it&rsquo;s kinda hard to create a
+half-initialized thing and populate it later when you aren&rsquo;t allowed to mutate
+anything.</p><p>On the other hand, OO languages are much happier to let you initialize an object
+after it has been constructed, especially because object references can be null
+by default and they have no qualms about mutability&mldr; You could argue this
+contributes to why OO languages have a propensity for crashing due to an
+unexpected <code>NullPointerException</code>.</p><h2 id=defensive-copies>Defensive Copies
+<a class=heading-link href=#defensive-copies><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>To point out the obvious, a really nice property of immutable objects is that
+you can rely on them to never change. However, in languages like Python and
+Java, immutability isn&rsquo;t transitive - i.e. if <code>x</code> is an immutable object, <code>x.y</code>
+isn&rsquo;t guaranteed to be immutable unless it was explicitly defined that way.</p><p>This means it&rsquo;s possible to write code like this&mldr;</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-py data-lang=py><span style=display:flex><span><span style=color:#66d9ef>class</span> <span style=color:#a6e22e>ImmutablePerson</span>:
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>def</span> __init__(self, name: str, age: int, addresses: List[str]):
+</span></span><span style=display:flex><span>    self<span style=color:#f92672>.</span>_name <span style=color:#f92672>=</span> name
+</span></span><span style=display:flex><span>    self<span style=color:#f92672>.</span>_age <span style=color:#f92672>=</span> age
+</span></span><span style=display:flex><span>    self<span style=color:#f92672>.</span>_addresses <span style=color:#f92672>=</span> addresses
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>  <span style=color:#75715e># read-only properties</span>
+</span></span><span style=display:flex><span>  <span style=color:#a6e22e>@property</span>
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>def</span> <span style=color:#a6e22e>name</span>(self): <span style=color:#66d9ef>return</span> self<span style=color:#f92672>.</span>_name
+</span></span><span style=display:flex><span>  <span style=color:#a6e22e>@property</span>
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>def</span> <span style=color:#a6e22e>age</span>(self): <span style=color:#66d9ef>return</span> self<span style=color:#f92672>.</span>_age
+</span></span><span style=display:flex><span>  <span style=color:#a6e22e>@property</span>
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>def</span> <span style=color:#a6e22e>addresses</span>(self): <span style=color:#66d9ef>return</span> self<span style=color:#f92672>.</span>_addresses
+</span></span></code></pre></div><p>Then someone else comes along and accidentally messes up the address list as
+part of their normal code.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-py data-lang=py><span style=display:flex><span><span style=color:#66d9ef>def</span> <span style=color:#a6e22e>send_letters</span>(message: str, addresses: List[str]):
+</span></span><span style=display:flex><span>  <span style=color:#75715e># Note: the post office&#39;s API only works with with uppercase letters so we</span>
+</span></span><span style=display:flex><span>  <span style=color:#75715e># need to pre-process the address list</span>
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>for</span> i, address <span style=color:#f92672>in</span> enumerate(addresses):
+</span></span><span style=display:flex><span>    addresses[i] <span style=color:#f92672>=</span> addresses<span style=color:#f92672>.</span>upper()
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>  client <span style=color:#f92672>=</span> PostOfficeClient()
+</span></span><span style=display:flex><span>  client<span style=color:#f92672>.</span>send_bulk_mail(message, addresses)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>person <span style=color:#f92672>=</span> ImmutablePerson(<span style=color:#e6db74>&#34;Joe Bloggs&#34;</span>, <span style=color:#ae81ff>42</span>, [<span style=color:#e6db74>&#34;123 Fake Street&#34;</span>])
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>send_letters(
+</span></span><span style=display:flex><span>  <span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Dear </span><span style=color:#e6db74>{</span>person<span style=color:#f92672>.</span>name<span style=color:#e6db74>}</span><span style=color:#e6db74>, I Nigerian prince. Please help me moving my monies.&#34;</span>,
+</span></span><span style=display:flex><span>  person<span style=color:#f92672>.</span>addresses
+</span></span><span style=display:flex><span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>print(person<span style=color:#f92672>.</span>addresses) <span style=color:#75715e># [&#34;123 FAKE STREET&#34;]</span>
+</span></span></code></pre></div><p>While I admit the example is a bit contrived, it&rsquo;s not uncommon for functions to
+modify the arguments they are given. Normally this is fine, but when your
+<code>ImmutablePerson</code> assumes its <code>addresses</code> field will never change, it&rsquo;s annoying
+for some random piece of code on the other side of the project to modify it
+without you knowing.</p><p>The typical solution to this is to preemptively copy the list so even if the
+caller tries to mutate its contents, they&rsquo;ll be mutating a copy and not the
+original <code>addresses</code> field.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-py data-lang=py><span style=display:flex><span><span style=color:#66d9ef>class</span> <span style=color:#a6e22e>ImmutablePerson</span>:
+</span></span><span style=display:flex><span>  <span style=color:#f92672>...</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>  <span style=color:#a6e22e>@property</span>
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>def</span> <span style=color:#a6e22e>addresses</span>(self): <span style=color:#66d9ef>return</span> self<span style=color:#f92672>.</span>_addresses<span style=color:#f92672>.</span>copy()
+</span></span></code></pre></div><p>In general, you&rsquo;ll see defensive copies being used anywhere code wants to be
+sure that another piece of code won&rsquo;t modify some shared object at an
+inopportune time.</p><p>Considering this is an article about Rust, you&rsquo;ve probably guessed what the
+root cause of this is - a combination of aliasing and mutation.</p><p>You&rsquo;ve also probably guessed why defensive copies aren&rsquo;t really necessary when
+writing Rust code - lifetimes and the &ldquo;shared immutable XOR single mutable&rdquo; rule
+for references means it just isn&rsquo;t possible for code to modify something without
+first asking its original owner for mutable access or explicitly opting into
+shared mutation by using a type like <code>std::sync::Mutex&lt;T></code>.</p><div class="notices note"><p>You <em>may</em> sometimes see people using <code>clone()</code> to get around borrow checker
+errors, and exclaim <em>&ldquo;Ha! See, Rust forces you to make defensive copies too!&rdquo;</em></p><p>To which I would argue that these copies are mostly caused by a lack of
+familiarity with lifetimes, or an architecture issue which forces the programmer
+to make more copies than they need to.</p></div><h2 id=conclusions>Conclusions
+<a class=heading-link href=#conclusions><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>There are a bunch of other bad habits that I haven&rsquo;t had a chance to touch on
+or which weren&rsquo;t included because I couldn&rsquo;t come up with a concise example.</p><p>Thanks to everyone that replied to <a href=https://users.rust-lang.org/t/common-newbie-mistakes-or-bad-practices/64821 class=external-link target=_blank rel=noopener>my post</a> on the Rust User Forums with
+suggestions for bad habits. Even though I kinda derailed the thread towards the
+end with talk about DI frameworks, it was really interesting to hear war stories
+from other veteran Rustaceans 🙂</p><div class=footnotes role=doc-endnotes><hr><ol><li id=fn:1><p>Out of curiosity, how many people noticed there are 4 <code>></code>&rsquo;s
+in <code>Rc&lt;RefCell&lt;Vec&lt;Foo>>>></code> but only 3 <code>&lt;</code>&rsquo;s?&#160;<a href=#fnref:1 class=footnote-backref role=doc-backlink>&#8617;&#xfe0e;</a></p></li><li id=fn:2><p><a href=https://bholley.net/blog/2015/must-be-this-tall-to-write-multi-threaded-code.html class=external-link target=_blank rel=noopener><em>Must be This Tall to Write Multi-Threaded Code</em> - Bobby Holley</a>&#160;<a href=#fnref:2 class=footnote-backref role=doc-backlink>&#8617;&#xfe0e;</a></p></li><li id=fn:3><p>Don&rsquo;t just listen to some random guy on the internet. If you
+care about performance then write a benchmark.&#160;<a href=#fnref:3 class=footnote-backref role=doc-backlink>&#8617;&#xfe0e;</a>&#160;<a href=#fnref1:3 class=footnote-backref role=doc-backlink>&#8617;&#xfe0e;</a></p></li></ol></div></div><footer><section class=see-also></section></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>

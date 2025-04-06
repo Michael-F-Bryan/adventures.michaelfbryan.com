@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Daily Rust on Michael-F-Bryan</title><link>https://adventures.michaelfbryan.com/tags/daily-rust/</link><description>Recent content in Daily Rust on Michael-F-Bryan</description><generator>Hugo</generator><language>en</language><lastBuildDate>Tue, 01 Apr 2025 09:19:10 +0800</lastBuildDate><atom:link href="https://adventures.michaelfbryan.com/tags/daily-rust/index.xml" rel="self" type="application/rss+xml"/><item><title>Daily Rust: Iterators</title><link>https://adventures.michaelfbryan.com/posts/daily/iterators/</link><pubDate>Tue, 24 Aug 2021 03:55:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/daily/iterators/</guid><description>&lt;p>Iterators are part of Rust&amp;rsquo;s secret sauce. They power things from the humble
+for-loop to the elegant iterator chain, but have you ever stopped to think how
+they work?&lt;/p>
+&lt;p>Let&amp;rsquo;s find out more about Rust&amp;rsquo;s iterators by implementing our own versions of
+common iterators and reading the standard library&amp;rsquo;s source code.&lt;/p>
+
+&lt;div class="notices info" >
+ &lt;p>The code written in this article is available on the Rust Playground using the
+various &lt;a href="https://play.rust-lang.org/" class="external-link" target="_blank" rel="noopener">(playground)&lt;/a> links dotted throughout. Feel free to browse
+through and steal code or inspiration.&lt;/p></description></item><item><title>Daily Rust: Slice Patterns</title><link>https://adventures.michaelfbryan.com/posts/daily/slice-patterns/</link><pubDate>Sat, 14 Aug 2021 00:00:00 +0000</pubDate><guid>https://adventures.michaelfbryan.com/posts/daily/slice-patterns/</guid><description>&lt;p>&lt;a href="https://blog.rust-lang.org/2018/05/10/Rust-1.26.html#basic-slice-patterns" class="external-link" target="_blank" rel="noopener">Rust 1.26&lt;/a> introduced a nifty little feature called &lt;em>Basic Slice
+Patterns&lt;/em> which lets you pattern match on slices with a known length. Later on
+in &lt;a href="https://blog.rust-lang.org/2020/03/12/Rust-1.42.html#subslice-patterns" class="external-link" target="_blank" rel="noopener">Rust 1.42&lt;/a>, this was extended to allow using &lt;code>..&lt;/code> to match on
+&amp;ldquo;everything else&amp;rdquo;.&lt;/p>
+&lt;p>As features go this may seem like a small addition, but it gives developers an
+opportunity to write much more expressive code.&lt;/p>
+
+&lt;div class="notices note" >
+ &lt;p>The code written in this article is available in the various playground links
+dotted throughout. Feel free to browse through and steal code or inspiration.&lt;/p></description></item></channel></rss>

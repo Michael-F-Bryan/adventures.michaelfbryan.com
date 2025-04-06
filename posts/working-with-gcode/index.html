@@ -1,0 +1,591 @@
+<!doctype html><html lang=en><head><title>Working With G-Code · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="As mentioned in the previous post there are a handful of tasks
+which may be tackled next, but only one of them really allows us to make progress
+towards our goal of implementing the simulated firmware for a 3D Printer.
+Let&rsquo;s send the motion controller some g-code.
+
+  Creating Message types
+  
+    
+    Link to heading
+  
+
+If we want to send g-code programs between the frontend and backend we&rsquo;ll need
+to make a couple message definitions."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="Working With G-Code"><meta name=twitter:description content="As mentioned in the previous post there are a handful of tasks which may be tackled next, but only one of them really allows us to make progress towards our goal of implementing the simulated firmware for a 3D Printer.
+Let’s send the motion controller some g-code.
+Creating Message types Link to heading If we want to send g-code programs between the frontend and backend we’ll need to make a couple message definitions."><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/working-with-gcode/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="Working With G-Code"><meta property="og:description" content="As mentioned in the previous post there are a handful of tasks which may be tackled next, but only one of them really allows us to make progress towards our goal of implementing the simulated firmware for a 3D Printer.
+Let’s send the motion controller some g-code.
+Creating Message types Link to heading If we want to send g-code programs between the frontend and backend we’ll need to make a couple message definitions."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2019-10-18T00:05:00+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Adventures-in-Motion-Control"><meta property="article:tag" content="Rust"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/working-with-gcode/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/working-with-gcode/>Working With G-Code</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2019-10-18T00:05:00+08:00>October 18, 2019
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+12-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/adventures-in-motion-control/>Adventures-in-Motion-Control</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/rust/>Rust</a></span></div></div></header><div class=post-content><p>As mentioned in <a href=https://adventures.michaelfbryan.com/posts/wiring-up-communication/#the-next-step>the previous post</a> there are a handful of tasks
+which may be tackled next, but only one of them really allows us to make progress
+towards our goal of implementing the simulated firmware for a 3D Printer.</p><p>Let&rsquo;s send the motion controller some g-code.</p><h2 id=creating-message-types>Creating Message types
+<a class=heading-link href=#creating-message-types><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>If we want to send g-code programs between the frontend and backend we&rsquo;ll need
+to make a couple message definitions.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/gcode.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// A message containing part of a g-code program.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>GcodeProgram</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The (zero-based) line number this chunk starts on.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// Primarily used for error messages and progress reporting.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    first_line: <span style=color:#66d9ef>u32</span>,
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The g-code program itself.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    text: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;a</span> <span style=color:#66d9ef>str</span>,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Something to keep in mind is the full <code>GcodeProgram</code> message needs to fit
+inside an <code>anpp::Packet</code>. That means we&rsquo;ll need to limit the length of the
+<code>text</code> field.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/gcode.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> GcodeProgram<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The message ID used with [`anpp::Packet::id()`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>ID</span>: <span style=color:#66d9ef>u8</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>5</span>;
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The maximum amount of text a [`GcodeProgram`] message can contain.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>MAX_TEXT_SIZE</span>: <span style=color:#66d9ef>usize</span> <span style=color:#f92672>=</span> anpp::Packet::<span style=color:#66d9ef>MAX_PACKET_SIZE</span>
+</span></span><span style=display:flex><span>        <span style=color:#f92672>-</span> mem::size_of::<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>u16</span><span style=color:#f92672>&gt;</span>()
+</span></span><span style=display:flex><span>        <span style=color:#f92672>-</span> mem::size_of::<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>u32</span><span style=color:#f92672>&gt;</span>();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Create a new [`GcodeProgram`] message.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// # Panics
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// The `text` must be smaller than [`GcodeProgram::MAX_TEXT_SIZE`] bytes
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// long.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new</span>(first_line: <span style=color:#66d9ef>u32</span>, text: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;a</span> <span style=color:#66d9ef>str</span>) -&gt; <span style=color:#a6e22e>GcodeProgram</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        assert!(text.len() <span style=color:#f92672>&lt;</span> Self::<span style=color:#66d9ef>MAX_TEXT_SIZE</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        GcodeProgram { first_line, text }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We&rsquo;ll also need to add the same definitions to the frontend code. For the sake
+of convenience, the <code>sim</code> crate will expose a WASM function for writing a
+<code>GcodeProgram</code> message to a <code>Uint8Array</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// sim/src/utils.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[wasm_bindgen]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>encode_gcode_program</span>(first_line: <span style=color:#66d9ef>u32</span>, text: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>) -&gt; <span style=color:#a6e22e>Uint8Array</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> buffer <span style=color:#f92672>=</span> [<span style=color:#ae81ff>0</span>; anpp::Packet::<span style=color:#66d9ef>MAX_PACKET_SIZE</span>];
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> msg <span style=color:#f92672>=</span> GcodeProgram::new(first_line, text);
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> bytes_written <span style=color:#f92672>=</span> buffer
+</span></span><span style=display:flex><span>        .pwrite_with(msg, <span style=color:#ae81ff>0</span>, Endian::network())
+</span></span><span style=display:flex><span>        .expect(<span style=color:#e6db74>&#34;Will always succeed&#34;</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// note: this is effectively a &amp;[u8] slice into the buffer on the stack,
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#75715e>// hence the seemingly redundant copy
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> view_into_stack_buffer <span style=color:#f92672>=</span> Uint8Array::from(<span style=color:#f92672>&amp;</span>buffer[<span style=color:#f92672>..</span>bytes_written]);
+</span></span><span style=display:flex><span>    Uint8Array::new(<span style=color:#f92672>&amp;</span>view_into_stack_buffer )
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices note"><p>The <code>Pwrite</code> trait from <code>scroll</code> is used here to copy the <code>GcodeProgram</code>
+message&rsquo;s fields directly to a byte buffer. <code>GcodeProgram</code> uses a <code>&amp;str</code>
+borrowed string so we actually needed to manually implement
+<code>scroll::ctx::TryIntoCtx</code> instead of using the custom derive.</p><p>The details have been elided for simplicity (and because the implementation is
+rather straightforward), but check <a href=https://github.com/Michael-F-Bryan/adventures-in-motion-control/blob/d95e8805f866ed92a73a5e7a060163a262796f8d/motion/src/gcode.rs class=external-link target=_blank rel=noopener><code>motion/src/gcode.rs</code></a> out on GitHub if
+you&rsquo;re interested in how <code>scroll</code>&rsquo;s <code>TryIntoCtx</code> trait can be implemented.</p></div><p>Next, we&rsquo;ll add the corresponding TypeScript class and a method for converting
+it to an ANPP <code>Packet</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-ts data-lang=ts><span style=display:flex><span><span style=color:#75715e>// frontend/src/messaging.ts
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>export</span> <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Request</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>GoHome</span> <span style=color:#f92672>|</span> <span style=color:#a6e22e>GcodeProgram</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>export</span> <span style=color:#66d9ef>class</span> <span style=color:#a6e22e>GcodeProgram</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>public</span> <span style=color:#66d9ef>readonly</span> <span style=color:#a6e22e>firstLine</span>: <span style=color:#66d9ef>number</span>;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>public</span> <span style=color:#66d9ef>readonly</span> <span style=color:#a6e22e>text</span>: <span style=color:#66d9ef>Uint8Array</span>;
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// frontend/src/CommsBus.ts
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>import</span> <span style=color:#f92672>*</span> <span style=color:#66d9ef>as</span> <span style=color:#a6e22e>wasm</span> <span style=color:#66d9ef>from</span> <span style=color:#e6db74>&#34;aimc_sim&#34;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>function</span> <span style=color:#a6e22e>toPacket</span>(<span style=color:#a6e22e>request</span>: <span style=color:#66d9ef>Request</span>)<span style=color:#f92672>:</span> <span style=color:#a6e22e>Packet</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>request</span> <span style=color:#66d9ef>instanceof</span> <span style=color:#a6e22e>GoHome</span>) {
+</span></span><span style=display:flex><span>        ...
+</span></span><span style=display:flex><span>    } <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>request</span> <span style=color:#66d9ef>instanceof</span> <span style=color:#a6e22e>GcodeProgram</span>) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>const</span> { <span style=color:#a6e22e>firstLine</span>, <span style=color:#a6e22e>text</span> } <span style=color:#f92672>=</span> <span style=color:#a6e22e>request</span>;
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>Packet</span>(<span style=color:#ae81ff>5</span>, <span style=color:#a6e22e>wasm</span>.<span style=color:#a6e22e>encode_gcode_program</span>(<span style=color:#a6e22e>firstLine</span>, <span style=color:#a6e22e>text</span>));
+</span></span><span style=display:flex><span>    } <span style=color:#66d9ef>else</span> {
+</span></span><span style=display:flex><span>        ...
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=sending-the-messages>Sending the Messages
+<a class=heading-link href=#sending-the-messages><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now we&rsquo;ve got definitions for a <code>GcodeProgram</code> message, we&rsquo;ll need a way to
+construct and send those messages from the frontend to the backend.</p><p>Let&rsquo;s add a text input to the <code>Controls</code> panel which can be used to send g-code
+to the backend one line at a time.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vue data-lang=vue><span style=display:flex><span><span style=color:#75715e>// frontend/src/components/Control.vue
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span>&lt;<span style=color:#f92672>template</span>&gt;
+</span></span><span style=display:flex><span>  &lt;<span style=color:#f92672>div</span>&gt;
+</span></span><span style=display:flex><span>    ...
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    &lt;<span style=color:#f92672>b-form</span> <span style=color:#a6e22e>inline</span> <span style=color:#f92672>@submit</span><span style=color:#e6db74>=&#34;onSendGcode&#34;</span>&gt;
+</span></span><span style=display:flex><span>      &lt;<span style=color:#f92672>label</span> <span style=color:#a6e22e>class</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;sr-only&#34;</span> <span style=color:#a6e22e>for</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;gcode-send&#34;</span>&gt;<span style=color:#a6e22e>Manually</span> <span style=color:#a6e22e>send</span> <span style=color:#a6e22e>g</span><span style=color:#f92672>-</span><span style=color:#a6e22e>code</span>&lt;/<span style=color:#f92672>label</span>&gt;
+</span></span><span style=display:flex><span>      &lt;<span style=color:#f92672>b-input-group</span> <span style=color:#a6e22e>prepend</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;Manual g-code&#34;</span> <span style=color:#a6e22e>class</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;mb-2 mr-sm-2 mb-sm-0&#34;</span>&gt;
+</span></span><span style=display:flex><span>        &lt;<span style=color:#f92672>b-input</span> <span style=color:#a6e22e>id</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;gcode&#34;</span> <span style=color:#f92672>v-model</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;gcodeProgram&#34;</span>&gt;<span style=color:#960050;background-color:#1e0010>&lt;/</span><span style=color:#a6e22e>b</span><span style=color:#f92672>-input</span>&gt;
+</span></span><span style=display:flex><span>      &lt;/<span style=color:#f92672>b-input-group</span>&gt;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>      &lt;<span style=color:#f92672>b-button</span> <span style=color:#a6e22e>type</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;submit&#34;</span> <span style=color:#a6e22e>variant</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;primary&#34;</span>&gt;<span style=color:#a6e22e>Send</span>&lt;/<span style=color:#f92672>b-button</span>&gt;
+</span></span><span style=display:flex><span>    &lt;/<span style=color:#f92672>b-form</span>&gt;
+</span></span><span style=display:flex><span>  &lt;/<span style=color:#f92672>div</span>&gt;
+</span></span><span style=display:flex><span>&lt;/<span style=color:#f92672>template</span>&gt;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>&lt;<span style=color:#f92672>script</span> <span style=color:#a6e22e>lang</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;ts&#34;</span>&gt;
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>@</span><span style=color:#a6e22e>Component</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>export</span> <span style=color:#66d9ef>default</span> <span style=color:#66d9ef>class</span> <span style=color:#a6e22e>Controls</span> <span style=color:#66d9ef>extends</span> <span style=color:#a6e22e>Vue</span> {
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>public</span> <span style=color:#a6e22e>gcodeProgram</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>string</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;&#34;</span>;
+</span></span><span style=display:flex><span>  ...
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>public</span> <span style=color:#a6e22e>onSendGcode</span>(<span style=color:#a6e22e>e</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>Event</span>) {
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>e</span>.<span style=color:#a6e22e>preventDefault</span>();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>program</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>gcodeProgram</span>;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>gcodeProgram</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;&#34;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>program</span>.<span style=color:#a6e22e>length</span> <span style=color:#f92672>&gt;</span> <span style=color:#ae81ff>0</span>) {
+</span></span><span style=display:flex><span>      <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#e6db74>&#34;Sending&#34;</span>, <span style=color:#a6e22e>program</span>);
+</span></span><span style=display:flex><span>      <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>sendGcode</span>(<span style=color:#a6e22e>program</span>)
+</span></span><span style=display:flex><span>        .<span style=color:#a6e22e>then</span>(<span style=color:#a6e22e>resp</span> =&gt; <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#a6e22e>resp</span>.<span style=color:#a6e22e>toString</span>(), <span style=color:#a6e22e>resp</span>))
+</span></span><span style=display:flex><span>        .<span style=color:#66d9ef>catch</span>(<span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>error</span>);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>  }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>  <span style=color:#66d9ef>private</span> <span style=color:#a6e22e>sendGcode</span>(<span style=color:#a6e22e>program</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>string</span>) {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>buffer</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>TextEncoder</span>().<span style=color:#a6e22e>encode</span>(<span style=color:#a6e22e>program</span>);
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>send</span>(<span style=color:#66d9ef>new</span> <span style=color:#a6e22e>GcodeProgram</span>(<span style=color:#ae81ff>0</span>, <span style=color:#ae81ff>0</span>, <span style=color:#a6e22e>buffer</span>));
+</span></span><span style=display:flex><span>  }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>&lt;/<span style=color:#f92672>script</span>&gt;
+</span></span></code></pre></div><p>That&rsquo;s about all the frontend code we&rsquo;ll need to write today. Let&rsquo;s move on to
+the backend.</p><p>At the moment, our <code>Router</code> isn&rsquo;t letting the <code>Motion</code> system know when a
+<code>GcodeProgram</code> message is received. Let&rsquo;s fix that.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// sim/src/router.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> MessageHandler <span style=color:#66d9ef>for</span> Router<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle_message</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, msg: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Packet</span>) -&gt; Result<span style=color:#f92672>&lt;</span>Packet, CommsError<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> msg.id() {
+</span></span><span style=display:flex><span>            <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>            GcodeProgram::<span style=color:#66d9ef>ID</span> <span style=color:#f92672>=&gt;</span> dispatch::<span style=color:#f92672>&lt;</span>_, GcodeProgram, _<span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>                self.motion,
+</span></span><span style=display:flex><span>                msg.contents(),
+</span></span><span style=display:flex><span>                map_result,
+</span></span><span style=display:flex><span>            ),
+</span></span><span style=display:flex><span>            <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>        }
+</span></span></code></pre></div><p>To make the compiler happy, we&rsquo;ll implement
+<code>aimc_hal::messaging::Handler&lt;GcodeProgram&lt;'_>></code> for <code>Motion</code> though using the
+good old <code>unimplemented!()</code> macro. We can use the panic message and backtrace as
+a crude sanity check to make sure everything is wired up correctly.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/motion.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Handler<span style=color:#f92672>&lt;</span>GcodeProgram<span style=color:#f92672>&lt;</span>&#39;_<span style=color:#f92672>&gt;&gt;</span> <span style=color:#66d9ef>for</span> Motion {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Response</span> <span style=color:#f92672>=</span> Result<span style=color:#f92672>&lt;</span>Ack, Nack<span style=color:#f92672>&gt;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, gcode: <span style=color:#a6e22e>GcodeProgram</span><span style=color:#f92672>&lt;</span>&#39;_<span style=color:#f92672>&gt;</span>) -&gt; <span style=color:#a6e22e>Self</span>::Response {
+</span></span><span style=display:flex><span>        unimplemented!(<span style=color:#e6db74>&#34;Received a </span><span style=color:#e6db74>{:?}</span><span style=color:#e6db74>&#34;</span>, gcode);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Typing <code>G90 asdf</code> into the <em>&ldquo;Manual g-code&rdquo;</em> box and pressing enter gives us a
+nice stack trace containing the <code>GcodeProgram</code> message:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-gdscript3 data-lang=gdscript3><span style=display:flex><span>panicked at <span style=color:#e6db74>&#39;not yet implemented: Received a GcodeProgram { first_line: 0, text: &#34;G90 asdf&#34; }&#39;</span>, motion<span style=color:#f92672>/</span>src<span style=color:#f92672>/</span>motion<span style=color:#f92672>.</span>rs:<span style=color:#ae81ff>85</span>:<span style=color:#ae81ff>9</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>Stack:
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>__wbg_new_59cb74e423758ede<span style=color:#960050;background-color:#1e0010>@</span>webpack<span style=color:#f92672>-</span>internal:<span style=color:#f92672>///../</span>sim<span style=color:#f92672>/</span>pkg<span style=color:#f92672>/</span>aimc_sim<span style=color:#f92672>.</span>js:<span style=color:#ae81ff>306</span>:<span style=color:#ae81ff>13</span>
+</span></span><span style=display:flex><span>__wbg_new_59cb74e423758ede<span style=color:#960050;background-color:#1e0010>@</span>http:<span style=color:#f92672>//</span>localhost:<span style=color:#ae81ff>8080</span><span style=color:#f92672>/</span>app<span style=color:#f92672>.</span>js:<span style=color:#ae81ff>774</span>:<span style=color:#ae81ff>74</span>
+</span></span><span style=display:flex><span>console_error_panic_hook::hook::h84b8e021e326f0d3<span style=color:#960050;background-color:#1e0010>@</span>http:<span style=color:#f92672>//</span>localhost:<span style=color:#ae81ff>8080</span><span style=color:#f92672>/</span><span style=color:#ae81ff>62</span>ee0e08a150c8392d23<span style=color:#f92672>.</span>module<span style=color:#f92672>.</span>wasm:wasm<span style=color:#f92672>-</span>function[<span style=color:#ae81ff>36</span>]:<span style=color:#ae81ff>0x3b71</span>
+</span></span><span style=display:flex><span>core::ops::function::Fn::call::hd092999f4ce770e6<span style=color:#960050;background-color:#1e0010>@</span>http:<span style=color:#f92672>//</span>localhost:<span style=color:#ae81ff>8080</span><span style=color:#f92672>/</span><span style=color:#ae81ff>62</span>ee0e08a150c8392d23<span style=color:#f92672>.</span>module<span style=color:#f92672>.</span>wasm:wasm<span style=color:#f92672>-</span>function[<span style=color:#ae81ff>253</span>]:<span style=color:#ae81ff>0xa677</span>
+</span></span><span style=display:flex><span>std::panicking::rust_panic_with_hook::hd6b16d2853327786<span style=color:#960050;background-color:#1e0010>@</span>http:<span style=color:#f92672>//</span>localhost:<span style=color:#ae81ff>8080</span><span style=color:#f92672>/</span><span style=color:#ae81ff>62</span>ee0e08a150c8392d23<span style=color:#f92672>.</span>module<span style=color:#f92672>.</span>wasm:wasm<span style=color:#f92672>-</span>function[<span style=color:#ae81ff>74</span>]:<span style=color:#ae81ff>0x75ab</span>
+</span></span><span style=display:flex><span>std::panicking::continue_panic_fmt::h70cda879a43284ba<span style=color:#960050;background-color:#1e0010>@</span>http:<span style=color:#f92672>//</span>localhost:<span style=color:#ae81ff>8080</span><span style=color:#f92672>/</span><span style=color:#ae81ff>62</span>ee0e08a150c8392d23<span style=color:#f92672>.</span>module<span style=color:#f92672>.</span>wasm:wasm<span style=color:#f92672>-</span>function[<span style=color:#ae81ff>110</span>]:<span style=color:#ae81ff>0x8dea</span>
+</span></span><span style=display:flex><span>rust_begin_unwind<span style=color:#960050;background-color:#1e0010>@</span>http:<span style=color:#f92672>//</span>localhost:<span style=color:#ae81ff>8080</span><span style=color:#f92672>/</span><span style=color:#ae81ff>62</span>ee0e08a150c8392d23<span style=color:#f92672>.</span>module<span style=color:#f92672>.</span>wasm:wasm<span style=color:#f92672>-</span>function[<span style=color:#ae81ff>250</span>]:<span style=color:#ae81ff>0xa65b</span>
+</span></span><span style=display:flex><span>core::panicking::panic_fmt::hddbe1a30080e00b8<span style=color:#960050;background-color:#1e0010>@</span>http:<span style=color:#f92672>//</span>localhost:<span style=color:#ae81ff>8080</span><span style=color:#f92672>/</span><span style=color:#ae81ff>62</span>ee0e08a150c8392d23<span style=color:#f92672>.</span>module<span style=color:#f92672>.</span>wasm:wasm<span style=color:#f92672>-</span>function[<span style=color:#ae81ff>142</span>]:<span style=color:#ae81ff>0x99f6</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>&lt;</span>aimc_motion::motion::Motion as aimc_hal::messaging::Handler<span style=color:#f92672>&lt;</span>aimc_motion::gcode::GcodeProgram<span style=color:#f92672>&gt;&gt;</span>::handle::hc98bbf6472c174d6<span style=color:#960050;background-color:#1e0010>@</span>http:<span style=color:#f92672>//</span>localhost:<span style=color:#ae81ff>8080</span><span style=color:#f92672>/</span><span style=color:#ae81ff>62</span>ee0e08a150c8392d23<span style=color:#f92672>.</span>module<span style=color:#f92672>.</span>wasm:wasm<span style=color:#f92672>-</span>function[<span style=color:#ae81ff>104</span>]:<span style=color:#ae81ff>0x8b04</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>&lt;</span>aimc_sim::router::Router as aimc_comms::MessageHandler<span style=color:#f92672>&gt;</span>::handle_message::hf38b3f9dfc446397<span style=color:#960050;background-color:#1e0010>@</span>http:<span style=color:#f92672>//</span>localhost:<span style=color:#ae81ff>8080</span><span style=color:#f92672>/</span><span style=color:#ae81ff>62</span>ee0e08a150c8392d23<span style=color:#f92672>.</span>module<span style=color:#f92672>.</span>wasm:wasm<span style=color:#f92672>-</span>function[<span style=color:#ae81ff>33</span>]:<span style=color:#ae81ff>0x33f2</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>&lt;</span>aimc_comms::Communications as aimc_hal::system::System<span style=color:#f92672>&lt;</span>I,aimc_comms::Outputs<span style=color:#f92672>&lt;</span>T,M<span style=color:#f92672>&gt;&gt;&gt;</span>::poll::h2b779ff57286c828<span style=color:#960050;background-color:#1e0010>@</span>http:<span style=color:#f92672>//</span>localhost:<span style=color:#ae81ff>8080</span><span style=color:#f92672>/</span><span style=color:#ae81ff>62</span>ee0e08a150c8392d23<span style=color:#f92672>.</span>module<span style=color:#f92672>.</span>wasm:wasm<span style=color:#f92672>-</span>function[<span style=color:#ae81ff>42</span>]:<span style=color:#ae81ff>0x47f4</span>
+</span></span><span style=display:flex><span>aimc_sim::app::App::poll::hb2d5c96993e5ecd2<span style=color:#960050;background-color:#1e0010>@</span>http:<span style=color:#f92672>//</span>localhost:<span style=color:#ae81ff>8080</span><span style=color:#f92672>/</span><span style=color:#ae81ff>62</span>ee0e08a150c8392d23<span style=color:#f92672>.</span>module<span style=color:#f92672>.</span>wasm:wasm<span style=color:#f92672>-</span>function[<span style=color:#ae81ff>55</span>]:<span style=color:#ae81ff>0x5cc0</span>
+</span></span><span style=display:flex><span>poll<span style=color:#960050;background-color:#1e0010>@</span>http:<span style=color:#f92672>//</span>localhost:<span style=color:#ae81ff>8080</span><span style=color:#f92672>/</span><span style=color:#ae81ff>62</span>ee0e08a150c8392d23<span style=color:#f92672>.</span>module<span style=color:#f92672>.</span>wasm:wasm<span style=color:#f92672>-</span>function[<span style=color:#ae81ff>135</span>]:<span style=color:#ae81ff>0x97ce</span>
+</span></span><span style=display:flex><span>poll<span style=color:#960050;background-color:#1e0010>@</span>webpack<span style=color:#f92672>-</span>internal:<span style=color:#f92672>///../</span>sim<span style=color:#f92672>/</span>pkg<span style=color:#f92672>/</span>aimc_sim<span style=color:#f92672>.</span>js:<span style=color:#ae81ff>91</span>:<span style=color:#ae81ff>52</span>
+</span></span><span style=display:flex><span>animate<span style=color:#960050;background-color:#1e0010>@</span>webpack<span style=color:#f92672>-</span>internal:<span style=color:#f92672>///./</span>node_modules<span style=color:#f92672>/</span>cache<span style=color:#f92672>-</span>loader<span style=color:#f92672>/</span>dist<span style=color:#f92672>/</span>cjs<span style=color:#f92672>.</span>js<span style=color:#960050;background-color:#1e0010>?</span><span style=color:#f92672>!./</span>node_modules<span style=color:#f92672>/</span>babel<span style=color:#f92672>-</span>loader<span style=color:#f92672>/</span>lib<span style=color:#f92672>/</span>index<span style=color:#f92672>.</span>js<span style=color:#f92672>!./</span>node_modules<span style=color:#f92672>/</span>ts<span style=color:#f92672>-</span>loader<span style=color:#f92672>/</span>index<span style=color:#f92672>.</span>js<span style=color:#960050;background-color:#1e0010>?</span><span style=color:#f92672>!./</span>node_modules<span style=color:#f92672>/</span>cache<span style=color:#f92672>-</span>loader<span style=color:#f92672>/</span>dist<span style=color:#f92672>/</span>cjs<span style=color:#f92672>.</span>js<span style=color:#960050;background-color:#1e0010>?</span><span style=color:#f92672>!./</span>node_modules<span style=color:#f92672>/</span>vue<span style=color:#f92672>-</span>loader<span style=color:#f92672>/</span>lib<span style=color:#f92672>/</span>index<span style=color:#f92672>.</span>js<span style=color:#960050;background-color:#1e0010>?</span><span style=color:#f92672>!./</span>src<span style=color:#f92672>/</span>App<span style=color:#f92672>.</span>vue<span style=color:#960050;background-color:#1e0010>?</span>vue<span style=color:#f92672>&amp;</span>type<span style=color:#f92672>=</span>script<span style=color:#f92672>&amp;</span>lang<span style=color:#f92672>=</span>ts<span style=color:#f92672>&amp;</span>:<span style=color:#ae81ff>108</span>:<span style=color:#ae81ff>48</span>
+</span></span></code></pre></div><p>Excellent!</p><h2 id=processing-the-g-code-program>Processing the G-Code Program
+<a class=heading-link href=#processing-the-g-code-program><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now we&rsquo;re able to send a gcode program as text to the backend we need to turn
+it into something more machine-readable. Fortunately most of the heavy lifting
+of parsing is already handled for us, courtesy of the <a href=https://crates.io/crates/gcodekk class=external-link target=_blank rel=noopener><code>gcode</code></a> crate.</p><p>The first step is to create a <code>Translator</code> for turning the generic
+<em>&ldquo;received the number <code>01</code> <code>G</code> command with arguments <code>(X, 42.0)</code> and <code>(Y, -3.14)</code> on line 123&rdquo;</em> message into something more specific to our use case.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/movements/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Translator</span> {}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Translator {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>translate</span><span style=color:#f92672>&lt;</span>C: <span style=color:#a6e22e>Callbacks</span><span style=color:#f92672>&gt;</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, _command: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>GCode</span>, _cb: <span style=color:#a6e22e>C</span>) {
+</span></span><span style=display:flex><span>        unimplemented!()
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> Callbacks {}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span>, C: <span style=color:#a6e22e>Callbacks</span> <span style=color:#f92672>+</span> <span style=color:#f92672>?</span>Sized<span style=color:#f92672>&gt;</span> Callbacks <span style=color:#66d9ef>for</span> <span style=color:#f92672>&amp;</span><span style=color:#a6e22e>&#39;a</span> <span style=color:#66d9ef>mut</span> C {}
+</span></span></code></pre></div><div class="notices note"><p>If you are familiar with parsers, this would be referred to as a <em>Push
+Parser</em>. We&rsquo;re notifying the caller of parse results via callbacks that get
+invoked during the parsing process.</p><p>An alternative approach is called <em>Pull Parsing</em>. This is where the caller
+will ask the parse for the next item, typically implemented using the
+<code>Iterator</code> trait.</p><p><em>Push Parsing</em> happens to be slightly easier to implement and test in this
+case, so that&rsquo;s what we&rsquo;ll go with.</p></div><p>We&rsquo;ll also want a way to report warnings (e.g. unsupported commands) or
+errors (e.g. <em>&ldquo;this command would move an axis out of bounds&rdquo;</em>) back to the
+user.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/movements/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> Callbacks {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>unsupported_command</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, _command: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>GCode</span>) {}
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>invalid_argument</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        _command: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>GCode</span>,
+</span></span><span style=display:flex><span>        _arg: <span style=color:#66d9ef>char</span>,
+</span></span><span style=display:flex><span>        _reason: <span style=color:#66d9ef>&amp;</span>&#39;static <span style=color:#66d9ef>str</span>,
+</span></span><span style=display:flex><span>    ) {}
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>For convenience, we&rsquo;ll make a helper method which uses parses text using the
+<code>gcode</code> crate then iterates over every command invoking <code>translate()</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/movements/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Translator {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>translate_src</span><span style=color:#f92672>&lt;</span>C, G<span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        src: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>,
+</span></span><span style=display:flex><span>        cb: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> C,
+</span></span><span style=display:flex><span>        parse_errors: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> G,
+</span></span><span style=display:flex><span>    ) <span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>        C: <span style=color:#a6e22e>Callbacks</span> <span style=color:#f92672>+</span> <span style=color:#f92672>?</span>Sized,
+</span></span><span style=display:flex><span>        G: <span style=color:#a6e22e>gcode</span>::Callbacks <span style=color:#f92672>+</span> <span style=color:#f92672>?</span>Sized,
+</span></span><span style=display:flex><span>    {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>for</span> line <span style=color:#66d9ef>in</span> gcode::parse_with_callbacks(src, parse_errors) {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>for</span> command <span style=color:#66d9ef>in</span> line.gcodes() {
+</span></span><span style=display:flex><span>                self.translate(<span style=color:#f92672>&amp;</span>command, <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> <span style=color:#f92672>*</span>cb);
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Annoyingly, the gcode language is only loosly specified with each vendor using
+their own dialect and associating different meanings to different commands.</p><p>For our purposes we&rsquo;ll only need to support the most common commands, though.</p><p>These are:</p><table><thead><tr><th>Command</th><th>Parameters</th><th>Description</th></tr></thead><tbody><tr><td><em>Motions</em></td><td><em>(X Y Z apply to all)</em></td><td></td></tr><tr><td>G00</td><td></td><td>Rapid Move</td></tr><tr><td>G01</td><td></td><td>Linear Interpolation</td></tr><tr><td>G02,G03</td><td>I J K or R</td><td>Circular Interpolation (CW or ACW)</td></tr><tr><td>G04</td><td>P</td><td>Pause for <code>P</code> seconds</td></tr><tr><td><em>Coordinate System</em></td><td></td><td></td></tr><tr><td>G20</td><td></td><td>Inches</td></tr><tr><td>G21</td><td></td><td>Millimeters</td></tr><tr><td>G90</td><td></td><td>Absolute coordinates</td></tr><tr><td>G91</td><td></td><td>Relative coordinates</td></tr><tr><td><em>Miscellaneous</em></td><td></td><td></td></tr><tr><td>M30</td><td></td><td>End of program.<br>(Stops all motion)</td></tr></tbody></table><div class="notices info"><p>Some links for further reading:</p><ul><li><a href=https://en.wikipedia.org/wiki/G-code class=external-link target=_blank rel=noopener>Wikipedia</a></li><li><a href=http://linuxcnc.org/docs/html/gcode.html class=external-link target=_blank rel=noopener>LinuxCNC &ldquo;G-Code&rdquo; Quick Reference</a></li><li><a href=https://reprap.org/wiki/G-code class=external-link target=_blank rel=noopener>The flavour of gcode recognised by RepRap firmware</a></li><li><a href="https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=823374" class=external-link target=_blank rel=noopener>The NIST RS274NGC Interpreter</a></li></ul></div><p>To turn the gcode commands into something more usable we&rsquo;re going to need a
+type to represent a 3-dimensional point in space. We <em>could</em> pull in a 3rd party
+geometry library for this, but sometimes <a href=https://go-proverbs.github.io/ class=external-link target=_blank rel=noopener><em>&ldquo;a little copying is better than a
+little dependency&rdquo;</em></a>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/movements/point.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> core::ops::Add;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> uom::{si::{<span style=color:#66d9ef>f32</span>::Length, length::Unit}, Conversion};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Point</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> x: <span style=color:#a6e22e>Length</span>,
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> y: <span style=color:#a6e22e>Length</span>,
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> z: <span style=color:#a6e22e>Length</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Point {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Create a new [`Point`] in a particular unit system.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new</span><span style=color:#f92672>&lt;</span>N<span style=color:#f92672>&gt;</span>(x: <span style=color:#66d9ef>f32</span>, y: <span style=color:#66d9ef>f32</span>, z: <span style=color:#66d9ef>f32</span>) -&gt; <span style=color:#a6e22e>Self</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>        N: <span style=color:#a6e22e>Unit</span> <span style=color:#f92672>+</span> Conversion<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f32</span>, T <span style=color:#f92672>=</span> <span style=color:#66d9ef>f32</span><span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    {
+</span></span><span style=display:flex><span>        Point {
+</span></span><span style=display:flex><span>            x: <span style=color:#a6e22e>Length</span>::new::<span style=color:#f92672>&lt;</span>N<span style=color:#f92672>&gt;</span>(x),
+</span></span><span style=display:flex><span>            y: <span style=color:#a6e22e>Length</span>::new::<span style=color:#f92672>&lt;</span>N<span style=color:#f92672>&gt;</span>(y),
+</span></span><span style=display:flex><span>            z: <span style=color:#a6e22e>Length</span>::new::<span style=color:#f92672>&lt;</span>N<span style=color:#f92672>&gt;</span>(z),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Get the underlying values in a particular unit system.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// # Examples
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// ```rust
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// use aimc_motion::movements::Point;
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// use uom::si::length::{inch, millimeter};
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// let p = Point::new::&lt;inch&gt;(10.0, 20.0, 30.0);
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// # let p = p.round::&lt;millimeter&gt;(); // ugh, floating point math...
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// assert_eq!(p.converted_to::&lt;millimeter&gt;(), (254.0, 254.0*2.0, 254.0*3.0));
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// ```
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>converted_to</span><span style=color:#f92672>&lt;</span>N<span style=color:#f92672>&gt;</span>(self) -&gt; (<span style=color:#66d9ef>f32</span>, <span style=color:#66d9ef>f32</span>, <span style=color:#66d9ef>f32</span>)
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>        N: <span style=color:#a6e22e>Unit</span> <span style=color:#f92672>+</span> Conversion<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f32</span>, T <span style=color:#f92672>=</span> <span style=color:#66d9ef>f32</span><span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    {
+</span></span><span style=display:flex><span>        (self.x.get::<span style=color:#f92672>&lt;</span>N<span style=color:#f92672>&gt;</span>(), self.y.get::<span style=color:#f92672>&lt;</span>N<span style=color:#f92672>&gt;</span>(), self.z.get::<span style=color:#f92672>&lt;</span>N<span style=color:#f92672>&gt;</span>())
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Round `x`, `y`, and `z` to the nearest integer when converted to `N`
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// units.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>round</span><span style=color:#f92672>&lt;</span>N<span style=color:#f92672>&gt;</span>(self) -&gt; <span style=color:#a6e22e>Self</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>        N: <span style=color:#a6e22e>Unit</span> <span style=color:#f92672>+</span> Conversion<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f32</span>, T <span style=color:#f92672>=</span> <span style=color:#66d9ef>f32</span><span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    {
+</span></span><span style=display:flex><span>        Point {
+</span></span><span style=display:flex><span>            x: <span style=color:#a6e22e>self</span>.x.round::<span style=color:#f92672>&lt;</span>N<span style=color:#f92672>&gt;</span>(),
+</span></span><span style=display:flex><span>            y: <span style=color:#a6e22e>self</span>.y.round::<span style=color:#f92672>&lt;</span>N<span style=color:#f92672>&gt;</span>(),
+</span></span><span style=display:flex><span>            z: <span style=color:#a6e22e>self</span>.z.round::<span style=color:#f92672>&lt;</span>N<span style=color:#f92672>&gt;</span>(),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Add<span style=color:#f92672>&lt;</span>Point<span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> Point { <span style=color:#f92672>..</span>. }
+</span></span></code></pre></div><p>We also need some helper enums to keep track of the coordinate system and units
+being used.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/movements/translator.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>CoordinateMode</span> {
+</span></span><span style=display:flex><span>    Absolute,
+</span></span><span style=display:flex><span>    Relative,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Default <span style=color:#66d9ef>for</span> CoordinateMode {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>default</span>() -&gt; <span style=color:#a6e22e>CoordinateMode</span> { CoordinateMode::Absolute }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>Units</span> {
+</span></span><span style=display:flex><span>    Millimetres,
+</span></span><span style=display:flex><span>    Inches,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Default <span style=color:#66d9ef>for</span> Units {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>default</span>() -&gt; <span style=color:#a6e22e>Units</span> { Units::Millimetres }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Next, let&rsquo;s add a couple methods which use these enums to calculate absolute
+locations and the end position for a <em>motion</em> command. The <code>Translator</code> type
+will need a couple new fields too.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/movements/translator.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Translator</span> {
+</span></span><span style=display:flex><span>    current_location: <span style=color:#a6e22e>Point</span>,
+</span></span><span style=display:flex><span>    coordinate_mode: <span style=color:#a6e22e>CoordinateMode</span>,
+</span></span><span style=display:flex><span>    units: <span style=color:#a6e22e>Units</span>,
+</span></span><span style=display:flex><span>    feed_rate: <span style=color:#a6e22e>Velocity</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Translator {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>calculate_end</span>(<span style=color:#f92672>&amp;</span>self, command: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>GCode</span>) -&gt; <span style=color:#a6e22e>Point</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> x <span style=color:#f92672>=</span> command.value_for(<span style=color:#e6db74>&#39;X&#39;</span>).unwrap_or(<span style=color:#ae81ff>0.0</span>);
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> y <span style=color:#f92672>=</span> command.value_for(<span style=color:#e6db74>&#39;Y&#39;</span>).unwrap_or(<span style=color:#ae81ff>0.0</span>);
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> z <span style=color:#f92672>=</span> command.value_for(<span style=color:#e6db74>&#39;Z&#39;</span>).unwrap_or(<span style=color:#ae81ff>0.0</span>);
+</span></span><span style=display:flex><span>        self.absolute_location(x, y, z)
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>absolute_location</span>(<span style=color:#f92672>&amp;</span>self, x: <span style=color:#66d9ef>f32</span>, y: <span style=color:#66d9ef>f32</span>, z: <span style=color:#66d9ef>f32</span>) -&gt; <span style=color:#a6e22e>Point</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> raw <span style=color:#f92672>=</span> <span style=color:#66d9ef>match</span> self.units {
+</span></span><span style=display:flex><span>            Units::Millimetres <span style=color:#f92672>=&gt;</span> Point::new::<span style=color:#f92672>&lt;</span>millimeter<span style=color:#f92672>&gt;</span>(x, y, z),
+</span></span><span style=display:flex><span>            Units::Inches <span style=color:#f92672>=&gt;</span> Point::new::<span style=color:#f92672>&lt;</span>inch<span style=color:#f92672>&gt;</span>(x, y, z),
+</span></span><span style=display:flex><span>        };
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> self.coordinate_mode {
+</span></span><span style=display:flex><span>            CoordinateMode::Absolute <span style=color:#f92672>=&gt;</span> raw,
+</span></span><span style=display:flex><span>            CoordinateMode::Relative <span style=color:#f92672>=&gt;</span> raw <span style=color:#f92672>+</span> self.current_location,
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>calculate_feed_rate</span>(<span style=color:#f92672>&amp;</span>self, command: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>GCode</span>) -&gt; <span style=color:#a6e22e>Velocity</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> raw <span style=color:#f92672>=</span> <span style=color:#66d9ef>match</span> command.value_for(<span style=color:#e6db74>&#39;F&#39;</span>) {
+</span></span><span style=display:flex><span>            Some(f) <span style=color:#f92672>=&gt;</span> f,
+</span></span><span style=display:flex><span>            None <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>return</span> self.feed_rate,
+</span></span><span style=display:flex><span>        };
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// there&#39;s no inch_per_minute unit, so calculate inch/minute manually
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>let</span> time <span style=color:#f92672>=</span> Time::new::<span style=color:#f92672>&lt;</span>minute<span style=color:#f92672>&gt;</span>(<span style=color:#ae81ff>1.0</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> self.units {
+</span></span><span style=display:flex><span>            Units::Inches <span style=color:#f92672>=&gt;</span> Length::new::<span style=color:#f92672>&lt;</span>inch<span style=color:#f92672>&gt;</span>(raw) <span style=color:#f92672>/</span> time,
+</span></span><span style=display:flex><span>            Units::Millimetres <span style=color:#f92672>=&gt;</span> Length::new::<span style=color:#f92672>&lt;</span>millimeter<span style=color:#f92672>&gt;</span>(raw) <span style=color:#f92672>/</span> time,
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Gets the centre of a circular interpolate move (G02, G03), bailing out
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// if the centre coordinates aren&#39;t provided.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>get_centre</span>(<span style=color:#f92672>&amp;</span>self, command: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>GCode</span>) -&gt; Result<span style=color:#f92672>&lt;</span>Point, <span style=color:#66d9ef>char</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> x <span style=color:#f92672>=</span> command.value_for(<span style=color:#e6db74>&#39;I&#39;</span>).ok_or(<span style=color:#e6db74>&#39;I&#39;</span>)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> y <span style=color:#f92672>=</span> command.value_for(<span style=color:#e6db74>&#39;J&#39;</span>).ok_or(<span style=color:#e6db74>&#39;J&#39;</span>)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// TODO: Take the plane into account (G17, G18, G19)
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        Ok(Point {
+</span></span><span style=display:flex><span>            x: <span style=color:#a6e22e>self</span>.to_length(x),
+</span></span><span style=display:flex><span>            y: <span style=color:#a6e22e>self</span>.to_length(y),
+</span></span><span style=display:flex><span>            z: <span style=color:#a6e22e>self</span>.current_location.z,
+</span></span><span style=display:flex><span>        })
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We need a way to notify the caller when a motion is translated, so the
+<code>Callbacks</code> trait needs a couple more methods.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/movements/translator.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> Callbacks {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>unsupported_command</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, _command: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>GCode</span>) {}
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>invalid_argument</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        _command: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>GCode</span>,
+</span></span><span style=display:flex><span>        _arg: <span style=color:#66d9ef>char</span>,
+</span></span><span style=display:flex><span>        _reason: <span style=color:#66d9ef>&amp;</span>&#39;static <span style=color:#66d9ef>str</span>,
+</span></span><span style=display:flex><span>    ) {
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>end_of_program</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) {}
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>linear_interpolate</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        _start: <span style=color:#a6e22e>Point</span>,
+</span></span><span style=display:flex><span>        _end: <span style=color:#a6e22e>Point</span>,
+</span></span><span style=display:flex><span>        _feed_rate: <span style=color:#a6e22e>Velocity</span>,
+</span></span><span style=display:flex><span>    ) {
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>circular_interpolate</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        _start: <span style=color:#a6e22e>Point</span>,
+</span></span><span style=display:flex><span>        _centre: <span style=color:#a6e22e>Point</span>,
+</span></span><span style=display:flex><span>        _end: <span style=color:#a6e22e>Point</span>,
+</span></span><span style=display:flex><span>        _direction: <span style=color:#a6e22e>Direction</span>,
+</span></span><span style=display:flex><span>        _feed_rate: <span style=color:#a6e22e>Velocity</span>,
+</span></span><span style=display:flex><span>    ) {
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>dwell</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, _period: <span style=color:#a6e22e>Duration</span>) {}
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>Direction</span> {
+</span></span><span style=display:flex><span>    Clockwise,
+</span></span><span style=display:flex><span>    Anticlockwise,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>From here on out, processing a <code>GCode</code> command becomes mostly a mechanical
+process of:</p><ol><li><code>match</code>ing on the <code>Mnemonic</code></li><li><code>match</code>ing on the <code>major_number</code></li><li>Convert arguments to <code>uom</code> types</li><li>Depending on the operation:<ul><li>If it is a <em>motion</em> command, notify the caller via the callbacks</li><li>Update some internal state (e.g. if changing from inches to millimetres)</li><li>Maybe notify the caller if something unexpected/invalid was encountered</li></ul></li></ol><p>Let&rsquo;s handle the <em>Miscellaneous</em> commands first, seeing as there&rsquo;s only one
+of them (<code>M30</code>).</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/movements/translator.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Translator {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>translate</span><span style=color:#f92672>&lt;</span>C: <span style=color:#a6e22e>Callbacks</span><span style=color:#f92672>&gt;</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, command: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>GCode</span>, <span style=color:#66d9ef>mut</span> cb: <span style=color:#a6e22e>C</span>) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> command.mnemonic() {
+</span></span><span style=display:flex><span>            Mnemonic::Miscellaneous <span style=color:#f92672>=&gt;</span> self.handle_miscellaneous(command, cb),
+</span></span><span style=display:flex><span>            _ <span style=color:#f92672>=&gt;</span> cb.unsupported_command(command),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle_miscellaneous</span><span style=color:#f92672>&lt;</span>C: <span style=color:#a6e22e>Callbacks</span><span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        command: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>GCode</span>,
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>mut</span> cb: <span style=color:#a6e22e>C</span>,
+</span></span><span style=display:flex><span>    ) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> command.major_number() {
+</span></span><span style=display:flex><span>            <span style=color:#ae81ff>30</span> <span style=color:#f92672>=&gt;</span> cb.end_of_program(),
+</span></span><span style=display:flex><span>            _ <span style=color:#f92672>=&gt;</span> cb.unsupported_command(command),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Handling the motion commands requires us to massage the arguments a bit to take
+into account things like units and coordinate systems, so when <code>match</code>ing on the
+<code>major_number</code> we&rsquo;ll pull the handling code into their own methods.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/movements/translator.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Translator {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>translate</span><span style=color:#f92672>&lt;</span>C: <span style=color:#a6e22e>Callbacks</span><span style=color:#f92672>&gt;</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, command: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>GCode</span>, <span style=color:#66d9ef>mut</span> cb: <span style=color:#a6e22e>C</span>) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> command.mnemonic() {
+</span></span><span style=display:flex><span>            Mnemonic::Miscellaneous <span style=color:#f92672>=&gt;</span> self.handle_miscellaneous(command, cb),
+</span></span><span style=display:flex><span>            Mnemonic::General <span style=color:#f92672>=&gt;</span> self.handle_general(command, cb),
+</span></span><span style=display:flex><span>            _ <span style=color:#f92672>=&gt;</span> cb.unsupported_command(command),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle_general</span><span style=color:#f92672>&lt;</span>C: <span style=color:#a6e22e>Callbacks</span><span style=color:#f92672>&gt;</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, command: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>GCode</span>, <span style=color:#66d9ef>mut</span> cb: <span style=color:#a6e22e>C</span>) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> command.major_number() {
+</span></span><span style=display:flex><span>            <span style=color:#ae81ff>0</span> <span style=color:#f92672>|</span> <span style=color:#ae81ff>1</span> <span style=color:#f92672>=&gt;</span> self.handle_linear_interpolate(command, cb),
+</span></span><span style=display:flex><span>            <span style=color:#ae81ff>2</span> <span style=color:#f92672>|</span> <span style=color:#ae81ff>3</span> <span style=color:#f92672>=&gt;</span> self.handle_circular_interpolate(command, cb),
+</span></span><span style=display:flex><span>            <span style=color:#ae81ff>4</span> <span style=color:#f92672>=&gt;</span> self.handle_dwell(command, cb),
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#ae81ff>20</span> <span style=color:#f92672>=&gt;</span> self.units <span style=color:#f92672>=</span> Units::Inches,
+</span></span><span style=display:flex><span>            <span style=color:#ae81ff>21</span> <span style=color:#f92672>=&gt;</span> self.units <span style=color:#f92672>=</span> Units::Millimetres,
+</span></span><span style=display:flex><span>            <span style=color:#ae81ff>90</span> <span style=color:#f92672>=&gt;</span> self.coordinate_mode <span style=color:#f92672>=</span> CoordinateMode::Absolute,
+</span></span><span style=display:flex><span>            <span style=color:#ae81ff>91</span> <span style=color:#f92672>=&gt;</span> self.coordinate_mode <span style=color:#f92672>=</span> CoordinateMode::Relative,
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            _ <span style=color:#f92672>=&gt;</span> cb.unsupported_command(command),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle_dwell</span><span style=color:#f92672>&lt;</span>C: <span style=color:#a6e22e>Callbacks</span><span style=color:#f92672>&gt;</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, command: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>GCode</span>, <span style=color:#66d9ef>mut</span> cb: <span style=color:#a6e22e>C</span>) { <span style=color:#f92672>..</span>. }
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle_linear_interpolate</span><span style=color:#f92672>&lt;</span>C: <span style=color:#a6e22e>Callbacks</span><span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        command: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>GCode</span>,
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>mut</span> cb: <span style=color:#a6e22e>C</span>,
+</span></span><span style=display:flex><span>    ) { <span style=color:#f92672>..</span>. }
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle_circular_interpolate</span><span style=color:#f92672>&lt;</span>C: <span style=color:#a6e22e>Callbacks</span><span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        command: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>GCode</span>,
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>mut</span> cb: <span style=color:#a6e22e>C</span>,
+</span></span><span style=display:flex><span>    ) { <span style=color:#f92672>..</span>. }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The dwell command (<code>G04</code>) is easiest to handle. It has a single required
+argument, <code>P</code>, the time to wait in seconds.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/movements/translator.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Translator {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle_dwell</span><span style=color:#f92672>&lt;</span>C: <span style=color:#a6e22e>Callbacks</span><span style=color:#f92672>&gt;</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, command: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>GCode</span>, <span style=color:#66d9ef>mut</span> cb: <span style=color:#a6e22e>C</span>) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> command.value_for(<span style=color:#e6db74>&#39;P&#39;</span>) {
+</span></span><span style=display:flex><span>            Some(dwell_time) <span style=color:#f92672>=&gt;</span> cb.dwell(Duration::from_secs_f32(dwell_time)),
+</span></span><span style=display:flex><span>            None <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                cb.invalid_argument(command, <span style=color:#e6db74>&#39;P&#39;</span>, <span style=color:#e6db74>&#34;Dwell time not provided&#34;</span>)
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The linear interpolate commands (<code>G00</code> and <code>G01</code>) are a bit more complicated.
+We need to determine the end point and feed rate (using the helpers defined
+earlier) then after notifying the caller, the <code>Translator</code>&rsquo;s state needs to be
+updated with the new values.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/movements/translator.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Translator {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle_linear_interpolate</span><span style=color:#f92672>&lt;</span>C: <span style=color:#a6e22e>Callbacks</span><span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        command: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>GCode</span>,
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>mut</span> cb: <span style=color:#a6e22e>C</span>,
+</span></span><span style=display:flex><span>    ) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> end <span style=color:#f92672>=</span> self.calculate_end(command);
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> feed_rate <span style=color:#f92672>=</span> self.calculate_feed_rate(command);
+</span></span><span style=display:flex><span>        cb.linear_interpolate(self.current_location, end, feed_rate);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        self.current_location <span style=color:#f92672>=</span> end;
+</span></span><span style=display:flex><span>        self.feed_rate <span style=color:#f92672>=</span> feed_rate;
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>And finally, we need to implement the circular interpolation commands (<code>G02</code> and
+<code>G03</code>). Circular interpolation is handled in much the same way as linear
+interpolation, except we also need to account for the centre point and direction
+of movement.</p><p>To make things simpler, we&rsquo;ll require the user to specify the centre location
+using <code>I</code> and <code>J</code>. Working with different definitions or in different planes is
+left as an exercise for later.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/movements/translator.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Translator {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle_circular_interpolate</span><span style=color:#f92672>&lt;</span>C: <span style=color:#a6e22e>Callbacks</span><span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        command: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>GCode</span>,
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>mut</span> cb: <span style=color:#a6e22e>C</span>,
+</span></span><span style=display:flex><span>    ) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> end <span style=color:#f92672>=</span> self.calculate_end(command);
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> start <span style=color:#f92672>=</span> self.current_location;
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> feed_rate <span style=color:#f92672>=</span> self.calculate_feed_rate(command);
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> direction <span style=color:#f92672>=</span> <span style=color:#66d9ef>if</span> command.major_number() <span style=color:#f92672>==</span> <span style=color:#ae81ff>2</span> {
+</span></span><span style=display:flex><span>            Direction::Clockwise
+</span></span><span style=display:flex><span>        } <span style=color:#66d9ef>else</span> {
+</span></span><span style=display:flex><span>            Direction::Anticlockwise
+</span></span><span style=display:flex><span>        };
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> self.get_centre(command) {
+</span></span><span style=display:flex><span>            Ok(centre) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                cb.circular_interpolate(
+</span></span><span style=display:flex><span>                    start, centre, end, direction, feed_rate,
+</span></span><span style=display:flex><span>                );
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>                self.feed_rate <span style=color:#f92672>=</span> feed_rate;
+</span></span><span style=display:flex><span>                self.current_location <span style=color:#f92672>=</span> end;
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            Err(arg) <span style=color:#f92672>=&gt;</span> cb.invalid_argument(command, arg, <span style=color:#e6db74>&#34;Missing&#34;</span>),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=the-next-step>The Next Step
+<a class=heading-link href=#the-next-step><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now we&rsquo;re able to parse a string into strongly-typed instructions for the motion
+planner, the next step is to bring this machine to life and start executing
+those instructions!</p></div><footer></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>

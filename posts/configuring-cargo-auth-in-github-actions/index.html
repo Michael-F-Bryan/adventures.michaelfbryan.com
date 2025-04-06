@@ -1,0 +1,131 @@
+<!doctype html><html lang=en><head><title>GitHub Actions can't access private repos? Here's how to fix it · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="When developing locally, you can add a private GitHub repository to your Rust
+crate as a git dependency and cargo should be able to retrieve it
+just fine.
+However, when you push your changes to GitHub and run CI, GitHub Actions can
+run into authentication issues when trying to build your crate.
+This is the error message I was fighting for a good part of today:
+$ cargo check --workspace --verbose --locked
+ Updating git repository `https://github.com/Michael-F-Bryan/my-secret-repo.git`
+ Running `git fetch --force --update-head-ok 'https://github.com/Michael-F-Bryan/my-secret-repo.git' '+HEAD:refs/remotes/origin/HEAD'`
+Error: failed to get `internal-crate` as a dependency of package `some-crate v0.1.4 (/home/runner/work/some-crate/some-crate/crates/cli)`
+Caused by:
+ failed to load source for dependency `internal-crate`
+
+Caused by:
+ Unable to update https://github.com/Michael-F-Bryan/my-secret-repo.git
+
+Caused by:
+ failed to clone into: /home/runner/.cargo/git/db/my-secret-repo-20c1af0756e23bf7
+
+Caused by:
+ process didn't exit successfully: `git fetch --force --update-head-ok 'https://github.com/Michael-F-Bryan/my-secret-repo.git' '+HEAD:refs/remotes/origin/HEAD'` (exit status: 128)
+ --- stderr
+ fatal: could not read Username for 'https://github.com': No such device or address
+Error: The process '/home/runner/.cargo/bin/cargo' failed with exit code 101
+Cargo can&rsquo;t check out my private repository!"><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="GitHub Actions can't access private repos? Here's how to fix it"><meta name=twitter:description content="When developing locally, you can add a private GitHub repository to your Rust crate as a git dependency and cargo should be able to retrieve it just fine.
+However, when you push your changes to GitHub and run CI, GitHub Actions can run into authentication issues when trying to build your crate.
+This is the error message I was fighting for a good part of today:
+$ cargo check --workspace --verbose --locked Updating git repository `https://github.com/Michael-F-Bryan/my-secret-repo.git` Running `git fetch --force --update-head-ok 'https://github.com/Michael-F-Bryan/my-secret-repo.git' '+HEAD:refs/remotes/origin/HEAD'` Error: failed to get `internal-crate` as a dependency of package `some-crate v0.1.4 (/home/runner/work/some-crate/some-crate/crates/cli)` Caused by: failed to load source for dependency `internal-crate` Caused by: Unable to update https://github.com/Michael-F-Bryan/my-secret-repo.git Caused by: failed to clone into: /home/runner/.cargo/git/db/my-secret-repo-20c1af0756e23bf7 Caused by: process didn't exit successfully: `git fetch --force --update-head-ok 'https://github.com/Michael-F-Bryan/my-secret-repo.git' '+HEAD:refs/remotes/origin/HEAD'` (exit status: 128) --- stderr fatal: could not read Username for 'https://github.com': No such device or address Error: The process '/home/runner/.cargo/bin/cargo' failed with exit code 101 Cargo can’t check out my private repository!"><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/configuring-cargo-auth-in-github-actions/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="GitHub Actions can't access private repos? Here's how to fix it"><meta property="og:description" content="When developing locally, you can add a private GitHub repository to your Rust crate as a git dependency and cargo should be able to retrieve it just fine.
+However, when you push your changes to GitHub and run CI, GitHub Actions can run into authentication issues when trying to build your crate.
+This is the error message I was fighting for a good part of today:
+$ cargo check --workspace --verbose --locked Updating git repository `https://github.com/Michael-F-Bryan/my-secret-repo.git` Running `git fetch --force --update-head-ok 'https://github.com/Michael-F-Bryan/my-secret-repo.git' '+HEAD:refs/remotes/origin/HEAD'` Error: failed to get `internal-crate` as a dependency of package `some-crate v0.1.4 (/home/runner/work/some-crate/some-crate/crates/cli)` Caused by: failed to load source for dependency `internal-crate` Caused by: Unable to update https://github.com/Michael-F-Bryan/my-secret-repo.git Caused by: failed to clone into: /home/runner/.cargo/git/db/my-secret-repo-20c1af0756e23bf7 Caused by: process didn't exit successfully: `git fetch --force --update-head-ok 'https://github.com/Michael-F-Bryan/my-secret-repo.git' '+HEAD:refs/remotes/origin/HEAD'` (exit status: 128) --- stderr fatal: could not read Username for 'https://github.com': No such device or address Error: The process '/home/runner/.cargo/bin/cargo' failed with exit code 101 Cargo can’t check out my private repository!"><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2022-09-13T12:01:45+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Rust"><meta property="article:tag" content="CI/CD"><meta property="article:tag" content="GitHub Actions"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/configuring-cargo-auth-in-github-actions/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/configuring-cargo-auth-in-github-actions/>GitHub Actions can't access private repos? Here's how to fix it</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2022-09-13T12:01:45+08:00>September 13, 2022
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+4-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/rust/>Rust</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/ci/cd/>CI/CD</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/github-actions/>GitHub Actions</a></span></div></div></header><div class=post-content><p>When developing locally, you can add a private GitHub repository to your Rust
+crate as a <a href=https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#specifying-dependencies-from-git-repositories class=external-link target=_blank rel=noopener><code>git</code> dependency</a> and <code>cargo</code> should be able to retrieve it
+just fine.</p><p>However, when you push your changes to GitHub and run CI, GitHub Actions can
+run into authentication issues when trying to build your crate.</p><p>This is the error message I was fighting for a good part of today:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-shell data-lang=shell><span style=display:flex><span>$ cargo check --workspace --verbose --locked
+</span></span><span style=display:flex><span> Updating git repository <span style=color:#e6db74>`</span>https://github.com/Michael-F-Bryan/my-secret-repo.git<span style=color:#e6db74>`</span>
+</span></span><span style=display:flex><span> Running <span style=color:#e6db74>`</span>git fetch --force --update-head-ok <span style=color:#e6db74>&#39;https://github.com/Michael-F-Bryan/my-secret-repo.git&#39;</span> <span style=color:#e6db74>&#39;+HEAD:refs/remotes/origin/HEAD&#39;</span><span style=color:#e6db74>`</span>
+</span></span><span style=display:flex><span>Error: failed to get <span style=color:#e6db74>`</span>internal-crate<span style=color:#e6db74>`</span> as a dependency of package <span style=color:#e6db74>`</span>some-crate v0.1.4 <span style=color:#f92672>(</span>/home/runner/work/some-crate/some-crate/crates/cli<span style=color:#f92672>)</span><span style=color:#e6db74>`</span>
+</span></span><span style=display:flex><span>Caused by:
+</span></span><span style=display:flex><span> failed to load source <span style=color:#66d9ef>for</span> dependency <span style=color:#e6db74>`</span>internal-crate<span style=color:#e6db74>`</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>Caused by:
+</span></span><span style=display:flex><span> Unable to update https://github.com/Michael-F-Bryan/my-secret-repo.git
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>Caused by:
+</span></span><span style=display:flex><span> failed to clone into: /home/runner/.cargo/git/db/my-secret-repo-20c1af0756e23bf7
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>Caused by:
+</span></span><span style=display:flex><span> process didn<span style=color:#e6db74>&#39;t exit successfully: `git fetch --force --update-head-ok &#39;</span>https://github.com/Michael-F-Bryan/my-secret-repo.git<span style=color:#e6db74>&#39; &#39;</span>+HEAD:refs/remotes/origin/HEAD<span style=color:#e6db74>&#39;` (exit status: 128)
+</span></span></span><span style=display:flex><span><span style=color:#e6db74> --- stderr
+</span></span></span><span style=display:flex><span><span style=color:#e6db74> fatal: could not read Username for &#39;</span>https://github.com<span style=color:#e6db74>&#39;: No such device or address
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>Error: The process &#39;</span>/home/runner/.cargo/bin/cargo<span style=color:#960050;background-color:#1e0010>&#39;</span> failed with exit code <span style=color:#ae81ff>101</span>
+</span></span></code></pre></div><p>Cargo can&rsquo;t check out my private repository!</p><p>This happens because the user on your dev machine is usually associated with a
+particular GitHub account and that account has access to the private repository,
+whereas the GitHub Actions user can only see the repository it&rsquo;s attached to.</p><p>The <em>Cargo Book</em> has a chapter on <a href=https://doc.rust-lang.org/cargo/appendix/git-authentication.html class=external-link target=_blank rel=noopener><em>Git Authentication</em></a>, but the
+<em>HTTPS Authentication</em> method they suggest (using credential stores) stopped
+working in August 2021 when <a href=https://github.blog/changelog/2021-08-12-git-password-authentication-is-shutting-down/ class=external-link target=_blank rel=noopener>GitHub shut down password authentication</a>.</p><p>Nowadays, the best way to authenticate with GitHub is via
+<a href=https://docs.github.com/en/developers/overview/managing-deploy-keys#deploy-keys class=external-link target=_blank rel=noopener><em>Deploy Keys</em></a>. This is a set of SSH keys that will give users
+read-only access (by default) to a particular repository.</p><div class="notices note"><p>If you found this useful or spotted a bug in the article, let me know on the
+blog&rsquo;s <a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues class=external-link target=_blank rel=noopener>issue tracker</a>!</p></div><h2 id=generate-deploy-keys>Generate Deploy Keys
+<a class=heading-link href=#generate-deploy-keys><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>First, we&rsquo;ll need to generate a set of SSH keys that we can use.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ ssh-keygen -t rsa -b <span style=color:#ae81ff>4096</span>
+</span></span><span style=display:flex><span>Generating public/private rsa key pair.
+</span></span><span style=display:flex><span>Enter file in which to save the key (~/.ssh/id_rsa): /tmp/secret-repo-deploy-key
+</span></span><span style=display:flex><span>Enter passphrase (empty for no passphrase):
+</span></span><span style=display:flex><span>Enter same passphrase again:
+</span></span><span style=display:flex><span>Your identification has been saved in /tmp/secret-repo-deploy-key
+</span></span><span style=display:flex><span>Your public key has been saved in /tmp/secret-repo-deploy-key.pub
+</span></span><span style=display:flex><span>...
+</span></span></code></pre></div><p>This process should be familiar to anyone that&rsquo;s worked with Git or SSH before.</p><div class="notices tip"><p>If you are using 1Password to share secrets with co-workers, you can use its
+<a href=https://developer.1password.com/docs/ssh/manage-keys/#generate-an-ssh-key class=external-link target=_blank rel=noopener>builtin support</a>
+for SSH keys to generate the key and save it with one click.</p></div><div class="notices warning"><p>Make sure you generate an RSA key.</p><p>When I generated an <code>ed25519</code> key, the <code>ssh-add</code> on GitHub Actions rejected it
+with this error message:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-gdscript3 data-lang=gdscript3><span style=display:flex><span>Adding GitHub<span style=color:#f92672>.</span>com keys to <span style=color:#f92672>/</span>home<span style=color:#f92672>/</span>runner<span style=color:#f92672>/.</span>ssh<span style=color:#f92672>/</span>known_hosts
+</span></span><span style=display:flex><span>Starting ssh<span style=color:#f92672>-</span>agent
+</span></span><span style=display:flex><span>SSH_AUTH_SOCK<span style=color:#f92672>=/</span>tmp<span style=color:#f92672>/</span>ssh<span style=color:#f92672>-</span>M5otljx2VjtQ<span style=color:#f92672>/</span>agent<span style=color:#f92672>.</span><span style=color:#ae81ff>1637</span>
+</span></span><span style=display:flex><span>SSH_AGENT_PID<span style=color:#f92672>=</span><span style=color:#ae81ff>1638</span>
+</span></span><span style=display:flex><span>Adding private key(s) to agent
+</span></span><span style=display:flex><span>Error loading key <span style=color:#e6db74>&#34;(stdin)&#34;</span>: invalid format
+</span></span><span style=display:flex><span>Error: Command failed: ssh<span style=color:#f92672>-</span>add <span style=color:#f92672>-</span>
+</span></span><span style=display:flex><span>Error loading key <span style=color:#e6db74>&#34;(stdin)&#34;</span>: invalid format
+</span></span></code></pre></div><p><a href=https://serverfault.com/a/1027037 class=external-link target=_blank rel=noopener>According to Stack Overflow</a>, this appears
+to be an issue with OpenSSH 8.3.</p></div><h2 id=uploading-the-deploy-key>Uploading the Deploy Key
+<a class=heading-link href=#uploading-the-deploy-key><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now we need to add the <strong>public</strong> key as a deploy key to the repository we want
+access to (<code>Michael-F-Bryan/my-secret-repo</code> in this case). GitHub&rsquo;s website has
+<a href=https://docs.github.com/en/developers/overview/managing-deploy-keys#deploy-keys class=external-link target=_blank rel=noopener>some docs</a> for this, but the process is pretty simple.</p><p>Here, have some screenshots.</p><p><img src=add-deploy-keys-button.png alt="Finding the &ldquo;Add Deploy Key&rdquo; button"></p><p><img src=adding-deploy-key.png alt="Adding the Deploy Key"></p><h2 id=adding-it-to-github-secrets>Adding it to GitHub Secrets
+<a class=heading-link href=#adding-it-to-github-secrets><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>If our project wants access to this private repository, we&rsquo;ll need to give it
+the private half of our deploy key to use.</p><p>We do this by adding the <strong>private</strong> key to our repository as a secret called
+<code>SECRET_REPO_DEPLOY_KEY</code>.</p><p><img src=new-secret.png alt></p><div class="notices tip"><p>If multiple projects will need access to this private repository, you might
+want to add it as a secret on the <em>Organisation</em> level. That should make it a
+lot easier to manage.</p></div><h2 id=updating-the-source-code>Updating the Source Code
+<a class=heading-link href=#updating-the-source-code><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now we&rsquo;ve set up the deploy keys, it&rsquo;s time to use them.</p><p>First, add the dependency using its <code>ssh</code> URL.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-toml data-lang=toml><span style=display:flex><span><span style=color:#75715e># Cargo.toml</span>
+</span></span><span style=display:flex><span>[<span style=color:#a6e22e>dependencies</span>]
+</span></span><span style=display:flex><span><span style=color:#a6e22e>internal-crate</span> = { <span style=color:#a6e22e>git</span> = <span style=color:#e6db74>&#34;ssh://git@github.com/Michael-F-Bryan/my-secret-repo.git&#34;</span>, ... }
+</span></span></code></pre></div><p>We need to make sure each job in GitHub Actions uses the deploy key that we&rsquo;re
+setting up. You can <a href=https://www.webfactory.de/blog/use-ssh-key-for-private-repositories-in-github-actions class=external-link target=_blank rel=noopener>do this manually</a>, but I find it easier to load
+it into <code>ssh-agent</code> with the
+<a href=https://github.com/marketplace/actions/webfactory-ssh-agent class=external-link target=_blank rel=noopener><code>webfactory/ssh-agent</code></a>
+action.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-yml data-lang=yml><span style=display:flex><span><span style=color:#75715e># .github/workflows/ci.yml</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>jobs</span>:
+</span></span><span style=display:flex><span>  <span style=color:#f92672>compile-and-test</span>:
+</span></span><span style=display:flex><span>    <span style=color:#ae81ff>...</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>steps</span>:
+</span></span><span style=display:flex><span>    <span style=color:#ae81ff>...</span>
+</span></span><span style=display:flex><span>    - <span style=color:#f92672>name</span>: <span style=color:#ae81ff>Give GitHub Actions access to Michael-F-Bryan/my-secret-repo</span>
+</span></span><span style=display:flex><span>      <span style=color:#f92672>uses</span>: <span style=color:#ae81ff>webfactory/ssh-agent@v0.5.4</span>
+</span></span><span style=display:flex><span>      <span style=color:#f92672>with</span>:
+</span></span><span style=display:flex><span>        <span style=color:#f92672>ssh-private-key</span>: <span style=color:#ae81ff>${{ secrets.SECRET_REPO_DEPLOY_KEY }}</span>
+</span></span></code></pre></div><div class="notices tip"><p>The <code>webfactory/ssh-agent</code> action lets you supply multiple private keys if you
+are trying to access several private repositories. When you are first generating
+the keys, just make sure to attach each repo&rsquo;s URL as a &ldquo;comment&rdquo;.</p><p>That means the <code>Michael-F-Bryan/my-secret-repo</code> deploy key would be generated
+using a command like this:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ ssh-keygen -t rsa -b <span style=color:#ae81ff>4096</span> -C https://github.com/Michael-F-Bryan/my-secret-repo
+</span></span></code></pre></div></div><p>That&rsquo;s all you should need. Now when you commit and push the changes to GitHub,
+your crate should build again.</p><p>Good Luck 🙂</p></div><footer></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>

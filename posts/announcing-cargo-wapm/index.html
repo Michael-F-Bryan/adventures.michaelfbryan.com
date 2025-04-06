@@ -1,0 +1,160 @@
+<!doctype html><html lang=en><head><title>Announcing Cargo WAPM · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="While at Hammer of the Gods, we wrote a lot of Rust code that gets compiled to
+WebAssembly for use in our containerization technology, Rune.
+We have over 30 different processing blocks (chunks of code that can be used in
+a data processing pipeline) and as you can imagine, publishing and versioning
+each of WebAssembly module manually isn&rsquo;t practical. For that, we lean on the
+WebAssembly Package Manager to do all the heavy lifting."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="Announcing Cargo WAPM"><meta name=twitter:description content="While at Hammer of the Gods, we wrote a lot of Rust code that gets compiled to WebAssembly for use in our containerization technology, Rune.
+We have over 30 different processing blocks (chunks of code that can be used in a data processing pipeline) and as you can imagine, publishing and versioning each of WebAssembly module manually isn’t practical. For that, we lean on the WebAssembly Package Manager to do all the heavy lifting."><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/announcing-cargo-wapm/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="Announcing Cargo WAPM"><meta property="og:description" content="While at Hammer of the Gods, we wrote a lot of Rust code that gets compiled to WebAssembly for use in our containerization technology, Rune.
+We have over 30 different processing blocks (chunks of code that can be used in a data processing pipeline) and as you can imagine, publishing and versioning each of WebAssembly module manually isn’t practical. For that, we lean on the WebAssembly Package Manager to do all the heavy lifting."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2022-08-07T16:14:07+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Rust"><meta property="article:tag" content="WebAssembly"><meta property="article:tag" content="WAPM"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/announcing-cargo-wapm/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/announcing-cargo-wapm/>Announcing Cargo WAPM</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2022-08-07T16:14:07+08:00>August 7, 2022
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+6-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/rust/>Rust</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/webassembly/>WebAssembly</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/wapm/>WAPM</a></span></div></div></header><div class=post-content><p>While at Hammer of the Gods, we wrote <em>a lot</em> of Rust code that gets compiled to
+WebAssembly for use in our containerization technology, Rune.</p><p>We have over 30 different processing blocks (chunks of code that can be used in
+a data processing pipeline) and as you can imagine, publishing and versioning
+each of WebAssembly module manually isn&rsquo;t practical. For that, we lean on the
+<a href=https://wapm.io/ class=external-link target=_blank rel=noopener>WebAssembly Package Manager</a> to do all the heavy lifting.</p><p>The nice thing is that WAPM is a language-agnostic package manager, meaning it&rsquo;s
+just as easy for Rune to run WebAssembly modules written in C++ as it is to use
+Rust. However, because WAPM is language-agnostic it means it&rsquo;s&mldr; <em>*ahem*</em>&mldr;
+not specific to any one language.</p><p>This presents a dilemma though, because manually compiling your Rust crate to
+WebAssembly and packaging it in the form that WAPM expects is a bit of a pain.</p><p>Therefore, we made <a href=https://crates.io/crates/cargo-wapm class=external-link target=_blank rel=noopener>a simple <code>cargo wapm</code> subcommand</a> to automate
+the process and we&rsquo;ve spent the last two months internally dogfooding it.</p><div class="notices note"><p>The code written in this article is available <a href=https://github.com/Michael-F-Bryan/cargo-wapm class=external-link target=_blank rel=noopener>on GitHub</a>. Feel free to
+browse through and steal code or inspiration.</p><p>If you found this useful or spotted a bug in the article, let me know on the
+blog&rsquo;s <a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues class=external-link target=_blank rel=noopener>issue tracker</a>!</p></div><h2 id=publishing-a-webassembly-package-manually>Publishing a WebAssembly Package Manually
+<a class=heading-link href=#publishing-a-webassembly-package-manually><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>The <a href=https://docs.wasmer.io/ecosystem/wapm/publishing-your-package class=external-link target=_blank rel=noopener>Publishing your Package page</a> from WAPM&rsquo;s documentation already
+does a good job of explaining the publishing process, but let’s have a look at
+what is involved from a Rust developer’s perspective.</p><p>First, we need to tell the Rust compiler to generate a <code>*.wasm</code> file by setting
+the crate-type key in our <code>Cargo.toml</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-toml data-lang=toml><span style=display:flex><span>[<span style=color:#a6e22e>package</span>]
+</span></span><span style=display:flex><span><span style=color:#a6e22e>name</span> = <span style=color:#e6db74>&#34;hello-world&#34;</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>version</span> = <span style=color:#e6db74>&#34;0.1.0&#34;</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>description</span> = <span style=color:#e6db74>&#34;A hello world example&#34;</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>license</span> = <span style=color:#e6db74>&#34;MIT OR Apache-2.0&#34;</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>repository</span> = <span style=color:#e6db74>&#34;https://github.com/hotg-ai/proc-blocks&#34;</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>homepage</span> = <span style=color:#e6db74>&#34;https://hotg.ai/&#34;</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>readme</span> = <span style=color:#e6db74>&#34;README.md&#34;</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>edition</span> = <span style=color:#e6db74>&#34;2021&#34;</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>[<span style=color:#a6e22e>lib</span>]
+</span></span><span style=display:flex><span><span style=color:#a6e22e>crate-type</span> = [<span style=color:#e6db74>&#34;cdylib&#34;</span>, <span style=color:#e6db74>&#34;rlib&#34;</span>]
+</span></span><span style=display:flex><span>...
+</span></span></code></pre></div><p>Now we can cross-compile the crate to WebAssembly.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cargo build --release --target<span style=color:#f92672>=</span>wasm32-unknown-unknown
+</span></span><span style=display:flex><span>   Compiling hello-world v0.1.0 (/tmp/hello-world)
+</span></span><span style=display:flex><span>    Finished release [optimized] target(s) in 0.35s
+</span></span></code></pre></div><p>Next, we need to create a <code>wapm.toml</code> manifest.</p><p>The <a href=https://docs.wasmer.io/ecosystem/wapm/manifest class=external-link target=_blank rel=noopener>Manifest</a> docs go through all the fields you can set, but these
+are the most common ones:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-toml data-lang=toml><span style=display:flex><span>[<span style=color:#a6e22e>package</span>]
+</span></span><span style=display:flex><span><span style=color:#a6e22e>name</span> = <span style=color:#e6db74>&#34;Michael-F-Bryan/hello-world&#34;</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>version</span> = <span style=color:#e6db74>&#34;0.1.0&#34;</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>description</span> = <span style=color:#e6db74>&#34;A hello world example&#34;</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>license</span> = <span style=color:#e6db74>&#34;MIT OR Apache-2.0&#34;</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>repository</span> = <span style=color:#e6db74>&#34;https://github.com/hotg-ai/proc-blocks&#34;</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>homepage</span> = <span style=color:#e6db74>&#34;https://hotg.ai/&#34;</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>readme</span> = <span style=color:#e6db74>&#34;README.md&#34;</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>[[<span style=color:#a6e22e>module</span>]]
+</span></span><span style=display:flex><span><span style=color:#a6e22e>name</span> = <span style=color:#e6db74>&#34;hello_world&#34;</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>source</span> = <span style=color:#e6db74>&#34;target/wasm32-unknown-unknown/release/hello_world.wasm&#34;</span>
+</span></span><span style=display:flex><span><span style=color:#75715e># Note: processing blocks use a Rune-specific ABI, not WASI</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>abi</span> = <span style=color:#e6db74>&#34;none&#34;</span>
+</span></span></code></pre></div><p>Finally, assuming you&rsquo;ve already <a href=https://docs.wasmer.io/ecosystem/wasmer/getting-started class=external-link target=_blank rel=noopener>installed the wapm CLI</a> and
+<a href=https://docs.wasmer.io/ecosystem/wapm/publishing-your-package#creating-an-account-in-wapm class=external-link target=_blank rel=noopener>authenticated with WAPM</a>, the package is ready for publishing.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ wapm publish
+</span></span><span style=display:flex><span>Successfully published package `Michael-F-Bryan/hello-world@1.0.0`
+</span></span></code></pre></div><p>From there, users can <a href=https://wapm.io/Michael-F-Bryan/hello-world class=external-link target=_blank rel=noopener>see the package</a> on WAPM and use it like
+normal.</p><p>For those familiar with other package managers like Cargo and NPM this process
+won&rsquo;t be surprising. However, I would like to draw your attention to
+something&mldr;</p><p>Except for the Michael-F-Bryan namespace, the <code>wapm.toml</code> we wrote is almost
+entirely copied from our <code>Cargo.toml</code>.</p><p>What&rsquo;s worse is that whenever we update <code>Cargo.toml</code> (e.g. to change the version
+number), we&rsquo;ll need to manually update <code>wapm.toml</code> to match.</p><p>We&rsquo;re also hard-coding the path to the compiled binary, so if we want to publish
+a version with debug symbols or switch from <code>wasm32-unknown-unknown</code> to
+<code>wasm32-wasi</code>, we&rsquo;ll need to update the path appropriately. There&rsquo;s also the
+technicality that the source path can&rsquo;t go outside the <code>wapm.toml</code> file&rsquo;s
+directory for security reasons. This means you can&rsquo;t easily publish anything in
+a <a href=https://doc.rust-lang.org/cargo/reference/workspaces.html class=external-link target=_blank rel=noopener>Cargo Workspace</a> because the WebAssembly module will typically be
+in <code>../target/</code>.</p><h2 id=publishing-a-webassembly-package-with-cargo-wapm>Publishing a WebAssembly Package With Cargo WAPM
+<a class=heading-link href=#publishing-a-webassembly-package-with-cargo-wapm><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now, let&rsquo;s go through the same process with <code>cargo wapm</code>.</p><p>First, you will need to install the <code>cargo wapm</code> subcommand.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cargo install cargo-wapm
+</span></span><span style=display:flex><span>    Updating crates.io index
+</span></span><span style=display:flex><span>  Downloaded cargo-wapm v0.1.3
+</span></span><span style=display:flex><span>  ...
+</span></span><span style=display:flex><span>   Installed package `cargo-wapm v0.1.3` (executable `cargo-wapm`)
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span>$ cargo wapm --help
+</span></span><span style=display:flex><span>Publish a crate to the WebAssembly Package Manager
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span>USAGE:
+</span></span><span style=display:flex><span>    wapm [OPTIONS]
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span>OPTIONS:
+</span></span><span style=display:flex><span>        --all-features
+</span></span><span style=display:flex><span>    -d, --dry-run                          [env: DRY_RUN=]
+</span></span><span style=display:flex><span>        --debug                            Compile in debug mode
+</span></span><span style=display:flex><span>        --exclude &lt;EXCLUDE&gt;                Packages to ignore
+</span></span><span style=display:flex><span>        --features &lt;FEATURES&gt;              A comma-delimited list of features to enable
+</span></span><span style=display:flex><span>    -h, --help                             Print help information
+</span></span><span style=display:flex><span>        --manifest-path &lt;MANIFEST_PATH&gt;    [env: MANIFEST_PATH=]
+</span></span><span style=display:flex><span>        --no-default-features
+</span></span><span style=display:flex><span>    -w, --workspace                        [env: WORKSPACE=]
+</span></span></code></pre></div><p>Next, add a <code>[package.metadata.wapm]</code> section to your Cargo.toml so we can tell
+<code>cargo wapm</code> any extra information it needs to know.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-toml data-lang=toml><span style=display:flex><span>...
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>[<span style=color:#a6e22e>package</span>.<span style=color:#a6e22e>metadata</span>.<span style=color:#a6e22e>wapm</span>]
+</span></span><span style=display:flex><span><span style=color:#a6e22e>namespace</span> = <span style=color:#e6db74>&#34;Michael-F-Bryan&#34;</span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>abi</span> = <span style=color:#e6db74>&#34;none&#34;</span>  <span style=color:#75715e># This tells `cargo wapm` to compile to wasm32-unknown-unknown</span>
+</span></span></code></pre></div><p>Now, let&rsquo;s do a dry run to see what would be published.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cargo wapm --dry-run
+</span></span><span style=display:flex><span>2022-06-28T11:59:29.025090Z  INFO publish: cargo_wapm: Publishing dry_run=true pkg=&#34;hello-world&#34;
+</span></span><span style=display:flex><span>Successfully published package `Michael-F-Bryan/hello-world@0.1.0`
+</span></span><span style=display:flex><span>[INFO] Publish succeeded, but package was not published because it was run in dry-run mode
+</span></span><span style=display:flex><span>2022-06-28T11:59:29.067902Z  INFO publish: cargo_wapm: Published! pkg=&#34;hello-world&#34;
+</span></span></code></pre></div><p>All the files that would normally be published to WAPM have been collected into a single folder.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ tree target/wapm
+</span></span><span style=display:flex><span>target/wapm
+</span></span><span style=display:flex><span>└── hello-world
+</span></span><span style=display:flex><span>    ├── hello_world.wasm
+</span></span><span style=display:flex><span>    ├── README.md
+</span></span><span style=display:flex><span>    └── wapm.toml
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span>1 directory, 3 files
+</span></span></code></pre></div><p>We can also look at the generated wapm.toml.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cat target/wapm/hello-world/wapm.toml
+</span></span><span style=display:flex><span>[package]
+</span></span><span style=display:flex><span>name = &#34;Michael-F-Bryan/hello-world&#34;
+</span></span><span style=display:flex><span>version = &#34;0.1.0&#34;
+</span></span><span style=display:flex><span>description = &#34;A hello world example&#34;
+</span></span><span style=display:flex><span>license = &#34;MIT OR Apache-2.0&#34;
+</span></span><span style=display:flex><span>readme = &#34;README.md&#34;
+</span></span><span style=display:flex><span>repository = &#34;https://github.com/hotg-ai/proc-blocks&#34;
+</span></span><span style=display:flex><span>homepage = &#34;https://hotg.ai/&#34;
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span>[[module]]
+</span></span><span style=display:flex><span>name = &#34;hello-world&#34;
+</span></span><span style=display:flex><span>source = &#34;hello_world.wasm&#34;
+</span></span><span style=display:flex><span>abi = &#34;none&#34;
+</span></span></code></pre></div><p>Unsurprisingly, it&rsquo;s almost identical to the handwritten <code>wapm.toml</code> except the
+README, repository, and homepage keys are in a different order.</p><p>Publishing a WebAssembly module that should be compiled in debug mode or with
+certain <a href=https://doc.rust-lang.org/cargo/reference/features.html class=external-link target=_blank rel=noopener>Cargo Features</a> enabled is just a case of adding some extra
+flags.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cargo wapm --debug --features some-feature
+</span></span></code></pre></div><p>Something that sets <code>cargo wapm</code> aside from the normal <code>wapm</code> CLI is that <em>it is
+workspace-aware</em>.</p><p>When publishing a new version of our processing blocks, we will typically run
+the following command from the root directory of <a href=https://github.com/hotg-ai/proc-blocks class=external-link target=_blank rel=noopener>the <code>hotg-ai/proc-blocks</code>
+repository</a>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback><span style=display:flex><span>$ cargo wapm --workspace --exclude xtask --exclude hotg-rune-proc-blocks
+</span></span></code></pre></div><p>(the <code>hotg-rune-proc-blocks</code> crate just contains shared abstractions and
+utilities, while <code>xtask</code> is an internal tool following <a href=https://github.com/matklad/cargo-xtask class=external-link target=_blank rel=noopener>the <code>xtask</code>
+pattern</a>)</p><p>This <code>--workspace</code> flag is worth its weight in gold when you&rsquo;ve got 30 different
+packages to publish!</p><p>The neat part is that because <a href=https://doc.rust-lang.org/cargo/commands/cargo-metadata.html class=external-link target=_blank rel=noopener>the <code>cargo metadata</code> command</a> gives us
+direct access to all the information Cargo discovers about a crate through its
+<code>Cargo.toml</code> file, this slots right into the tools and conventions that Rust
+developers are familiar with.</p><h2 id=next-steps>Next Steps
+<a class=heading-link href=#next-steps><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>The Cargo WAPM tool fits into our workflow quite well and we&rsquo;re happy with it,
+so now we&rsquo;d like you to give it a go.</p><p>We&rsquo;d especially like to hear from other people in the industry that are wanting
+to do cool things with WebAssembly.</p></div><footer></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>

@@ -1,0 +1,605 @@
+<!doctype html><html lang=en><head><title>FFI-Safe Polymorphism: Thin Trait Objects · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="A while ago someone posted a question on the Rust User Forums
+asking how to achieve polymorphism in a C API and while lots of good
+suggestions were made, I&rsquo;d like to explore my take on things.
+As a recap, Rust provides two mechanisms for letting you write code which will
+work with multiple types. These are
+
+Static Dispatch, where the compiler will generate multiple copies of the
+function, tailor-made for each type and resolved at compile time, and
+Dynamic Dispatch, where we use an extra level of indirection to only
+resolve the actual implementation at runtime
+
+While both mechanisms are extremely powerful and can cover almost all of your
+needs in normal Rust code, they both have one drawback&mldr; The actual
+mechanisms used are (deliberately) unspecified and not safe for FFI."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="FFI-Safe Polymorphism: Thin Trait Objects"><meta name=twitter:description content="A while ago someone posted a question on the Rust User Forums asking how to achieve polymorphism in a C API and while lots of good suggestions were made, I’d like to explore my take on things.
+As a recap, Rust provides two mechanisms for letting you write code which will work with multiple types. These are
+Static Dispatch, where the compiler will generate multiple copies of the function, tailor-made for each type and resolved at compile time, and Dynamic Dispatch, where we use an extra level of indirection to only resolve the actual implementation at runtime While both mechanisms are extremely powerful and can cover almost all of your needs in normal Rust code, they both have one drawback… The actual mechanisms used are (deliberately) unspecified and not safe for FFI."><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/ffi-safe-polymorphism-in-rust/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="FFI-Safe Polymorphism: Thin Trait Objects"><meta property="og:description" content="A while ago someone posted a question on the Rust User Forums asking how to achieve polymorphism in a C API and while lots of good suggestions were made, I’d like to explore my take on things.
+As a recap, Rust provides two mechanisms for letting you write code which will work with multiple types. These are
+Static Dispatch, where the compiler will generate multiple copies of the function, tailor-made for each type and resolved at compile time, and Dynamic Dispatch, where we use an extra level of indirection to only resolve the actual implementation at runtime While both mechanisms are extremely powerful and can cover almost all of your needs in normal Rust code, they both have one drawback… The actual mechanisms used are (deliberately) unspecified and not safe for FFI."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2020-12-16T02:00:00+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Rust"><meta property="article:tag" content="Unsafe Rust"><meta property="article:tag" content="FFI"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/ffi-safe-polymorphism-in-rust/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/ffi-safe-polymorphism-in-rust/>FFI-Safe Polymorphism: Thin Trait Objects</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2020-12-16T02:00:00+08:00>December 16, 2020
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+19-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/rust/>Rust</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/unsafe-rust/>Unsafe Rust</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/ffi/>FFI</a></span></div></div></header><div class=post-content><p>A while ago someone <a href=https://users.rust-lang.org/t/ffi-c-file-and-good-rust-wrapper-equivalent-type/52050 class=external-link target=_blank rel=noopener>posted a question</a> on the Rust User Forums
+asking how to achieve polymorphism in a C API and while lots of good
+suggestions were made, I&rsquo;d like to explore my take on things.</p><p>As a recap, Rust provides two mechanisms for letting you write code which will
+work with multiple types. These are</p><ul><li><strong>Static Dispatch</strong>, where the compiler will generate multiple copies of the
+function, tailor-made for each type and resolved at compile time, and</li><li><strong>Dynamic Dispatch</strong>, where we use an extra level of indirection to only
+resolve the actual implementation at runtime</li></ul><p>While both mechanisms are extremely powerful and can cover almost all of your
+needs in normal Rust code, they both have one drawback&mldr; The actual
+mechanisms used are (deliberately) unspecified and not safe for FFI.</p><p>The concrete use case is looking for a FFI-safe equivalent of C&rsquo;s <code>FILE*</code>;
+some writeable thing which doesn&rsquo;t care if it is backed by a real file on
+disk, a network socket, an OS pipe, or an arbitrary piece of code that
+consumes bytes. This <code>FILE*</code>-like type could then be instantiated by C and
+used to initialise the logger in a Rust library.</p><p>Normally you&rsquo;d just reach for a <code>Box&lt;dyn std::io::Write></code> here, but as we&rsquo;ve
+already mentioned Rust&rsquo;s trait objects aren&rsquo;t FFI-safe, meaning we need to be
+a little more creative.</p><p>My solution takes inspiration from something I first discovered while
+browsing the source code for <a href=https://github.com/dtolnay/anyhow/blob/2a82468b07751485552a7c1123007ad90e842b24/src/error.rs class=external-link target=_blank rel=noopener><code>anyhow::Error</code></a>. I wasn&rsquo;t able to find
+a proper name for it, so I&rsquo;m referring to this technique as <em>Thin Trait
+Objects</em>.</p><div class="notices note"><p>The code written in this article is available <a href=https://github.com/Michael-F-Bryan/thin-trait-objects class=external-link target=_blank rel=noopener>on GitHub</a>. Feel free to
+browse through and steal code or inspiration.</p><p>If you found this useful or spotted a bug, let me know on the blog&rsquo;s
+<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues class=external-link target=_blank rel=noopener>issue tracker</a>!</p></div><h2 id=alternate-solutions>Alternate Solutions
+<a class=heading-link href=#alternate-solutions><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now before we go any further it is important to ask the question, <em>&ldquo;do we
+actually <strong>need</strong> to come up with a fancy solution here?&rdquo;</em> This is especially
+important if your solution will require writing <code>unsafe</code> code.</p><p>9 times out of 10 taking the more complicated option will require you to do
+extra work that wasn&rsquo;t needed in the first place.</p><h3 id=dont-allow-polymorphism>Don&rsquo;t Allow Polymorphism
+<a class=heading-link href=#dont-allow-polymorphism><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>This is probably the simplest option. If you want to avoid complexity,
+especially when already writing a Foreign Function Interface, don&rsquo;t do
+polymorphism.</p><p>This could be as simple as hard-coding a simple implementation (i.e. if on
+Linux, accept a file descriptor and write to that).</p><p>Another option would be to design your API to be more data-oriented. That way
+the caller can write the custom logic in their own code instead of trying to
+inject it into someone else&rsquo;s.</p><p>After all, the simplest code is no code.</p><h3 id=pointer-to-enum>Pointer to Enum
+<a class=heading-link href=#pointer-to-enum><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>If you have a finite set of possible implementations you can pass around a
+pointer to an enum.</p><p>While more complex than the previous option, we&rsquo;re all familiar with the Rust
+enum and how it enables a limited form of polymorphism.</p><h3 id=double-indirection>Double Indirection
+<a class=heading-link href=#double-indirection><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>The problem with passing around a normal trait object (e.g. <code>Box&lt;dyn Trait></code>
+or <code>*mut dyn Trait</code>) is that you need space for two pointers, one for the
+data and one for a vtable that operates on the data.</p><p>The problem is that Rust trait objects don&rsquo;t have a stable ABI so we can&rsquo;t pass
+<code>Box&lt;dyn Trait></code> by value across the FFI boundary.</p><p>However, what about a pointer to a <code>Box&lt;dyn Trait></code>? A <code>Box&lt;Box&lt;dyn Trait>></code> is
+the size of a single pointer and can be passed around just fine using
+<code>Box::into_raw()</code> and <code>Box::from_raw()</code>.</p><p>The only drawback for this method is that you need to pass through two levels
+of indirection every time you want to use the object. Even though it probably
+doesn&rsquo;t matter in the grand scheme of things (your performance bottlenecks will
+almost certainly be elsewhere), using double indirection feels like a pretty
+weak solution.</p><h3 id=pointer-to-vtable--object>Pointer to VTable + Object
+<a class=heading-link href=#pointer-to-vtable--object><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>Believe it or not, but you can implement inheritance-based polymorphism in
+plain C with just a couple function pointers and some casting.</p><p>The idea is you create a struct which will act as an <em>&ldquo;abstract base class&rdquo;</em>,
+a type which declares an interface which other types inherit from and implement
+methods for.</p><p>The trick is works because of this particular clause in the C standard:</p><blockquote><p>A pointer to a structure object,suitably converted, points to its initial
+member (or if that member is a bit-field, then to the unit in which it
+resides), and vice versa. There may be unnamed padding within a structure
+object, but not at its beginning.</p><p><cite><a href=http://www.open-std.org/jtc1/sc22/wg14/www/docs/n2310.pdf>C17 Standard, §6.7.2.1</a></cite></p></blockquote><p>In layman&rsquo;s terms, it means I can declare a <code>Child</code> type who&rsquo;s first element
+is a <code>Base</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c><span style=display:flex><span><span style=color:#66d9ef>struct</span> Base
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>void</span> (<span style=color:#f92672>*</span>destructor)(Base <span style=color:#f92672>*</span>);
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>(<span style=color:#f92672>*</span>get_name)(<span style=color:#66d9ef>const</span> Base <span style=color:#f92672>*</span>);
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>(<span style=color:#f92672>*</span>set_name)(Base <span style=color:#f92672>*</span>, <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>);
+</span></span><span style=display:flex><span>};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>typedef</span> <span style=color:#66d9ef>struct</span> Child
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    Base base;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>name;
+</span></span><span style=display:flex><span>} Child;
+</span></span></code></pre></div><p>We can then pass the <code>Child *</code> pointer around as a <code>Base *</code> and, assuming
+<code>get_name</code> and <code>set_name</code> were implemented correctly, we can get and set the
+<code>Child.name</code> field.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c><span style=display:flex><span><span style=color:#66d9ef>void</span> <span style=color:#a6e22e>main</span>()
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// Create a Child* and upcast it to a Base*
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    Base <span style=color:#f92672>*</span>child <span style=color:#f92672>=</span> (Base <span style=color:#f92672>*</span>)<span style=color:#a6e22e>new_child</span>();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// set the child object&#39;s name
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    child<span style=color:#f92672>-&gt;</span><span style=color:#a6e22e>set_name</span>(child, <span style=color:#e6db74>&#34;Michael&#34;</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// get the child object&#39;s name
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#a6e22e>printf</span>(<span style=color:#e6db74>&#34;Child&#39;s name is </span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>%s</span><span style=color:#ae81ff>\&#34;\n</span><span style=color:#e6db74>&#34;</span>, child<span style=color:#f92672>-&gt;</span><span style=color:#a6e22e>get_name</span>(child));
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// make sure the destructor is called
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    child<span style=color:#f92672>-&gt;</span><span style=color:#a6e22e>destructor</span>(child);
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The <code>set_name</code> and <code>get_name</code> members are called <em>virtual methods</em> in
+traditional Object-Oriented parlance.</p><p><strong>This technique is equally valid in Rust when each struct is marked as
+<code>#[repr(C)]</code>.</strong></p><p>The benefit of using C-style inheritance is that a <code>Base *</code> pointer is <em>just</em>
+a pointer, with the vtable being kept alongside the data being pointed to.</p><div class="notices note"><p>This isn&rsquo;t a novel technique. It&rsquo;s actually already used by frameworks like
+Microsoft&rsquo;s <a href=https://en.wikipedia.org/wiki/Component_Object_Model class=external-link target=_blank rel=noopener><em>COM</em></a>.</p><p>Gnome&rsquo;s <a href=https://en.wikipedia.org/wiki/GObject class=external-link target=_blank rel=noopener>*GObject</a> and most C++ implementations use <a href=http://www.vishalchovatiya.com/memory-layout-of-cpp-object/ class=external-link target=_blank rel=noopener>a slight
+variation</a> where the virtual methods are stored behind another level of
+indirection. This extra level of indirection makes different trade-offs with
+respect to memory use, cache, and performance, but it&rsquo;s much the same idea
+(see <a href="https://www.reddit.com/r/rust/comments/kdt5qs/ffisafe_polymorphism_thin_trait_objects/gg1wb3n?utm_source=share&amp;utm_medium=web2x&amp;context=3" class=external-link target=_blank rel=noopener>this Reddit comment</a> from <a href=https://www.reddit.com/user/matthieum/ class=external-link target=_blank rel=noopener><code>u/matthieum</code></a>).</p><p>In code, the extra level of indirection might look something like this:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c><span style=display:flex><span><span style=color:#66d9ef>struct</span> VTable {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>void</span> (<span style=color:#f92672>*</span>destructor)(Base <span style=color:#f92672>*</span>);
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>(<span style=color:#f92672>*</span>get_name)(<span style=color:#66d9ef>const</span> Base <span style=color:#f92672>*</span>);
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>(<span style=color:#f92672>*</span>set_name)(Base <span style=color:#f92672>*</span>, <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>);
+</span></span><span style=display:flex><span>};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> CppBase {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>const</span> VTable <span style=color:#f92672>*</span>vtable;
+</span></span><span style=display:flex><span>};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> CppChild {
+</span></span><span style=display:flex><span>    CppBase base;
+</span></span><span style=display:flex><span>    ...
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The C++ implementation gets a bit more interesting when multiple inheritance
+is involved.</p></div><h2 id=creating-the-filehandle>Creating the FileHandle
+<a class=heading-link href=#creating-the-filehandle><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Returning to our original goal of creating a FFI-safe version of
+<code>Box&lt;dyn std::io::Write></code>, let&rsquo;s create a struct representing our base &ldquo;class&rdquo;.</p><p>I&rsquo;m going to call this a <code>FileHandle</code> because that&rsquo;s how it was being used in
+the <a href=https://users.rust-lang.org/t/ffi-c-file-and-good-rust-wrapper-equivalent-type/52050 class=external-link target=_blank rel=noopener>user forum thread</a> that inspired this article.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/file_handle.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::{any::TypeId, io::{Error, Write}};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[repr(C)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>FileHandle</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) type_id: <span style=color:#a6e22e>TypeId</span>,
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) destroy: <span style=color:#a6e22e>unsafe</span> <span style=color:#66d9ef>fn</span>(<span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> FileHandle),
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) write: <span style=color:#a6e22e>unsafe</span> <span style=color:#66d9ef>fn</span>(<span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> FileHandle, <span style=color:#f92672>&amp;</span>[<span style=color:#66d9ef>u8</span>]) -&gt; Result<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>usize</span>, Error<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) flush: <span style=color:#a6e22e>unsafe</span> <span style=color:#66d9ef>fn</span>(<span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> FileHandle) -&gt; Result<span style=color:#f92672>&lt;</span>(), Error<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>I&rsquo;ve added a couple extra fields alongside the <code>write()</code> and <code>flush()</code>
+methods from <a href=https://doc.rust-lang.org/std/io/trait.Write.html class=external-link target=_blank rel=noopener><code>std::io::Write</code></a>,</p><ul><li><code>type_id</code> to allow downcasting (more on that later)</li><li><code>destroy()</code>, our object&rsquo;s destructor</li></ul><p>I don&rsquo;t particularly want have to create a new type which inherits from
+<code>FileHandle</code> for every possible <code>std::io::Write</code> implementation I need.</p><p>Instead it&rsquo;d be nice to have some generic function like
+<code>FileHandle::for_writer()</code> which accepts <em>any</em> writer and returns a pointer
+to an appropriate child class.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#66d9ef>impl</span> FileHandle {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>for_writer</span><span style=color:#f92672>&lt;</span>W<span style=color:#f92672>&gt;</span>(writer: <span style=color:#a6e22e>W</span>) -&gt; <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> FileHandle
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>        W: <span style=color:#a6e22e>Write</span> <span style=color:#f92672>+</span> &#39;static,
+</span></span><span style=display:flex><span>    {
+</span></span><span style=display:flex><span>        <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>To do this we just need a normal generic struct.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/file_handle.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[repr(C)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Repr</span><span style=color:#f92672>&lt;</span>W<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// SAFETY: The FileHandle must be the first field so we can cast between
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#75715e>// *mut Repr&lt;W&gt; and *mut FileHandle
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) base: <span style=color:#a6e22e>FileHandle</span>,
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) writer: <span style=color:#a6e22e>W</span>,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Our <code>FileHandle::for_writer()</code> function can then be implemented by creating a
+<code>Repr&lt;W></code> on the heap and returning a pointer to it, cast to <code>*mut FileHandle</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/file_handle.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> FileHandle {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>for_writer</span><span style=color:#f92672>&lt;</span>W<span style=color:#f92672>&gt;</span>(writer: <span style=color:#a6e22e>W</span>) -&gt; <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> FileHandle
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>        W: <span style=color:#a6e22e>Write</span> <span style=color:#f92672>+</span> Send <span style=color:#f92672>+</span> Sync <span style=color:#f92672>+</span> &#39;static,
+</span></span><span style=display:flex><span>    {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> repr <span style=color:#f92672>=</span> Repr {
+</span></span><span style=display:flex><span>            base: <span style=color:#a6e22e>FileHandle</span>::vtable::<span style=color:#f92672>&lt;</span>W<span style=color:#f92672>&gt;</span>(),
+</span></span><span style=display:flex><span>            writer,
+</span></span><span style=display:flex><span>        };
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> boxed <span style=color:#f92672>=</span> Box::into_raw(Box::new(repr));
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// SAFETY: A pointer to the first field on a #[repr(C)] struct has the
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#75715e>// same address as the struct itself
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        boxed <span style=color:#66d9ef>as</span> <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> _
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>vtable</span><span style=color:#f92672>&lt;</span>W: <span style=color:#a6e22e>Write</span> <span style=color:#f92672>+</span> &#39;static<span style=color:#f92672>&gt;</span>() -&gt; <span style=color:#a6e22e>FileHandle</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> type_id <span style=color:#f92672>=</span> TypeId::of::<span style=color:#f92672>&lt;</span>W<span style=color:#f92672>&gt;</span>();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        FileHandle {
+</span></span><span style=display:flex><span>            type_id,
+</span></span><span style=display:flex><span>            destroy: <span style=color:#a6e22e>destroy</span>::<span style=color:#f92672>&lt;</span>W<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>            write: <span style=color:#a6e22e>write</span>::<span style=color:#f92672>&lt;</span>W<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>            flush: <span style=color:#a6e22e>flush</span>::<span style=color:#f92672>&lt;</span>W<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices note"><p>I&rsquo;ve also added the requirement that the <code>W</code> type is <code>Send + Sync</code>. That
+means it should be possible to move the object between threads and refer to
+it (immutably) concurrently.</p><p>We need to be conservative here because when working with FFI there&rsquo;s no way
+of knowing what the code on the other end will do.</p></div><p>For the <code>destroy</code>, <code>write</code>, and <code>flush</code> fields we can use a trick taken from
+<a href=https://adventures.michaelfbryan.com/posts/rust-closures-in-ffi/#introducing-closures><em>Rust Closures in FFI</em></a>, using <a href=https://turbo.fish/ class=external-link target=_blank rel=noopener><em>turbofish</em></a> to get a
+concrete function pointer to a generic function.</p><p>The functions themselves are almost trivial, they just cast a <code>*mut FileHandle</code>
+to <code>*mut Repr&lt;W></code> then invoke the corresponding method. The destructor uses
+<code>Box::from_raw()</code> to turn the <code>*mut Repr&lt;W></code> back into a <code>Box&lt;Repr&lt;W>></code> so it
+can be destroyed properly.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/file_handle.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// SAFETY: The following functions can only be used when `handle` is actually a
+</span></span></span><span style=display:flex><span><span style=color:#75715e>// `*mut Repr&lt;W&gt;`.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>destroy</span><span style=color:#f92672>&lt;</span>W<span style=color:#f92672>&gt;</span>(handle: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> FileHandle) {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> repr <span style=color:#f92672>=</span> handle <span style=color:#66d9ef>as</span> <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> Repr<span style=color:#f92672>&lt;</span>W<span style=color:#f92672>&gt;</span>;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> _ <span style=color:#f92672>=</span> Box::from_raw(repr);
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>write</span><span style=color:#f92672>&lt;</span>W: <span style=color:#a6e22e>Write</span><span style=color:#f92672>&gt;</span>(handle: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> FileHandle, data: <span style=color:#66d9ef>&amp;</span>[<span style=color:#66d9ef>u8</span>]) -&gt; Result<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>usize</span>, Error<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> repr <span style=color:#f92672>=</span> <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> <span style=color:#f92672>*</span>(handle <span style=color:#66d9ef>as</span> <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> Repr<span style=color:#f92672>&lt;</span>W<span style=color:#f92672>&gt;</span>);
+</span></span><span style=display:flex><span>    repr.writer.write(data)
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>flush</span><span style=color:#f92672>&lt;</span>W: <span style=color:#a6e22e>Write</span><span style=color:#f92672>&gt;</span>(handle: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> FileHandle) -&gt; Result<span style=color:#f92672>&lt;</span>(), Error<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> repr <span style=color:#f92672>=</span> <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> <span style=color:#f92672>*</span>(handle <span style=color:#66d9ef>as</span> <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> Repr<span style=color:#f92672>&lt;</span>W<span style=color:#f92672>&gt;</span>);
+</span></span><span style=display:flex><span>    repr.writer.flush()
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>It only took about 50 lines, but we&rsquo;ve</p><ol><li>Created an abstract base class</li><li>Created a child class inheriting from the base class</li><li>Made a <code>FileHandle::for_writer()</code> constructor which will create a new child
+and populate the vtable in the base class with child-specific methods</li></ol><h2 id=using-the-filehandle-from-c>Using the FileHandle from C
+<a class=heading-link href=#using-the-filehandle-from-c><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now, to actually be usable from C code we&rsquo;ll need to define <code>extern "C"</code>
+functions for interacting with our <code>*mut FileHandle</code>.</p><p>Let&rsquo;s start with a couple common constructors.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/ffi.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> <span style=color:#66d9ef>crate</span>::FileHandle;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Create a new [`FileHandle`] which throws away all data written to it.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[no_mangle]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new_null_file_handle</span>() -&gt; <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> FileHandle {
+</span></span><span style=display:flex><span>    FileHandle::for_writer(std::io::sink())
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Create a new [`FileHandle`] which writes directly to stdout.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[no_mangle]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new_stdout_file_handle</span>() -&gt; <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> FileHandle {
+</span></span><span style=display:flex><span>    FileHandle::for_writer(std::io::stdout())
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>It&rsquo;d be nice to construct a <code>FileHandle</code> which actually writes to a file, so
+let&rsquo;s create a <code>new_file_handle_from_path()</code> constructor which takes a
+<code>*const c_char</code> containing the path.</p><p>This constructor is a bit more complex than the previous two in that we need
+to use <code>CStr</code> to turn the <code>*const c_char</code> into a Rust <code>&amp;str</code> that can be
+passed to <code>File::create()</code>. Both <code>CStr::to_str()</code> and <code>File::create()</code> can
+fail, in which case we&rsquo;ll let the caller know by returning a null pointer.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/ffi.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::{os::raw::c_char, ffi::CStr, fs::File};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Create a new [`FileHandle`] which will write to a file on disk.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[no_mangle]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new_file_handle_from_path</span>(path: <span style=color:#f92672>*</span><span style=color:#66d9ef>const</span> c_char) -&gt; <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> FileHandle {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> path <span style=color:#f92672>=</span> <span style=color:#66d9ef>match</span> CStr::from_ptr(path).to_str() {
+</span></span><span style=display:flex><span>        Ok(p) <span style=color:#f92672>=&gt;</span> p,
+</span></span><span style=display:flex><span>        Err(_) <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>return</span> ptr::null_mut(),
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> f <span style=color:#f92672>=</span> <span style=color:#66d9ef>match</span> File::create(path) {
+</span></span><span style=display:flex><span>        Ok(f) <span style=color:#f92672>=&gt;</span> f,
+</span></span><span style=display:flex><span>        Err(_) <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>return</span> ptr::null_mut(),
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    FileHandle::for_writer(f)
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Now callers can create a <code>*mut FileHandle</code>, let&rsquo;s give them a way to destroy it.</p><p>The implementation is pretty simple in this case, load the destructor from our
+vtable then call it with the <code>*mut FileHandle</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/ffi.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[no_mangle]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>file_handle_destroy</span>(handle: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> FileHandle) {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> destructor <span style=color:#f92672>=</span> (<span style=color:#f92672>*</span>handle).destroy;
+</span></span><span style=display:flex><span>    destructor(handle);
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Next we need a way to call the <code>write()</code> and <code>flush()</code> methods. This gets a bit
+trickier because we need to translate arguments from C types to Rust types and
+follow C conventions for notifying the caller of failure.</p><p>In this case the convention we use is to return a negative error code on
+failure, which aligns with <code>errno</code> on most *nix platforms.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/ffi.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Write some data to the file handle, returning the number of bytes written.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// The return value is negative when writing fails.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[no_mangle]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>file_handle_write</span>(
+</span></span><span style=display:flex><span>    handle: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> FileHandle,
+</span></span><span style=display:flex><span>    data: <span style=color:#f92672>*</span><span style=color:#66d9ef>const</span> c_char,
+</span></span><span style=display:flex><span>    len: <span style=color:#a6e22e>c_int</span>,
+</span></span><span style=display:flex><span>) -&gt; <span style=color:#a6e22e>c_int</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> write <span style=color:#f92672>=</span> (<span style=color:#f92672>*</span>handle).write;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> data <span style=color:#f92672>=</span> std::slice::from_raw_parts(data <span style=color:#66d9ef>as</span> <span style=color:#f92672>*</span><span style=color:#66d9ef>const</span> <span style=color:#66d9ef>u8</span>, len <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>usize</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>match</span> write(handle, data) {
+</span></span><span style=display:flex><span>        Ok(bytes_written) <span style=color:#f92672>=&gt;</span> bytes_written <span style=color:#66d9ef>as</span> c_int,
+</span></span><span style=display:flex><span>        Err(e) <span style=color:#f92672>=&gt;</span> <span style=color:#f92672>-</span>e.raw_os_error().unwrap_or(<span style=color:#ae81ff>1</span>),
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Flush this output stream, ensuring that all intermediately buffered contents
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// reach their destination.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// Returns `0` on success or a negative value on failure.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[no_mangle]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>extern</span> <span style=color:#e6db74>&#34;C&#34;</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>file_handle_flush</span>(handle: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> FileHandle) -&gt; <span style=color:#a6e22e>c_int</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> flush <span style=color:#f92672>=</span> (<span style=color:#f92672>*</span>handle).flush;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>match</span> flush(handle) {
+</span></span><span style=display:flex><span>        Ok(_) <span style=color:#f92672>=&gt;</span> <span style=color:#ae81ff>0</span>,
+</span></span><span style=display:flex><span>        Err(e) <span style=color:#f92672>=&gt;</span> <span style=color:#f92672>-</span>e.raw_os_error().unwrap_or(<span style=color:#ae81ff>1</span>),
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h3 id=tests>Tests
+<a class=heading-link href=#tests><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>Now we have some code for interacting with <code>FileHandle</code>, let&rsquo;s make sure it
+actually works and is sound.</p><p>The first thing I want to test is that destructors are called by
+<code>file_handle_destroy()</code>.</p><p>To do this let&rsquo;s create a dummy type which implements <code>Write</code> and will set a
+flag when it gets destroyed.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/ffi.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[cfg(test)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>mod</span> tests {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>use</span> <span style=color:#66d9ef>super</span>::<span style=color:#f92672>*</span>;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>use</span> std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>NotifyOnDrop</span>(Arc<span style=color:#f92672>&lt;</span>AtomicBool<span style=color:#f92672>&gt;</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>impl</span> Drop <span style=color:#66d9ef>for</span> NotifyOnDrop {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>drop</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) {
+</span></span><span style=display:flex><span>            self.<span style=color:#ae81ff>0.</span>store(<span style=color:#66d9ef>true</span>, Ordering::SeqCst);
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>impl</span> Write <span style=color:#66d9ef>for</span> NotifyOnDrop {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>write</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, _buf: <span style=color:#66d9ef>&amp;</span>[<span style=color:#66d9ef>u8</span>]) -&gt; <span style=color:#a6e22e>std</span>::io::Result<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>            todo!()
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>flush</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; <span style=color:#a6e22e>std</span>::io::Result<span style=color:#f92672>&lt;</span>()<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>            todo!()
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Now we can use <code>FileHandle::for_writer()</code> to create a new <code>*mut FileHandle</code>,
+then immediately call <code>file_handle_destroy()</code> to destroy it.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/ffi.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>mod</span> tests {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>writer_destructor_is_always_called</span>() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> was_dropped <span style=color:#f92672>=</span> Arc::new(AtomicBool::new(<span style=color:#66d9ef>false</span>));
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> file_handle <span style=color:#f92672>=</span> FileHandle::for_writer(NotifyOnDrop(Arc::clone(<span style=color:#f92672>&amp;</span>was_dropped)));
+</span></span><span style=display:flex><span>        assert!(<span style=color:#f92672>!</span>file_handle.is_null());
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>            file_handle_destroy(file_handle);
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        assert!(was_dropped.load(Ordering::SeqCst));
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Normally you can run this test with <code>cargo test</code> but when working with
+<code>unsafe</code> code it&rsquo;s a good idea to run tests with <a href=https://github.com/rust-lang/miri class=external-link target=_blank rel=noopener>Miri</a>, a Rust
+interpreter which executes code and will detect instances of <em>Undefined
+Behaviour</em> and memory leaks.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cargo miri test
+</span></span><span style=display:flex><span>    Finished test [unoptimized + debuginfo] target(s) in 0.00s
+</span></span><span style=display:flex><span>     Running target/x86_64-unknown-linux-gnu/debug/deps/thin_trait_objects-3a5d6200958baa20
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span>running 1 test
+</span></span><span style=display:flex><span>test ffi::tests::writer_destructor_is_always_called ... ok
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span>test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+</span></span></code></pre></div><p>The test passed and Miri seems happy with our code so that gives me a lot of
+confidence 🙂</p><div class="notices tip"><p>If our test did something wrong like forgetting to call <code>file_handle_destroy()</code>
+we&rsquo;d be greeted with a message like this:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-console data-lang=console><span style=display:flex><span>$ cargo miri test
+</span></span><span style=display:flex><span>    Finished test [unoptimized + debuginfo] target(s) in 0.00s
+</span></span><span style=display:flex><span>     Running target/x86_64-unknown-linux-gnu/debug/deps/thin_trait_objects-3a5d6200958baa20
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span>running 1 test
+</span></span><span style=display:flex><span>test ffi::tests::writer_destructor_is_always_called ... ok
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span>test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out
+</span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span>The following memory was leaked: alloc77819 (Rust heap, size: 24, align: 8) {
+</span></span><span style=display:flex><span>    0x00 │ 01 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 │ ................
+</span></span><span style=display:flex><span>    0x10 │ 00 __ __ __ __ __ __ __                         │ .░░░░░░░
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>alloc77918 (Rust heap, size: 58, align: 8) {
+</span></span><span style=display:flex><span>    0x00 │ 1d 71 55 22 f5 a8 92 81 ╾alloc77896[&lt;191016&gt;]─╼ │ .qU&#34;....╾──────╼
+</span></span><span style=display:flex><span>    0x10 │ ╾alloc77897[&lt;191017&gt;]─╼ ╾alloc77898[&lt;191018&gt;]─╼ │ ╾──────╼╾──────╼
+</span></span><span style=display:flex><span>    0x20 │ ╾─a77819[&lt;untagged&gt;]──╼                         │ ╾──────╼
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>alloc77896 (fn: file_handle::destroy::&lt;ffi::tests::NotifyOnDrop&gt;)
+</span></span><span style=display:flex><span>alloc77897 (fn: file_handle::write::&lt;ffi::tests::NotifyOnDrop&gt;)
+</span></span><span style=display:flex><span>alloc77898 (fn: file_handle::flush::&lt;ffi::tests::NotifyOnDrop&gt;)
+</span></span></code></pre></div><p>In this case you can see two items were leaked, the first is a block of 24
+bytes for the <code>Arc&lt;AtomicBool></code>. If you look carefully, you&rsquo;ll see the
+allocation contains 2x <code>1_usize</code> values followed by a single <code>0</code> and a bunch
+of padding (the underscores). They are the strong count, the weak count, and
+the <code>false</code>, respectively.</p><p>In the second allocation you can see 8 bytes followed by a bunch of items
+like <code>alloc77896</code>, which we see further down is actually a pointer to the
+<code>file_handle::destroy::&lt;ffi::tests::NotifyOnDrop></code> function.</p><p>That indicates we&rsquo;ve leaked the <code>Repr&lt;NotifyOnDrop></code> behind our <code>*mut FileHandle</code>, which would hopefully be enough information to start tracking down
+a memory leak.</p></div><p>Most of the other <code>ffi</code> module tests look the same, create a dummy type which
+will behave in a particular way (e.g. by returning an error from <code>write()</code> or
+writing to a buffer that can be inspected later) then exercise the code,
+running tests with <code>cargo miri test</code>.</p><h2 id=an-owned-wrapper>An Owned Wrapper
+<a class=heading-link href=#an-owned-wrapper><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now our hypothetical C caller has the ability to create a <code>*mut FileHandle</code>,
+but we don&rsquo;t want to be using <code>unsafe</code> and raw pointers when the file handle
+gets passed to normal Rust code.</p><p>We need a safe smart pointer.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/owned.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::ptr::NonNull;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[repr(transparent)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>OwnedFileHandle</span>(NonNull<span style=color:#f92672>&lt;</span>FileHandle<span style=color:#f92672>&gt;</span>);
+</span></span></code></pre></div><div class="notices note"><p>We use a <code>std::ptr::NonNull</code> instead of a normal raw pointer (<code>*mut FileHandle</code>)
+because it guarantees the pointer can never be <code>null</code>.</p><p>A nice side-effect is that the Rust compiler knows <code>NonNull</code> can never be
+<code>null</code>. This means if it ever needs to store a <code>OwnedFileHandle</code> alongside a
+single bit of information (e.g. an enum&rsquo;s tag), <code>null</code> can be used to
+represent this information.</p><p>This <em>Null Pointer Optimisation</em> means types like <code>Option&lt;OwnedFileHandle></code>
+are guaranteed to be the same size as <code>OwnedFileHandle</code>, which in turn is
+guaranteed to be the same size as a pointer.</p></div><p>As you would have guessed by the name, our <code>OwnedFileHandle</code> needs to run the
+destructor from its <code>Drop</code> impl.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/owned.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Drop <span style=color:#66d9ef>for</span> OwnedFileHandle {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>drop</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> ptr <span style=color:#f92672>=</span> self.<span style=color:#ae81ff>0.</span>as_ptr();
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> destroy <span style=color:#f92672>=</span> (<span style=color:#f92672>*</span>ptr).destroy;
+</span></span><span style=display:flex><span>            (destroy)(ptr)
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>This smart pointer also needs functions for converting to/from its raw pointer
+form or constructing it with <code>FileHandle::for_writer()</code> directly.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/owned.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> OwnedFileHandle {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Create a new [`OwnedFileHandle`] which wraps some [`Write`]r.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new</span><span style=color:#f92672>&lt;</span>W<span style=color:#f92672>&gt;</span>(writer: <span style=color:#a6e22e>W</span>) -&gt; <span style=color:#a6e22e>Self</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>        W: <span style=color:#a6e22e>Write</span> <span style=color:#f92672>+</span> Send <span style=color:#f92672>+</span> Sync <span style=color:#f92672>+</span> &#39;static,
+</span></span><span style=display:flex><span>    {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> handle <span style=color:#f92672>=</span> FileHandle::for_writer(writer);
+</span></span><span style=display:flex><span>            assert!(<span style=color:#f92672>!</span>handle.is_null());
+</span></span><span style=display:flex><span>            OwnedFileHandle::from_raw(handle)
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Create an [`OwnedFileHandle`] from a `*mut FileHandle`, taking
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// ownership of the [`FileHandle`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// # Safety
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// Ownership of the `handle` is given to the [`OwnedFileHandle`] and the
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// original pointer may no longer be used.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// The `handle` must be a non-null pointer which points to a valid
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// `FileHandle`.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>from_raw</span>(handle: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> FileHandle) -&gt; <span style=color:#a6e22e>Self</span> {
+</span></span><span style=display:flex><span>        debug_assert!(<span style=color:#f92672>!</span>handle.is_null());
+</span></span><span style=display:flex><span>        OwnedFileHandle(NonNull::new_unchecked(handle))
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Consume the [`OwnedFileHandle`] and get a `*mut FileHandle` that can be
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// used from native code.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>into_raw</span>(self) -&gt; <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> FileHandle {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> ptr <span style=color:#f92672>=</span> self.<span style=color:#ae81ff>0.</span>as_ptr();
+</span></span><span style=display:flex><span>        std::mem::forget(self);
+</span></span><span style=display:flex><span>        ptr
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We can also implement <code>std::io::Write</code> by directly calling the vtable methods.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/owned.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Write <span style=color:#66d9ef>for</span> OwnedFileHandle {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>write</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, buf: <span style=color:#66d9ef>&amp;</span>[<span style=color:#66d9ef>u8</span>]) -&gt; <span style=color:#a6e22e>std</span>::io::Result<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> ptr <span style=color:#f92672>=</span> self.<span style=color:#ae81ff>0.</span>as_ptr();
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> write <span style=color:#f92672>=</span> (<span style=color:#f92672>*</span>ptr).write;
+</span></span><span style=display:flex><span>            (write)(ptr, buf)
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>flush</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; <span style=color:#a6e22e>std</span>::io::Result<span style=color:#f92672>&lt;</span>()<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> ptr <span style=color:#f92672>=</span> self.<span style=color:#ae81ff>0.</span>as_ptr();
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> flush <span style=color:#f92672>=</span> (<span style=color:#f92672>*</span>ptr).flush;
+</span></span><span style=display:flex><span>            (flush)(ptr)
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Thanks to our <code>Send + Sync</code> requirements on <code>FileHandle::for_writer()</code> we can
+guarantee <code>*mut FileHandle</code> is also <code>Send + Sync</code> and can implement the two
+traits on our <code>OwnedFileHandle</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// SAFETY: The FileHandle::for_writer() method ensure by construction that our
+</span></span></span><span style=display:flex><span><span style=color:#75715e>// object is Send + Sync.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span><span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>impl</span> Send <span style=color:#66d9ef>for</span> OwnedFileHandle {}
+</span></span><span style=display:flex><span><span style=color:#66d9ef>unsafe</span> <span style=color:#66d9ef>impl</span> Sync <span style=color:#66d9ef>for</span> OwnedFileHandle {}
+</span></span></code></pre></div><h3 id=downcasting>Downcasting
+<a class=heading-link href=#downcasting><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>A useful feature of Object Oriented languages is <em>downcasting</em>, the ability
+to convert from a parent class back to a child class; in this case we want a
+way to access the <code>W</code> from our <code>Repr&lt;W></code> when we know what type it is.</p><p>Rust provides a mechanism called <a href=https://doc.rust-lang.org/std/any/struct.TypeId.html class=external-link target=_blank rel=noopener><code>std::any::TypeId</code></a> for uniquely
+identifying different types. It&rsquo;s deliberately basic, providing nothing more
+than equality, but that&rsquo;s perfectly fine for our cases.</p><p>First we need a way to check if the item inside an <code>OwnedFileHandle</code> has a
+particular type. We&rsquo;ll use the <code>TypeId</code> added to the <code>FileHandle</code> vtable earlier.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/owned.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> OwnedFileHandle {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Check if the object pointed to by a [`OwnedFileHandle`] has type `W`.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>is</span><span style=color:#f92672>&lt;</span>W: &#39;static<span style=color:#f92672>&gt;</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>bool</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> ptr <span style=color:#f92672>=</span> self.<span style=color:#ae81ff>0.</span>as_ptr();
+</span></span><span style=display:flex><span>            (<span style=color:#f92672>*</span>ptr).type_id <span style=color:#f92672>==</span> TypeId::of::<span style=color:#f92672>&lt;</span>W<span style=color:#f92672>&gt;</span>()
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Using this new <code>is()</code> method we can now provide access to the <code>W</code> by doing a
+type check followed by an <code>unsafe</code> pointer cast.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/owned.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> OwnedFileHandle {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Returns a reference to the boxed value if it is of type `T`, or
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// `None` if it isn&#39;t.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>downcast_ref</span><span style=color:#f92672>&lt;</span>W: &#39;static<span style=color:#f92672>&gt;</span>(<span style=color:#f92672>&amp;</span>self) -&gt; Option<span style=color:#f92672>&lt;&amp;</span>W<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> self.is::<span style=color:#f92672>&lt;</span>W<span style=color:#f92672>&gt;</span>() {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>                <span style=color:#75715e>// SAFETY: We just did a type check
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                <span style=color:#66d9ef>let</span> repr <span style=color:#f92672>=</span> self.<span style=color:#ae81ff>0.</span>as_ptr() <span style=color:#66d9ef>as</span> <span style=color:#f92672>*</span><span style=color:#66d9ef>const</span> Repr<span style=color:#f92672>&lt;</span>W<span style=color:#f92672>&gt;</span>;
+</span></span><span style=display:flex><span>                Some(<span style=color:#f92672>&amp;</span>(<span style=color:#f92672>*</span>repr).writer)
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        } <span style=color:#66d9ef>else</span> {
+</span></span><span style=display:flex><span>            None
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Returns a mutable reference to the boxed value if it is of type `T`, or
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// `None` if it isn&#39;t.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>downcast_mut</span><span style=color:#f92672>&lt;</span>W: &#39;static<span style=color:#f92672>&gt;</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; Option<span style=color:#f92672>&lt;&amp;</span><span style=color:#66d9ef>mut</span> W<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> self.is::<span style=color:#f92672>&lt;</span>W<span style=color:#f92672>&gt;</span>() {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>                <span style=color:#75715e>// SAFETY: We just did a type check
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                <span style=color:#66d9ef>let</span> repr <span style=color:#f92672>=</span> self.<span style=color:#ae81ff>0.</span>as_ptr() <span style=color:#66d9ef>as</span> <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> Repr<span style=color:#f92672>&lt;</span>W<span style=color:#f92672>&gt;</span>;
+</span></span><span style=display:flex><span>                Some(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> (<span style=color:#f92672>*</span>repr).writer)
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        } <span style=color:#66d9ef>else</span> {
+</span></span><span style=display:flex><span>            None
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We also need a method which consumes <code>self</code>, unboxes the <code>Repr&lt;W></code>, and gives
+the original <code>W</code> back to the caller.</p><p>However, what happens if the type check fails? If we follow <code>downcast_ref()</code>
+and return an <code>Option&lt;W></code> we&rsquo;d be throwing the <code>OwnedFileHandle</code> away with no
+way to try again or fall back to something else. Most APIs in the standard
+library will return a <code>Result&lt;W, OwnedFileHandle></code> here, returning ownership
+of the file handle in the error case.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/owned.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> OwnedFileHandle {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Attempt to downcast the [`OwnedFileHandle`] to a concrete type and
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// extract it.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>downcast</span><span style=color:#f92672>&lt;</span>W: &#39;static<span style=color:#f92672>&gt;</span>(self) -&gt; Result<span style=color:#f92672>&lt;</span>W, Self<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> self.is::<span style=color:#f92672>&lt;</span>W<span style=color:#f92672>&gt;</span>() {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>unsafe</span> {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> ptr <span style=color:#f92672>=</span> self.into_raw();
+</span></span><span style=display:flex><span>                <span style=color:#75715e>// SAFETY: We just did a type check
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                <span style=color:#66d9ef>let</span> repr: <span style=color:#f92672>*</span><span style=color:#66d9ef>mut</span> Repr<span style=color:#f92672>&lt;</span>W<span style=color:#f92672>&gt;</span> <span style=color:#f92672>=</span> ptr.cast();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> unboxed <span style=color:#f92672>=</span> Box::from_raw(repr);
+</span></span><span style=display:flex><span>                Ok(unboxed.writer)
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        } <span style=color:#66d9ef>else</span> {
+</span></span><span style=display:flex><span>            Err(self)
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>With the addition of downcasting our <code>OwnedFileHandle</code> has pretty much reached
+feature parity with most <code>Box&lt;dyn Write></code> solutions.</p><div class="notices warning"><p>You may have noticed that throughout the implementation of <code>OwnedFileHandle</code>
+I was very careful to <em>only</em> do operations using raw pointers. While a
+<code>*mut FileHandle</code> can be freely interchanged with a <code>*mut Repr&lt;W></code>, <strong>it
+absolutely cannot be turned into a <code>&amp;mut FileHandle</code></strong> (i.e. a normal Rust
+reference).</p><p>This is to do with a concept called <em>Provenance</em>. The idea is that a pointer
+can &ldquo;remember&rdquo; what allocation it came from (e.g. if we created it from a
+<code>Box&lt;Repr&lt;std::fs::File></code>) and it&rsquo;s not okay to cast Rust references into
+something they aren&rsquo;t.</p><p>Ralf Jung does a much better job of explaining the subtleties of provenance so
+I&rsquo;ll just defer to his articles on the topic,</p><ul><li><a href=https://www.ralfj.de/blog/2020/12/14/provenance.html class=external-link target=_blank rel=noopener><em>Pointers Are Complicated II, or: We need better language
+specs</em></a>, and</li><li><a href=https://www.ralfj.de/blog/2018/07/24/pointers-and-bytes.html class=external-link target=_blank rel=noopener><em>Pointers Are Complicated, or: What&rsquo;s in a Byte?</em></a></li></ul></div><h2 id=conclusions>Conclusions
+<a class=heading-link href=#conclusions><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>While it&rsquo;s not something you&rsquo;ll be using every day, <em>Thin Trait Objects</em> are
+a technique that you may find a use for some day. If nothing else,
+understanding them should give you a better appreciation for how much work
+our compilers do to implement nice things like Polymorphism and inheritance.</p><p>It also reinforces the idea that all Turing-complete languages are
+equivalent. Just because you start with a non-OO language doesn&rsquo;t mean you
+can&rsquo;t have inheritance, it just requires a bit more work.</p><p>Another nice thing is that, apart from the <code>ffi</code> module, this code is just a
+mechanical transformation based on a trait definition. I&rsquo;m sure a suitably
+motivated person could create a procedural macro which lets you add a
+<code>#[thin_trait_object]</code> attribute on top of a trait definition and
+automatically generate the corresponding <code>FileHandle</code>, <code>OwnedFileHandle</code>, and
+<code>Repr&lt;W></code> types.</p><p>If you noticed anything unsound (or just plain incorrect) in my code, please
+<a href=mailto:michaelfbryan@gmail.com>get in contact</a> because I want to hear from you! I&rsquo;m also curious to
+hear if from people who create Rust products which use FFI, and if you&rsquo;ve had
+to do something similar in production.</p></div><footer></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>

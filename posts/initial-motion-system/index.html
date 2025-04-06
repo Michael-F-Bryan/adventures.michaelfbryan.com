@@ -1,0 +1,228 @@
+<!doctype html><html lang=en><head><title>Initial Motion System · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="Now we&rsquo;ve got some simple automation code, lets start a proper
+Motion system.
+Most Motion systems are designed around a &ldquo;control mode&rdquo;, a fancy term for
+&ldquo;what is the machine doing right now?&rdquo; Common control modes are:
+
+Idle - the default control mode, machines revert to Idle whenever they&rsquo;re
+not doing anything
+Automation - running an automation sequence
+Recipe - executing a job (a set of instructions for how to execute a job
+and the motion parameters that should be used is often referred to as a
+Recipe)
+Manual - manual movement, where velocity may be controlled via a handset
+or the user invokes a &ldquo;jog to position&rdquo; function
+
+There are several ways to transition between control modes."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="Initial Motion System"><meta name=twitter:description content="Now we’ve got some simple automation code, lets start a proper Motion system.
+Most Motion systems are designed around a “control mode”, a fancy term for “what is the machine doing right now?” Common control modes are:
+Idle - the default control mode, machines revert to Idle whenever they’re not doing anything Automation - running an automation sequence Recipe - executing a job (a set of instructions for how to execute a job and the motion parameters that should be used is often referred to as a Recipe) Manual - manual movement, where velocity may be controlled via a handset or the user invokes a “jog to position” function There are several ways to transition between control modes."><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/initial-motion-system/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="Initial Motion System"><meta property="og:description" content="Now we’ve got some simple automation code, lets start a proper Motion system.
+Most Motion systems are designed around a “control mode”, a fancy term for “what is the machine doing right now?” Common control modes are:
+Idle - the default control mode, machines revert to Idle whenever they’re not doing anything Automation - running an automation sequence Recipe - executing a job (a set of instructions for how to execute a job and the motion parameters that should be used is often referred to as a Recipe) Manual - manual movement, where velocity may be controlled via a handset or the user invokes a “jog to position” function There are several ways to transition between control modes."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2019-09-18T20:00:00+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Adventures-in-Motion-Control"><meta property="article:tag" content="Rust"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/initial-motion-system/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/initial-motion-system/>Initial Motion System</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2019-09-18T20:00:00+08:00>September 18, 2019
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+6-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/adventures-in-motion-control/>Adventures-in-Motion-Control</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/rust/>Rust</a></span></div></div></header><div class=post-content><p>Now we&rsquo;ve got <a href=https://adventures.michaelfbryan.com/posts/simple-automation-sequences/#the-next-step>some simple automation</a> code, lets start a proper
+<em>Motion</em> system.</p><p>Most <em>Motion</em> systems are designed around a <em>&ldquo;control mode&rdquo;</em>, a fancy term for
+<em>&ldquo;what is the machine doing right now?&rdquo;</em> Common control modes are:</p><ul><li><code>Idle</code> - the default control mode, machines revert to <code>Idle</code> whenever they&rsquo;re
+not doing anything</li><li><code>Automation</code> - running an automation sequence</li><li><code>Recipe</code> - executing a job (a set of instructions for how to execute a job
+and the motion parameters that should be used is often referred to as a
+<em>Recipe</em>)</li><li><code>Manual</code> - manual movement, where velocity may be controlled via a handset
+or the user invokes a <em>&ldquo;jog to position&rdquo;</em> function</li></ul><p>There are several ways to transition between control modes.</p><ul><li>An <code>AutomationSequence</code> can end and we transition to <code>Idle</code></li><li>The machine may encounter a fault (e.g. by hitting a limit switch)
+returning to <code>Idle</code> and latching some fault flag</li><li>The user may send a recipe to the machine and press the <em>GO</em> button (switching
+to the <code>Recipe</code> control mode)</li><li>The current recipe finishes successfully (transition to <code>Idle</code>),</li><li>and many more&mldr;</li></ul><p>This all combines to make an interesting state machine diagram.</p><div class=mermaid align=center>graph LR;
+A[Automation];
+I((Idle));
+R[Recipe];
+M[Manual];
+I-- Start Automation Sequence -->A;
+A-- Fault -->I;
+linkStyle 1 stroke:red;
+A-- Completed -->I;
+linkStyle 2 stroke:green;
+I-- GO -->R;
+R-- Recipe Finished -->I;
+linkStyle 4 stroke:green;
+R-- Fault -->I;
+linkStyle 5 stroke:red;
+I-- Jog -->M;
+I-- Handset Button Pressed -->M;
+M-- Handset Button Released -->I;
+linkStyle 8 stroke:green;
+M-- Jog Position Reached -->I;
+linkStyle 9 stroke:green;
+M-- Fault -->I;
+linkStyle 10 stroke:red;</div><p>You may also notice that a lot of the transitions are in response to a message
+from the user via our <em>Communications</em> system. This means we&rsquo;ll end up declaring
+several new message types and handle them using the
+<code>aimc_hal::messaging::Handler</code> trait.</p><p>For now, we can keep things simple with just a set of <code>GoHome</code> and <code>AbortMotion</code>
+messages. The controller will need to switch control modes and ack or nack
+the messages, depending on whether the desired transition is supported at the
+time.</p><h2 id=implementation>Implementation
+<a class=heading-link href=#implementation><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>In its current form, the <em>Motion</em> system is rather simple. We haven&rsquo;t
+implemented recipes or manual motion yet, so the only states are <code>Idle</code> and
+<code>Home</code> (our only automation sequence).</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Motion</span> {
+</span></span><span style=display:flex><span>    control_mode: <span style=color:#a6e22e>ControlMode</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>ControlMode</span> {
+</span></span><span style=display:flex><span>    Idle,
+</span></span><span style=display:flex><span>    Home(Home),
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>L: <span style=color:#a6e22e>Limits</span>, A: <span style=color:#a6e22e>Axes</span><span style=color:#f92672>&gt;</span> System<span style=color:#f92672>&lt;</span>L, A<span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> Motion {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>poll</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, inputs: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>L</span>, outputs: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> A) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> self.control_mode {
+</span></span><span style=display:flex><span>            ControlMode::Idle <span style=color:#f92672>=&gt;</span> {}
+</span></span><span style=display:flex><span>            ControlMode::Home(<span style=color:#66d9ef>ref</span> <span style=color:#66d9ef>mut</span> home) <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>match</span> home.poll(inputs, outputs) {
+</span></span><span style=display:flex><span>                Transition::Complete <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                    self.control_mode <span style=color:#f92672>=</span> ControlMode::Idle
+</span></span><span style=display:flex><span>                }
+</span></span><span style=display:flex><span>                Transition::Fault(_) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                    <span style=color:#75715e>// TODO: we should probably do something about this fault...
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                    self.control_mode <span style=color:#f92672>=</span> ControlMode::Idle
+</span></span><span style=display:flex><span>                }
+</span></span><span style=display:flex><span>                _ <span style=color:#f92672>=&gt;</span> {}
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We&rsquo;re polling the <code>Home</code> automation sequence and handling the <code>Complete</code> and
+<code>Fault</code> transition, but there&rsquo;s no way to actually get into the <code>Home</code> state.</p><p>Usually this would be done in response to a message from the user, so&mldr; let&rsquo;s
+add a new message to our <code>Communications</code> module and wire it up to the <code>Router</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Default, Copy, Clone, PartialEq, Eq, Pread, Pwrite, IOread, IOwrite, SizeWith)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>StartHomingSequence</span> {}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> StartHomingSequence {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>ID</span>: <span style=color:#66d9ef>u8</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>4</span>;
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// sim/src/router.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Router</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) fps: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;a</span> <span style=color:#a6e22e>mut</span> FpsCounter,
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) motion: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;a</span> <span style=color:#a6e22e>mut</span> Motion,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> MessageHandler <span style=color:#66d9ef>for</span> Router<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle_message</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, msg: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Packet</span>) -&gt; Result<span style=color:#f92672>&lt;</span>Packet, CommsError<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> msg.id() {
+</span></span><span style=display:flex><span>            <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>            StartHomingSequence::<span style=color:#66d9ef>ID</span> <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                dispatch::<span style=color:#f92672>&lt;</span>_, StartHomingSequence, _<span style=color:#f92672>&gt;</span>(self.motion, msg.contents(), map_result)
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>            <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>map_result</span><span style=color:#f92672>&lt;</span>A, B<span style=color:#f92672>&gt;</span>(result: Result<span style=color:#f92672>&lt;</span>A, B<span style=color:#f92672>&gt;</span>) -&gt; <span style=color:#a6e22e>Packet</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    A: Into<span style=color:#f92672>&lt;</span>Packet<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    B: Into<span style=color:#f92672>&lt;</span>Packet<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>match</span> result {
+</span></span><span style=display:flex><span>        Result::Ok(a) <span style=color:#f92672>=&gt;</span> a.into(),
+</span></span><span style=display:flex><span>        Result::Err(b) <span style=color:#f92672>=&gt;</span> b.into(),
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices note"><p>Because <code>Motion</code> will need to return a <code>Result&lt;Ack, Nack></code>, we&rsquo;ve had to update
+the <code>dispatch()</code> helper so we can manually specify the function for turning
+<code>H::Response</code> back into a <code>Packet</code>.</p><p>Previously it would always just use <code>response.into()</code>, but for the <code>Motion</code>
+we want to use <code>map_result()</code> instead.</p><p>Adding more generics to an already complicated <code>dispatch()</code> function isn&rsquo;t great
+though, we may want to revisit it in the future and try to make things less
+clever&mldr;</p></div><p>The <code>Motion</code> system is now part of our application state, so we&rsquo;ll also need to
+update the <code>App</code> appropriately.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// sim/src/app.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[wasm_bindgen]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>App</span> {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>    motion: <span style=color:#a6e22e>Motion</span>, <span style=color:#75715e>// the motion system is now part of our app state
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> App {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle_comms</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> router <span style=color:#f92672>=</span> Router {
+</span></span><span style=display:flex><span>            fps: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> self.fps,
+</span></span><span style=display:flex><span>            motion: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> self.motion, <span style=color:#75715e>// &lt;-- New!
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        };
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> outputs <span style=color:#f92672>=</span>
+</span></span><span style=display:flex><span>            aimc_comms::Outputs::new(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self.browser, <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> router);
+</span></span><span style=display:flex><span>        self.comms.poll(<span style=color:#f92672>&amp;</span>self.inputs, <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> outputs);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>To actually handle the <code>StartHomingSequence</code> message and switch to the <code>Home</code>
+control mode we&rsquo;ll need to remember how the machine is wired up (e.g. axis
+numbers and speeds).</p><p>This requires adding a new <code>MotionParameters</code> struct to the <code>Motion</code> system.
+Later on we&rsquo;ll let the user configure the motion parameters, but for now it&rsquo;s
+okay to hard-code some defaults.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Motion</span> {
+</span></span><span style=display:flex><span>    motion_params: <span style=color:#a6e22e>MotionParameters</span>, <span style=color:#75715e>// &lt;-- new!
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    control_mode: <span style=color:#a6e22e>ControlMode</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>MotionParameters</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> x_axis: <span style=color:#66d9ef>usize</span>,
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> y_axis: <span style=color:#66d9ef>usize</span>,
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> z_axis: <span style=color:#66d9ef>usize</span>,
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> homing_speed: <span style=color:#a6e22e>Velocity</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> MotionParameters {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>homing_sequence</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#a6e22e>Home</span> {
+</span></span><span style=display:flex><span>        Home::new(self.x_axis, self.y_axis, self.z_axis, self.homing_speed)
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Default <span style=color:#66d9ef>for</span> MotionParameters {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>default</span>() -&gt; <span style=color:#a6e22e>MotionParameters</span> {
+</span></span><span style=display:flex><span>        MotionParameters {
+</span></span><span style=display:flex><span>            x_axis: <span style=color:#ae81ff>0</span>,
+</span></span><span style=display:flex><span>            y_axis: <span style=color:#ae81ff>1</span>,
+</span></span><span style=display:flex><span>            z_axis: <span style=color:#ae81ff>2</span>,
+</span></span><span style=display:flex><span>            homing_speed: <span style=color:#a6e22e>Velocity</span>::new::<span style=color:#f92672>&lt;</span>millimeter_per_second<span style=color:#f92672>&gt;</span>(<span style=color:#ae81ff>10.0</span>),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>And now we should have everything we need to handle a <code>StartHomingSequence</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// motion/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Handler<span style=color:#f92672>&lt;</span>StartHomingSequence<span style=color:#f92672>&gt;</span> <span style=color:#66d9ef>for</span> Motion {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Response</span> <span style=color:#f92672>=</span> Result<span style=color:#f92672>&lt;</span>Ack, Nack<span style=color:#f92672>&gt;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, _: <span style=color:#a6e22e>StartHomingSequence</span>) -&gt; <span style=color:#a6e22e>Self</span>::Response {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> self.control_mode {
+</span></span><span style=display:flex><span>            ControlMode::Idle <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> home <span style=color:#f92672>=</span> self.motion_params.homing_sequence();
+</span></span><span style=display:flex><span>                self.control_mode <span style=color:#f92672>=</span> ControlMode::Home(home);
+</span></span><span style=display:flex><span>                Ok(Ack::default())
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// it doesn&#39;t make sense to start a homing sequence if we&#39;re already
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#75715e>// doing something else...
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            _ <span style=color:#f92672>=&gt;</span> Err(Nack::default()),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=the-next-step>The Next Step
+<a class=heading-link href=#the-next-step><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>If you&rsquo;ve done this sort of thing before, you&rsquo;ll know we&rsquo;ve got all the basic
+components for an embedded motion controller. There is:</p><ul><li>A <em>Communications</em> system which talks to the outside world and can be used to
+send message to the various parts of the application</li><li>Some <em>Automation Sequences</em></li><li>A <em>Motion</em> system which implements a state machine that can be used to move
+things around and interact with the outside world</li></ul><p>We&rsquo;ve got one big problem though&mldr;</p><p>This is a simulation that runs in the browser and at the moment all we can see
+is a white screen with a rapidly changing <a href=https://adventures.michaelfbryan.com/posts/fps-counter/>FPS Counter</a> in one
+corner. There&rsquo;s currently no way to interact with our simulator, set motion
+parameters, or even see what it&rsquo;s doing.</p><p>That&rsquo;ll be our goal for next time.</p></div><footer></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=https://cdn.jsdelivr.net/npm/mermaid@9.3.0/dist/mermaid.min.js integrity="sha256-QdTG1YTLLTwD3b95jLqFxpQX9uYuJMNAtVZgwKX4oYU=" crossorigin=anonymous></script><script>mermaid.initialize({startOnLoad:!0})</script><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>

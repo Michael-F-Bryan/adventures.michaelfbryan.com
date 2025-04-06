@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Adventures-in-Motion-Control on Michael-F-Bryan</title><link>https://adventures.michaelfbryan.com/tags/adventures-in-motion-control/</link><description>Recent content in Adventures-in-Motion-Control on Michael-F-Bryan</description><generator>Hugo</generator><language>en</language><lastBuildDate>Tue, 01 Apr 2025 09:19:10 +0800</lastBuildDate><atom:link href="https://adventures.michaelfbryan.com/tags/adventures-in-motion-control/index.xml" rel="self" type="application/rss+xml"/><item><title>Working With G-Code</title><link>https://adventures.michaelfbryan.com/posts/working-with-gcode/</link><pubDate>Fri, 18 Oct 2019 00:05:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/working-with-gcode/</guid><description>&lt;p>As mentioned in &lt;a href="https://adventures.michaelfbryan.com/posts/wiring-up-communication/#the-next-step" >the previous post&lt;/a> there are a handful of tasks
+which may be tackled next, but only one of them really allows us to make progress
+towards our goal of implementing the simulated firmware for a 3D Printer.&lt;/p>
+&lt;p>Let&amp;rsquo;s send the motion controller some g-code.&lt;/p>
+&lt;h2 id="creating-message-types">
+ Creating Message types
+ &lt;a class="heading-link" href="#creating-message-types">
+ &lt;i class="fa-solid fa-link" aria-hidden="true" title="Link to heading">&lt;/i>
+ &lt;span class="sr-only">Link to heading&lt;/span>
+ &lt;/a>
+&lt;/h2>
+&lt;p>If we want to send g-code programs between the frontend and backend we&amp;rsquo;ll need
+to make a couple message definitions.&lt;/p></description></item><item><title>Wiring Up Communication</title><link>https://adventures.michaelfbryan.com/posts/wiring-up-communication/</link><pubDate>Thu, 10 Oct 2019 22:58:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/wiring-up-communication/</guid><description>&lt;p>As we mentioned &lt;a href="https://adventures.michaelfbryan.com/posts/a-better-frontend/#the-next-step" >in the last AiMC post&lt;/a>, the next task is to wire up
+communications between the simulator&amp;rsquo;s backend and frontend.&lt;/p>
+&lt;p>As a general rule, our frontend will have two communication regimes:&lt;/p>
+&lt;ol>
+&lt;li>When something happens (e.g. a button is pressed or a job starts sending),
+the frontend will send a batch of messages to the backend and interpret the
+response&lt;/li>
+&lt;li>The frontend will continually poll the backend&amp;rsquo;s state in the background
+(e.g. at 10Hz)&lt;/li>
+&lt;/ol>
+&lt;p>As it is, the &lt;code>Browser&lt;/code> in our WASM code already provides a method for
+sending data to the frontend (&lt;a href="https://michael-f-bryan.github.io/adventures-in-motion-control/aimc_sim/struct.Browser.html#method.send_data" class="external-link" target="_blank" rel="noopener">&lt;code>Browser::send_data()&lt;/code>&lt;/a>) and
+receiving data from the frontend (&lt;a href="https://michael-f-bryan.github.io/adventures-in-motion-control/aimc_sim/struct.App.html#method.on_data_received" class="external-link" target="_blank" rel="noopener">&lt;code>App::on_data_received()&lt;/code>&lt;/a>) so
+we shouldn&amp;rsquo;t need to write any Rust code.&lt;/p></description></item><item><title>A Better Frontend</title><link>https://adventures.michaelfbryan.com/posts/a-better-frontend/</link><pubDate>Fri, 27 Sep 2019 03:47:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/a-better-frontend/</guid><description>&lt;p>Now we&amp;rsquo;ve got a half-usable motion controller, we need a graphical way for
+humans to interact with it. The controller runs in a browser, which makes
+&lt;a href="https://vuejs.org/" class="external-link" target="_blank" rel="noopener">Vue&lt;/a> a perfect candidate for the UI.&lt;/p>
+&lt;h2 id="adding-vue-to-the-frontend">
+ Adding Vue to the Frontend
+ &lt;a class="heading-link" href="#adding-vue-to-the-frontend">
+ &lt;i class="fa-solid fa-link" aria-hidden="true" title="Link to heading">&lt;/i>
+ &lt;span class="sr-only">Link to heading&lt;/span>
+ &lt;/a>
+&lt;/h2>
+&lt;p>Now, we don&amp;rsquo;t actually have much frontend code (47 lines of JavaScript to be
+exact) so it&amp;rsquo;s actually easier to delete the existing &lt;code>frontend&lt;/code> and use the
+&lt;a href="https://cli.vuejs.org/guide/installation.html" class="external-link" target="_blank" rel="noopener">&lt;code>vue&lt;/code> CLI tool&lt;/a> to create a new one.&lt;/p></description></item><item><title>Initial Motion System</title><link>https://adventures.michaelfbryan.com/posts/initial-motion-system/</link><pubDate>Wed, 18 Sep 2019 20:00:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/initial-motion-system/</guid><description>&lt;p>Now we&amp;rsquo;ve got &lt;a href="https://adventures.michaelfbryan.com/posts/simple-automation-sequences/#the-next-step" >some simple automation&lt;/a> code, lets start a proper
+&lt;em>Motion&lt;/em> system.&lt;/p>
+&lt;p>Most &lt;em>Motion&lt;/em> systems are designed around a &lt;em>&amp;ldquo;control mode&amp;rdquo;&lt;/em>, a fancy term for
+&lt;em>&amp;ldquo;what is the machine doing right now?&amp;rdquo;&lt;/em> Common control modes are:&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>Idle&lt;/code> - the default control mode, machines revert to &lt;code>Idle&lt;/code> whenever they&amp;rsquo;re
+not doing anything&lt;/li>
+&lt;li>&lt;code>Automation&lt;/code> - running an automation sequence&lt;/li>
+&lt;li>&lt;code>Recipe&lt;/code> - executing a job (a set of instructions for how to execute a job
+and the motion parameters that should be used is often referred to as a
+&lt;em>Recipe&lt;/em>)&lt;/li>
+&lt;li>&lt;code>Manual&lt;/code> - manual movement, where velocity may be controlled via a handset
+or the user invokes a &lt;em>&amp;ldquo;jog to position&amp;rdquo;&lt;/em> function&lt;/li>
+&lt;/ul>
+&lt;p>There are several ways to transition between control modes.&lt;/p></description></item><item><title>Simple Automation Sequences</title><link>https://adventures.michaelfbryan.com/posts/simple-automation-sequences/</link><pubDate>Sat, 14 Sep 2019 23:55:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/simple-automation-sequences/</guid><description>&lt;p>Now we can communicate with the outside world, let&amp;rsquo;s start interacting with the
+&amp;ldquo;hardware&amp;rdquo; attached to our motion controller. This will be the beginning of our
+&lt;em>Motion&lt;/em> system.&lt;/p>
+&lt;p>The simplest way to interact with the world is by executing a pre-defined
+routine, and one of the simplest useful routines is to move all axes to the
+home position.&lt;/p>
+&lt;h2 id="system-inputs-and-outputs">
+ System Inputs and Outputs
+ &lt;a class="heading-link" href="#system-inputs-and-outputs">
+ &lt;i class="fa-solid fa-link" aria-hidden="true" title="Link to heading">&lt;/i>
+ &lt;span class="sr-only">Link to heading&lt;/span>
+ &lt;/a>
+&lt;/h2>
+&lt;p>From our &lt;a href="https://adventures.michaelfbryan.com/posts/announcing-adventures-in-motion-control/#identifying-requirements-and-subsystems" >initial requirements gathering&lt;/a> we know that our 3D
+printer will have three linear axes (X, Y, and Z), with limit switches at the
+ends of each axis. This gives our new &lt;em>Motion&lt;/em> system six inputs to deal with.&lt;/p></description></item><item><title>The Communications System: Part 2</title><link>https://adventures.michaelfbryan.com/posts/comms-part-2/</link><pubDate>Sun, 08 Sep 2019 01:20:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/comms-part-2/</guid><description>&lt;p>Now we have a mechanism for transferring bytes from the frontend to the
+simulator and back again, we need to translate those bytes into higher-level
+messages. Luckily each [&lt;code>anpp::Packet&lt;/code>] contains an &lt;a href="https://docs.rs/anpp/1.0.1/anpp/struct.Packet.html#method.id" class="external-link" target="_blank" rel="noopener">&lt;code>ID&lt;/code> field&lt;/a> that
+is designed specifically for this purpose.&lt;/p>
+&lt;p>That lets us do something like this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-rust" data-lang="rust">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// (not real code)
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">enum&lt;/span> &lt;span style="color:#a6e22e">Message&lt;/span>&lt;span style="color:#f92672">&amp;lt;&lt;/span>&lt;span style="color:#a6e22e">&amp;#39;a&lt;/span>&lt;span style="color:#f92672">&amp;gt;&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Ping,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> StatusCheck,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> ProgramChunk {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> chunk_number: &lt;span style="color:#66d9ef">usize&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> body: &lt;span style="color:#66d9ef">&amp;amp;&lt;/span>&lt;span style="color:#a6e22e">&amp;#39;a&lt;/span> [&lt;span style="color:#66d9ef">u8&lt;/span>],
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">..&lt;/span>.
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">struct&lt;/span> &lt;span style="color:#a6e22e">UnknownMessageError&lt;/span>;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">fn&lt;/span> &lt;span style="color:#a6e22e">parse_packet&lt;/span>&lt;span style="color:#f92672">&amp;lt;&lt;/span>&lt;span style="color:#a6e22e">&amp;#39;a&lt;/span>&lt;span style="color:#f92672">&amp;gt;&lt;/span>(pkt: &lt;span style="color:#66d9ef">&amp;amp;&lt;/span>&lt;span style="color:#a6e22e">&amp;#39;a&lt;/span> &lt;span style="color:#a6e22e">Packet&lt;/span>) -&amp;gt; Result&lt;span style="color:#f92672">&amp;lt;&lt;/span>Message&lt;span style="color:#f92672">&amp;lt;&lt;/span>&lt;span style="color:#a6e22e">&amp;#39;a&lt;/span>&lt;span style="color:#f92672">&amp;gt;&lt;/span>, UnknownMessageError&lt;span style="color:#f92672">&amp;gt;&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#66d9ef">match&lt;/span> pkt.id() {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#ae81ff">0&lt;/span> &lt;span style="color:#f92672">=&amp;gt;&lt;/span> Ok(Message::Ping),
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#ae81ff">1&lt;/span> &lt;span style="color:#f92672">=&amp;gt;&lt;/span> Ok(Message::StatusCheck),
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#ae81ff">2&lt;/span> &lt;span style="color:#f92672">=&amp;gt;&lt;/span> Ok(&lt;span style="color:#f92672">..&lt;/span>.),
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> _ &lt;span style="color:#f92672">=&amp;gt;&lt;/span> Err(UnknownMessageError),
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The top-level &lt;code>App&lt;/code> can handle messages by routing them to the appropriate
+system and invoking a message handler.&lt;/p></description></item><item><title>The Communications System: Part 1</title><link>https://adventures.michaelfbryan.com/posts/comms-part-1/</link><pubDate>Fri, 06 Sep 2019 23:00:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/comms-part-1/</guid><description>&lt;h2 id="prelude">
+ Prelude
+ &lt;a class="heading-link" href="#prelude">
+ &lt;i class="fa-solid fa-link" aria-hidden="true" title="Link to heading">&lt;/i>
+ &lt;span class="sr-only">Link to heading&lt;/span>
+ &lt;/a>
+&lt;/h2>
+&lt;p>The &lt;em>Communications&lt;/em> system is arguably one of the most important parts of
+our simulator. After all, it&amp;rsquo;s kinda hard to debug a program when you can&amp;rsquo;t
+ask it why something isn&amp;rsquo;t working.&lt;/p>
+&lt;p>The user will interact with our simulated motion controller via a single
+&lt;em>Serial Port&lt;/em>, which we&amp;rsquo;ll be modelling as a simple thing which sends and
+receives bytes. Serial ports are a fairly old technology, and have several
+drawbacks compared to the Ethernet and TCP protocols that most programmers
+are familiar with.&lt;/p></description></item><item><title>FPS Counter</title><link>https://adventures.michaelfbryan.com/posts/fps-counter/</link><pubDate>Tue, 03 Sep 2019 08:50:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/fps-counter/</guid><description>&lt;p>As mentioned in &lt;a href="https://adventures.michaelfbryan.com/posts/top-level-infrastructure/#the-next-step" >the previous article&lt;/a> the next task is to
+implement our first proper &lt;code>System&lt;/code>, the &lt;code>FpsCounter&lt;/code>.&lt;/p>
+&lt;blockquote>
+&lt;p>A relatively easy, yet important, component is some sort of FPS counter.
+Ideally there’ll be a bit of text in the corner showing the number of
+&lt;code>poll()&lt;/code>s per second and the average duration. That way we can get a better
+feel for our simulator’s performance characteristics.&lt;/p>&lt;/blockquote>
+&lt;p>An &lt;code>FpsCounter&lt;/code> has two responsibilities,&lt;/p></description></item><item><title>Top-Level Infrastructure</title><link>https://adventures.michaelfbryan.com/posts/top-level-infrastructure/</link><pubDate>Mon, 02 Sep 2019 21:22:30 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/top-level-infrastructure/</guid><description>&lt;p>As mentioned in &lt;a href="https://adventures.michaelfbryan.com/posts/announcing-adventures-in-motion-control/#the-next-step" >the intro article&lt;/a>, the first task will be to set
+up the application&amp;rsquo;s structure and define how the various components will
+communicate.&lt;/p>
+&lt;h2 id="multitasking">
+ Multitasking
+ &lt;a class="heading-link" href="#multitasking">
+ &lt;i class="fa-solid fa-link" aria-hidden="true" title="Link to heading">&lt;/i>
+ &lt;span class="sr-only">Link to heading&lt;/span>
+ &lt;/a>
+&lt;/h2>
+&lt;p>Most embedded systems will implement multi-tasking by rapidly polling each
+system within an infinite loop.&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-rust" data-lang="rust">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">loop&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> poll_comms();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> poll_motion_planning();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> poll_io();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> poll_machine_events();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>A motion controller will normally spend most of its time polling, but there are
+places where polling isn&amp;rsquo;t appropriate. For example, accurate movement of a
+stepper motor relies on sending pulses at very precise times. Another scenario
+is in the handling of communication, where waiting for the next poll to read a
+byte may result in missing part of a message.&lt;/p></description></item><item><title>Announcing Adventures in Motion Control</title><link>https://adventures.michaelfbryan.com/posts/announcing-adventures-in-motion-control/</link><pubDate>Sun, 01 Sep 2019 16:27:15 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/announcing-adventures-in-motion-control/</guid><description>&lt;p>This is the first installation in my &lt;em>Adventures in Motion Control&lt;/em> series.&lt;/p>
+&lt;p>At &lt;code>$JOB&lt;/code> we build industrial CNC machines, and while developing a simulator
+for our machines I noticed a distinct lack of online resources on how
+they work under the hood. Hopefully this series will address the situation.&lt;/p>
+&lt;h2 id="the-goal">
+ The Goal
+ &lt;a class="heading-link" href="#the-goal">
+ &lt;i class="fa-solid fa-link" aria-hidden="true" title="Link to heading">&lt;/i>
+ &lt;span class="sr-only">Link to heading&lt;/span>
+ &lt;/a>
+&lt;/h2>
+&lt;p>The goal for this series is to develop a simulator which will accurately reflect
+how an embedded motion controller is implemented internally.&lt;/p></description></item></channel></rss>

@@ -1,0 +1,1468 @@
+<!doctype html><html lang=en><head><title>Creating Interactive Applications While Maintaining Your Sanity · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="One of the primary reasons computers are so ubiquitous in modern society is
+their ability to let humans and software cooperate to achieve a desired goal.
+That is, to be interactive.
+Creating interactive applications can be pretty annoying for a programmer.
+Unlike a computer which is predictable and will blindly follow any
+instructions given to it,
+
+Humans are unpredictable. They like to press buttons and push features further
+than they were originally intended
+Humans have a habit of asking for special cases (&ldquo;Feature X works really
+well, but when I click on this triangle while holding shift and tilting my
+head at an angle, it should really do Y instead. It&rsquo;s not a big feature, can
+you just add?&rdquo;)
+Humans often don&rsquo;t know what they want, meaning even if you implement
+something exactly as described to you users will still complain about it not
+doing the right thing
+The real world is messy, and letting users interact with your program is a
+really effective way of mixing the messy outside world with the nice
+structured world inside a computer
+Also, users are the ones funding your pay check so you should probably try
+to keep them happy 😁
+
+The ideas and concepts shown in this article aren&rsquo;t overly advanced. In fact,
+if you&rsquo;ve been programming for a couple months (especially if it&rsquo;s part of a
+formal Computer Science program) you&rsquo;re probably already familiar with them."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="Creating Interactive Applications While Maintaining Your Sanity"><meta name=twitter:description content="One of the primary reasons computers are so ubiquitous in modern society is their ability to let humans and software cooperate to achieve a desired goal. That is, to be interactive.
+Creating interactive applications can be pretty annoying for a programmer. Unlike a computer which is predictable and will blindly follow any instructions given to it,
+Humans are unpredictable. They like to press buttons and push features further than they were originally intended Humans have a habit of asking for special cases (“Feature X works really well, but when I click on this triangle while holding shift and tilting my head at an angle, it should really do Y instead. It’s not a big feature, can you just add?”) Humans often don’t know what they want, meaning even if you implement something exactly as described to you users will still complain about it not doing the right thing The real world is messy, and letting users interact with your program is a really effective way of mixing the messy outside world with the nice structured world inside a computer Also, users are the ones funding your pay check so you should probably try to keep them happy 😁 The ideas and concepts shown in this article aren’t overly advanced. In fact, if you’ve been programming for a couple months (especially if it’s part of a formal Computer Science program) you’re probably already familiar with them."><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/implementing-interactive-applications/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="Creating Interactive Applications While Maintaining Your Sanity"><meta property="og:description" content="One of the primary reasons computers are so ubiquitous in modern society is their ability to let humans and software cooperate to achieve a desired goal. That is, to be interactive.
+Creating interactive applications can be pretty annoying for a programmer. Unlike a computer which is predictable and will blindly follow any instructions given to it,
+Humans are unpredictable. They like to press buttons and push features further than they were originally intended Humans have a habit of asking for special cases (“Feature X works really well, but when I click on this triangle while holding shift and tilting my head at an angle, it should really do Y instead. It’s not a big feature, can you just add?”) Humans often don’t know what they want, meaning even if you implement something exactly as described to you users will still complain about it not doing the right thing The real world is messy, and letting users interact with your program is a really effective way of mixing the messy outside world with the nice structured world inside a computer Also, users are the ones funding your pay check so you should probably try to keep them happy 😁 The ideas and concepts shown in this article aren’t overly advanced. In fact, if you’ve been programming for a couple months (especially if it’s part of a formal Computer Science program) you’re probably already familiar with them."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2020-02-06T23:43:00+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Rust"><meta property="article:tag" content="Architecture"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/implementing-interactive-applications/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/implementing-interactive-applications/>Creating Interactive Applications While Maintaining Your Sanity</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2020-02-06T23:43:00+08:00>February 6, 2020
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+40-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/rust/>Rust</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/architecture/>Architecture</a></span></div></div></header><div class=post-content><p>One of the primary reasons computers are so ubiquitous in modern society is
+their ability to let humans and software cooperate to achieve a desired goal.
+That is, to be interactive.</p><p>Creating interactive applications can be pretty annoying for a programmer.
+Unlike a computer which is predictable and will blindly follow any
+instructions given to it,</p><ul><li>Humans are unpredictable. They like to press buttons and push features further
+than they were originally intended</li><li>Humans have a habit of asking for special cases (<em>&ldquo;Feature X works really
+well, but when I click on this triangle while holding shift and tilting my
+head at an angle, it should really do Y instead. It&rsquo;s not a big feature, can
+you just add?&rdquo;</em>)</li><li>Humans often don&rsquo;t know what they want, meaning even if you implement
+something exactly as described to you users will still complain about it not
+doing the right thing</li><li>The real world is messy, and letting users interact with your program is a
+really effective way of mixing the messy outside world with the nice
+structured world inside a computer</li><li>Also, users are the ones funding your pay check so you should probably try
+to keep them happy 😁</li></ul><p>The ideas and concepts shown in this article aren&rsquo;t overly advanced. In fact,
+if you&rsquo;ve been programming for a couple months (especially if it&rsquo;s part of a
+formal Computer Science program) you&rsquo;re probably already familiar with them.</p><p>The difference between an &ldquo;ordinary&rdquo; programmer and a Software Engineer isn&rsquo;t
+in how many advanced concepts they know, it&rsquo;s the ability to identify a
+pattern, understand why it exists, and employ it to solve a problem. The
+experienced software engineer will do this in a way which won&rsquo;t make them sad
+6 months from now when they need to revisit the code because the boss has
+asked for a shiny new feature.</p><div class="notices note"><p>The code written in this article is available <a href=https://github.com/Michael-F-Bryan/arcs class=external-link target=_blank rel=noopener>on GitHub</a>. Feel free to
+browse through and steal code or inspiration.</p><p>If you found this useful or spotted a bug, let me know on the blog&rsquo;s
+<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com class=external-link target=_blank rel=noopener>issue tracker</a>!</p></div><h2 id=coming-up-with-a-design>Coming Up With A Design
+<a class=heading-link href=#coming-up-with-a-design><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Before we write any code we need to do two things,</p><ol><li>Define what we mean by making a program &ldquo;interactive&rdquo;</li><li>Come up with a formal model to implement this interactivity</li></ol><p>This step is arguably the most important. Many a project has been ruined</p><p>I work in the CNC industry, and one of my tasks is the development and
+maintenance of an application for Computer Aided Design. So when I say the
+word <em>&ldquo;interactive&rdquo;</em> I think of the user being able to adding items to a
+drawing through a sequence of mouse clicks and key presses while receiving
+visual feedback in real time.</p><p>For example, if you wanted to draw an arc on the canvas you might</p><ol><li>Select the arc tool</li><li>Click where you want the arc&rsquo;s centre to be on the canvas (this draws a dot
+where you clicked)</li><li>Click another location to set the arc&rsquo;s start point (drawing another dot,
+plus a line between the two dots to indicate the arc&rsquo;s radius)</li><li>Move the cursor to where you want the arc&rsquo;s end point to be (as you move the
+cursor a temporary arc is drawn on the canvas to show what it would look like
+if you placed the arc&rsquo;s end point at the cursor location)</li><li>Click to place the end point, actually adding the arc to the drawing</li></ol><figure><img src=/img/solidworks-arc.gif alt="Drawing an arc using SolidWorks"><figcaption><p>Drawing an arc using SolidWorks</p></figcaption></figure><p>The typical way to implement this is with a state machine. You&rsquo;ll add a variable
+(typically an integer) to your window, then when something happens (e.g. a mouse
+click) there is a switch statement which will execute the desired code depending
+on the current state.</p><p>To be fair, this kinda works. However it doesn&rsquo;t foster robustness or long
+term maintainability.</p><p>The cause for this is two-fold, a &ldquo;state&rdquo; is scattered around half a dozen
+different event handlers and buried inside large switch-case statements. That
+means adding a new state or adjusting an existing one tends to look a lot like
+<a href=https://refactoring.guru/smells/shotgun-surgery class=external-link target=_blank rel=noopener>shotgun surgery</a> with changes spread out across the app.</p><p>The second reason using a simple integer to track the current state is that a
+&ldquo;state&rdquo; often constitutes more than a simple &ldquo;I am doing X&rdquo;.</p><p>See those lines and annotations used to provide the user with visual feedback
+in the gif? Where do you think they&rsquo;re stored? If a &ldquo;state&rdquo; is just an
+integer these temporary variables will typically be stored as fields attached
+to the <code>Window</code>. Not only does this add a lot of unnecessary fields to an
+already bloated object, a lot of these fields are only valid during specific
+states and we have no way to statically ensure that a field will be
+initialized or destroyed at the correct time.</p><p>This becomes especially painful when writing Rust because you can&rsquo;t just ignore
+a <code>null</code> field&mldr; Almost as if the code is trying to tell us something 🤔</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#66d9ef>const</span> <span style=color:#66d9ef>STATE_IDLE</span>: <span style=color:#66d9ef>u32</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>const</span> <span style=color:#66d9ef>STATE_SELECTING_ARC_CENTRE</span>: <span style=color:#66d9ef>u32</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>2</span>;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>const</span> <span style=color:#66d9ef>STATE_SELECTING_ARC_START_POINT</span>: <span style=color:#66d9ef>u32</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>3</span>;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>const</span> <span style=color:#66d9ef>STATE_SELECTING_ARC_END_POINT</span>: <span style=color:#66d9ef>u32</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>4</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Window</span> {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Which state we are currently in.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    current_state: <span style=color:#66d9ef>u32</span>,
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The temporary dot we draw when the arc&#39;s centre point is selected.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    temp_arc_centre: Option<span style=color:#f92672>&lt;</span>Point<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The temporary radial line drawn after the arc&#39;s start point is selected.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    temp_arc_radius: Option<span style=color:#f92672>&lt;</span>Line<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// A preview of the arc we&#39;re drawing when the user is moving their cursor
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// to the arc&#39;s end point.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    temp_arc_preview: Option<span style=color:#f92672>&lt;</span>Arc<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The angle annotation that hovers near the cursor while selecting the end
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// point.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    temp_arc_angle_annotation: Option<span style=color:#f92672>&lt;</span>Annotation<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// 50 more fields containing variables needed by the other states
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>I have seen such code monsters inside 10,000+ line <code>Window</code> classes in the
+wild. They are not fun to maintain or debug.</p><p>Please don&rsquo;t do this.</p><p>A much better solution is to use something like the <a href=https://refactoring.guru/design-patterns/state class=external-link target=_blank rel=noopener><em>State Pattern</em></a>.</p><div class="notices tip"><p>It may sound weird for someone who is both a Functional Programming fan and
+diehard Rust coder to be promoting object-oriented design patterns, but bear
+with me.</p><p>There is method to this madness.</p></div><p>The idea behind the <em>State Pattern</em> is pretty simple, encapsulate everything
+about a particular &ldquo;state&rdquo; into an object which can respond to events and
+trigger transitions to other states.</p><p>In code the state pattern looks something like this:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Window</span> {
+</span></span><span style=display:flex><span>    current_state: Box<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>dyn</span> State<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>trait</span> State {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_mouse_down</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, cursor: <span style=color:#a6e22e>Vector2D</span>, drawing: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Drawing) -&gt; <span style=color:#a6e22e>Transition</span>;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_mouse_up</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, cursor: <span style=color:#a6e22e>Vector2D</span>, drawing: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Drawing) -&gt; <span style=color:#a6e22e>Transition</span>;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_mouse_move</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, cursor: <span style=color:#a6e22e>Vector2D</span>, drawing: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Drawing) -&gt; <span style=color:#a6e22e>Transition</span>;
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>Transition</span> {
+</span></span><span style=display:flex><span>    ChangeState(Box<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>dyn</span> State<span style=color:#f92672>&gt;</span>),
+</span></span><span style=display:flex><span>    DoNothing,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>To complete the pattern, our <code>Window</code> just needs to propagate events to the
+current state and possibly switch to a new state based on the returned
+<code>Transition</code>.</p><div class="notices info"><p>Although all code in this article is written in Rust, there&rsquo;s nothing really
+Rust-specific going on here.</p><p>I just happen to be working on adding interactivity to the WebAssembly demo
+for <a href=https://github.com/Michael-F-Bryan/arcs class=external-link target=_blank rel=noopener>arcs</a>, a CAD library I&rsquo;m writing from scratch based on my
+experiences in other languages.</p></div><p>Another very important aspect of this pattern is how it is completely
+<em>decoupled</em> from the <code>Window</code> (as far as each <code>State</code> is concerned, it doesn&rsquo;t
+even know the <code>Window</code> exists).</p><p>When your <code>State</code> doesn&rsquo;t know anything about the rest of the world and can
+only interact with data passed to it as parameters it becomes almost trivial
+to test. Create a dummy drawing in memory, instantiate the <code>State</code>, then call
+an event handler and make sure it behaves as expected.</p><h3 id=nested-states>Nested States
+<a class=heading-link href=#nested-states><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>At this point you need to look at your application and ask whether it makes
+sense for a state to have a &ldquo;sub-state&rdquo;, and how you want to represent
+sub-states.</p><p>To make this idea of nested states more concrete, consider the example from
+before where we were adding an arc to the canvas. Clicking the <em>&ldquo;Arc&rdquo;</em> tool
+transitioned to the <em>&ldquo;Adding Arc&rdquo;</em> state, but we hadn&rsquo;t actually started drawing
+anything on the canvas at that point. It was only after clicking that we started
+the process of drawing an arc.</p><p>You <em>could</em> make every possible tool and action part of the same state
+machine, but if we were to draw the state machine diagram it&rsquo;d require a
+massive whiteboard. It also wouldn&rsquo;t fit in your head. Especially when you
+consider that users should be able to cancel pretty much any action midway
+through (e.g. if they put the arc&rsquo;s centre in the wrong spot or didn&rsquo;t mean
+to enter arc mode at all).</p><p>Another way to structure this is to introduce some form of nesting. That way
+when the user is in the <em>&ldquo;Arc Mode&rdquo;</em> you just need to consider the states and
+transitions related to the arc mode&rsquo;s sub-states.</p><div class=mermaid align=center>stateDiagram
+state "Idle" as idle
+state "Arc Mode" as arc
+state "Point Mode" as point
+[*] --> idle
+idle --> arc
+idle --> point
+state arc {
+state "Arc Mode Idle State" as arc_idle
+state "Selected Centre" as arc_selected_centre
+state "Selected Start Point" as arc_selected_start
+state "Selected End Point" as arc_selected_e
+arc_idle --> arc_selected_centre
+arc_selected_centre --> arc_selected_start
+arc_selected_centre --> arc_idle: Cancel
+arc_selected_start --> arc_selected_e
+arc_selected_start --> arc_idle: Cancel
+arc_selected_e --> arc_idle: Arc added to drawing
+}
+state point { }</div><p>There are a couple ways you can implement nesting, both with their pros and
+cons,</p><ol><li>Give a top-level state (&ldquo;mode&rdquo;) its own set of nested state machines as
+required</li><li>Go one step higher in the ladder of abstraction and use a <em>stack</em> of <code>State</code>s
+(also called a <a href=https://en.wikipedia.org/wiki/Pushdown_automaton class=external-link target=_blank rel=noopener>Pushdown Automata</a>), introducing <code>Push</code> and <code>Pop</code>
+operations to <code>Transition</code> and sending events to the top-most <code>State</code></li></ol><p>Using nested state machines means your states can be custom-tailored for the
+current mode and make assumptions based on the other states within their state
+machine.</p><p>On the other hand, pushdown automata promote code reuse. If you want to share
+behaviour between different modes it&rsquo;s just a case of pushing the state onto
+the stack and when the set of interactions triggered by the state are done it
+will &ldquo;return&rdquo; to the original state by popping itself from the stack.</p><p>This reusability means you can avoid a lot of code duplication. However, because
+your states need to be more generic by their very nature you aren&rsquo;t able to
+make as many assumptions about what is going on in the big picture.</p><div class="notices tip"><p>Something else to consider is whether it&rsquo;s possible to trigger a transition
+from outside the state machine.</p><p>A typical example of this is when the user clicks a toolbar button to start
+using a different tool. In this case if a transition is triggered you need a
+way to tell the current mode it has been cancelled and it needs to clean up
+after itself, otherwise you risk leaving temporary artifacts around which the
+user can&rsquo;t interact.</p><p>The way this is implemented will change depending on whether you&rsquo;re using
+nested state machines or a pushdown automata.</p></div><p>Like a lot of things where the real world is involved there are trade-offs,
+and it&rsquo;s the Software Engineer&rsquo;s job to figure out which alternative would be
+the least bad in the long term.</p><h2 id=the-infrastructure>The Infrastructure
+<a class=heading-link href=#the-infrastructure><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>The first step in making our application interactive is to create the
+fundamental infrastructure our code will be built on top of.</p><p>The <code>arcs</code> demo app won&rsquo;t be <em>too</em> complex, so we&rsquo;ll take the nested state
+machine route instead of using pushdown automata. In this case we&rsquo;re
+preferring to make the app easier to reason about at the cost of writing
+duplicate code when modes have behaviour in common.</p><div class="notices info"><p>A lot of the content from now on will be focused around <a href=https://github.com/Michael-F-Bryan/arcs class=external-link target=_blank rel=noopener>the <code>arcs</code> CAD
+library</a> because I want to make a demo people can use when evaluating the library
+and as a form of <a href=https://en.wikipedia.org/wiki/Eating_your_own_dog_food class=external-link target=_blank rel=noopener>dogfooding</a>.</p><p>In <a href=https://adventures.michaelfbryan.com/posts/ecs-outside-of-games/ class=external-link target=_blank rel=noopener>a previous article</a> I&rsquo;ve gone into a fair amount of detail
+regarding its design, in particular the use of an <em>Entity Component System</em>
+architecture, so you may want to have a skim through that if you start
+feeling lost.</p></div><p>We don&rsquo;t want our <code>State</code>s to be coupled to any particular implementation of
+the <code>Drawing</code>, instead it just needs to know what can be done with a drawing.
+This also makes testing a lot easier because we can insert mocks if necessary.</p><p>For now the <code>Drawing</code> trait can be left empty. We&rsquo;ll add things to it as the
+various modes are implemented.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// A basic drawing canvas, as seen by the various [`State`]s.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> Drawing { }
+</span></span></code></pre></div><p>For now we only care about four events,</p><ul><li>The left mouse button was pressed</li><li>The left mouse button was released</li><li>The mouse has moved</li><li>A button was pressed on the keyboard</li></ul><p>Combined with an <code>on_cancelled()</code> method, this gives us a nice starting point
+for the <code>State</code> trait.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> State {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The [`State`] has been cancelled and needs to clean up any temporary
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// objects it created.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_cancelled</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, _drawing: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> <span style=color:#66d9ef>dyn</span> Drawing) {}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The left mouse button was pressed.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_mouse_down</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        _drawing: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> <span style=color:#66d9ef>dyn</span> Drawing,
+</span></span><span style=display:flex><span>        _event_args: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>MouseEventArgs</span>,
+</span></span><span style=display:flex><span>    ) -&gt; <span style=color:#a6e22e>Transition</span> {
+</span></span><span style=display:flex><span>        Transition::DoNothing
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The left mouse button was released.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_mouse_up</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        _drawing: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> <span style=color:#66d9ef>dyn</span> Drawing,
+</span></span><span style=display:flex><span>        _event_args: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>MouseEventArgs</span>,
+</span></span><span style=display:flex><span>    ) -&gt; <span style=color:#a6e22e>Transition</span> {
+</span></span><span style=display:flex><span>        Transition::DoNothing
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The mouse moved.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_mouse_move</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        drawing: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> <span style=color:#66d9ef>dyn</span> Drawing,
+</span></span><span style=display:flex><span>        _event_args: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>MouseEventArgs</span>,
+</span></span><span style=display:flex><span>    ) -&gt; <span style=color:#a6e22e>Transition</span> {
+</span></span><span style=display:flex><span>        Transition::DoNothing
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// A button was pressed on the keyboard.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_key_pressed</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, _drawing: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> <span style=color:#66d9ef>dyn</span> Drawing) -&gt; <span style=color:#a6e22e>Transition</span> {
+</span></span><span style=display:flex><span>        Transition::DoNothing
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Instructions to the state machine returned by the various event handlers
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// in [`State`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>Transition</span> {
+</span></span><span style=display:flex><span>    ChangeState(Box<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>dyn</span> State<span style=color:#f92672>&gt;</span>),
+</span></span><span style=display:flex><span>    DoNothing,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices tip"><p>You&rsquo;ll notice we&rsquo;ve given each event handler a default implementation which
+just returns <code>Transition::DoNothing</code>. This is a convenience thing so states
+can ignore events they don&rsquo;t care about without needing to explicitly write a
+no-op event handler.</p></div><p>We also need to create types which provide information about the event that has
+occurred.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> arcs::{CanvasSpace, DrawingSpace};
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> euclid::Point2D;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>MouseEventArgs</span> {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The mouse&#39;s location on the drawing.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> location: <span style=color:#a6e22e>Point2D</span><span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, DrawingSpace<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The mouse&#39;s location on the canvas.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> cursor: <span style=color:#a6e22e>Point2D</span><span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, CanvasSpace<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The state of the mouse buttons.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> button_state: <span style=color:#a6e22e>MouseButtons</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>bitflags::bitflags! {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Which mouse button (or buttons) are pressed?
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>MouseButtons</span>: <span style=color:#66d9ef>u8</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>LEFT_BUTTON</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>RIGHT_BUTTON</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>1</span>;
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>MIDDLE_BUTTON</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>2</span>;
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>KeyboardEventArgs</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> shift_pressed: <span style=color:#66d9ef>bool</span>,
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>pub</span> control_pressed: <span style=color:#66d9ef>bool</span>,
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The semantic meaning of the key currently being pressed, if there is
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// one.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> key: Option<span style=color:#f92672>&lt;</span>VirtualKeyCode<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>VirtualKeyCode</span> {
+</span></span><span style=display:flex><span>    Escape,
+</span></span><span style=display:flex><span>    Left,
+</span></span><span style=display:flex><span>    Up,
+</span></span><span style=display:flex><span>    Right,
+</span></span><span style=display:flex><span>    Down,
+</span></span><span style=display:flex><span>    Back,
+</span></span><span style=display:flex><span>    Return,
+</span></span><span style=display:flex><span>    Space,
+</span></span><span style=display:flex><span>    A,
+</span></span><span style=display:flex><span>    B,
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>    Key9,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices info"><p>You may have noticed the <code>MouseEventArgs</code> has two fields for the mouse&rsquo;s
+location. That&rsquo;s because the mouse has both a physical location on the screen
+(referred to as <code>CanvasSpace</code> by <code>arcs</code>) and an equivalent location on the
+drawing (referred to as <code>DrawingSpace</code>).</p><p>The <code>euclid</code> library exposes types which can be &ldquo;tagged&rdquo; with the coordinate
+space they belong to, ensuring you can&rsquo;t accidentally mix up coordinates in
+<code>DrawingSpace</code> and <code>CanvasSpace</code>.</p><p>For examples of why we might want to avoid this, look up <a href=https://en.wikipedia.org/wiki/Mars_Climate_Orbiter class=external-link target=_blank rel=noopener><em>The Mars Climate
+Orbiter</em></a>. For more details on the various coordinate spaces, see the
+<a href=https://michael-f-bryan.github.io/arcs/arcs/index.html class=external-link target=_blank rel=noopener><code>arcs</code> crate docs</a>.</p></div><p>We&rsquo;ll almost certainly want to print the state of the world to the console at
+some point (you have no idea how helpful this is when debugging complex
+interactions!), so let&rsquo;s also require that all <code>State</code>s implement <code>Debug</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::fmt::Debug;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> State: <span style=color:#a6e22e>Debug</span> {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=idle-mode>Idle Mode
+<a class=heading-link href=#idle-mode><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>We usually refer to the base <code>State</code> for an application as <em>Idle</em>. This is where
+the user isn&rsquo;t in the middle of an interaction and the computer is waiting to
+do something.</p><div class="notices note"><p>As a convention I&rsquo;ll refer to top-level <code>State</code>s as <em>Modes</em> (i.e. <code>IdleMode</code>,
+<code>AddArcMode</code>, <code>AddPointMode</code>, etc.), with any sub-states being referred to as
+just states.</p><p>This is just something I&rsquo;ve noticed when watching people train new users at
+work. I&rsquo;m not sure how widespread the convention is. The top-level <code>State</code>
+that a user has conscious control over (e.g. by clicking buttons on the
+toolbar) normally gets referred to as a <em>Mode</em>, and intermediate <code>State</code>s
+created while performing an action inside a mode aren&rsquo;t normally significant
+enough (to an end user) to get a bespoke name.</p></div><p>First we need to create a type representig the <code>Idle</code> state and implement
+<code>State</code> for it.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/idle.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> <span style=color:#66d9ef>crate</span>::modes::State;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Idle</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> State <span style=color:#66d9ef>for</span> Idle {}
+</span></span></code></pre></div><p>We&rsquo;ll also need to tell Rust that <code>idle.rs</code> is part of the <code>modes</code> module and
+we want the <code>Idle</code> mode publicly accessible.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>mod</span> idle;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>use</span> idle::Idle;
+</span></span></code></pre></div><p>Next we need to figure out what we want our <code>Idle</code> mode to do. Some normal
+responsibilities for an <code>Idle</code> mode are,</p><ul><li>Clicking on one or more objects to select them</li><li>Triggering a &ldquo;drag&rdquo; action when the user clicks and drags on an object</li><li>Clearing the current selection when the user clicks in the middle of nowhere</li></ul><p>In addition to this we can hard-code a couple keyboard shortcuts.</p><ul><li><code>A</code> - transitions to <code>ArcMode</code> for drawing arcs</li><li><code>L</code> - transitions to <code>LineMode</code> for drawing lines</li><li><code>P</code> - transitions to <code>PointMode</code> for drawing points</li></ul><div class="notices note"><p>This is mainly because I&rsquo;m lazy and don&rsquo;t want to mess around with giving the
+<code>arcs</code> demo a toolbar for changing modes just yet, but not having to worry
+about external transitions right away should also make it easier for the
+reader to follow.</p></div><p>I&rsquo;m envisioning something like this for our <code>Idle</code> mode.</p><div class=mermaid align=center>stateDiagram
+state arc: Arc Mode
+state line: Line Mode
+state point: Point Mode
+[*] --> Idle
+Idle --> arc: A
+Idle --> line: L
+Idle --> point: P
+line --> Idle: Cancel
+arc --> Idle: Cancel
+point --> Idle: Cancel
+state Idle {
+state "dragging" as idle_dragging
+idle --> idle_dragging: Mouse Down
+idle_dragging --> idle_dragging: Mouse Move
+idle_dragging --> idle: Mouse Up
+}</div><h3 id=idle-mode-keyboard-shortcuts>Idle Mode Keyboard Shortcuts
+<a class=heading-link href=#idle-mode-keyboard-shortcuts><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>The keyboard shortcuts for changing to <code>AddArcMode</code> and friends is easy enough
+to implement. We just need to handle the <code>on_key_pressed()</code> event and <code>match</code>
+on the key that was pressed, returning a <code>Transition::ChangeState</code> if it&rsquo;s
+a button we support.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/idle.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> State <span style=color:#66d9ef>for</span> Idle {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_key_pressed</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        _drawing: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> <span style=color:#66d9ef>dyn</span> Drawing,
+</span></span><span style=display:flex><span>        event_args: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>KeyboardEventArgs</span>,
+</span></span><span style=display:flex><span>    ) -&gt; <span style=color:#a6e22e>Transition</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> event_args.key {
+</span></span><span style=display:flex><span>            Some(VirtualKeyCode::A) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                Transition::ChangeState(Box::new(AddArcMode::default()))
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            Some(VirtualKeyCode::P) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                Transition::ChangeState(Box::new(AddPointMode::default()))
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            Some(VirtualKeyCode::L) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                Transition::ChangeState(Box::new(AddLineMode::default()))
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            _ <span style=color:#f92672>=&gt;</span> Transition::DoNothing,
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We haven&rsquo;t actually created <code>AddArcMode</code>, <code>AddPointMode</code>, and <code>AddLineMode</code> yet,
+so let&rsquo;s stub out some code for them.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/add_point_mode.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> <span style=color:#66d9ef>crate</span>::modes::State;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Default)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>AddPointMode</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> State <span style=color:#66d9ef>for</span> AddPointMode {}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/add_line_mode.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> <span style=color:#66d9ef>crate</span>::modes::State;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Default)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>AddLineMode</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> State <span style=color:#66d9ef>for</span> AddLineMode {}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/add_arc_mode.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> <span style=color:#66d9ef>crate</span>::modes::State;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Default)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>AddArcMode</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> State <span style=color:#66d9ef>for</span> AddArcMode {}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>mod</span> add_arc_mode;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>mod</span> add_line_mode;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>mod</span> add_point_mode;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>use</span> add_arc_mode::AddArcMode;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>use</span> add_line_mode::AddLineMode;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>use</span> add_point_mode::AddPointMode;
+</span></span></code></pre></div><p>This code isn&rsquo;t overly interesting. I&rsquo;ve just created a couple new types and
+done the bare minimum so they can be used as <code>State</code>s.</p><p>I&rsquo;ve also given them default constructors because it makes switching to that
+mode easier, this works when there isn&rsquo;t any setup that needs to be done to
+enter a state (e.g. no need to create temporary objects).</p><p>To make sure we are actually changing state we can write a test.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/idle.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[cfg(test)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>mod</span> tests {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>use</span> <span style=color:#66d9ef>super</span>::<span style=color:#f92672>*</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[derive(Debug, Default)]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>DummyDrawing</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>impl</span> Drawing <span style=color:#66d9ef>for</span> DummyDrawing { }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>change_to_arc_mode</span>() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> idle <span style=color:#f92672>=</span> Idle::default();
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> drawing <span style=color:#f92672>=</span> DummyDrawing;
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> args <span style=color:#f92672>=</span> KeyboardEventArgs::pressing(VirtualKeyCode::A);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> got <span style=color:#f92672>=</span> idle.on_key_pressed(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> drawing, <span style=color:#f92672>&amp;</span>args);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> got {
+</span></span><span style=display:flex><span>            Transition::ChangeState(new_state) <span style=color:#f92672>=&gt;</span> <span style=color:#f92672>..</span>.,
+</span></span><span style=display:flex><span>            Transition::DoNothing <span style=color:#f92672>=&gt;</span> panic!(<span style=color:#e6db74>&#34;We expected a state change&#34;</span>),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>(I also decided to extract creating the <code>KeyboardEventArgs</code> with
+<code>VirtualKeyCode::A</code> into its own <code>KeyboardEventArgs::pressing()</code> constructor)</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> KeyboardEventArgs {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Create a new [`KeyboardEventArgs`] which just presses a key.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>pressing</span>(key: <span style=color:#a6e22e>VirtualKeyCode</span>) -&gt; <span style=color:#a6e22e>Self</span> {
+</span></span><span style=display:flex><span>        KeyboardEventArgs {
+</span></span><span style=display:flex><span>            key: Some(key),
+</span></span><span style=display:flex><span>            <span style=color:#f92672>..</span>Default::default()
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The tricky bit is figuring out how to ensure we actually got the state we
+expected (that <code>...</code> on the <code>Transition::ChangeState</code> branch). Every <code>State</code>
+must implement <code>Debug</code> so in theory we could get the debug representation and
+do some sort of <code>repr.contains("AddArcMode")</code>, but that&rsquo;s a bit <em>too</em> <del>hacky</del>
+brittle for my liking.</p><p>Another option is to use the <a href=https://doc.rust-lang.org/std/any/trait.Any.html class=external-link target=_blank rel=noopener><code>std::any::Any</code> trait</a> as an escape hatch
+intended for testing purposes. This is a bit like the <code>Object</code> in Java where
+you can have a pointer to <em>something</em> and then try to downcast it to a more
+specific type.</p><p>The best way to implement this is by saying anything implementing <code>State</code> needs
+to have an <code>as_any(&amp;self) -> &amp;dyn Any</code> method. To avoid needing to manually
+write this it can be pulled out into a trait which is automatically implemented
+by any type that is <code>Any</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::any::Any;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// A helper trait for casting `self` to [`Any`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> AsAny {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>as_any</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>dyn</span> Any;
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span>A: <span style=color:#a6e22e>Any</span><span style=color:#f92672>&gt;</span> AsAny <span style=color:#66d9ef>for</span> A {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>as_any</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>dyn</span> Any { self }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>And then we can add <code>AsAny</code> as a pre-requisite for the <code>State</code> trait.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> State: <span style=color:#a6e22e>Debug</span> <span style=color:#f92672>+</span> AsAny {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>To make the testing code easier I&rsquo;ll also add a method to <code>Transition</code> which lets
+us check whether it will change to a particular <code>State</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Transition {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Checks whether the transition will change to a particular [`State`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>changes_to</span><span style=color:#f92672>&lt;</span>S<span style=color:#f92672>&gt;</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>bool</span>
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>where</span> S: <span style=color:#a6e22e>State</span> <span style=color:#f92672>+</span> &#39;static
+</span></span><span style=display:flex><span>    {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> self {
+</span></span><span style=display:flex><span>            Transition::ChangeState(new_state) <span style=color:#f92672>=&gt;</span> (<span style=color:#f92672>**</span>new_state).as_any().is::<span style=color:#f92672>&lt;</span>S<span style=color:#f92672>&gt;</span>(),
+</span></span><span style=display:flex><span>            _ <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>false</span>,
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Now we can write tests for our three keyboard shortcuts. Thanks to the helper
+functions we made along the way our tests are actually pretty readable.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/idle.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[cfg(test)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>mod</span> tests {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>change_to_arc_mode</span>() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> idle <span style=color:#f92672>=</span> Idle::default();
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> drawing <span style=color:#f92672>=</span> DummyDrawing::default();
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> args <span style=color:#f92672>=</span> KeyboardEventArgs::pressing(VirtualKeyCode::A);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> got <span style=color:#f92672>=</span> idle.on_key_pressed(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> drawing, <span style=color:#f92672>&amp;</span>args);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        assert!(got.changes_to::<span style=color:#f92672>&lt;</span>AddArcMode<span style=color:#f92672>&gt;</span>());
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>change_to_line_mode</span>() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> idle <span style=color:#f92672>=</span> Idle::default();
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> drawing <span style=color:#f92672>=</span> DummyDrawing::default();
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> args <span style=color:#f92672>=</span> KeyboardEventArgs::pressing(VirtualKeyCode::L);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> got <span style=color:#f92672>=</span> idle.on_key_pressed(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> drawing, <span style=color:#f92672>&amp;</span>args);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        assert!(got.changes_to::<span style=color:#f92672>&lt;</span>AddLineMode<span style=color:#f92672>&gt;</span>());
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>change_to_point_mode</span>() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> idle <span style=color:#f92672>=</span> Idle::default();
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> drawing <span style=color:#f92672>=</span> DummyDrawing::default();
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> args <span style=color:#f92672>=</span> KeyboardEventArgs::pressing(VirtualKeyCode::P);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> got <span style=color:#f92672>=</span> idle.on_key_pressed(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> drawing, <span style=color:#f92672>&amp;</span>args);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        assert!(got.changes_to::<span style=color:#f92672>&lt;</span>AddPointMode<span style=color:#f92672>&gt;</span>());
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices note"><p>Some would argue the use of <code>std::any::Any</code> in Rust to do downcasting or
+dynamic type checking is a bit of a code smell for a strongly typed language,
+and I would be inclined to agree with them.</p><p>In normal production code, changing logic based on something&rsquo;s type at
+runtime can result in brittleness and invisible coupling. It also hints that
+maybe there&rsquo;s actually some deeper abstraction trying to get out, and the
+need to have dynamic checks is your code&rsquo;s way of telling you this.</p><p>That said, we&rsquo;re not trying to change the main program&rsquo;s behaviour using
+dynamic typing. This is mainly for testing purposes, and <em>maybe</em> also a tool of
+last resort if we realise we&rsquo;ve engineered ourselves into a corner with this
+architecture six months down the track.</p></div><p>We should also add a test to make sure pressing other keys does nothing.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/idle.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[cfg(test)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>mod</span> tests {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>pressing_any_other_key_does_nothing</span>() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> idle <span style=color:#f92672>=</span> Idle::default();
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> drawing <span style=color:#f92672>=</span> DummyDrawing;
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> args <span style=color:#f92672>=</span> KeyboardEventArgs::pressing(VirtualKeyCode::Q);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> got <span style=color:#f92672>=</span> idle.on_key_pressed(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> drawing, <span style=color:#f92672>&amp;</span>args);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        assert!(got.does_nothing());
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Transition {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Is this a no-op [`Transition`]?
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>does_nothing</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>bool</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> self {
+</span></span><span style=display:flex><span>            Transition::DoNothing <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>true</span>,
+</span></span><span style=display:flex><span>            _ <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>false</span>,
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h3 id=dragging>Dragging
+<a class=heading-link href=#dragging><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>Dragging is one of those things which just comes naturally for a human.
+Because we&rsquo;re used to picking things up and moving them in the real world
+without much mental exertion, people don&rsquo;t stop to think how complex your
+basic &ldquo;drag&rdquo; interaction can be.</p><p>The <em>&ldquo;Happy Path&rdquo;</em> looks something like this&mldr; When in idle mode, if the
+user presses the left mouse button we&rsquo;ll mark whatever is under the cursor as
+&ldquo;selected&rdquo;. Then if we receive &ldquo;mouse moved&rdquo; events, all selected items get
+translated by the amount the mouse has moved. When the mouse button is
+released, we stop dragging and &ldquo;commit&rdquo; the changes to some sort of
+<code>UndoRedoBuffer</code> so the user can undo or redo the drag.</p><p>We also need to consider a bunch of edge cases,</p><ul><li>What do you do if the user clicks in the middle of nowhere?</li><li>How can a user cancel dragging midway through (e.g. if the drag was accidental)
+and what happens to the objects being dragged?</li><li>How do we handle <em>debouncing</em>? Often, when a user tries to click something
+the mouse will move by a couple pixels between the &ldquo;mouse down&rdquo; and &ldquo;mouse
+up&rdquo; events. If we naively interpreted this as a drag then you&rsquo;ll get lots of
+complaints saying <em>&ldquo;things jump a bit whenever I try to select them&rdquo;</em></li></ul><div class="notices note"><p>Interactivity almost always needs to be paired with some sort of Undo/Redo
+mechanism. This lets users undo accidental changes or look back in time to see
+what the world looked like several changes ago.</p><p>I&rsquo;m not going to talk about Undo/Redo mechanisms too much here (I&rsquo;m still
+trying to think of a nice way to implement it in <code>arcs</code>), other than to
+mention that having a robust way to apply and revert changes to the world is
+important&mldr; And like a lot of things, they can be tricky to implement in a
+way that will scale and allow you to maintain some semblance of sanity in the
+long term.</p></div><p>At this point we&rsquo;ll need to give <code>Idle</code> its own nested state machine.</p><p>I&rsquo;ll call the initial state <code>WaitingToSelect</code> seeing as that&rsquo;s what it does&mldr;
+Plus <code>Idle</code> is already taken.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/idle.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// [`Idle`]&#39;s base sub-state.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// We are waiting for the user to click so we can change the selection or start
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// dragging.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug, Default)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>WaitingToSelect</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> State <span style=color:#66d9ef>for</span> WaitingToSelect {}
+</span></span></code></pre></div><p>We also need to update <code>Idle</code> to have a <code>nested</code> field and give it a default
+constructor that sets <code>nested</code> to the <code>WaitingToSelect</code> state.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/idle.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Idle</span> {
+</span></span><span style=display:flex><span>    nested: Box<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>dyn</span> State<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Default <span style=color:#66d9ef>for</span> Idle {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>default</span>() -&gt; <span style=color:#a6e22e>Idle</span> {
+</span></span><span style=display:flex><span>        Idle {
+</span></span><span style=display:flex><span>            nested: Box::new(WaitingToSelect::default()),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>To implement <code>WaitingToSelect</code> we&rsquo;ll need to handle the <code>on_mouse_down()</code>
+event and ask the <code>Drawing</code> for a list of items under the cursor.</p><p>That requires <code>Drawing</code> to have some sort of <code>entities_under_point()</code> method.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> arcs::{Point, components::DrawingObject};
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> specs::Entity;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> Drawing {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Get a list of all the entities which lie &#34;under&#34; a point, for some
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// definition of &#34;under&#34;.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// Typically this will be implemented by the drawing canvas having some
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// sort of &#34;pick box&#34; where anything within, say, 3 pixels of something is
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// considered to be &#34;under&#34; it.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>entities_under_point</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span>self,
+</span></span><span style=display:flex><span>        location: <span style=color:#a6e22e>Point</span>,
+</span></span><span style=display:flex><span>    ) -&gt; Box<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>dyn</span> Iterator<span style=color:#f92672>&lt;</span>Item <span style=color:#f92672>=</span> Entity<span style=color:#f92672>&gt;&gt;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>A caller asks the <code>Drawing</code> an iterator over the entities underneath some
+<code>location</code> on the drawing. We&rsquo;ve decided to use an iterator here instead of
+greedily storing the results in a <code>Vec</code> because the number of items under the
+cursor can be potentially massive (imagine zooming all the way out and clicking,
+the <em>entire</em> drawing would be &ldquo;under&rdquo; the cursor). Additionally a lot of code
+will just care about the first object found under the cursor, so we can avoid
+unnecessary work by being lazy.</p><p>Unfortunately the iterator itself needs to use dynamic dispatch so we can
+make <code>Drawing</code> object safe. There&rsquo;s no real way to avoid the allocation while
+maintaining object safety, but it shouldn&rsquo;t be too bad considering how
+expensive these lookups can be.</p><p>Now we can stub out the body for <code>on_mouse_down()</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/idle.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> <span style=color:#66d9ef>crate</span>::modes::{Drawing, MouseEventArgs, Transition};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> State <span style=color:#66d9ef>for</span> WaitingToSelect {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_mouse_down</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        drawing: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> <span style=color:#66d9ef>dyn</span> Drawing,
+</span></span><span style=display:flex><span>        args: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>MouseEventArgs</span>,
+</span></span><span style=display:flex><span>    ) -&gt; <span style=color:#a6e22e>Transition</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> items_under_cursor <span style=color:#f92672>=</span> drawing.entities_under_point(args.location);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> items_under_cursor.next() {
+</span></span><span style=display:flex><span>            Some(entity) <span style=color:#f92672>=&gt;</span> unimplemented!(),
+</span></span><span style=display:flex><span>            _ <span style=color:#f92672>=&gt;</span> unimplemented!(),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Looking back at the intended behaviour, it seems like we&rsquo;ll need to update
+<code>Drawing</code> with a way to select a specific object and unselect everything.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> Drawing {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Mark an object as being selected.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>select</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, target: <span style=color:#a6e22e>Entity</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Clear the selection.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>unselect_all</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self);
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>This gives us enough to complete the <code>on_mouse_down()</code> method.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/idle.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> State <span style=color:#66d9ef>for</span> WaitingToSelect {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_mouse_down</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        drawing: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> <span style=color:#66d9ef>dyn</span> Drawing,
+</span></span><span style=display:flex><span>        args: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>MouseEventArgs</span>,
+</span></span><span style=display:flex><span>    ) -&gt; <span style=color:#a6e22e>Transition</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> first_item_under_cursor <span style=color:#f92672>=</span>
+</span></span><span style=display:flex><span>            drawing.entities_under_point(args.location).next();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> first_item_under_cursor {
+</span></span><span style=display:flex><span>            Some(entity) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                drawing.select(entity);
+</span></span><span style=display:flex><span>                Transition::ChangeState(Box::new(DraggingSelection::default()))
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            _ <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                drawing.unselect_all();
+</span></span><span style=display:flex><span>                Transition::DoNothing
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// The left mouse button is currently pressed and the user is dragging items
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// around.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug, Default)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>DraggingSelection</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> State <span style=color:#66d9ef>for</span> DraggingSelection {}
+</span></span></code></pre></div><p>Now we need to implement <code>DraggingSelection</code>, the actual dragging action. The
+code for this is pretty simple, when <code>on_mouse_move()</code> gets called we ned to
+calculate how much the cursor has been moved and translate all selected
+entities accordingly.</p><p>We aren&rsquo;t worrying about Undo/Redo at this point, so when the mouse button is
+released (<code>on_mouse_up()</code>) we just switch back to the <code>WaitingToSelect</code> state.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> arcs::Vector;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> Drawing {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Translate all selected objects by a specific amount.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>translate_selection</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, displacement: <span style=color:#a6e22e>Vector</span>);
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/idle.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>DraggingSelection</span> {
+</span></span><span style=display:flex><span>    previous_location: <span style=color:#a6e22e>Point</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> State <span style=color:#66d9ef>for</span> DraggingSelection {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_mouse_move</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        drawing: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> <span style=color:#66d9ef>dyn</span> Drawing,
+</span></span><span style=display:flex><span>        args: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>MouseEventArgs</span>,
+</span></span><span style=display:flex><span>    ) -&gt; <span style=color:#a6e22e>Transition</span> {
+</span></span><span style=display:flex><span>        drawing.translate_selection(args.location <span style=color:#f92672>-</span> self.previous_location);
+</span></span><span style=display:flex><span>        self.previous_location <span style=color:#f92672>=</span> args.location;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        Transition::DoNothing
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_mouse_up</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        drawing: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> <span style=color:#66d9ef>dyn</span> Drawing,
+</span></span><span style=display:flex><span>        args: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>MouseEventArgs</span>,
+</span></span><span style=display:flex><span>    ) -&gt; <span style=color:#a6e22e>Transition</span> {
+</span></span><span style=display:flex><span>        Transition::ChangeState(Box::new(WaitingToSelect::default()))
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The implementation is deliberately simple for now. We aren&rsquo;t even handling
+debounce or cancellation, but you might see how you&rsquo;d implement them.</p><h2 id=a-brief-intermission-for-refactoring>A Brief Intermission For Refactoring
+<a class=heading-link href=#a-brief-intermission-for-refactoring><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>I don&rsquo;t know about you, but we&rsquo;ve only written a couple states so far and I&rsquo;m
+already feeling like that <code>Drawing</code> trait will turn into a massive interface
+pretty quickly. Every time we need to interact with the drawing we need to add
+more methods, and as the proverb goes, <em>&ldquo;The bigger the interface, the weaker
+the abstraction&rdquo;</em>.</p><p>Our <code>Drawing</code> interface (the interface a <code>State</code> can use to interact with the
+outside world) also seems to have a bit of an identitiy crisis on its hands.
+Despite being called a <code>Drawing</code>, this interface comes across as something
+which gives us access to the ECS&rsquo;s <a href=https://docs.rs/specs/0.15.1/specs/struct.World.html class=external-link target=_blank rel=noopener><code>specs::World</code></a>, has a
+<code>Viewport</code> representing which part of the drawing is being displayed,
+contains the <code>UndoRedoBuffer</code>, and maybe some knobs and levers for
+communicating with the UI (e.g. to request that the canvas gets redrawn).</p><p>Using this interpretation, the current <code>Drawing</code> trait seems a little&mldr;
+confused.</p><p>Even its name isn&rsquo;t quite correct. We aren&rsquo;t necessarily giving each <code>State</code> a
+reference to the drawing, they&rsquo;re getting contextual information relevant to
+the drawing and application as a whole. Hmm&mldr; How about <code>ApplicationContext</code>?</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Contextual information passed to each [`State`] when it handles events.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> ApplicationContext {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>world</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>World</span>;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>world_mut</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> World;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>viewport</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#a6e22e>Entity</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// An optimisation hint that the canvas doesn&#39;t need to be redrawn after
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// this event handler returns.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>suppress_redraw</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) {}
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> State: <span style=color:#a6e22e>Debug</span> <span style=color:#f92672>+</span> AsAny {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// The left mouse button was pressed.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_mouse_down</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        _ctx: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> <span style=color:#66d9ef>dyn</span> ApplicationContext,
+</span></span><span style=display:flex><span>        _event_args: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>MouseEventArgs</span>,
+</span></span><span style=display:flex><span>    ) -&gt; <span style=color:#a6e22e>Transition</span> {
+</span></span><span style=display:flex><span>        Transition::DoNothing
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span></code></pre></div><p>Now we have a way to access the <code>World</code>, the methods that were previously
+required for <code>Drawing</code> (i.e. <code>ApplicationContext</code>) can be implemented as
+provided methods.</p><p>But first we need to give <code>arcs</code> a way to mark things as <em>Selected</em>.</p><p>See, I kinda lied to you earlier when we implemented <code>WaitingToSelect</code>. At
+the time I only ever ran the code under test using a mock <code>Drawing</code>, but now
+is as good a time as any seeing as we need to give <code>ApplicationContext</code> a set
+of <code>select()</code> and <code>unselect_all()</code> methods.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// arcs/src/components/selected.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> specs::prelude::<span style=color:#f92672>*</span>;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> specs_derive::Component;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// An empty [`Component`] used to mark an [`Entity`] as selected.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug, Copy, Clone, Default, PartialEq, Component)]</span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[storage(NullStorage)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Selected</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// arcs/src/components/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>mod</span> selected;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>use</span> selected::Selected;
+</span></span></code></pre></div><p>From here we can add <code>selected()</code> and <code>unselect_all()</code> to <code>ApplicationContext</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> ApplicationContext {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Mark an object as being selected.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>select</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, target: <span style=color:#a6e22e>Entity</span>) {
+</span></span><span style=display:flex><span>        self.world()
+</span></span><span style=display:flex><span>            .write_storage()
+</span></span><span style=display:flex><span>            .insert(target, Selected)
+</span></span><span style=display:flex><span>            .unwrap();
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Clear the selection.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>unselect_all</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) {
+</span></span><span style=display:flex><span>        self.world().write_storage::<span style=color:#f92672>&lt;</span>Selected<span style=color:#f92672>&gt;</span>().clear();
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The <a href=https://docs.rs/arcs/0.2.0/arcs/algorithms/trait.Approximate.html class=external-link target=_blank rel=noopener><code>arcs::algorithms::Translate</code></a> algorithm can be used to make
+<code>translate_selection()</code> almost trivial. The only hard part is deciphering the
+type returned by <code>system_data()</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/mod.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>trait</span> ApplicationContext {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Translate all selected objects by a specific amount.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>translate_selection</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, displacement: <span style=color:#a6e22e>Vector</span>) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> world <span style=color:#f92672>=</span> self.world();
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> (entities, selected, <span style=color:#66d9ef>mut</span> drawing_objects): (
+</span></span><span style=display:flex><span>            Entities,
+</span></span><span style=display:flex><span>            ReadStorage<span style=color:#f92672>&lt;</span>Selected<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>            WriteStorage<span style=color:#f92672>&lt;</span>DrawingObject<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>        ) <span style=color:#f92672>=</span> world.system_data();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>for</span> (_, _, drawing_object) <span style=color:#66d9ef>in</span>
+</span></span><span style=display:flex><span>            (<span style=color:#f92672>&amp;</span>entities, <span style=color:#f92672>&amp;</span>selected, <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> drawing_objects).join()
+</span></span><span style=display:flex><span>        {
+</span></span><span style=display:flex><span>            drawing_object.geometry.translate(displacement);
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=wiring-it-up-to-the-ui>Wiring it Up to the UI
+<a class=heading-link href=#wiring-it-up-to-the-ui><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>We now have a system for letting users interact with the application in a
+structured way, let&rsquo;s wire it up to the UI and make sure it actually works!</p><p>The browser demo for <code>arcs</code> is written using a framework called <a href=https://seed-rs.org/ class=external-link target=_blank rel=noopener>seed</a>.
+The framework itself is fairly lightweight, with the idea being you provide a
+<code>update()</code> function which takes some &ldquo;message&rdquo; and uses it to update your
+<code>Model</code>, and a a <code>view()</code> method which will create a representation of your
+UI (&ldquo;virtual DOM&rdquo;) and wire up functions to turn a JavaScript event into a
+message to be sent to <code>update()</code>.</p><p>At the moment the UI already kinda handles click events. I was previously using
+it to test my math for coordinate transforms (converting from pixel locations
+on a canvas to the corresponding point on the drawing) were correct by clicking
+on the canvas and making sure it rendered a dot under my cursor.</p><p>It&rsquo;s not overly high-tech (essentially the graphical equivalent of debugging
+with print statements) but it&rsquo;s a good feeling when you can click on the
+canvas and know that under the hood you&rsquo;ve implemented all the machinery for
+a zoomable, pannable viewport, plus enough rendering to start drawing coloured
+dots.</p><p>First we need to update the code handling the <code>Msg::Clicked</code> message to call
+<code>on_mouse_down()</code> on our <code>Model</code> (we&rsquo;ll implement it in a bit).</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-diff data-lang=diff><span style=display:flex><span> fn update(msg: Msg, model: &amp;mut Model, orders: &amp;mut impl Orders&lt;Msg&gt;) {
+</span></span><span style=display:flex><span>     log::debug!(&#34;Handling {:?}&#34;, msg);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>     match msg {
+</span></span><span style=display:flex><span>         Msg::Rendered =&gt; { ... },
+</span></span><span style=display:flex><span><span style=color:#f92672>-        Msg::Clicked(location) =&gt; {
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-            let clicked = {
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-                let viewports = model.world.read_storage();
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-                let viewport = model.window.viewport(&amp;viewports);
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-                arcs::window::to_drawing_coordinates(
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-                    location,
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-                    viewport,
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-                    model.canvas_size,
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-                )
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-            };
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-            log::debug!(&#34;Resolved {:?} =&gt; {:?}&#34;, location, clicked);
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-            model
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-                .world
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-                .create_entity()
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-                .with(DrawingObject {
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-                    geometry: Geometry::Point(clicked),
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-                    layer: model.default_layer,
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-                })
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-                .build();
+</span></span></span><span style=display:flex><span><span style=color:#f92672></span><span style=color:#a6e22e>+        Msg::Clicked(cursor) =&gt; {
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+            let location = {
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+                let viewports = model.world.read_storage();
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+                let viewport = model.window.viewport(&amp;viewports);
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+                arcs::window::to_drawing_coordinates(
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+                    cursor,
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+                    viewport,
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+                    model.canvas_size,
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+                )
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+            };
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+            model.on_mouse_down(location, cursor);
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span>         },
+</span></span><span style=display:flex><span>         Msg::WindowResized =&gt; { ... }
+</span></span><span style=display:flex><span>     }
+</span></span><span style=display:flex><span> }
+</span></span></code></pre></div><p>We also need to give <code>Model</code> a <code>current_state</code> field.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-diff data-lang=diff><span style=display:flex><span> pub struct Model {
+</span></span><span style=display:flex><span>     world: World,
+</span></span><span style=display:flex><span>     window: Window,
+</span></span><span style=display:flex><span>     default_layer: Entity,
+</span></span><span style=display:flex><span>     canvas_size: Size2D&lt;f64, CanvasSpace&gt;,
+</span></span><span style=display:flex><span><span style=color:#a6e22e>+    current_state: Box&lt;dyn State&gt;,
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span> }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span> impl Default for Model {
+</span></span><span style=display:flex><span>     fn default() -&gt; Model {
+</span></span><span style=display:flex><span>         ...
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>         Model {
+</span></span><span style=display:flex><span>             world,
+</span></span><span style=display:flex><span>             window,
+</span></span><span style=display:flex><span>             default_layer,
+</span></span><span style=display:flex><span>             canvas_size: Size2D::new(300.0, 150.0),
+</span></span><span style=display:flex><span><span style=color:#a6e22e>+            current_state: Box::new(Idle::default()),
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span>         }
+</span></span><span style=display:flex><span>     }
+</span></span><span style=display:flex><span> }
+</span></span></code></pre></div><p>To start using <code>current_state</code> we&rsquo;ll need something to act as our <code>State</code>&rsquo;s
+<code>ApplicationContext</code>. I&rsquo;ve decided to pull this out into a &ldquo;view&rdquo; struct
+which borrows some of our <code>Model</code>&rsquo;s fields. We can&rsquo;t use <code>Model</code> as the
+<code>ApplicationContext</code> because it owns our <code>current_state</code>, and passing <code>&amp;mut self</code> to <code>self.current_state</code> is no bueno.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// A temporary struct which presents a &#34;view&#34; of [`Model`] which can be used
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// as a [`ApplicationContext`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Context</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;model</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    world: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;model</span> <span style=color:#a6e22e>mut</span> World,
+</span></span><span style=display:flex><span>    window: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;model</span> <span style=color:#a6e22e>mut</span> Window,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;model</span><span style=color:#f92672>&gt;</span> ApplicationContext <span style=color:#66d9ef>for</span> Context<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;model</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>world</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>World</span> { <span style=color:#f92672>&amp;</span>self.world }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>world_mut</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> World { <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self.world }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>viewport</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#a6e22e>Entity</span> { self.window.<span style=color:#ae81ff>0</span> }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Now we can finally write our <code>Model::on_mouse_down()</code> method. All it does is
+construct a couple arguments then calls <code>self.current_state.on_mouse_down()</code>.</p><p>For convenience, I&rsquo;ve pulled <code>Transition</code> handling into its own function.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/lib.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Model {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_mouse_down</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        location: <span style=color:#a6e22e>Point2D</span><span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, DrawingSpace<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>        cursor: <span style=color:#a6e22e>Point2D</span><span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, CanvasSpace<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    ) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> args <span style=color:#f92672>=</span> modes::MouseEventArgs {
+</span></span><span style=display:flex><span>            location,
+</span></span><span style=display:flex><span>            cursor,
+</span></span><span style=display:flex><span>            button_state: <span style=color:#a6e22e>modes</span>::MouseButtons::<span style=color:#66d9ef>LEFT_BUTTON</span>,
+</span></span><span style=display:flex><span>        };
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> ctx <span style=color:#f92672>=</span> Context {
+</span></span><span style=display:flex><span>            world: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> self.world,
+</span></span><span style=display:flex><span>            window: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> self.window,
+</span></span><span style=display:flex><span>        };
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> trans <span style=color:#f92672>=</span> self.current_state.on_mouse_down(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> ctx, <span style=color:#f92672>&amp;</span>args);
+</span></span><span style=display:flex><span>        self.handle_transition(trans);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle_transition</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, transition: <span style=color:#a6e22e>Transition</span>) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> transition {
+</span></span><span style=display:flex><span>            Transition::ChangeState(new_state) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                self.current_state <span style=color:#f92672>=</span> new_state
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            Transition::DoNothing <span style=color:#f92672>=&gt;</span> {},
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Okay, let&rsquo;s spin up the dev server and give it a test run&mldr;</p><p><video controls src=it-doesnt-work.webm type=video/webm style=width:100%></video></p><p>Hmm&mldr; I clicked around and nothing seems to happen. Are we even calling
+<code>on_mouse_down()</code>?</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-diff data-lang=diff><span style=display:flex><span> impl Model {
+</span></span><span style=display:flex><span>     fn on_mouse_down(
+</span></span><span style=display:flex><span>         &amp;mut self,
+</span></span><span style=display:flex><span>         location: Point2D&lt;f64, DrawingSpace&gt;,
+</span></span><span style=display:flex><span>         cursor: Point2D&lt;f64, CanvasSpace&gt;,
+</span></span><span style=display:flex><span>     ) {
+</span></span><span style=display:flex><span>         ...
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>+        log::debug!(&#34;[ON_MOUSE_DOWN] {:?}, {:?}&#34;, args, self.current_state);
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span>         let trans = self.current_state.on_mouse_down(&amp;mut ctx, &amp;args);
+</span></span><span style=display:flex><span>         self.handle_transition(trans);
+</span></span><span style=display:flex><span>     }
+</span></span><span style=display:flex><span> }
+</span></span></code></pre></div><p><video controls src=it-kinda-works.webm type=video/webm style=width:100%></video></p><p>Soo&mldr; looks like everything is working as intended. The problem is that our
+<code>Idle</code> mode is in the <code>WaitingToSelect</code> state, but there&rsquo;s nothing on our canvas
+to select. I&rsquo;m going to declare that a success and keep going.</p><p>Next, let&rsquo;s wire up keyboard presses.</p><p>First we need to add a <code>KeyPressed</code> variant to <code>Msg</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-diff data-lang=diff><span style=display:flex><span> #[derive(Debug, Copy, Clone, PartialEq)]
+</span></span><span style=display:flex><span> pub enum Msg {
+</span></span><span style=display:flex><span>     Rendered,
+</span></span><span style=display:flex><span>     Clicked(Point2D&lt;f64, CanvasSpace&gt;),
+</span></span><span style=display:flex><span>     WindowResized,
+</span></span><span style=display:flex><span><span style=color:#a6e22e>+    KeyPressed(KeyboardEventArgs),
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span> }
+</span></span></code></pre></div><p>Then we need to register for the key pressed event and make sure it gets turned
+into a <code>Msg::KeyPressed</code> message.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-diff data-lang=diff><span style=display:flex><span> fn view(model: &amp;Model) -&gt; impl View&lt;Msg&gt; {
+</span></span><span style=display:flex><span>     div![div![
+</span></span><span style=display:flex><span>         attrs![ At::Class =&gt; &#34;canvas-container&#34; ],
+</span></span><span style=display:flex><span>         style! {
+</span></span><span style=display:flex><span>             St::Width =&gt; &#34;100%&#34;,
+</span></span><span style=display:flex><span>             St::Height =&gt; &#34;100%&#34;,
+</span></span><span style=display:flex><span>             St::OverflowY =&gt; &#34;hidden&#34;,
+</span></span><span style=display:flex><span>             St::OverflowX =&gt; &#34;hidden&#34;,
+</span></span><span style=display:flex><span>         },
+</span></span><span style=display:flex><span>         canvas![
+</span></span><span style=display:flex><span>             attrs![
+</span></span><span style=display:flex><span>                 At::Id =&gt; CANVAS_ID,
+</span></span><span style=display:flex><span>                 At::Width =&gt; model.canvas_size.width,
+</span></span><span style=display:flex><span>                 At::Height =&gt; model.canvas_size.height,
+</span></span><span style=display:flex><span>             ],
+</span></span><span style=display:flex><span><span style=color:#f92672>-            mouse_ev(Ev::MouseDown, Msg::from_click_event)
+</span></span></span><span style=display:flex><span><span style=color:#f92672></span><span style=color:#a6e22e>+            mouse_ev(Ev::MouseDown, Msg::from_click_event),
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+            keyboard_ev(Ev::KeyDown, Msg::from_key_press)
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span>         ],
+</span></span><span style=display:flex><span>     ]]
+</span></span><span style=display:flex><span> }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span> impl Msg {
+</span></span><span style=display:flex><span>     pub fn from_click_event(ev: MouseEvent) -&gt; Self {
+</span></span><span style=display:flex><span>         let x = ev.offset_x().into();
+</span></span><span style=display:flex><span>         let y = ev.offset_y().into();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>         Msg::Clicked(Point2D::new(x, y))
+</span></span><span style=display:flex><span>     }
+</span></span><span style=display:flex><span><span style=color:#a6e22e>+
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+    pub fn from_key_press(ev: KeyboardEvent) -&gt; Self {
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        Msg::KeyPressed(KeyboardEventArgs {
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+            shift_pressed: ev.shift_key(),
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+            control_pressed: ev.ctrl_key(),
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+            key: ev.key().parse().ok(),
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        })
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+    }
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span> }
+</span></span></code></pre></div><p>We can now implement the <code>Msg::KeyPressed</code> handler like we did with
+<code>Msg::Clicked</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-diff data-lang=diff><span style=display:flex><span> fn update(msg: Msg, model: &amp;mut Model, orders: &amp;mut impl Orders&lt;Msg&gt;) {
+</span></span><span style=display:flex><span>     log::debug!(&#34;Handling {:?}&#34;, msg);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>     match msg {
+</span></span><span style=display:flex><span>         Msg::Rendered =&gt; { ... },
+</span></span><span style=display:flex><span>         Msg::Clicked(cursor) =&gt; { ... },
+</span></span><span style=display:flex><span><span style=color:#a6e22e>+        Msg::KeyPressed(args) =&gt; model.on_key_pressed(args),
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span>         Msg::WindowResized =&gt; { ... },
+</span></span><span style=display:flex><span>     }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>     ...
+</span></span><span style=display:flex><span> }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span> impl Model {
+</span></span><span style=display:flex><span>     ...
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>+    fn on_key_pressed(&amp;mut self, args: KeyboardEventArgs) {
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        let mut ctx = Context {
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+            world: &amp;mut self.world,
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+            window: &amp;mut self.window,
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        };
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        let trans = self.current_state.on_key_pressed(&amp;mut ctx, &amp;args);
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        self.handle_transition(trans);
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+    }
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span>
+</span></span><span style=display:flex><span>     ...
+</span></span><span style=display:flex><span> }
+</span></span></code></pre></div><p>I ended up needing to use <a href=https://stackoverflow.com/a/16492878/7149940 class=external-link target=_blank rel=noopener>this hack</a> because <code>&lt;canvas></code> elements don&rsquo;t
+actually support key up/down events, but now we can receive keyboard events and
+even change to <code>AddArcMode</code> when <code>VirtualKeyCode::A</code> is pressed!</p><p><video controls src=keyboard-events.webm type=video/webm style=width:100%></video></p><p>The crazy part is I spent longer troubleshooting the <code>&lt;canvas></code> keyboard event
+browser quirk than I did re-working the UI to use proper modes. Sure, it doesn&rsquo;t
+actually do anything at the moment, but that&rsquo;s just because there&rsquo;s no mode for
+adding points to the drawing.</p><h2 id=add-point-mode>Add Point Mode
+<a class=heading-link href=#add-point-mode><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>I didn&rsquo;t want to finish off without at least showing you a dot that we can drag
+around the screen sp let&rsquo;s implement <code>AddPointMode</code>.</p><p>The first thing we need to do is define how <code>AddPointMode</code> will react to actions
+from the user. Normally I&rsquo;ll use a whiteboard for this and bounce ideas off
+coworkers, but you&rsquo;ve got to make do with what you&rsquo;ve got.</p><p>Our <code>AddPointMode</code> won&rsquo;t be as simple as <em>&ldquo;place a point wherever the user
+clicks&rdquo;</em>. If you watch how users interact with a CAD program you&rsquo;ll notice they
+tend to hold the mouse button down and fine-tune where they want the point to go
+before releasing the button and &ldquo;committing&rdquo; the change.</p><p>Sometimes they&rsquo;ll realise midway through that they didn&rsquo;t want to place a point,
+so you need to give the user a way to cancel the interaction. In the wild, I&rsquo;ve
+seen roughly two ways people try to do this, one is to hit <code>&lt;ctrl-Z></code> (&ldquo;I want
+to undo the point I&rsquo;ve started creating&rdquo;) and the other is to press <code>&lt;esc></code>
+(&ldquo;I want to <strong>escape</strong> this interaction&rdquo;).</p><p>As someone who seeks out the vim keybindings for pretty much every editor or
+IDE they use, pressing <code>&lt;esc></code> seems the more natural of the two. That said,
+I just admitted I&rsquo;m biased plus I&rsquo;m not your &ldquo;ordinary&rdquo; user, so it&rsquo;s always
+good to get another person&rsquo;s opinion.</p><p>The state machine diagram for this is almost trivial.</p><div class=mermaid align=center>stateDiagram
+state "Add Point Mode" as point
+state point {
+state "Waiting To Place" as idle
+state "Placing Point" as placing
+idle --> placing: Mouse Down
+placing --> idle: Mouse Up/Cancel
+}</div><p>The simplicity of our state machine diagram hides a fair amount of detail
+though&mldr;</p><p>First, let&rsquo;s create a <code>WaitingToPlace</code> state to act as <code>AddPointMode</code>&rsquo;s base
+state.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// arcs/demo/src/modes/add_point_mode.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// The base sub-state for [`AddPointMode`]. We&#39;re waiting for the user to click
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// so we can start adding a point to the canvas.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug, Default)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>WaitingToPlace</span>;
+</span></span></code></pre></div><p>It only responds to a single event, <code>on_mouse_down()</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// arcs/demo/src/modes/add_point_mode.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> State <span style=color:#66d9ef>for</span> WaitingToPlace {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_mouse_down</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        ctx: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> <span style=color:#66d9ef>dyn</span> ApplicationContext,
+</span></span><span style=display:flex><span>        args: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>MouseEventArgs</span>,
+</span></span><span style=display:flex><span>    ) -&gt; <span style=color:#a6e22e>Transition</span> {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// make sure nothing else is selected
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        ctx.unselect_all();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> layer <span style=color:#f92672>=</span> ctx.default_layer();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// create a point and automatically mark it as selected
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>let</span> temp_point <span style=color:#f92672>=</span> ctx
+</span></span><span style=display:flex><span>            .world_mut()
+</span></span><span style=display:flex><span>            .create_entity()
+</span></span><span style=display:flex><span>            .with(DrawingObject {
+</span></span><span style=display:flex><span>                geometry: <span style=color:#a6e22e>Geometry</span>::Point(args.location),
+</span></span><span style=display:flex><span>                layer,
+</span></span><span style=display:flex><span>            })
+</span></span><span style=display:flex><span>            .with(Selected)
+</span></span><span style=display:flex><span>            .build();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        Transition::ChangeState(Box::new(PlacingPoint::new(temp_point)))
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Next we need a <code>PlacingPoint</code> state which will keep track of our temporary point
+and let us drag it around the screen.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/add_point_mode.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>PlacingPoint</span> {
+</span></span><span style=display:flex><span>    temp_point: <span style=color:#a6e22e>Entity</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> PlacingPoint {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new</span>(temp_point: <span style=color:#a6e22e>Entity</span>) -&gt; <span style=color:#a6e22e>Self</span> { PlacingPoint { temp_point } }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Next we need to implement the relevant event handlers. For <code>PlacingPoint</code> we&rsquo;ll
+need to</p><ul><li>Transition back to <code>WaitingToPlace</code> when the mouse is released</li><li>Delete the <code>temp_point</code> if we get an <code>on_cancelled()</code> event</li><li>Move the <code>temp_point</code> if the mouse moves</li></ul><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/add_point_mode.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> State <span style=color:#66d9ef>for</span> PlacingPoint {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_mouse_up</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        _ctx: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> <span style=color:#66d9ef>dyn</span> ApplicationContext,
+</span></span><span style=display:flex><span>        _args: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>MouseEventArgs</span>,
+</span></span><span style=display:flex><span>    ) -&gt; <span style=color:#a6e22e>Transition</span> {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// We &#34;commit&#34; the change by leaving the temporary point where it is
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        Transition::ChangeState(Box::new(WaitingToPlace::default()))
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_mouse_move</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        ctx: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> <span style=color:#66d9ef>dyn</span> ApplicationContext,
+</span></span><span style=display:flex><span>        args: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>MouseEventArgs</span>,
+</span></span><span style=display:flex><span>    ) -&gt; <span style=color:#a6e22e>Transition</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> world <span style=color:#f92672>=</span> ctx.world();
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> drawing_objects: <span style=color:#a6e22e>WriteStorage</span><span style=color:#f92672>&lt;</span>DrawingObject<span style=color:#f92672>&gt;</span> <span style=color:#f92672>=</span>
+</span></span><span style=display:flex><span>            world.write_storage();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> drawing_object <span style=color:#f92672>=</span> drawing_objects.get_mut(self.temp_point).unwrap();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// we *know* this is a point. Instead of pattern matching or translating
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#75715e>// the drawing object, we can just overwrite it with its new position.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        drawing_object.geometry <span style=color:#f92672>=</span> Geometry::Point(args.location);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        Transition::DoNothing
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_cancelled</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, ctx: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> <span style=color:#66d9ef>dyn</span> ApplicationContext) {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// make sure we clean up the temporary point.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>let</span> _ <span style=color:#f92672>=</span> ctx.world_mut().delete_entity(self.temp_point);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>So we&rsquo;ve defined the state machine for <code>AddPointMode</code>, but if we want anything
+to happen we&rsquo;ll need to make sure <code>AddPointMode</code> propagates <code>on_mouse_up()</code>,
+<code>on_mouse_down()</code>, and <code>on_mouse_move()</code> to them.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/add_point_mode.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> AddPointMode {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>handle_transition</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, transition: <span style=color:#a6e22e>Transition</span>) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> transition {
+</span></span><span style=display:flex><span>            Transition::ChangeState(new_state) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                log::debug!(
+</span></span><span style=display:flex><span>                    <span style=color:#e6db74>&#34;Changing state {:?} -&gt; {:?}&#34;</span>,
+</span></span><span style=display:flex><span>                    self.nested,
+</span></span><span style=display:flex><span>                    new_state
+</span></span><span style=display:flex><span>                );
+</span></span><span style=display:flex><span>                self.nested <span style=color:#f92672>=</span> new_state;
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            Transition::DoNothing <span style=color:#f92672>=&gt;</span> {},
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> State <span style=color:#66d9ef>for</span> AddPointMode {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_mouse_down</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        ctx: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> <span style=color:#66d9ef>dyn</span> ApplicationContext,
+</span></span><span style=display:flex><span>        args: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>MouseEventArgs</span>,
+</span></span><span style=display:flex><span>    ) -&gt; <span style=color:#a6e22e>Transition</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> trans <span style=color:#f92672>=</span> self.nested.on_mouse_down(ctx, args);
+</span></span><span style=display:flex><span>        self.handle_transition(trans);
+</span></span><span style=display:flex><span>        Transition::DoNothing
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_mouse_up</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        ctx: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> <span style=color:#66d9ef>dyn</span> ApplicationContext,
+</span></span><span style=display:flex><span>        args: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>MouseEventArgs</span>,
+</span></span><span style=display:flex><span>    ) -&gt; <span style=color:#a6e22e>Transition</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> trans <span style=color:#f92672>=</span> self.nested.on_mouse_up(ctx, args);
+</span></span><span style=display:flex><span>        self.handle_transition(trans);
+</span></span><span style=display:flex><span>        Transition::DoNothing
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_mouse_move</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        ctx: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> <span style=color:#66d9ef>dyn</span> ApplicationContext,
+</span></span><span style=display:flex><span>        args: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>MouseEventArgs</span>,
+</span></span><span style=display:flex><span>    ) -&gt; <span style=color:#a6e22e>Transition</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> trans <span style=color:#f92672>=</span> self.nested.on_mouse_move(ctx, args);
+</span></span><span style=display:flex><span>        self.handle_transition(trans);
+</span></span><span style=display:flex><span>        Transition::DoNothing
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>While we&rsquo;re at it, we should make sure pressing the escape key cancels the
+current mode and switches back to the <code>Idle</code> state.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// demo/src/modes/add_point_mode.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> State <span style=color:#66d9ef>for</span> AddPointMode {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_key_pressed</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        ctx: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> <span style=color:#66d9ef>dyn</span> ApplicationContext,
+</span></span><span style=display:flex><span>        args: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>KeyboardEventArgs</span>,
+</span></span><span style=display:flex><span>    ) -&gt; <span style=color:#a6e22e>Transition</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> args.key <span style=color:#f92672>==</span> Some(VirtualKeyCode::Escape) {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// pressing escape should take us back to idle
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            self.nested.on_cancelled(ctx);
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>return</span> Transition::ChangeState(Box::new(Idle::default()));
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> trans <span style=color:#f92672>=</span> self.nested.on_key_pressed(ctx, args);
+</span></span><span style=display:flex><span>        self.handle_transition(trans);
+</span></span><span style=display:flex><span>        Transition::DoNothing
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>on_cancelled</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self, ctx: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> <span style=color:#66d9ef>dyn</span> ApplicationContext) {
+</span></span><span style=display:flex><span>        self.nested.on_cancelled(ctx);
+</span></span><span style=display:flex><span>        self.nested <span style=color:#f92672>=</span> Box::new(WaitingToPlace::default());
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The top-level application is also only handling mouse down events so we&rsquo;ll need
+to add event handlers and <code>Msg</code> variants for <code>MouseUp</code> and <code>MouseMove</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-diff data-lang=diff><span style=display:flex><span>
+</span></span><span style=display:flex><span> #[derive(Debug, Copy, Clone, PartialEq)]
+</span></span><span style=display:flex><span> pub enum Msg {
+</span></span><span style=display:flex><span>     Rendered,
+</span></span><span style=display:flex><span><span style=color:#f92672>-    Clicked(Point2D&lt;f64, CanvasSpace&gt;),
+</span></span></span><span style=display:flex><span><span style=color:#f92672></span><span style=color:#a6e22e>+    MouseDown(Point2D&lt;f64, CanvasSpace&gt;),
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+    MouseUp(Point2D&lt;f64, CanvasSpace&gt;),
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+    MouseMove(Point2D&lt;f64, CanvasSpace&gt;),
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span>     KeyPressed(KeyboardEventArgs),
+</span></span><span style=display:flex><span>     WindowResized,
+</span></span><span style=display:flex><span> }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span> fn update(msg: Msg, model: &amp;mut Model, orders: &amp;mut impl Orders&lt;Msg&gt;) {
+</span></span><span style=display:flex><span>     log::trace!(&#34;Handling {:?}&#34;, msg);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>     match msg {
+</span></span><span style=display:flex><span>         Msg::Rendered =&gt; { ... },
+</span></span><span style=display:flex><span><span style=color:#f92672>-        Msg::Clicked(cursor) =&gt; {
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-            let location = {
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-                let viewports = model.world.read_storage();
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-                let viewport = model.window.viewport(&amp;viewports);
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-                arcs::window::to_drawing_coordinates(
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-                    cursor,
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-                    viewport,
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-                    model.canvas_size,
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-                )
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-            };
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-            model.on_mouse_down(location, cursor);
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-        },
+</span></span></span><span style=display:flex><span><span style=color:#f92672></span><span style=color:#a6e22e>+        Msg::MouseDown(cursor) =&gt; model.on_mouse_down(cursor),
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        Msg::MouseUp(cursor) =&gt; model.on_mouse_up(cursor),
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        Msg::MouseMove(cursor) =&gt; model.on_mouse_move(cursor),
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span>         Msg::KeyPressed(args) =&gt; model.on_key_pressed(args),
+</span></span><span style=display:flex><span>         Msg::WindowResized =&gt; { ... },
+</span></span><span style=display:flex><span>     }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>     ...
+</span></span><span style=display:flex><span> }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span> impl Model {
+</span></span><span style=display:flex><span><span style=color:#f92672>-    fn on_mouse_down(
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-        &amp;mut self,
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-        location: Point2D&lt;f64, DrawingSpace&gt;,
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-        cursor: Point2D&lt;f64, CanvasSpace&gt;,
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-    ) {
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-        let args = modes::MouseEventArgs {
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-            location,
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-            cursor,
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-            button_state: modes::MouseButtons::LEFT_BUTTON,
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-        };
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-        log::debug!(&#34;[ON_MOUSE_DOWN] {:?}, {:?}&#34;, args, self.current_state);
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-        let mut ctx = Context {
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-            world: &amp;mut self.world,
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-            window: &amp;mut self.window,
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-        };
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-        let trans = self.current_state.on_mouse_down(&amp;mut ctx, &amp;args);
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-        self.handle_transition(trans);
+</span></span></span><span style=display:flex><span><span style=color:#f92672>-    }
+</span></span></span><span style=display:flex><span><span style=color:#f92672></span><span style=color:#a6e22e>+    fn on_mouse_down(&amp;mut self, cursor: Point2D&lt;f64, CanvasSpace&gt;) -&gt; bool {
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        let args = self.mouse_event_args(cursor);
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        log::debug!(&#34;[ON_MOUSE_DOWN] {:?}, {:?}&#34;, args, self.current_state);
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        self.handle_event(|state, ctx| state.on_mouse_down(ctx, &amp;args))
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+    }
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+    fn on_mouse_up(&amp;mut self, cursor: Point2D&lt;f64, CanvasSpace&gt;) -&gt; bool {
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        let args = self.mouse_event_args(cursor);
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        log::debug!(&#34;[ON_MOUSE_UP] {:?}, {:?}&#34;, args, self.current_state);
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        self.handle_event(|state, ctx| state.on_mouse_up(ctx, &amp;args))
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+    }
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+    fn on_mouse_move(&amp;mut self, cursor: Point2D&lt;f64, CanvasSpace&gt;) -&gt; bool {
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        let args = self.mouse_event_args(cursor);
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        self.handle_event(|state, ctx| state.on_mouse_move(ctx, &amp;args))
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+    }
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+    fn handle_event&lt;F&gt;(&amp;mut self, handler: F) -&gt; bool
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+    where
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        F: FnOnce(&amp;mut dyn State, &amp;mut Context&lt;&#39;_&gt;) -&gt; Transition,
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+    {
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        let mut suppress_redraw = false;
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        let transition = handler(
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+            &amp;mut *self.current_state,
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+            &amp;mut Context {
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+                world: &amp;mut self.world,
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+                window: &amp;mut self.window,
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+                default_layer: self.default_layer,
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+                suppress_redraw: &amp;mut suppress_redraw,
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+            },
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        );
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        self.handle_transition(transition);
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        if suppress_redraw {
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+            log::debug!(&#34;Redraw suppressed&#34;);
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        }
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+        !suppress_redraw
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e>+    }
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span>
+</span></span><span style=display:flex><span>     ...
+</span></span><span style=display:flex><span> }
+</span></span></code></pre></div><div class="notices note"><p>It&rsquo;s annoying that we need to implement this sort of dragging a second time
+instead of just reusing the code from our <code>Idle</code> mode, but that&rsquo;s the
+trade-off we made back when thinking up a design. I&rsquo;m also feeling funny
+about needing to constantly propagate events down to nested state machines.</p><p>If we were using a pushdown automata, dragging the current selection around
+would be a simple case of pushing the <code>DraggingSelection</code> state onto the stack,
+then when the mouse is released it would be popped and return control back to
+<code>AddPointMode</code>.</p><p>Likewise, events would be sent directly to the innermost <code>State</code> so there&rsquo;d be
+no need to explicitly propagate them down.</p><p>It&rsquo;s all about trade-offs. In this case, dragging is simple enough I&rsquo;m okay with
+writing it twice because it means we know exactly what&rsquo;s going on when
+<code>DraggingSelection</code> runs. If we were using a pushdown automata
+<code>DraggingSelection</code> would have no way of knowing which assumptions are being
+made by states higher in the stack so it might be easier to introduce bugs, or
+at least some form of <em>&ldquo;spooky action at a distance&rdquo;</em>.</p><p>You could even combine pushdown automata with some sort of bubbling mechanism
+where a state will explicitly say whether the event is &ldquo;handled&rdquo;, allowing
+events to be sent to the innermost state first and continually bubbled up
+until someone handles the event or we reach the top of the stack. This is how
+a lot of GUIs do things (e.g. <code>preventDefault()</code> in the browser) to allow
+components to be composable, but I feel like that&rsquo;d just make our already
+complex mode system even harder to reason about&mldr;</p></div><p>Something I&rsquo;d also like to draw your attention to is how little code that
+required. Sure we needed to duplicate some of the dragging logic, but overall
+it was pretty simple to plug new functionality into our app.</p><h2 id=conclusions>Conclusions
+<a class=heading-link href=#conclusions><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Looking back, I&rsquo;m not 100% sure we should have gone the <em>Nested State Machine</em>
+route instead of using a <em>Pushdown Automata</em>.</p><p>Having to constantly propagate events down to inner state machines is a bit
+annoying to do in Rust, and the various tricks we could have employed to make
+the process easier would end up making the code less readable. The large
+projects I&rsquo;ve needed to implement interactivity for in the past have all had
+some form of inheritance, and using inheritance this delegation could be solved
+quite elegantly.</p><details><summary>Example of event delegation in C#</summary><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-cs data-lang=cs><span style=display:flex><span><span style=color:#66d9ef>abstract</span> <span style=color:#66d9ef>class</span> <span style=color:#a6e22e>State</span>
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>public</span> <span style=color:#66d9ef>virtual</span> <span style=color:#66d9ef>void</span> OnMouseDown(ApplicationContext ctx, MouseEventArgs args) {}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    ...
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>/// &lt;summary&gt;</span>
+</span></span><span style=display:flex><span><span style=color:#75715e>/// A State which contains a nested state machine.</span>
+</span></span><span style=display:flex><span><span style=color:#75715e>/// &lt;/summary&gt;</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>abstract</span> <span style=color:#66d9ef>class</span> <span style=color:#a6e22e>StateWithNestedStateMachine</span>: State <span style=color:#75715e>// name subject to much bikeshedding</span>
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#75715e>/// &lt;summary&gt;</span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>/// The current state in a nested state machine.</span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>/// &lt;/summary&gt;</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>protected</span> State Inner { <span style=color:#66d9ef>get</span>; <span style=color:#66d9ef>set</span>; }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>public</span> <span style=color:#66d9ef>virtual</span> <span style=color:#66d9ef>void</span> OnMouseDown(ApplicationContext ctx, MouseEventArgs args)
+</span></span><span style=display:flex><span>    {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// by default we just want to propagate the event down and handle any</span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// resulting transitions</span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>var</span> transition = Inner.OnMouseDown(ctx, args);
+</span></span><span style=display:flex><span>        HandleTransition(transition);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    ...
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>protected</span> <span style=color:#66d9ef>void</span> HandleTransition(Transition trans)
+</span></span><span style=display:flex><span>    {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> (trans <span style=color:#66d9ef>is</span> ChangeStateTransition change)
+</span></span><span style=display:flex><span>        {
+</span></span><span style=display:flex><span>            Inner = change.NewState;
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div></details><p>That said, even if it required a bit more code having everything written out
+explicitly means our mode system is pretty easy to understand at a glance.
+When troubleshooting there&rsquo;s no need for contextual knowledge (i.e. knowing that
+a particular branch can only be hit when something a couple levels higher in the
+pushdown automata stack is in a particular state) and you can just follow the
+code.</p><p>I&rsquo;ve found that to tackle these sorts of problems outside of toy projects, you
+<em>really</em> need to make sure your implementation is backed by a formal model or
+pattern. Implementing interactivity by attaching intermediate variables to your
+top-level <code>Window</code> (or <code>Model</code> in our case) and throwing more switch-case
+statements at the problem is a great way to create a code monster and make your
+successors/coworkers/future self hate you.</p><p>And yes, if you are curious, we can indeed now draw points on the canvas 🎉</p><p><video controls src=adding-points.webm type=video/webm style=width:100%></video></p><p>(please excuse the poor frame rate from OBS)</p></div><footer></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=https://cdn.jsdelivr.net/npm/mermaid@9.3.0/dist/mermaid.min.js integrity="sha256-QdTG1YTLLTwD3b95jLqFxpQX9uYuJMNAtVZgwKX4oYU=" crossorigin=anonymous></script><script>mermaid.initialize({startOnLoad:!0})</script><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>

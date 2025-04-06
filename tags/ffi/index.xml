@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>FFI on Michael-F-Bryan</title><link>https://adventures.michaelfbryan.com/tags/ffi/</link><description>Recent content in FFI on Michael-F-Bryan</description><generator>Hugo</generator><language>en</language><lastBuildDate>Tue, 01 Apr 2025 09:19:10 +0800</lastBuildDate><atom:link href="https://adventures.michaelfbryan.com/tags/ffi/index.xml" rel="self" type="application/rss+xml"/><item><title>FFI-Safe Polymorphism: Thin Trait Objects</title><link>https://adventures.michaelfbryan.com/posts/ffi-safe-polymorphism-in-rust/</link><pubDate>Wed, 16 Dec 2020 02:00:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/ffi-safe-polymorphism-in-rust/</guid><description>&lt;p>A while ago someone &lt;a href="https://users.rust-lang.org/t/ffi-c-file-and-good-rust-wrapper-equivalent-type/52050" class="external-link" target="_blank" rel="noopener">posted a question&lt;/a> on the Rust User Forums
+asking how to achieve polymorphism in a C API and while lots of good
+suggestions were made, I&amp;rsquo;d like to explore my take on things.&lt;/p>
+&lt;p>As a recap, Rust provides two mechanisms for letting you write code which will
+work with multiple types. These are&lt;/p>
+&lt;ul>
+&lt;li>&lt;strong>Static Dispatch&lt;/strong>, where the compiler will generate multiple copies of the
+function, tailor-made for each type and resolved at compile time, and&lt;/li>
+&lt;li>&lt;strong>Dynamic Dispatch&lt;/strong>, where we use an extra level of indirection to only
+resolve the actual implementation at runtime&lt;/li>
+&lt;/ul>
+&lt;p>While both mechanisms are extremely powerful and can cover almost all of your
+needs in normal Rust code, they both have one drawback&amp;hellip; The actual
+mechanisms used are (deliberately) unspecified and not safe for FFI.&lt;/p></description></item><item><title>Rust Closures in FFI</title><link>https://adventures.michaelfbryan.com/posts/rust-closures-in-ffi/</link><pubDate>Tue, 12 May 2020 22:00:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/rust-closures-in-ffi/</guid><description>&lt;p>Every now and then when using native libraries from Rust you&amp;rsquo;ll be asked to
+pass a callback across the FFI boundary. The reasons are varied, but often
+this might be done to notify the caller when &amp;ldquo;interesting&amp;rdquo; things happen, for
+injecting logic (see the &lt;a href="https://sourcemaking.com/design_patterns/strategy" class="external-link" target="_blank" rel="noopener">Strategy Pattern&lt;/a>), or to handle the
+result of an asynchronous operation.&lt;/p>
+&lt;p>If this were normal Rust, we&amp;rsquo;d just accept a closure (e.g. a
+&lt;code>Box&amp;lt;dyn Fn(...)&amp;gt;&lt;/code> or by being generic over any function-like type) and be
+done with it. However, when working with other languages you are reduced to
+the lowest common denominator, a the C language (or more specifically, the
+ABI and machine code in general) doesn&amp;rsquo;t understand generics or Rust&amp;rsquo;s &amp;ldquo;fat&amp;rdquo;
+pointers.&lt;/p></description></item><item><title>How to RiiR</title><link>https://adventures.michaelfbryan.com/posts/how-to-riir/</link><pubDate>Mon, 02 Dec 2019 01:00:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/how-to-riir/</guid><description>&lt;p>In &lt;a href="https://adventures.michaelfbryan.com/posts/how-not-to-riir/" >a previous article&lt;/a> we&amp;rsquo;ve talked about how you can avoid
+rewriting a library in Rust when you don&amp;rsquo;t need to. But what about the times
+when you really &lt;em>do&lt;/em> need to?&lt;/p>
+&lt;p>In most languages you&amp;rsquo;d need to rewrite the entire library from the ground
+up, waiting until the port is almost finished before you can start seeing
+results. These sorts of ports tend to be quite expensive and error-prone, and
+often they&amp;rsquo;ll fail midway and you&amp;rsquo;ll have nothing to show for your effort.
+&lt;em>Joel Spolsky&lt;/em> does a much better job of explaining this than I ever could, see
+&lt;a href="https://www.joelonsoftware.com/2000/04/06/things-you-should-never-do-part-i/" class="external-link" target="_blank" rel="noopener">his article on why full rewrites are a bad idea&lt;/a> for more.&lt;/p></description></item><item><title>How to not RiiR</title><link>https://adventures.michaelfbryan.com/posts/how-not-to-riir/</link><pubDate>Sun, 20 Oct 2019 19:45:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/how-not-to-riir/</guid><description>&lt;p>Once you get past the growing pains of the &lt;em>Borrow Checker&lt;/em> and realise Rust
+gives you the power to do things which would be unheard of (or just plain
+dangerous) in other languages, the temptation to &lt;a href="https://transitiontech.ca/random/RIIR" class="external-link" target="_blank" rel="noopener">&lt;em>Rewrite it in Rust&lt;/em>&lt;/a>
+can be quite strong. However at best, the temptation to &lt;em>RiiR&lt;/em> is unproductive
+(unnecessary duplication of effort), and at worst it can promote the creation
+of buggy software (why would &lt;em>you&lt;/em> be better equipped to write a library for
+some domain-specific purpose than the original author?).&lt;/p></description></item><item><title>Plugins in Rust</title><link>https://adventures.michaelfbryan.com/posts/plugins-in-rust/</link><pubDate>Mon, 30 Sep 2019 22:04:58 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/plugins-in-rust/</guid><description>&lt;p>Imagine you are implementing a calculator application and want users to be able
+to extend the application with their own functionality. For example, imagine a
+user wants to provide a &lt;code>random()&lt;/code> function that generates &lt;em>true&lt;/em> random numbers
+using &lt;a href="https://random.org/" class="external-link" target="_blank" rel="noopener">random.org&lt;/a> instead of the pseudo-random numbers that a crate like
+&lt;a href="https://crates.io/crates/rand" class="external-link" target="_blank" rel="noopener">rand&lt;/a> would provide.&lt;/p>
+&lt;p>The Rust language gives you a lot of really powerful tools for adding
+flexibility and extensibility to your applications (e.g. traits, enums,
+macros), but all of these happen at compile time. Unfortunately, to get the
+flexibility that we&amp;rsquo;re looking we&amp;rsquo;ll need to be able to add new functionalty at
+runtime.&lt;/p></description></item></channel></rss>

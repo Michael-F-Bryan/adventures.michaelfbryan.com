@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Geometric Constraint Solver on Michael-F-Bryan</title><link>https://adventures.michaelfbryan.com/tags/geometric-constraint-solver/</link><description>Recent content in Geometric Constraint Solver on Michael-F-Bryan</description><generator>Hugo</generator><language>en</language><lastBuildDate>Tue, 01 Apr 2025 09:19:10 +0800</lastBuildDate><atom:link href="https://adventures.michaelfbryan.com/tags/geometric-constraint-solver/index.xml" rel="self" type="application/rss+xml"/><item><title>Geometric Constraint Solvers Part 1: Algebraic Expressions</title><link>https://adventures.michaelfbryan.com/posts/constraints-part-1-expressions/</link><pubDate>Wed, 15 Jul 2020 00:40:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/constraints-part-1-expressions/</guid><description>&lt;p>A really powerful tool in Computer Aided Design (CAD) is the ability to apply
+&lt;em>&amp;ldquo;constraints&amp;rdquo;&lt;/em> to your drawing. Constraints are a really powerful tool,
+allowing the drafter to declare how parts of their drawing are related, then
+letting the CAD program figure out how parameters can be manipulated in such
+a way that&lt;/p>
+&lt;p>You can think of a constraint as some sort of mathematical relationship between
+two or more parameters.&lt;/p></description></item></channel></rss>

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Vue on Michael-F-Bryan</title><link>https://adventures.michaelfbryan.com/tags/vue/</link><description>Recent content in Vue on Michael-F-Bryan</description><generator>Hugo</generator><language>en</language><lastBuildDate>Tue, 01 Apr 2025 09:19:10 +0800</lastBuildDate><atom:link href="https://adventures.michaelfbryan.com/tags/vue/index.xml" rel="self" type="application/rss+xml"/><item><title>Wiring Up Communication</title><link>https://adventures.michaelfbryan.com/posts/wiring-up-communication/</link><pubDate>Thu, 10 Oct 2019 22:58:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/wiring-up-communication/</guid><description>&lt;p>As we mentioned &lt;a href="https://adventures.michaelfbryan.com/posts/a-better-frontend/#the-next-step" >in the last AiMC post&lt;/a>, the next task is to wire up
+communications between the simulator&amp;rsquo;s backend and frontend.&lt;/p>
+&lt;p>As a general rule, our frontend will have two communication regimes:&lt;/p>
+&lt;ol>
+&lt;li>When something happens (e.g. a button is pressed or a job starts sending),
+the frontend will send a batch of messages to the backend and interpret the
+response&lt;/li>
+&lt;li>The frontend will continually poll the backend&amp;rsquo;s state in the background
+(e.g. at 10Hz)&lt;/li>
+&lt;/ol>
+&lt;p>As it is, the &lt;code>Browser&lt;/code> in our WASM code already provides a method for
+sending data to the frontend (&lt;a href="https://michael-f-bryan.github.io/adventures-in-motion-control/aimc_sim/struct.Browser.html#method.send_data" class="external-link" target="_blank" rel="noopener">&lt;code>Browser::send_data()&lt;/code>&lt;/a>) and
+receiving data from the frontend (&lt;a href="https://michael-f-bryan.github.io/adventures-in-motion-control/aimc_sim/struct.App.html#method.on_data_received" class="external-link" target="_blank" rel="noopener">&lt;code>App::on_data_received()&lt;/code>&lt;/a>) so
+we shouldn&amp;rsquo;t need to write any Rust code.&lt;/p></description></item><item><title>A Better Frontend</title><link>https://adventures.michaelfbryan.com/posts/a-better-frontend/</link><pubDate>Fri, 27 Sep 2019 03:47:00 +0800</pubDate><guid>https://adventures.michaelfbryan.com/posts/a-better-frontend/</guid><description>&lt;p>Now we&amp;rsquo;ve got a half-usable motion controller, we need a graphical way for
+humans to interact with it. The controller runs in a browser, which makes
+&lt;a href="https://vuejs.org/" class="external-link" target="_blank" rel="noopener">Vue&lt;/a> a perfect candidate for the UI.&lt;/p>
+&lt;h2 id="adding-vue-to-the-frontend">
+ Adding Vue to the Frontend
+ &lt;a class="heading-link" href="#adding-vue-to-the-frontend">
+ &lt;i class="fa-solid fa-link" aria-hidden="true" title="Link to heading">&lt;/i>
+ &lt;span class="sr-only">Link to heading&lt;/span>
+ &lt;/a>
+&lt;/h2>
+&lt;p>Now, we don&amp;rsquo;t actually have much frontend code (47 lines of JavaScript to be
+exact) so it&amp;rsquo;s actually easier to delete the existing &lt;code>frontend&lt;/code> and use the
+&lt;a href="https://cli.vuejs.org/guide/installation.html" class="external-link" target="_blank" rel="noopener">&lt;code>vue&lt;/code> CLI tool&lt;/a> to create a new one.&lt;/p></description></item></channel></rss>

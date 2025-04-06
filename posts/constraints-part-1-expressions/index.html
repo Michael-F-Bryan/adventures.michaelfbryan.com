@@ -1,0 +1,1035 @@
+<!doctype html><html lang=en><head><title>Geometric Constraint Solvers Part 1: Algebraic Expressions · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="A really powerful tool in Computer Aided Design (CAD) is the ability to apply
+&ldquo;constraints&rdquo; to your drawing. Constraints are a really powerful tool,
+allowing the drafter to declare how parts of their drawing are related, then
+letting the CAD program figure out how parameters can be manipulated in such
+a way that
+You can think of a constraint as some sort of mathematical relationship between
+two or more parameters."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="Geometric Constraint Solvers Part 1: Algebraic Expressions"><meta name=twitter:description content="A really powerful tool in Computer Aided Design (CAD) is the ability to apply “constraints” to your drawing. Constraints are a really powerful tool, allowing the drafter to declare how parts of their drawing are related, then letting the CAD program figure out how parameters can be manipulated in such a way that
+You can think of a constraint as some sort of mathematical relationship between two or more parameters."><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/constraints-part-1-expressions/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="Geometric Constraint Solvers Part 1: Algebraic Expressions"><meta property="og:description" content="A really powerful tool in Computer Aided Design (CAD) is the ability to apply “constraints” to your drawing. Constraints are a really powerful tool, allowing the drafter to declare how parts of their drawing are related, then letting the CAD program figure out how parameters can be manipulated in such a way that
+You can think of a constraint as some sort of mathematical relationship between two or more parameters."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2020-07-15T00:40:00+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Rust"><meta property="article:tag" content="Geometric Constraint Solver"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/constraints-part-1-expressions/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/constraints-part-1-expressions/>Geometric Constraint Solvers Part 1: Algebraic Expressions</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2020-07-15T00:40:00+08:00>July 15, 2020
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+24-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/rust/>Rust</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/geometric-constraint-solver/>Geometric Constraint Solver</a></span></div></div></header><div class=post-content><p>A really powerful tool in Computer Aided Design (CAD) is the ability to apply
+<em>&ldquo;constraints&rdquo;</em> to your drawing. Constraints are a really powerful tool,
+allowing the drafter to declare how parts of their drawing are related, then
+letting the CAD program figure out how parameters can be manipulated in such
+a way that</p><p>You can think of a constraint as some sort of mathematical relationship between
+two or more parameters.</p><p>Some examples are:</p><ul><li><em>&ldquo;This interior angle is 45°&rdquo;</em></li><li><em>&ldquo;That line is vertical&rdquo;</em></li><li><em>&ldquo;Side A is perpendicular to side B&rdquo;</em></li></ul><p>Graphically they&rsquo;ll be displayed something like this:</p><figure><a href=http://solvespace.com/constraints.pl><img src=https://raw.githubusercontent.com/solvespace/solvespace-web/dc2f3ed070d58eb827617633cd4bdc52b8c0ba00/pics/constraints-triangle-dim-2.png alt="A constrained triangle in SolveSpace"></a><figcaption><p>A constrained triangle in <a href=http://solvespace.com/ class=external-link target=_blank rel=noopener>SolveSpace</a></p></figcaption></figure><p>These constraints are declared mathematically, so a <em>&ldquo;This line is vertical&rdquo;</em>
+constraint may be written as $line.start.x - line.end.x = 0$ and
+$line.start.z - line.end.z = 0$ (assuming the $x$ axis is to the right and
+the $z$ comes out of the page).</p><p>In response to input from the user (e.g. they click on the line and drag it
+to the left), a constraint system will feed the perturbation into the system
+of equations (e.g. the $line.start.y$ changes by $-0.1$ units) and based on
+the available constraints and tie-breaking heuristics, it will figure out how
+much each remaining variable must change. Execute at 60 FPS and you&rsquo;ve got an
+interactive, parametric CAD application.</p><p>A constraint solver is a fairly complex system, but the first step is teaching
+it how to manipulate and evaluate abstract maths.</p><div class="notices note"><p>The code written in this article is available <a href=https://github.com/Michael-F-Bryan/constraints class=external-link target=_blank rel=noopener>on GitHub</a>. Feel free to
+browse through and steal code or inspiration.</p><p>If you found this useful or spotted a bug, let me know on the blog&rsquo;s
+<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com class=external-link target=_blank rel=noopener>issue tracker</a>!</p></div><h2 id=the-expression-tree>The Expression Tree
+<a class=heading-link href=#the-expression-tree><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>For this constraint solver we need a way to represent algebraic expressions like
+$x - 5$ or $sin(x) + y*y - x*y$, and the most natural form is the <a href=https://en.wikipedia.org/wiki/Abstract_syntax_tree class=external-link target=_blank rel=noopener><em>Abstract
+Syntax Tree</em></a>.</p><p>In this language, an expression can be:</p><ul><li>A (possibly unnamed) parameter</li><li>A floating-point constant</li><li>A call to a function with a single argument</li><li>Negation, and</li><li>A binary operation (e.g. <code>x + y</code>, where <code>x</code> and <code>y</code> are the <code>left</code> and <code>right</code>
+operands, and we&rsquo;re using the <code>+</code> operator)</li></ul><p>Our constraint solver is considerably less complex than a general purpose
+programming language, so most of our <em>Abstract Syntax Tree</em> can fit into a
+couple simple types.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/expr.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::rc::Rc;
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> smol_str::SmolStr;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// An expression.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>Expression</span> {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// A free variable (e.g. `x`).
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    Parameter(Parameter),
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// A fixed constant (e.g. `3.14`).
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    Constant(<span style=color:#66d9ef>f64</span>),
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// An expression involving two operands.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    Binary {
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>/// The left operand.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>        left: <span style=color:#a6e22e>Rc</span><span style=color:#f92672>&lt;</span>Expression<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>/// The right operand.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>        right: <span style=color:#a6e22e>Rc</span><span style=color:#f92672>&lt;</span>Expression<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>/// The binary operation being executed.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>        op: <span style=color:#a6e22e>BinaryOperation</span>,
+</span></span><span style=display:flex><span>    },
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Negate the expression.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    Negate(Rc<span style=color:#f92672>&lt;</span>Expression<span style=color:#f92672>&gt;</span>),
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Invoke a builtin function.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    FunctionCall {
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>/// The name of the function being called.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>        name: <span style=color:#a6e22e>SmolStr</span>,
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>/// The argument passed to this function call.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>        argument: <span style=color:#a6e22e>Rc</span><span style=color:#f92672>&lt;</span>Expression<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    },
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// A free variable.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Hash)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>Parameter</span> {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// A variable with associated name.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    Named(SmolStr),
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// An anonymous variable generated by the system.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    Anonymous { number: <span style=color:#66d9ef>usize</span> },
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// An operation that can be applied to two arguments.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug, Copy, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>BinaryOperation</span> {
+</span></span><span style=display:flex><span>    Plus,
+</span></span><span style=display:flex><span>    Minus,
+</span></span><span style=display:flex><span>    Times,
+</span></span><span style=display:flex><span>    Divide,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>This should be fairly straightforward if you are familiar with Rust, although
+I&rsquo;d like to direct your attention to two details&mldr;</p><ol><li>Text fields use a <a href=https://crates.io/crates/smol_str class=external-link target=_blank rel=noopener><code>smol_str::SmolStr</code></a>
+instead of a normal <code>String</code></li><li>Each child node is behind a reference-counted pointer</li></ol><p>We&rsquo;re using <code>SmolStr</code> for something called the <a href=https://stackoverflow.com/questions/10315041/meaning-of-acronym-sso-in-the-context-of-stdstring/10319672#10319672 class=external-link target=_blank rel=noopener><em>Small String Optimisation</em></a>.
+This is where small amounts of text can be stored inline on the stack (in place
+of the data pointer, length, and capacity fields in a normal <code>String</code>) to skip
+a heap allocation and a layer of indirection.</p><p>The small string optimisation is useful when you&rsquo;re dealing with a large
+number of small strings (like programming language identifiers) because it
+helps avoid heap fragmentation and locality. Cloning a <code>SmolStr</code> is also
+quite cheap because even if it isn&rsquo;t small, a reference-counted string
+(analogous to <code>Arc&lt;str></code>) is used when we need to store large strings on the
+heap.</p><p>A conscious design decision is to <em>make the AST immutable</em>. Most operations
+applied to an <code>Expression</code> will leave part of the tree unchanged, and seeing
+as we already <em>need</em> to add a layer of indirection to <a href=https://stackoverflow.com/questions/25296195/why-are-recursive-struct-types-illegal-in-rust class=external-link target=_blank rel=noopener>prevent infinitely
+sized types</a>, we can use reference-counted pointers to share
+common sub-expressions.</p><p>This should reduce memory usage and hopefully increase performance because
+shared nodes are more likely to be in cache.</p><h2 id=pretty-printing-and-other-useful-methods>Pretty-Printing and Other Useful Methods
+<a class=heading-link href=#pretty-printing-and-other-useful-methods><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>To make our <code>Expression</code> type easier to work with we can implement several
+traits from the standard library.</p><p>Arguably the most useful of these is <code>std::fmt::Display</code>, a mechanism for
+getting the <code>Expression</code>&rsquo;s human-readable form.</p><h3 id=writing-the-display-implementation>Writing the Display Implementation
+<a class=heading-link href=#writing-the-display-implementation><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>To help make writing parentheses and spaces in <code>Display</code> a bit easier, let&rsquo;s
+create a temporary type for handling operator precedence.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/expr.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>Precedence</span> {
+</span></span><span style=display:flex><span>    Bi,
+</span></span><span style=display:flex><span>    Md,
+</span></span><span style=display:flex><span>    As,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices note"><p>The mnemonic I learned in school was <em>BIMDAS</em>, short for <em>Brackets</em>,
+<em>Indices</em>, <em>Multiply and Divide</em>, and <em>Addition and Subtraction</em>. Hence the
+cryptic variant names.</p><p>We don&rsquo;t support exponents (yet?), so it&rsquo;s fine for <em>Brackets</em> and <em>Indices</em> to
+be in the same precedence variant.</p></div><p>We also define some helper methods for getting an <code>Expression</code>&rsquo;s precedence.
+In this case parameters, constants, and function calls all have the highest
+possible precedence level.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/expr.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Expression {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>precedence</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#a6e22e>Precedence</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> self {
+</span></span><span style=display:flex><span>            Expression::Parameter(_)
+</span></span><span style=display:flex><span>            <span style=color:#f92672>|</span> Expression::Constant(_)
+</span></span><span style=display:flex><span>            <span style=color:#f92672>|</span> Expression::FunctionCall { <span style=color:#f92672>..</span> } <span style=color:#f92672>=&gt;</span> Precedence::Bi,
+</span></span><span style=display:flex><span>            Expression::Negate(_) <span style=color:#f92672>=&gt;</span> Precedence::Md,
+</span></span><span style=display:flex><span>            Expression::Binary { op, <span style=color:#f92672>..</span> } <span style=color:#f92672>=&gt;</span> op.precedence(),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> BinaryOperation {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>precedence</span>(self) -&gt; <span style=color:#a6e22e>Precedence</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> self {
+</span></span><span style=display:flex><span>            BinaryOperation::Plus <span style=color:#f92672>|</span> BinaryOperation::Minus <span style=color:#f92672>=&gt;</span> Precedence::As,
+</span></span><span style=display:flex><span>            BinaryOperation::Times <span style=color:#f92672>|</span> BinaryOperation::Divide <span style=color:#f92672>=&gt;</span> Precedence::Md,
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Printing a <code>Parameter</code> works by either printing the name as-is, or the
+parameter number preceded by a <code>$</code> if it is anonymous (i.e. <code>$2</code>).</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/expr.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::fmt::{self, Display, Formatter};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Display <span style=color:#66d9ef>for</span> Parameter {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>fmt</span>(<span style=color:#f92672>&amp;</span>self, f: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Formatter<span style=color:#f92672>&lt;</span>&#39;_<span style=color:#f92672>&gt;</span>) -&gt; <span style=color:#a6e22e>fmt</span>::Result {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> self {
+</span></span><span style=display:flex><span>            Parameter::Named(name) <span style=color:#f92672>=&gt;</span> write!(f, <span style=color:#e6db74>&#34;{}&#34;</span>, name),
+</span></span><span style=display:flex><span>            Parameter::Anonymous { number } <span style=color:#f92672>=&gt;</span> write!(f, <span style=color:#e6db74>&#34;${}&#34;</span>, number),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>In <code>Expression</code>&rsquo;s <code>Display</code> implementation we just need to do a <code>match</code> and
+use the <code>write!()</code> macro to generate the desired string for each variant.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/expr.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Display <span style=color:#66d9ef>for</span> Expression {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>fmt</span>(<span style=color:#f92672>&amp;</span>self, f: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Formatter<span style=color:#f92672>&lt;</span>&#39;_<span style=color:#f92672>&gt;</span>) -&gt; <span style=color:#a6e22e>fmt</span>::Result {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> self {
+</span></span><span style=display:flex><span>            Expression::Parameter(p) <span style=color:#f92672>=&gt;</span> write!(f, <span style=color:#e6db74>&#34;{}&#34;</span>, p),
+</span></span><span style=display:flex><span>            Expression::Constant(value) <span style=color:#f92672>=&gt;</span> write!(f, <span style=color:#e6db74>&#34;{}&#34;</span>, value),
+</span></span><span style=display:flex><span>            Expression::Binary { left, right, op } <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                write_with_precedence(op.precedence(), left, f)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> middle <span style=color:#f92672>=</span> <span style=color:#66d9ef>match</span> op {
+</span></span><span style=display:flex><span>                    BinaryOperation::Plus <span style=color:#f92672>=&gt;</span> <span style=color:#e6db74>&#34; + &#34;</span>,
+</span></span><span style=display:flex><span>                    BinaryOperation::Minus <span style=color:#f92672>=&gt;</span> <span style=color:#e6db74>&#34; - &#34;</span>,
+</span></span><span style=display:flex><span>                    BinaryOperation::Times <span style=color:#f92672>=&gt;</span> <span style=color:#e6db74>&#34;*&#34;</span>,
+</span></span><span style=display:flex><span>                    BinaryOperation::Divide <span style=color:#f92672>=&gt;</span> <span style=color:#e6db74>&#34;/&#34;</span>,
+</span></span><span style=display:flex><span>                };
+</span></span><span style=display:flex><span>                write!(f, <span style=color:#e6db74>&#34;{}&#34;</span>, middle)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>                write_with_precedence(op.precedence(), right, f)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>                Ok(())
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            Expression::Negate(inner) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                write!(f, <span style=color:#e6db74>&#34;-&#34;</span>)<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>                write_with_precedence(
+</span></span><span style=display:flex><span>                    BinaryOperation::Times.precedence(),
+</span></span><span style=display:flex><span>                    inner,
+</span></span><span style=display:flex><span>                    f,
+</span></span><span style=display:flex><span>                )<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>                Ok(())
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            Expression::FunctionCall { name, argument } <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                write!(f, <span style=color:#e6db74>&#34;{}({})&#34;</span>, name, argument)
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>write_with_precedence</span>(
+</span></span><span style=display:flex><span>    current_precedence: <span style=color:#a6e22e>Precedence</span>,
+</span></span><span style=display:flex><span>    expr: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Expression</span>,
+</span></span><span style=display:flex><span>    f: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Formatter<span style=color:#f92672>&lt;</span>&#39;_<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>) -&gt; <span style=color:#a6e22e>fmt</span>::Result {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> expr.precedence() <span style=color:#f92672>&gt;</span> current_precedence {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// we need parentheses to maintain ordering
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        write!(f, <span style=color:#e6db74>&#34;({})&#34;</span>, expr)
+</span></span><span style=display:flex><span>    } <span style=color:#66d9ef>else</span> {
+</span></span><span style=display:flex><span>        write!(f, <span style=color:#e6db74>&#34;{}&#34;</span>, expr)
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The <code>write_with_precedence()</code> helper is used to make sure our pretty-printer
+respects the precedence of its operands by adding parentheses when necessary.
+This prevents awkward bugs like <code>-(x + 3)</code> being printed as <code>-x + 3</code>.</p><p>We also deliberately add space before and after operators with the
+<code>Precedence::As</code> precedence to help visually separate the different terms in an
+expression.</p><p>The <code>Display</code> implementation is really easy to test. Just create a list of
+tuples containing an <code>Expression</code> and its expected string representation,
+then loop over asserting each gets formatted as desired.</p><details><summary>Long table-based pretty-printer test</summary><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/expr.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>pretty_printing_works_similarly_to_a_human</span>() {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> inputs <span style=color:#f92672>=</span> vec![
+</span></span><span style=display:flex><span>        (Expression::Constant(<span style=color:#ae81ff>3.0</span>), <span style=color:#e6db74>&#34;3&#34;</span>),
+</span></span><span style=display:flex><span>        (
+</span></span><span style=display:flex><span>            Expression::FunctionCall {
+</span></span><span style=display:flex><span>                name: <span style=color:#e6db74>&#34;sin&#34;</span>.into(),
+</span></span><span style=display:flex><span>                argument: <span style=color:#a6e22e>Rc</span>::new(Expression::Constant(<span style=color:#ae81ff>5.0</span>)),
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;sin(5)&#34;</span>,
+</span></span><span style=display:flex><span>        ),
+</span></span><span style=display:flex><span>        (
+</span></span><span style=display:flex><span>            Expression::Negate(Rc::new(Expression::Constant(<span style=color:#ae81ff>5.0</span>))),
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;-5&#34;</span>,
+</span></span><span style=display:flex><span>        ),
+</span></span><span style=display:flex><span>        (
+</span></span><span style=display:flex><span>            Expression::Negate(Rc::new(Expression::FunctionCall {
+</span></span><span style=display:flex><span>                name: <span style=color:#e6db74>&#34;sin&#34;</span>.into(),
+</span></span><span style=display:flex><span>                argument: <span style=color:#a6e22e>Rc</span>::new(Expression::Constant(<span style=color:#ae81ff>5.0</span>)),
+</span></span><span style=display:flex><span>            })),
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;-sin(5)&#34;</span>,
+</span></span><span style=display:flex><span>        ),
+</span></span><span style=display:flex><span>        (
+</span></span><span style=display:flex><span>            Expression::Binary {
+</span></span><span style=display:flex><span>                left: <span style=color:#a6e22e>Rc</span>::new(Expression::Constant(<span style=color:#ae81ff>1.0</span>)),
+</span></span><span style=display:flex><span>                right: <span style=color:#a6e22e>Rc</span>::new(Expression::Constant(<span style=color:#ae81ff>1.0</span>)),
+</span></span><span style=display:flex><span>                op: <span style=color:#a6e22e>BinaryOperation</span>::Plus,
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;1 + 1&#34;</span>,
+</span></span><span style=display:flex><span>        ),
+</span></span><span style=display:flex><span>        (
+</span></span><span style=display:flex><span>            Expression::Binary {
+</span></span><span style=display:flex><span>                left: <span style=color:#a6e22e>Rc</span>::new(Expression::Constant(<span style=color:#ae81ff>1.0</span>)),
+</span></span><span style=display:flex><span>                right: <span style=color:#a6e22e>Rc</span>::new(Expression::Constant(<span style=color:#ae81ff>1.0</span>)),
+</span></span><span style=display:flex><span>                op: <span style=color:#a6e22e>BinaryOperation</span>::Minus,
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;1 - 1&#34;</span>,
+</span></span><span style=display:flex><span>        ),
+</span></span><span style=display:flex><span>        (
+</span></span><span style=display:flex><span>            Expression::Binary {
+</span></span><span style=display:flex><span>                left: <span style=color:#a6e22e>Rc</span>::new(Expression::Constant(<span style=color:#ae81ff>1.0</span>)),
+</span></span><span style=display:flex><span>                right: <span style=color:#a6e22e>Rc</span>::new(Expression::Constant(<span style=color:#ae81ff>1.0</span>)),
+</span></span><span style=display:flex><span>                op: <span style=color:#a6e22e>BinaryOperation</span>::Times,
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;1*1&#34;</span>,
+</span></span><span style=display:flex><span>        ),
+</span></span><span style=display:flex><span>        (
+</span></span><span style=display:flex><span>            Expression::Binary {
+</span></span><span style=display:flex><span>                left: <span style=color:#a6e22e>Rc</span>::new(Expression::Constant(<span style=color:#ae81ff>1.0</span>)),
+</span></span><span style=display:flex><span>                right: <span style=color:#a6e22e>Rc</span>::new(Expression::Constant(<span style=color:#ae81ff>1.0</span>)),
+</span></span><span style=display:flex><span>                op: <span style=color:#a6e22e>BinaryOperation</span>::Divide,
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;1/1&#34;</span>,
+</span></span><span style=display:flex><span>        ),
+</span></span><span style=display:flex><span>        (
+</span></span><span style=display:flex><span>            Expression::Negate(Rc::new(Expression::Binary {
+</span></span><span style=display:flex><span>                left: <span style=color:#a6e22e>Rc</span>::new(Expression::Constant(<span style=color:#ae81ff>1.0</span>)),
+</span></span><span style=display:flex><span>                right: <span style=color:#a6e22e>Rc</span>::new(Expression::Constant(<span style=color:#ae81ff>1.0</span>)),
+</span></span><span style=display:flex><span>                op: <span style=color:#a6e22e>BinaryOperation</span>::Plus,
+</span></span><span style=display:flex><span>            })),
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;-(1 + 1)&#34;</span>,
+</span></span><span style=display:flex><span>        ),
+</span></span><span style=display:flex><span>        (
+</span></span><span style=display:flex><span>            Expression::Negate(Rc::new(Expression::Binary {
+</span></span><span style=display:flex><span>                left: <span style=color:#a6e22e>Rc</span>::new(Expression::Constant(<span style=color:#ae81ff>1.0</span>)),
+</span></span><span style=display:flex><span>                right: <span style=color:#a6e22e>Rc</span>::new(Expression::Constant(<span style=color:#ae81ff>1.0</span>)),
+</span></span><span style=display:flex><span>                op: <span style=color:#a6e22e>BinaryOperation</span>::Times,
+</span></span><span style=display:flex><span>            })),
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;-1*1&#34;</span>,
+</span></span><span style=display:flex><span>        ),
+</span></span><span style=display:flex><span>        (
+</span></span><span style=display:flex><span>            Expression::Binary {
+</span></span><span style=display:flex><span>                left: <span style=color:#a6e22e>Rc</span>::new(Expression::Binary {
+</span></span><span style=display:flex><span>                    left: <span style=color:#a6e22e>Rc</span>::new(Expression::Constant(<span style=color:#ae81ff>1.0</span>)),
+</span></span><span style=display:flex><span>                    right: <span style=color:#a6e22e>Rc</span>::new(Expression::Constant(<span style=color:#ae81ff>2.0</span>)),
+</span></span><span style=display:flex><span>                    op: <span style=color:#a6e22e>BinaryOperation</span>::Plus,
+</span></span><span style=display:flex><span>                }),
+</span></span><span style=display:flex><span>                right: <span style=color:#a6e22e>Rc</span>::new(Expression::Constant(<span style=color:#ae81ff>3.0</span>)),
+</span></span><span style=display:flex><span>                op: <span style=color:#a6e22e>BinaryOperation</span>::Divide,
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;(1 + 2)/3&#34;</span>,
+</span></span><span style=display:flex><span>        ),
+</span></span><span style=display:flex><span>        (
+</span></span><span style=display:flex><span>            Expression::Binary {
+</span></span><span style=display:flex><span>                left: <span style=color:#a6e22e>Rc</span>::new(Expression::Constant(<span style=color:#ae81ff>3.0</span>)),
+</span></span><span style=display:flex><span>                right: <span style=color:#a6e22e>Rc</span>::new(Expression::Binary {
+</span></span><span style=display:flex><span>                    left: <span style=color:#a6e22e>Rc</span>::new(Expression::Constant(<span style=color:#ae81ff>1.0</span>)),
+</span></span><span style=display:flex><span>                    right: <span style=color:#a6e22e>Rc</span>::new(Expression::Constant(<span style=color:#ae81ff>2.0</span>)),
+</span></span><span style=display:flex><span>                    op: <span style=color:#a6e22e>BinaryOperation</span>::Times,
+</span></span><span style=display:flex><span>                }),
+</span></span><span style=display:flex><span>                op: <span style=color:#a6e22e>BinaryOperation</span>::Minus,
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;3 - 1*2&#34;</span>,
+</span></span><span style=display:flex><span>        ),
+</span></span><span style=display:flex><span>    ];
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>for</span> (expr, should_be) <span style=color:#66d9ef>in</span> inputs {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> got <span style=color:#f92672>=</span> expr.to_string();
+</span></span><span style=display:flex><span>        assert_eq!(got, should_be);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div></details><h3 id=operator-overloads>Operator Overloads
+<a class=heading-link href=#operator-overloads><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>The use of operator overloads can often be quite controversial, but in this
+case I think it could help add some level of <a href=https://en.wikipedia.org/wiki/Syntactic_sugar class=external-link target=_blank rel=noopener><em>syntactic sugar</em></a> to
+make constructing <code>Expression</code>s more readable.</p><p>In this case, we&rsquo;ll overload the normal binary operators so they wrap the left
+and right operands with an <code>Expression::Binary</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/expr.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::ops::{Add, Div, Mul, Sub};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// define some operator overloads to make constructing an expression easier.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Add <span style=color:#66d9ef>for</span> Expression {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Output</span> <span style=color:#f92672>=</span> Expression;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>add</span>(self, rhs: <span style=color:#a6e22e>Expression</span>) -&gt; <span style=color:#a6e22e>Expression</span> {
+</span></span><span style=display:flex><span>        Expression::Binary {
+</span></span><span style=display:flex><span>            left: <span style=color:#a6e22e>Rc</span>::new(self),
+</span></span><span style=display:flex><span>            right: <span style=color:#a6e22e>Rc</span>::new(rhs),
+</span></span><span style=display:flex><span>            op: <span style=color:#a6e22e>BinaryOperation</span>::Plus,
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Sub <span style=color:#66d9ef>for</span> Expression {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Output</span> <span style=color:#f92672>=</span> Expression;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>sub</span>(self, rhs: <span style=color:#a6e22e>Expression</span>) -&gt; <span style=color:#a6e22e>Expression</span> {
+</span></span><span style=display:flex><span>        Expression::Binary {
+</span></span><span style=display:flex><span>            left: <span style=color:#a6e22e>Rc</span>::new(self),
+</span></span><span style=display:flex><span>            right: <span style=color:#a6e22e>Rc</span>::new(rhs),
+</span></span><span style=display:flex><span>            op: <span style=color:#a6e22e>BinaryOperation</span>::Minus,
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Mul <span style=color:#66d9ef>for</span> Expression {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Output</span> <span style=color:#f92672>=</span> Expression;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>mul</span>(self, rhs: <span style=color:#a6e22e>Expression</span>) -&gt; <span style=color:#a6e22e>Expression</span> {
+</span></span><span style=display:flex><span>        Expression::Binary {
+</span></span><span style=display:flex><span>            left: <span style=color:#a6e22e>Rc</span>::new(self),
+</span></span><span style=display:flex><span>            right: <span style=color:#a6e22e>Rc</span>::new(rhs),
+</span></span><span style=display:flex><span>            op: <span style=color:#a6e22e>BinaryOperation</span>::Times,
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Div <span style=color:#66d9ef>for</span> Expression {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Output</span> <span style=color:#f92672>=</span> Expression;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>div</span>(self, rhs: <span style=color:#a6e22e>Expression</span>) -&gt; <span style=color:#a6e22e>Expression</span> {
+</span></span><span style=display:flex><span>        Expression::Binary {
+</span></span><span style=display:flex><span>            left: <span style=color:#a6e22e>Rc</span>::new(self),
+</span></span><span style=display:flex><span>            right: <span style=color:#a6e22e>Rc</span>::new(rhs),
+</span></span><span style=display:flex><span>            op: <span style=color:#a6e22e>BinaryOperation</span>::Divide,
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>While we&rsquo;re at it, let&rsquo;s add a <code>Neg</code> impl so you can write things like <code>-x</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/expr.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::ops::Neg;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Neg <span style=color:#66d9ef>for</span> Expression {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Output</span> <span style=color:#f92672>=</span> Expression;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>neg</span>(self) -&gt; <span style=color:#a6e22e>Self</span>::Output { Expression::Negate(Rc::new(self)) }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>You can see none of these operator overloads are particularly interesting, they
+just let us avoid a bunch of typing.</p><h3 id=iterators>Iterators
+<a class=heading-link href=#iterators><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>A useful building block for working with the <code>Expression</code> tree is being able
+to iterate over every node in the tree. Imagine scanning through a big
+expression to figure out which parameters it references or the functions that
+it calls.</p><p>To do this, we&rsquo;ll create an <code>iter()</code> method which returns something
+implementing <code>Iterator&lt;Item = &amp;Expression></code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/expr.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Expression {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Iterate over all [`Expression`]s in this [`Expression`] tree.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>iter</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#a6e22e>impl</span> Iterator<span style=color:#f92672>&lt;</span>Item <span style=color:#f92672>=</span> <span style=color:#f92672>&amp;</span>Expression<span style=color:#f92672>&gt;</span> <span style=color:#f92672>+</span> &#39;_ {
+</span></span><span style=display:flex><span>        Iter {
+</span></span><span style=display:flex><span>            to_visit: <span style=color:#a6e22e>vec</span><span style=color:#f92672>!</span>[self],
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// A depth-first iterator over the sub-[`Expression`]s in an [`Expression`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Iter</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;expr</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    to_visit: Vec<span style=color:#f92672>&lt;&amp;</span><span style=color:#a6e22e>&#39;expr</span> Expression<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The <code>Iter</code> type works by maintaining a list of <code>&amp;Expression</code> references for the
+nodes it still needs to visit. Getting the <code>next_item</code> is then just a case of
+popping a reference from the list, queueing any sub-expressions under
+<code>next_item</code> itself before returning it.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/expr.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;expr</span><span style=color:#f92672>&gt;</span> Iterator <span style=color:#66d9ef>for</span> Iter<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;expr</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Item</span> <span style=color:#f92672>=</span> <span style=color:#f92672>&amp;</span><span style=color:#a6e22e>&#39;expr</span> Expression;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>next</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; Option<span style=color:#f92672>&lt;</span>Self::Item<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> next_item <span style=color:#f92672>=</span> self.to_visit.pop()<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> next_item {
+</span></span><span style=display:flex><span>            Expression::Binary { left, right, <span style=color:#f92672>..</span> } <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                self.to_visit.push(right);
+</span></span><span style=display:flex><span>                self.to_visit.push(left);
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            Expression::Negate(inner) <span style=color:#f92672>=&gt;</span> self.to_visit.push(inner),
+</span></span><span style=display:flex><span>            Expression::FunctionCall { argument, <span style=color:#f92672>..</span> } <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                self.to_visit.push(argument)
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            _ <span style=color:#f92672>=&gt;</span> {},
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        Some(next_item)
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>This enables nice things like an iterator over all referenced parameters or
+functions, and checking whether an expression depends on a parameter.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/expr.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> Expression {
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Iterate over all [`Parameter`]s mentioned in this [`Expression`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>params</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#a6e22e>impl</span> Iterator<span style=color:#f92672>&lt;</span>Item <span style=color:#f92672>=</span> <span style=color:#f92672>&amp;</span>Parameter<span style=color:#f92672>&gt;</span> <span style=color:#f92672>+</span> &#39;_ {
+</span></span><span style=display:flex><span>        self.iter().filter_map(<span style=color:#f92672>|</span>expr<span style=color:#f92672>|</span> <span style=color:#66d9ef>match</span> expr {
+</span></span><span style=display:flex><span>            Expression::Parameter(p) <span style=color:#f92672>=&gt;</span> Some(p),
+</span></span><span style=display:flex><span>            _ <span style=color:#f92672>=&gt;</span> None,
+</span></span><span style=display:flex><span>        })
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Does this [`Expression`] involve a particular [`Parameter`]?
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>depends_on</span>(<span style=color:#f92672>&amp;</span>self, param: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>Parameter</span>) -&gt; <span style=color:#66d9ef>bool</span> {
+</span></span><span style=display:flex><span>        self.params().any(<span style=color:#f92672>|</span>p<span style=color:#f92672>|</span> p <span style=color:#f92672>==</span> param)
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Iterate over all functions used by this [`Expression`].
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>functions</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#a6e22e>impl</span> Iterator<span style=color:#f92672>&lt;</span>Item <span style=color:#f92672>=</span> <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>str</span><span style=color:#f92672>&gt;</span> <span style=color:#f92672>+</span> &#39;_ {
+</span></span><span style=display:flex><span>        self.iter().filter_map(<span style=color:#f92672>|</span>expr<span style=color:#f92672>|</span> <span style=color:#66d9ef>match</span> expr {
+</span></span><span style=display:flex><span>            Expression::FunctionCall { name, <span style=color:#f92672>..</span> } <span style=color:#f92672>=&gt;</span> Some(name.as_ref()),
+</span></span><span style=display:flex><span>            _ <span style=color:#f92672>=&gt;</span> None,
+</span></span><span style=display:flex><span>        })
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=parsing>Parsing
+<a class=heading-link href=#parsing><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>Now you may be wondering why we&rsquo;d mention parsing in an article about
+creating a geometric constraints system, and the answer is quite simple&mldr;
+Constructing a full <code>Expression</code> tree using object literals is really verbose
+and annoying. In turn, this increases the effort required to write and maintain
+tests,</p><p>It&rsquo;s also useful if we want to provide users with a text box so they can
+enter their own custom constraints. <em>SolidWorks</em> uses this to let an engineer
+specify entire families of designs who&rsquo;s final dimensions are driven by one
+or two parameters (this is often referred to as <a href=https://www.cati.com/blog/2018/01/solidworks-configurations-part-1-basics-and-creating-configurations/ class=external-link target=_blank rel=noopener>a
+<em>&ldquo;Configuration&rdquo;</em></a>). For example, imagine having a proprietary
+*bolt design and being able to say <em>&ldquo;I want this as an <code>M6x1.0</code>&rdquo;</em> (initial
+parameters are <code>outside_diameter = 6.0</code> millimetres, <code>thread_pitch = 1.0</code>
+threads per millimetre) and the constraints system figuring out all the other
+dimensions.</p><p>Besides letting the end user or developer input enter an expression into the
+computer in textual form, it can also be a powerful tool during development.
+In combination with our earlier pretty-printer, you can use strings to
+concisely say what an <code>Expression</code> should look like before and after a
+particular operation.</p><p>Throw in a macro or two and a suite of unit tests for testing various
+expression operations could look like this:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span>expr_test!(simplify_multiplication, <span style=color:#e6db74>&#34;2*2 + x&#34;</span> <span style=color:#f92672>=&gt;</span> fold_constants <span style=color:#f92672>=&gt;</span> <span style=color:#e6db74>&#34;4 + x&#34;</span>);
+</span></span><span style=display:flex><span>expr_test!(simplify_sine_90_degrees, <span style=color:#e6db74>&#34;sin(90)&#34;</span> <span style=color:#f92672>=&gt;</span> fold_constants <span style=color:#f92672>=&gt;</span> <span style=color:#e6db74>&#34;1&#34;</span>);
+</span></span><span style=display:flex><span>expr_test!(differentiate_cos, <span style=color:#e6db74>&#34;cos(t)&#34;</span> <span style=color:#f92672>=&gt;</span> partial_derivative(t) <span style=color:#f92672>=&gt;</span> <span style=color:#e6db74>&#34;-sin(t)&#34;</span>);
+</span></span><span style=display:flex><span>expr_test!(evaluate_tricky_expression, <span style=color:#e6db74>&#34;10 - 2*x + x*x&#34;</span> <span style=color:#f92672>=&gt;</span> evaluate(x: <span style=color:#ae81ff>5.0</span>) <span style=color:#f92672>=&gt;</span> <span style=color:#e6db74>&#34;25&#34;</span>);
+</span></span></code></pre></div><p>The process of turning unstructured text into a more structured form, an
+<code>Expression</code> tree in our case, is commonly referred to as <em>&ldquo;parsing&rdquo;</em>.</p><p>While you <em>could</em> hack something together using string operations or even a
+regular expression or two, this approach will often fall over the moment you
+give it more complex expressions (e.g. using parentheses to nest expressions
+inside expressions) or if different levels of precedence are involved.</p><div class="notices tip"><p>If you are initially tempted to parse a non-trivial expression using regular
+expressions, I would invite you to first read <a href=https://stackoverflow.com/a/1732454/7149940 class=external-link target=_blank rel=noopener>this famous StackOverflow
+answer</a>.</p><p>The underlying problem is that an expression is something called a <a href=https://en.wikipedia.org/wiki/Context-free_grammar class=external-link target=_blank rel=noopener><em>Context
+Free Language</em></a>, while a regular expression is based on a <a href=https://en.wikipedia.org/wiki/Regular_grammar class=external-link target=_blank rel=noopener><em>Regular
+Language</em></a>. To parse a <em>Regular Language</em> you (in theory) just need
+to keep track of the current state (a state machine), however <em>Context Free
+Languages</em> require you to track not just the current state, but also support
+nesting and keep track of each nested state (a pushdown automata).</p><p>Google the <a href=https://stackoverflow.com/a/8398208/7149940 class=external-link target=_blank rel=noopener><em>Chomsky Hierarchy</em></a> for more.</p></div><h3 id=tokenising>Tokenising
+<a class=heading-link href=#tokenising><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>Often the first step in turning an unstructured string of characters into a
+structured <code>Expression</code> tree is <a href=https://en.wikipedia.org/wiki/Lexical_analysis#Tokenization class=external-link target=_blank rel=noopener><em>Tokenisation</em></a>. This is where the
+string is broken up into the &ldquo;atoms&rdquo; of our language (aka <code>Token</code>s), so
+things like identifiers (<code>"foo"</code>), numbers (<code>"3.14"</code>), punctuation (<code>"("</code>),
+and operators (<code>"+"</code>).</p><p>We also keep track of where each <code>Token</code> occurred in the source text. That
+way we&rsquo;ve got somewhere to point to when reporting errors to the user.</p><p>By pre-processing a stream of text into a slightly more high-level
+representation your parser can operate at the granularity of tokens (e.g. a
+number, plus symbol, or an identifier) instead of needing to process
+individual characters.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/parse.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::ops::Range;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Token</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    text: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;a</span> <span style=color:#66d9ef>str</span>,
+</span></span><span style=display:flex><span>    span: <span style=color:#a6e22e>Range</span><span style=color:#f92672>&lt;</span><span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    kind: <span style=color:#a6e22e>TokenKind</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// The kinds of token that can appear in an [`Expression`]&#39;s text form.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug, Copy, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>TokenKind</span> {
+</span></span><span style=display:flex><span>    Identifier,
+</span></span><span style=display:flex><span>    Number,
+</span></span><span style=display:flex><span>    OpenParen,
+</span></span><span style=display:flex><span>    CloseParen,
+</span></span><span style=display:flex><span>    Plus,
+</span></span><span style=display:flex><span>    Minus,
+</span></span><span style=display:flex><span>    Times,
+</span></span><span style=display:flex><span>    Divide,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We use the <code>Iterator</code> trait to represent a stream of tokens. For our
+purposes, a <code>Tokens</code> stream wraps a <code>&amp;str</code> and uses a <code>cursor</code> variable to
+keep track of where it has read up to. I&rsquo;ve attached a couple helper methods
+for seeing what text is remaining.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/parse.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[derive(Debug, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Tokens</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    src: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;a</span> <span style=color:#66d9ef>str</span>,
+</span></span><span style=display:flex><span>    cursor: <span style=color:#66d9ef>usize</span>,
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> Tokens<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>new</span>(src: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;a</span> <span style=color:#66d9ef>str</span>) -&gt; <span style=color:#a6e22e>Self</span> { Tokens { src, cursor: <span style=color:#ae81ff>0</span> } }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>rest</span>(<span style=color:#f92672>&amp;</span>self) -&gt; <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>&#39;a</span> <span style=color:#66d9ef>str</span> { <span style=color:#f92672>&amp;</span>self.src[self.cursor<span style=color:#f92672>..</span>] }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>peek</span>(<span style=color:#f92672>&amp;</span>self) -&gt; Option<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>char</span><span style=color:#f92672>&gt;</span> { self.rest().chars().next() }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>While it&rsquo;s nice to see what text is remaining, we also need a way to advance
+the <code>cursor</code> along the string.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/parse.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> Tokens<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>advance</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; Option<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>char</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> c <span style=color:#f92672>=</span> self.peek()<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>        self.cursor <span style=color:#f92672>+=</span> c.len_utf8();
+</span></span><span style=display:flex><span>        Some(c)
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>If you wanted to, you could implement the rest of the <code>Tokens</code> type purely using
+calls to <code>peek()</code> and <code>advance()</code>, but sometimes it&rsquo;s easier to have a more
+high-level primitive.</p><p>For this sort of thing I&rsquo;ll typically use some sort of <code>take_while()</code> method
+which accepts a predicate and will keep advancing the <code>cursor</code> until the
+predicate doesn&rsquo;t like the next character in line.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/parse.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> Tokens<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>take_while</span><span style=color:#f92672>&lt;</span>P<span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>mut</span> predicate: <span style=color:#a6e22e>P</span>,
+</span></span><span style=display:flex><span>    ) -&gt; Option<span style=color:#f92672>&lt;</span>(<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>&#39;a</span> <span style=color:#66d9ef>str</span>, Range<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span>)<span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>        P: FnMut(<span style=color:#66d9ef>char</span>) -&gt; <span style=color:#66d9ef>bool</span>,
+</span></span><span style=display:flex><span>    {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> start <span style=color:#f92672>=</span> self.cursor;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>while</span> <span style=color:#66d9ef>let</span> Some(c) <span style=color:#f92672>=</span> self.peek() {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>if</span> <span style=color:#f92672>!</span>predicate(c) { <span style=color:#66d9ef>break</span>; }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            self.advance();
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> end <span style=color:#f92672>=</span> self.cursor;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> start <span style=color:#f92672>!=</span> end {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> text <span style=color:#f92672>=</span> <span style=color:#f92672>&amp;</span>self.src[start<span style=color:#f92672>..</span>end];
+</span></span><span style=display:flex><span>            Some((text, start<span style=color:#f92672>..</span>end))
+</span></span><span style=display:flex><span>        } <span style=color:#66d9ef>else</span> {
+</span></span><span style=display:flex><span>            None
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices note"><p>By stashing away the <code>cursor</code>&rsquo;s value before and after looping we can
+calculate the range of characters that have been consumed, and whether
+anything was consumed at all.</p></div><p>Reading a token from the stream is just a case of peeking at the next
+character, and executing a <code>match</code> statement based on what we find. Something
+to keep in mind is we don&rsquo;t care about whitespace, so the entire thing is
+executed in a loop which will keep skipping whitespace until we encounter
+something else.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/parse.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> Iterator <span style=color:#66d9ef>for</span> Tokens<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Item</span> <span style=color:#f92672>=</span> Result<span style=color:#f92672>&lt;</span>Token<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span>, ParseError<span style=color:#f92672>&gt;</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>next</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; Option<span style=color:#f92672>&lt;</span>Self::Item<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>loop</span> {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>match</span> self.peek()<span style=color:#f92672>?</span> {
+</span></span><span style=display:flex><span>                space <span style=color:#66d9ef>if</span> space.is_whitespace() <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                    self.advance();
+</span></span><span style=display:flex><span>                    <span style=color:#66d9ef>continue</span>;
+</span></span><span style=display:flex><span>                },
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;(&#39;</span> <span style=color:#f92672>=&gt;</span> self.chomp(TokenKind::OpenParen),
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;)&#39;</span> <span style=color:#f92672>=&gt;</span> self.chomp(TokenKind::CloseParen),
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;+&#39;</span> <span style=color:#f92672>=&gt;</span> self.chomp(TokenKind::Plus),
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;-&#39;</span> <span style=color:#f92672>=&gt;</span> self.chomp(TokenKind::Minus),
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;*&#39;</span> <span style=color:#f92672>=&gt;</span> self.chomp(TokenKind::Times),
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;/&#39;</span> <span style=color:#f92672>=&gt;</span> self.chomp(TokenKind::Divide),
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;_&#39;</span> <span style=color:#f92672>|</span> <span style=color:#e6db74>&#39;a&#39;</span><span style=color:#f92672>..=</span><span style=color:#e6db74>&#39;z&#39;</span> <span style=color:#f92672>|</span> <span style=color:#e6db74>&#39;A&#39;</span><span style=color:#f92672>..=</span><span style=color:#e6db74>&#39;Z&#39;</span> <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                    Some(Ok(self.chomp_identifier()))
+</span></span><span style=display:flex><span>                },
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;0&#39;</span><span style=color:#f92672>..=</span><span style=color:#e6db74>&#39;9&#39;</span> <span style=color:#f92672>=&gt;</span> Some(Ok(self.chomp_number())),
+</span></span><span style=display:flex><span>                other <span style=color:#f92672>=&gt;</span> Some(Err(ParseError::InvalidCharacter {
+</span></span><span style=display:flex><span>                    character: <span style=color:#a6e22e>other</span>,
+</span></span><span style=display:flex><span>                    index: <span style=color:#a6e22e>self</span>.cursor,
+</span></span><span style=display:flex><span>                })),
+</span></span><span style=display:flex><span>            };
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The <code>next()</code> method makes use of several helper methods, the simplest of
+which is <code>chomp()</code> for reading a single character as a <code>Token</code> with the
+specified <code>TokenKind</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/parse.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> Tokens<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>chomp</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self,
+</span></span><span style=display:flex><span>        kind: <span style=color:#a6e22e>TokenKind</span>,
+</span></span><span style=display:flex><span>    ) -&gt; Option<span style=color:#f92672>&lt;</span>Result<span style=color:#f92672>&lt;</span>Token<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span>, ParseError<span style=color:#f92672>&gt;&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> start <span style=color:#f92672>=</span> self.cursor;
+</span></span><span style=display:flex><span>        self.advance()<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> end <span style=color:#f92672>=</span> self.cursor;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> tok <span style=color:#f92672>=</span> Token {
+</span></span><span style=display:flex><span>            text: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>self</span>.src[start<span style=color:#f92672>..</span>end],
+</span></span><span style=display:flex><span>            span: <span style=color:#a6e22e>start</span><span style=color:#f92672>..</span>end,
+</span></span><span style=display:flex><span>            kind,
+</span></span><span style=display:flex><span>        };
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        Some(Ok(tok))
+</span></span><span style=display:flex><span>    }
+</span></span></code></pre></div><p>We&rsquo;re also introducing <code>chomp_identifier()</code> for consuming an entire
+identifier (i.e. anything that would match the regex, <code>[\w_][\w\d_]*</code>), and
+<code>chomp_number()</code> for extracting a floating-point number (which I&rsquo;m just
+defining as the regex <code>\d+(\.\d*)?</code>, because I&rsquo;m too lazy to worry about the
+<code>1e-5</code> notation for now).</p><p>It&rsquo;s overkill to actually pull in the <code>regex</code> crate for simple patterns like
+these though, so we leverage our existing <code>take_while()</code> function and the
+fact that closures can use variables from an outside scope to change their
+behaviour.</p><p>First, let&rsquo;s look at how <code>chomp_number()</code> is implemented.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/parse.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> Tokens<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>chomp_number</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; <span style=color:#a6e22e>Token</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> seen_decimal_point <span style=color:#f92672>=</span> <span style=color:#66d9ef>false</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> (text, span) <span style=color:#f92672>=</span> self
+</span></span><span style=display:flex><span>            .take_while(<span style=color:#f92672>|</span>c<span style=color:#f92672>|</span> <span style=color:#66d9ef>match</span> c {
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;.&#39;</span> <span style=color:#66d9ef>if</span> <span style=color:#f92672>!</span>seen_decimal_point <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                    seen_decimal_point <span style=color:#f92672>=</span> <span style=color:#66d9ef>true</span>;
+</span></span><span style=display:flex><span>                    <span style=color:#66d9ef>true</span>
+</span></span><span style=display:flex><span>                },
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;0&#39;</span><span style=color:#f92672>..=</span><span style=color:#e6db74>&#39;9&#39;</span> <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>true</span>,
+</span></span><span style=display:flex><span>                _ <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>false</span>,
+</span></span><span style=display:flex><span>            })
+</span></span><span style=display:flex><span>            .expect(<span style=color:#e6db74>&#34;We know there is at least one digit in the input&#34;</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        Token {
+</span></span><span style=display:flex><span>            text,
+</span></span><span style=display:flex><span>            span,
+</span></span><span style=display:flex><span>            kind: <span style=color:#a6e22e>TokenKind</span>::Number,
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The idea is we want to keep consuming digits, but only accept the first <code>.</code>
+character we see (hence the <code>seen_decimal_point</code> flag). That allows us to
+recognise input like <code>1234</code>, <code>12.34</code>, and <code>.1234</code> as numbers, but reject
+things like <code>1.2.3.4</code> or <code>1..23</code>.</p><p>We do something very similar in <code>chomp_identifier()</code>, where we want to make
+sure the first character is either a letter or <code>_</code>, but all characters after
+that can be also contain digits.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/parse.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> Tokens<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>chomp_identifier</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; <span style=color:#a6e22e>Token</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> seen_first_character <span style=color:#f92672>=</span> <span style=color:#66d9ef>false</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> (text, span) <span style=color:#f92672>=</span> self
+</span></span><span style=display:flex><span>            .take_while(<span style=color:#f92672>|</span>c<span style=color:#f92672>|</span> {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>if</span> seen_first_character {
+</span></span><span style=display:flex><span>                    c.is_alphabetic() <span style=color:#f92672>||</span> c.is_ascii_digit() <span style=color:#f92672>||</span> c <span style=color:#f92672>==</span> <span style=color:#e6db74>&#39;_&#39;</span>
+</span></span><span style=display:flex><span>                } <span style=color:#66d9ef>else</span> {
+</span></span><span style=display:flex><span>                    seen_first_character <span style=color:#f92672>=</span> <span style=color:#66d9ef>true</span>;
+</span></span><span style=display:flex><span>                    c.is_alphabetic() <span style=color:#f92672>||</span> c <span style=color:#f92672>==</span> <span style=color:#e6db74>&#39;_&#39;</span>
+</span></span><span style=display:flex><span>                }
+</span></span><span style=display:flex><span>            })
+</span></span><span style=display:flex><span>            .expect(<span style=color:#e6db74>&#34;We know there should be at least 1 character&#34;</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        Token {
+</span></span><span style=display:flex><span>            text,
+</span></span><span style=display:flex><span>            span,
+</span></span><span style=display:flex><span>            kind: <span style=color:#a6e22e>TokenKind</span>::Identifier,
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h3 id=parsing-using-recursive-descent>Parsing Using Recursive Descent
+<a class=heading-link href=#parsing-using-recursive-descent><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>Arguably one of the most intuitive ways to parse text is a technique called
+<a href=https://en.wikipedia.org/wiki/Recursive_descent_parser class=external-link target=_blank rel=noopener><em>Recursive Descent</em></a>. This is a top-down method that uses
+recursive functions to turn a stream of tokens into a tree.</p><p>I like using recursive descent because once you&rsquo;ve figured out your grammar
+(a <em>file</em> is zero or more <em>statements</em>, a <em>statement</em> maybe an <em>assignment</em>
+or <em>if-statement</em>, etc.) turning that into code just becomes a case of
+writing one function per rule and matching different things depending on what
+the rule asks for.</p><p>I&rsquo;ll often create a <code>Parser</code> type which wraps a <code>Tokens</code> stream. You don&rsquo;t
+<em>need</em> to do it this way, but I like how I can put the grammar in the
+*<code>Parser</code>&rsquo;s doc-comment so if I need to revisit the code 6 months for now I
+can pull up the API docs and immediately get a feel for how an <code>Expression</code>
+is parsed.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/parse.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> std::iter::Peekable;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// A simple recursive descent parser (`LL(1)`) for converting a string into an
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// expression tree.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// The grammar:
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// ```text
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// expression := term &#34;+&#34; expression
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///             | term &#34;-&#34; expression
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///             | term
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// term       := factor &#34;*&#34; term
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///             | factor &#34;/&#34; term
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///             | factor
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// factor     := &#34;-&#34; term
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///             | IDENTIFIER &#34;(&#34; expression &#34;)&#34;
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///             | IDENTIFIER
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///             | &#34;(&#34; expression &#34;)&#34;
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///             | NUMBER
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// ```
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug, Clone)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span>(<span style=color:#66d9ef>crate</span>) <span style=color:#66d9ef>struct</span> <span style=color:#a6e22e>Parser</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    tokens: <span style=color:#a6e22e>Peekable</span><span style=color:#f92672>&lt;</span>Tokens<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;&gt;</span>,
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices note"><p>You may notice that we&rsquo;ve wrapped our <code>Tokens</code> in a <code>std::iter::Peekable</code>.
+This lets us peek at the next token when we need more information about how
+to proceed. For example, when processing the <code>expression</code> rule from above, we
+after parse one <code>term</code> we can peek at the next token to see if it is a <code>+</code> or
+<code>-</code>.</p><p>An alternative to looking ahead is to try something anyway and <a href=https://en.wikipedia.org/wiki/Backtracking class=external-link target=_blank rel=noopener>backtrack</a>
+if it doesn&rsquo;t work. This might let us simplify the code a bit, but comes with
+the disadvantage that parsing time can become exponential in the face of poor
+(or maliciously crafted) input.</p><p>Using a lookahead of one token lets us make performance much more consistent.
+Rust&rsquo;s <code>regex</code> crate avoids arbitrary lookahead and back-references <a href=https://docs.rs/regex/1.3.9/regex/#untrusted-input class=external-link target=_blank rel=noopener>for similar
+reasons</a>.</p></div><p>To help provide better error messages than just <em>&ldquo;this expression is invalid&rdquo;</em>,
+we&rsquo;ve defined a <code>ParseError</code> type representing the various errors that may
+occur.</p><p>For example, we could encounter an <code>InvalidCharacter</code> while tokenising or run
+out of tokens when we are expecting more (e.g. <code>42 +</code> would result in a
+<code>ParseError::UnexpectedEndOfInput</code>), or we could run into a token that isn&rsquo;t
+valid in that context (imagine seeing a <code>+</code> when we&rsquo;re expecting a number or
+identifier).</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/parse.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Possible errors that may occur while parsing.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#75715e>#[derive(Debug, Clone, PartialEq)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>enum</span> <span style=color:#a6e22e>ParseError</span> {
+</span></span><span style=display:flex><span>    InvalidCharacter {
+</span></span><span style=display:flex><span>        character: <span style=color:#66d9ef>char</span>,
+</span></span><span style=display:flex><span>        index: <span style=color:#66d9ef>usize</span>,
+</span></span><span style=display:flex><span>    },
+</span></span><span style=display:flex><span>    UnexpectedEndOfInput,
+</span></span><span style=display:flex><span>    UnexpectedToken {
+</span></span><span style=display:flex><span>        found: <span style=color:#a6e22e>TokenKind</span>,
+</span></span><span style=display:flex><span>        span: <span style=color:#a6e22e>Range</span><span style=color:#f92672>&lt;</span><span style=color:#66d9ef>usize</span><span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>        expected: <span style=color:#66d9ef>&amp;</span>&#39;static [TokenKind],
+</span></span><span style=display:flex><span>    },
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The key to writing a <em>Recursive Descent</em> parser is to write down the rules so
+you know what to expect. For example, lets look at the top-level <code>expression</code>
+rule.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback><span style=display:flex><span>expression := term &#34;+&#34; expression
+</span></span><span style=display:flex><span>            | term &#34;-&#34; expression
+</span></span><span style=display:flex><span>            | term
+</span></span></code></pre></div><div class="notices note"><p>Order is important here.</p><p>When specifying the <code>expression</code> rule, I&rsquo;ve taken care to put the more
+specific term, <code>term</code>, towards the left and then recurse on the right.</p><p>Matching on the more specific thing first takes you closer to the base case
+and prevents infinite recursion (I need to parse an <code>expression</code> in order to
+parse an <code>expression</code> in order to parse an <code>expression</code> &mldr;).</p></div><p>Now, to parse an <code>expression</code> we need to first parse a <code>term</code> (which we&rsquo;ll
+define shortly) then look ahead to check whether it is followed by a <code>+</code> or
+<code>-</code> so we know whether we need to parse the right side.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/parse.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> Parser<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>expression</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; Result<span style=color:#f92672>&lt;</span>Expression, ParseError<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> left <span style=color:#f92672>=</span> self.term()<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> self.peek() {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// term + expression
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            Some(TokenKind::Add) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> _plus_sign <span style=color:#f92672>=</span> self.advance();
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> right <span style=color:#f92672>=</span> self.expression()<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>                Ok(left <span style=color:#f92672>+</span> right)
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// term - expression
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            Some(TokenKind::Sub) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> _minus_sign <span style=color:#f92672>=</span> self.advance();
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> right <span style=color:#f92672>=</span> self.expression()<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>                Ok(left <span style=color:#f92672>-</span> right)
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// term
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            _ <span style=color:#f92672>=&gt;</span> Ok(left)
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>term</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; Result<span style=color:#f92672>&lt;</span>Expression, ParseError<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        todo!()
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// What kind of token is the next one in our `Tokens` stream?
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>peek</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; Option<span style=color:#f92672>&lt;</span>TokenKind<span style=color:#f92672>&gt;</span> { <span style=color:#f92672>..</span>. }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>/// Advance the `Tokens` stream by one, returning the token that was
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#e6db74>/// consumed.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>advance</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; Option<span style=color:#f92672>&lt;</span>Token<span style=color:#f92672>&gt;</span> { <span style=color:#f92672>..</span>. }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>You can see how this code almost exactly reflects the <code>expression</code>. You&rsquo;ll
+see that there&rsquo;s a lot you can do to remove code duplication, but for our
+purposes it&rsquo;s not necessary.</p><p>I chose to reuse our operator overloads, though. They make constructing binary
+expressions slightly less verbose.</p><p>Next comes the <code>term</code> rule.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback><span style=display:flex><span>term := factor &#34;*&#34; term
+</span></span><span style=display:flex><span>      | factor &#34;/&#34; term
+</span></span><span style=display:flex><span>      | factor
+</span></span></code></pre></div><p>You can see that the <code>term</code> rule is almost identical, except it looks for <code>*</code>
+and <code>/</code>.</p><p>There&rsquo;s no point copy-pasting the <code>expression()</code> method here, so let&rsquo;s jump
+straight into <code>factor</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback><span style=display:flex><span>factor := &#34;-&#34; factor
+</span></span><span style=display:flex><span>        | IDENTIFIER &#34;(&#34; expression &#34;)&#34;
+</span></span><span style=display:flex><span>        | IDENTIFIER
+</span></span><span style=display:flex><span>        | &#34;(&#34; expression &#34;)&#34;
+</span></span><span style=display:flex><span>        | NUMBER
+</span></span></code></pre></div><p>Finally we reach something interesting.</p><p>This rule matches a bunch of things which all have the same precedence level:</p><ul><li>Negated <code>factor</code>s (i.e. <code>-(x + y)</code>)</li><li>Function calls</li><li>Variables</li><li>Nested <code>expression</code>s inside parentheses, or</li><li>Number</li></ul><p>The code is fairly similar to before, except we&rsquo;ve got a larger <code>match</code>
+statement.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/parse.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span><span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> Parser<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>&#39;a</span><span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>factor</span>(<span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> self) -&gt; Result<span style=color:#f92672>&lt;</span>Expression, ParseError<span style=color:#f92672>&gt;</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>match</span> self.peek() {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// NUMBER
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            Some(TokenKind::Number) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>return</span> self.number();
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// &#34;-&#34; factor
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            Some(TokenKind::Minus) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> _ <span style=color:#f92672>=</span> self.advance()<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> operand <span style=color:#f92672>=</span> self.factor()<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>return</span> Ok(<span style=color:#f92672>-</span>operand);
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// IDENTIFIER | IDENTIFIER &#34;(&#34; expression &#34;)&#34;
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            Some(TokenKind::Identifier) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>return</span> self.variable_or_function_call()
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// &#34;(&#34; expression &#34;)&#34;
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            Some(TokenKind::OpenParen) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> _ <span style=color:#f92672>=</span> self.advance()<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> expr <span style=color:#f92672>=</span> self.expression()<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> close_paren <span style=color:#f92672>=</span> self.advance()<span style=color:#f92672>?</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>if</span> close_paren.kind <span style=color:#f92672>==</span> TokenKind::CloseParen {
+</span></span><span style=display:flex><span>                    <span style=color:#66d9ef>return</span> Ok(expr);
+</span></span><span style=display:flex><span>                } <span style=color:#66d9ef>else</span> {
+</span></span><span style=display:flex><span>                    <span style=color:#66d9ef>return</span> Err(ParseError::UnexpectedToken {
+</span></span><span style=display:flex><span>                        found: <span style=color:#a6e22e>close_paren</span>.kind,
+</span></span><span style=display:flex><span>                        span: <span style=color:#a6e22e>close_paren</span>.span,
+</span></span><span style=display:flex><span>                        expected: <span style=color:#66d9ef>&amp;</span>[TokenKind::CloseParen],
+</span></span><span style=display:flex><span>                    });
+</span></span><span style=display:flex><span>                }
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// something unexpected
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            _ <span style=color:#f92672>=&gt;</span> {},
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// We couldn&#39;t parse the `factor` so try to return a nice error
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#75715e>// indicating what types of tokens we were expecting
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>match</span> self.tokens.next() {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// &#34;we found an XXX but were expecting a number, identifier, or minus&#34;
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            Some(Ok(Token { span, kind, <span style=color:#f92672>..</span> })) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>                Err(ParseError::UnexpectedToken {
+</span></span><span style=display:flex><span>                    found: <span style=color:#a6e22e>kind</span>,
+</span></span><span style=display:flex><span>                    expected: <span style=color:#66d9ef>&amp;</span>[TokenKind::Number, TokenKind::Identifier, TokenKind::Minus],
+</span></span><span style=display:flex><span>                    span,
+</span></span><span style=display:flex><span>                })
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// the underlying tokens stream encountered an error (e.g. unknown
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#75715e>// character)
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            Some(Err(e)) <span style=color:#f92672>=&gt;</span> Err(e),
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// there were just no tokens available to parse as a factor
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            None <span style=color:#f92672>=&gt;</span> Err(ParseError::UnexpectedEndOfInput),
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>We are also in a better position to report parse errors here because we&rsquo;ve
+reached several terminals (branches/rules which don&rsquo;t recurse). If possible,
+we try to let the user know what type of token we were expecting to see.</p><p>To keep the <code>match</code> statement from growing out of control I&rsquo;ve pulled
+matching either a variable or function call (both of which start with an
+identifier) out into its own function. However if you look at the rule for
+parenthesised expressions you can probably figure out how it goes.</p><p>Sorry if it feels like I&rsquo;ve rushed this section. I&rsquo;ve written enough recursive
+descent parsers that it tends to be a mechanical process and once you&rsquo;ve seen
+how to write one or two rules, you can write pretty much anything.</p><h3 id=testing>Testing
+<a class=heading-link href=#testing><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h3><p>Something I can&rsquo;t overstate enough when writing a parser by hand is to have a
+reasonably large test suite with lots of edge cases.</p><p>To make the process easier I&rsquo;ll often create my own <code>macro_rules</code> macro to
+make writing tests easier.</p><p>For example, to test that we parse something correctly I&rsquo;ll generate a test
+that parses a string into an <code>Expression</code> then immediately use the
+pretty-printer created earlier to turn it back into a string.</p><p>If the round-tripped version matches the original you can be fairly confident
+your parser is correct without having to write out verbose parse trees by hand.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/parse.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[cfg(test)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>mod</span> parser_tests {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>use</span> <span style=color:#66d9ef>super</span>::<span style=color:#f92672>*</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    macro_rules<span style=color:#f92672>!</span> parser_test {
+</span></span><span style=display:flex><span>        (<span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span>, <span style=color:#75715e>$src</span>:<span style=color:#a6e22e>expr</span>) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>            parser_test!(<span style=color:#75715e>$name</span>, <span style=color:#75715e>$src</span>, <span style=color:#75715e>$src</span>);
+</span></span><span style=display:flex><span>        };
+</span></span><span style=display:flex><span>        (<span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span>, <span style=color:#75715e>$src</span>:<span style=color:#a6e22e>expr</span>, <span style=color:#75715e>$should_be</span>:<span style=color:#a6e22e>expr</span>) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>() {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> got <span style=color:#f92672>=</span> Parser::new(<span style=color:#75715e>$src</span>).parse().unwrap();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> round_tripped <span style=color:#f92672>=</span> got.to_string();
+</span></span><span style=display:flex><span>                assert_eq!(round_tripped, <span style=color:#75715e>$should_be</span>);
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        };
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>And here are some of my parser tests:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/parse.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[cfg(test)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>mod</span> parser_tests {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    parser_test!(simple_integer, <span style=color:#e6db74>&#34;1&#34;</span>);
+</span></span><span style=display:flex><span>    parser_test!(one_plus_one, <span style=color:#e6db74>&#34;1 + 1&#34;</span>);
+</span></span><span style=display:flex><span>    parser_test!(one_plus_one_plus_negative_one, <span style=color:#e6db74>&#34;1 + -1&#34;</span>);
+</span></span><span style=display:flex><span>    parser_test!(one_plus_one_times_three, <span style=color:#e6db74>&#34;1 + 1*3&#34;</span>);
+</span></span><span style=display:flex><span>    parser_test!(one_plus_one_all_times_three, <span style=color:#e6db74>&#34;(1 + 1)*3&#34;</span>);
+</span></span><span style=display:flex><span>    parser_test!(negative_one, <span style=color:#e6db74>&#34;-1&#34;</span>);
+</span></span><span style=display:flex><span>    parser_test!(negative_one_plus_one, <span style=color:#e6db74>&#34;-1 + 1&#34;</span>);
+</span></span><span style=display:flex><span>    parser_test!(negative_one_plus_x, <span style=color:#e6db74>&#34;-1 + x&#34;</span>);
+</span></span><span style=display:flex><span>    parser_test!(number_in_parens, <span style=color:#e6db74>&#34;(1)&#34;</span>, <span style=color:#e6db74>&#34;1&#34;</span>);
+</span></span><span style=display:flex><span>    parser_test!(bimdas, <span style=color:#e6db74>&#34;1*2 + 3*4/(5 - 2)*1 - 3&#34;</span>);
+</span></span><span style=display:flex><span>    parser_test!(function_call, <span style=color:#e6db74>&#34;sin(1)&#34;</span>);
+</span></span><span style=display:flex><span>    parser_test!(function_call_with_expression, <span style=color:#e6db74>&#34;sin(1/0)&#34;</span>);
+</span></span><span style=display:flex><span>    parser_test!(
+</span></span><span style=display:flex><span>        function_calls_function_calls_function_with_variable,
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>&#34;foo(bar(baz(pi)))&#34;</span>
+</span></span><span style=display:flex><span>    );
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The tokeniser tests are quite similar, except we also need to make sure spans
+are correct otherwise the user will get dodgy error messages.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/parse.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[cfg(test)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>mod</span> tokenizer_tests {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>use</span> <span style=color:#66d9ef>super</span>::<span style=color:#f92672>*</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    macro_rules<span style=color:#f92672>!</span> tokenize_test {
+</span></span><span style=display:flex><span>        (<span style=color:#75715e>$name</span>:<span style=color:#a6e22e>ident</span>, <span style=color:#75715e>$src</span>:<span style=color:#a6e22e>expr</span>, <span style=color:#75715e>$should_be</span>:<span style=color:#a6e22e>expr</span>) <span style=color:#f92672>=&gt;</span> {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>fn</span> <span style=color:#75715e>$name</span>() {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> tokens <span style=color:#f92672>=</span> Tokens::new(<span style=color:#75715e>$src</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> got <span style=color:#f92672>=</span> tokens.next().unwrap().unwrap();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> Range { start, end } <span style=color:#f92672>=</span> got.span;
+</span></span><span style=display:flex><span>                assert_eq!(start, <span style=color:#ae81ff>0</span>);
+</span></span><span style=display:flex><span>                assert_eq!(end, <span style=color:#75715e>$src</span>.len());
+</span></span><span style=display:flex><span>                assert_eq!(got.kind, <span style=color:#75715e>$should_be</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>                assert!(
+</span></span><span style=display:flex><span>                    tokens.next().is_none(),
+</span></span><span style=display:flex><span>                    <span style=color:#e6db74>&#34;{:?} should be empty&#34;</span>,
+</span></span><span style=display:flex><span>                    tokens
+</span></span><span style=display:flex><span>                );
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        };
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>And this is what they look like in action.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// src/parse.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>impl</span> tokenizer_tests {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    tokenize_test!(open_paren, <span style=color:#e6db74>&#34;(&#34;</span>, TokenKind::OpenParen);
+</span></span><span style=display:flex><span>    tokenize_test!(close_paren, <span style=color:#e6db74>&#34;)&#34;</span>, TokenKind::CloseParen);
+</span></span><span style=display:flex><span>    tokenize_test!(plus, <span style=color:#e6db74>&#34;+&#34;</span>, TokenKind::Plus);
+</span></span><span style=display:flex><span>    tokenize_test!(minus, <span style=color:#e6db74>&#34;-&#34;</span>, TokenKind::Minus);
+</span></span><span style=display:flex><span>    tokenize_test!(times, <span style=color:#e6db74>&#34;*&#34;</span>, TokenKind::Times);
+</span></span><span style=display:flex><span>    tokenize_test!(divide, <span style=color:#e6db74>&#34;/&#34;</span>, TokenKind::Divide);
+</span></span><span style=display:flex><span>    tokenize_test!(single_digit_integer, <span style=color:#e6db74>&#34;3&#34;</span>, TokenKind::Number);
+</span></span><span style=display:flex><span>    tokenize_test!(multi_digit_integer, <span style=color:#e6db74>&#34;31&#34;</span>, TokenKind::Number);
+</span></span><span style=display:flex><span>    tokenize_test!(number_with_trailing_dot, <span style=color:#e6db74>&#34;31.&#34;</span>, TokenKind::Number);
+</span></span><span style=display:flex><span>    tokenize_test!(simple_decimal, <span style=color:#e6db74>&#34;3.14&#34;</span>, TokenKind::Number);
+</span></span><span style=display:flex><span>    tokenize_test!(simple_identifier, <span style=color:#e6db74>&#34;x&#34;</span>, TokenKind::Identifier);
+</span></span><span style=display:flex><span>    tokenize_test!(longer_identifier, <span style=color:#e6db74>&#34;hello&#34;</span>, TokenKind::Identifier);
+</span></span><span style=display:flex><span>    tokenize_test!(
+</span></span><span style=display:flex><span>        identifiers_can_have_underscores,
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>&#34;hello_world&#34;</span>,
+</span></span><span style=display:flex><span>        TokenKind::Identifier
+</span></span><span style=display:flex><span>    );
+</span></span><span style=display:flex><span>    tokenize_test!(
+</span></span><span style=display:flex><span>        identifiers_can_start_with_underscores,
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>&#34;_hello_world&#34;</span>,
+</span></span><span style=display:flex><span>        TokenKind::Identifier
+</span></span><span style=display:flex><span>    );
+</span></span><span style=display:flex><span>    tokenize_test!(
+</span></span><span style=display:flex><span>        identifiers_can_contain_numbers,
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>&#34;var5&#34;</span>,
+</span></span><span style=display:flex><span>        TokenKind::Identifier
+</span></span><span style=display:flex><span>    );
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=conclusions>Conclusions
+<a class=heading-link href=#conclusions><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>While our main focus is implementing a geometric constraints solver, this
+article mainly focused on defining our <code>Expression</code> tree&rsquo;s structure and
+converting to/from its string representation.</p><p>Now we&rsquo;ve got a way to represent <code>Expression</code>s, enter them into a program, and
+print them out for debugging, we&rsquo;ve created a solid foundation that the rest of
+the solver can be built on.</p><p>As an aside, the code and techniques used here are almost identical to those
+used when implementing a programming language. Indeed, that&rsquo;s where I
+initially learned things like <a href=https://en.wikipedia.org/wiki/Backus%E2%80%93Naur_form class=external-link target=_blank rel=noopener>Backus–Naur form</a> (the syntax used to
+represent rules), <a href=https://en.wikipedia.org/wiki/Recursive_descent_parser class=external-link target=_blank rel=noopener>Recursive Descent</a> parsers, and
+<a href=https://en.wikipedia.org/wiki/LL_parser class=external-link target=_blank rel=noopener><code>LL(1)</code> grammars</a>.</p></div><footer></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>

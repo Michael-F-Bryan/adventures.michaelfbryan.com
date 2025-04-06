@@ -1,0 +1,341 @@
+<!doctype html><html lang=en><head><title>Line Simplification with Ramer–Douglas–Peucker · Michael-F-Bryan
+</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="light dark"><meta name=author content="Michael-F-Bryan"><meta name=description content="The other day I needed to do a fairly routine graphical operation, to
+&ldquo;simplify&rdquo; a polyline with many points into a simpler polyline which has
+roughly the same shape plus or minus some tolerance factor.
+My actual use case was in sending linear movements to a CNC machine. Drawings
+are defined using floating point numbers and can be &ldquo;accurate&rdquo; to about 7-15
+decimal places (depending on if you use floats or doubles) but when you take
+the machine&rsquo;s mechanical tolerances and material effects into account the
+final cut is only really accurate to about 1 decimal place (0.1 mm). If I
+were to simplify the path with a tolerance of, say, 0.05 mm I could massively
+reduce the number of points sent to the machine (which reduces the amount of
+data sent, buffer sizes, communications overhead, etc.) with minimal effect
+on the accuracy."><meta name=keywords content="blog,developer,personal"><meta name=twitter:card content="summary"><meta name=twitter:title content="Line Simplification with Ramer–Douglas–Peucker"><meta name=twitter:description content="The other day I needed to do a fairly routine graphical operation, to “simplify” a polyline with many points into a simpler polyline which has roughly the same shape plus or minus some tolerance factor.
+My actual use case was in sending linear movements to a CNC machine. Drawings are defined using floating point numbers and can be “accurate” to about 7-15 decimal places (depending on if you use floats or doubles) but when you take the machine’s mechanical tolerances and material effects into account the final cut is only really accurate to about 1 decimal place (0.1 mm). If I were to simplify the path with a tolerance of, say, 0.05 mm I could massively reduce the number of points sent to the machine (which reduces the amount of data sent, buffer sizes, communications overhead, etc.) with minimal effect on the accuracy."><meta property="og:url" content="https://adventures.michaelfbryan.com/posts/line-simplification/"><meta property="og:site_name" content="Michael-F-Bryan"><meta property="og:title" content="Line Simplification with Ramer–Douglas–Peucker"><meta property="og:description" content="The other day I needed to do a fairly routine graphical operation, to “simplify” a polyline with many points into a simpler polyline which has roughly the same shape plus or minus some tolerance factor.
+My actual use case was in sending linear movements to a CNC machine. Drawings are defined using floating point numbers and can be “accurate” to about 7-15 decimal places (depending on if you use floats or doubles) but when you take the machine’s mechanical tolerances and material effects into account the final cut is only really accurate to about 1 decimal place (0.1 mm). If I were to simplify the path with a tolerance of, say, 0.05 mm I could massively reduce the number of points sent to the machine (which reduces the amount of data sent, buffer sizes, communications overhead, etc.) with minimal effect on the accuracy."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2020-02-23T21:56:00+08:00"><meta property="article:modified_time" content="2025-04-01T09:19:10+08:00"><meta property="article:tag" content="Rust"><meta property="article:tag" content="Algorithms"><link rel=canonical href=https://adventures.michaelfbryan.com/posts/line-simplification/><link rel=preload href=/fonts/fa-brands-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-regular-400.woff2 as=font type=font/woff2 crossorigin><link rel=preload href=/fonts/fa-solid-900.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/css/coder.min.7763f8bc6341ecf82378e867c285e1549abb063a899be313ccd25dbfcd24fa7d.css integrity="sha256-d2P4vGNB7PgjeOhnwoXhVJq7BjqJm+MTzNJdv80k+n0=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/coder-dark.min.a00e6364bacbc8266ad1cc81230774a1397198f8cfb7bcba29b7d6fcb54ce57f.css integrity="sha256-oA5jZLrLyCZq0cyBIwd0oTlxmPjPt7y6KbfW/LVM5X8=" crossorigin=anonymous media=screen><link rel=stylesheet href=/css/master.min.34be5ef36a820320661b4a8578382aba472d1a01092908eb30f0db81ec4031d4.css integrity="sha256-NL5e82qCAyBmG0qFeDgqukctGgEJKQjrMPDbgexAMdQ=" crossorigin=anonymous media=screen><link rel=icon type=image/svg+xml href=/images/favicon.svg sizes=any><link rel=icon type=image/png href=/images/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicon-16x16.png sizes=16x16><link rel=apple-touch-icon href=/images/apple-touch-icon.png><link rel=apple-touch-icon sizes=180x180 href=/images/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=mask-icon href=/images/safari-pinned-tab.svg color=#5bbad5></head><body class="preload-transitions colorscheme-auto"><div class=float-container><a id=dark-mode-toggle class=colorscheme-toggle><i class="fa-solid fa-adjust fa-fw" aria-hidden=true></i></a></div><main class=wrapper><nav class=navigation><section class=container><a class=navigation-title href=https://adventures.michaelfbryan.com/>Michael-F-Bryan
+</a><input type=checkbox id=menu-toggle>
+<label class="menu-button float-right" for=menu-toggle><i class="fa-solid fa-bars fa-fw" aria-hidden=true></i></label><ul class=navigation-list><li class=navigation-item><a class=navigation-link href=/about/>About</a></li><li class=navigation-item><a class=navigation-link href=/posts/>Blog</a></li></ul></section></nav><div class=content><section class="container post"><article><header><div class=post-title><h1 class=title><a class=title-link href=https://adventures.michaelfbryan.com/posts/line-simplification/>Line Simplification with Ramer–Douglas–Peucker</a></h1></div><div class=post-meta><div class=date><span class=posted-on><i class="fa-solid fa-calendar" aria-hidden=true></i>
+<time datetime=2020-02-23T21:56:00+08:00>February 23, 2020
+</time></span><span class=reading-time><i class="fa-solid fa-clock" aria-hidden=true></i>
+9-minute read</span></div><div class=tags><i class="fa-solid fa-tag" aria-hidden=true></i>
+<span class=tag><a href=/tags/rust/>Rust</a>
+</span><span class=separator>•</span>
+<span class=tag><a href=/tags/algorithms/>Algorithms</a></span></div></div></header><div class=post-content><p>The other day I needed to do a fairly routine graphical operation, to
+&ldquo;simplify&rdquo; a polyline with many points into a simpler polyline which has
+roughly the same shape plus or minus some <code>tolerance</code> factor.</p><p>My actual use case was in sending linear movements to a CNC machine. Drawings
+are defined using floating point numbers and can be &ldquo;accurate&rdquo; to about 7-15
+decimal places (depending on if you use floats or doubles) but when you take
+the machine&rsquo;s mechanical tolerances and material effects into account the
+final cut is only really accurate to about 1 decimal place (0.1 mm). If I
+were to simplify the path with a tolerance of, say, 0.05 mm I could massively
+reduce the number of points sent to the machine (which reduces the amount of
+data sent, buffer sizes, communications overhead, etc.) with minimal effect
+on the accuracy.</p><p>Other places where this operation can be useful are:</p><ul><li>Cleaning up paths from from &ldquo;noisy&rdquo; data sources (imagine getting pixel
+locations from an <a href=https://en.wikipedia.org/wiki/Edge_detection class=external-link target=_blank rel=noopener>edge detection</a> algorithm)</li><li>When you just need a general shape and more points would have a large
+negative effect on performance for the consumer (e.g. a <a href=https://en.wikipedia.org/wiki/Nesting_%28process%29 class=external-link target=_blank rel=noopener>nesting
+algorithm</a>).</li></ul><p>My go-to tool for this sort of operation is the <a href=https://en.wikipedia.org/wiki/Ramer%E2%80%93Douglas%E2%80%93Peucker_algorithm class=external-link target=_blank rel=noopener>Ramer–Douglas–Peucker
+algorithm</a>, and I thought this would make a nice addition to the
+<a href=https://github.com/Michael-F-Bryan/arcs class=external-link target=_blank rel=noopener>arcs</a> library I&rsquo;ve been working on over the last couple months.</p><div class="notices note"><p>The code written in this article is available <a href=https://github.com/Michael-F-Bryan/arcs class=external-link target=_blank rel=noopener>on GitHub</a>. Feel free to
+browse through and steal code or inspiration.</p><p>If you found this useful or spotted a bug, let me know on the blog&rsquo;s
+<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com class=external-link target=_blank rel=noopener>issue tracker</a>!</p></div><h2 id=the-algorithm>The Algorithm
+<a class=heading-link href=#the-algorithm><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>The algorithm itself uses a remarkably simple recursive algorithm,</p><ol><li>Mark the <code>first</code> and <code>last</code> points as kept</li><li>Find the point, <code>p</code> that is the farthest from the first-last line segment.
+If there are no points between <code>first</code> and <code>last</code> we are done (the base case)</li><li>If <code>p</code> is closer than <code>tolerance</code> units to the line segment then
+everything between <code>first</code> and <code>last</code> can be discarded</li><li>Otherwise, mark <code>p</code> as kept and repeat steps 1-4 using the points between
+<code>first</code> and <code>p</code> and between <code>p</code> and <code>last</code> (the call to recursion)</li></ol><p>This animation from <a href=https://en.wikipedia.org/wiki/Ramer%E2%80%93Douglas%E2%80%93Peucker_algorithm class=external-link target=_blank rel=noopener>the Wikipedia article</a> can help wrap your head
+around how it works.</p><figure><a href=https://en.wikipedia.org/wiki/Ramer%E2%80%93Douglas%E2%80%93Peucker_algorithm><img src=https://upload.wikimedia.org/wikipedia/commons/3/30/Douglas-Peucker_animated.gif alt="Visualisation of the Ramer-Douglas-Peucker algorithm"></a><figcaption><p>Visualisation of the Ramer-Douglas-Peucker algorithm</p></figcaption></figure><p>Like most divide-and-conquer algorithms, in the ideal case this completes in
+<code>O(n log n)</code> time. However, if you hit an edge case where the &ldquo;furthest&rdquo;
+point is right next to the endpoints this can blow out to <code>O(n^2)</code>.</p><p>I don&rsquo;t normally worry about computational complexity too often (computers
+are fast), but because it&rsquo;s quite common for my application to work with
+drawings containing hundreds of thousands of points it&rsquo;s something to keep an
+eye on.</p><h2 id=the-implementation>The Implementation
+<a class=heading-link href=#the-implementation><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>To start, let&rsquo;s add a <code>line_simplification</code> module to <code>arcs::algorithms</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-diff data-lang=diff><span style=display:flex><span> // arcs/src/algorithms/mod.rs
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span> mod length;
+</span></span><span style=display:flex><span><span style=color:#a6e22e>+mod line_simplification;
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span> mod scale;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span> ...
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span> pub use length::Length;
+</span></span><span style=display:flex><span><span style=color:#a6e22e>+pub use line_simplification::simplify;
+</span></span></span><span style=display:flex><span><span style=color:#a6e22e></span> pub use scale::Scale;
+</span></span></code></pre></div><p>I&rsquo;ve also stubbed out a <code>simplify</code> function.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// arcs/src/algorithms/line_simplification.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>use</span> euclid::{Length, Point2D};
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#e6db74>/// Decimate a curve composed of line segments to a *&#34;simpler&#34;* curve with fewer
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// points.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// The algorithm defines *&#34;simpler&#34;* based on the maximum distance
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// (`tolerance`) between the original curve and the simplified curve.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// You may want to research the [Ramer–Douglas–Peucker algorithm][wiki] for
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// the exact details and assumptions that can be made.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>///
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>/// [wiki]: https://en.wikipedia.org/wiki/Ramer%E2%80%93Douglas%E2%80%93Peucker_algorithm
+</span></span></span><span style=display:flex><span><span style=color:#e6db74></span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>simplify</span><span style=color:#f92672>&lt;</span>Space<span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>    points: <span style=color:#66d9ef>&amp;</span>[Point2D<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, Space<span style=color:#f92672>&gt;</span>],
+</span></span><span style=display:flex><span>    tolerance: <span style=color:#a6e22e>Length</span><span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, Space<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>) -&gt; Vec<span style=color:#f92672>&lt;</span>Point2D<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, Space<span style=color:#f92672>&gt;&gt;</span> {
+</span></span><span style=display:flex><span>    unimplemented!()
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><div class="notices note"><p>You&rsquo;ll notice that the function signature has this funny <code>Space</code> generic type
+variable. The <code>arcs</code> crate takes advantage of <a href=https://crates.io/crates/euclid class=external-link target=_blank rel=noopener>the <code>euclid</code> crate</a>&rsquo;s
+ability to &ldquo;tag&rdquo; a type with the coordinate space it can be used with, and
+because this algorithm isn&rsquo;t specific to any one coordinate space we&rsquo;re
+making it generic over <em>all</em> coordinate spaces.</p><p>You can think of this <em>&ldquo;Coordinate Space&rdquo;</em> idea as the graphical version of
+units. It&rsquo;s really annoying to accidentally mix up locations on a screen
+(<em>Canvas Space</em>, with the origin at the top-left) with locations in a drawing
+(<em>Drawing Space</em>, Cartesian coordinates which can go to infinity), so
+tagging points and lengths with their intended space lets us
+statically prevent the types of conversion problems that destroyed the <a href=https://en.wikipedia.org/wiki/Mars_Climate_Orbiter#Cause_of_failure class=external-link target=_blank rel=noopener>Mars
+Climate Orbiter</a>.</p></div><p>To implement this I&rsquo;m going to procedurally build up a new <code>Vec</code> of points,
+passing a <code>&amp;mut Vec&lt;_></code> to the function doing the actual recursion.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// arcs/src/algorithms/line_simplification.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>pub</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>simplify</span><span style=color:#f92672>&lt;</span>Space<span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>    points: <span style=color:#66d9ef>&amp;</span>[Point2D<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, Space<span style=color:#f92672>&gt;</span>],
+</span></span><span style=display:flex><span>    tolerance: <span style=color:#a6e22e>Length</span><span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, Space<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>) -&gt; Vec<span style=color:#f92672>&lt;</span>Point2D<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, Space<span style=color:#f92672>&gt;&gt;</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> points.len() <span style=color:#f92672>&lt;=</span> <span style=color:#ae81ff>2</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>return</span> points.to_vec();
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> buffer <span style=color:#f92672>=</span> Vec::new();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// push the first point
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    buffer.push(points[<span style=color:#ae81ff>0</span>]);
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// then simplify every point in between the start and end
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    simplify_points(<span style=color:#f92672>&amp;</span>points[<span style=color:#f92672>..</span>], tolerance, <span style=color:#f92672>&amp;</span><span style=color:#66d9ef>mut</span> buffer);
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// and finally the last one
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    buffer.push(<span style=color:#f92672>*</span>points.last().unwrap());
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    buffer
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Next we need to implement this <code>simplify_points()</code> function.</p><p>We can use <code>if let</code> and the really handy <a href=https://doc.rust-lang.org/edition-guide/rust-2018/slice-patterns.html class=external-link target=_blank rel=noopener>slice pattern</a>
+feature (stabilised in Rust 1.42) to extract the <code>first</code>, <code>last</code>, and <code>rest</code>.
+This gives us everything we need to create a <code>Line</code> from <code>first</code> and <code>last</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// arcs/src/algorithms/line_simplification.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>simplify_points</span><span style=color:#f92672>&lt;</span>Space<span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>    points: <span style=color:#66d9ef>&amp;</span>[Point2D<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, Space<span style=color:#f92672>&gt;</span>],
+</span></span><span style=display:flex><span>    tolerance: <span style=color:#a6e22e>Length</span><span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, Space<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    buffer: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Vec<span style=color:#f92672>&lt;</span>Point2D<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, Space<span style=color:#f92672>&gt;&gt;</span>,
+</span></span><span style=display:flex><span>) {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> [first, rest <span style=color:#f92672>@</span> <span style=color:#f92672>..</span>, last] <span style=color:#f92672>=</span> points {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> line_segment <span style=color:#f92672>=</span> Line::new(<span style=color:#f92672>*</span>first, <span style=color:#f92672>*</span>last);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Next we can try to find the point whose perpendicular distance is furthest from
+<code>line_segment</code>.</p><p>Ideally I&rsquo;d like to use the <a href=https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.max_by_key class=external-link target=_blank rel=noopener><code>Iterator::max_by_key()</code></a> method to
+find the index of the furthest point where our &ldquo;key&rdquo; function uses
+<code>Line::perpendicular_distance_to()</code>, but that returns a reference to the item
+and not its index&mldr; So to make the code cleaner I ended up rolling my own
+<code>max_by_key()</code> function.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// arcs/src/algorithms/line_simplification.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>simplify_points</span><span style=color:#f92672>&lt;</span>Space<span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>    points: <span style=color:#66d9ef>&amp;</span>[Point2D<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, Space<span style=color:#f92672>&gt;</span>],
+</span></span><span style=display:flex><span>    tolerance: <span style=color:#a6e22e>Length</span><span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, Space<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    buffer: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Vec<span style=color:#f92672>&lt;</span>Point2D<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, Space<span style=color:#f92672>&gt;&gt;</span>,
+</span></span><span style=display:flex><span>) {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> [first, rest <span style=color:#f92672>@</span> <span style=color:#f92672>..</span>, last] <span style=color:#f92672>=</span> points {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> line_segment <span style=color:#f92672>=</span> Line::new(<span style=color:#f92672>*</span>first, <span style=color:#f92672>*</span>last);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> Some((ix, distance)) <span style=color:#f92672>=</span>
+</span></span><span style=display:flex><span>            max_by_key(rest, <span style=color:#f92672>|</span>p<span style=color:#f92672>|</span> line_segment.perpendicular_distance_to(<span style=color:#f92672>*</span>p))
+</span></span><span style=display:flex><span>        {
+</span></span><span style=display:flex><span>            <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>max_by_key</span><span style=color:#f92672>&lt;</span>T, F, K<span style=color:#f92672>&gt;</span>(items: <span style=color:#66d9ef>&amp;</span>[T], <span style=color:#66d9ef>mut</span> key_func: <span style=color:#a6e22e>F</span>) -&gt; Option<span style=color:#f92672>&lt;</span>(<span style=color:#66d9ef>usize</span>, K)<span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>where</span>
+</span></span><span style=display:flex><span>    F: FnMut(<span style=color:#f92672>&amp;</span>T) -&gt; <span style=color:#a6e22e>K</span>,
+</span></span><span style=display:flex><span>    K: PartialOrd,
+</span></span><span style=display:flex><span>{
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> best_so_far <span style=color:#f92672>=</span> None;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>for</span> (i, item) <span style=color:#66d9ef>in</span> items.iter().enumerate() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> key <span style=color:#f92672>=</span> key_func(item);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> is_better <span style=color:#f92672>=</span> <span style=color:#66d9ef>match</span> best_so_far {
+</span></span><span style=display:flex><span>            Some((_, <span style=color:#66d9ef>ref</span> best_key)) <span style=color:#f92672>=&gt;</span> key <span style=color:#f92672>&gt;</span> <span style=color:#f92672>*</span>best_key,
+</span></span><span style=display:flex><span>            None <span style=color:#f92672>=&gt;</span> <span style=color:#66d9ef>true</span>,
+</span></span><span style=display:flex><span>        };
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> is_better {
+</span></span><span style=display:flex><span>            best_so_far <span style=color:#f92672>=</span> Some((i, key));
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    best_so_far
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>If you&rsquo;re keeping track we&rsquo;ve completed step 2 from <a href=#the-algorithm>the algorithm
+section</a>.</p><p>Now if the <code>distance</code> is greater than our <code>tolerance</code> we need to recurse and
+add the furthest point to our <code>buffer</code>.</p><p>The only real difficulty here is that the <code>ix</code> returned by <code>max_by_key()</code> is
+an index into <code>rest</code>, not <code>points</code>&mldr; I originally forgot this bit and had an
+off-by-one error that resulted in infinite recursion and blowing the stack 😊</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// arcs/src/algorithms/line_simplification.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>simplify_points</span><span style=color:#f92672>&lt;</span>Space<span style=color:#f92672>&gt;</span>(
+</span></span><span style=display:flex><span>    points: <span style=color:#66d9ef>&amp;</span>[Point2D<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, Space<span style=color:#f92672>&gt;</span>],
+</span></span><span style=display:flex><span>    tolerance: <span style=color:#a6e22e>Length</span><span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, Space<span style=color:#f92672>&gt;</span>,
+</span></span><span style=display:flex><span>    buffer: <span style=color:#66d9ef>&amp;</span><span style=color:#a6e22e>mut</span> Vec<span style=color:#f92672>&lt;</span>Point2D<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>f64</span>, Space<span style=color:#f92672>&gt;&gt;</span>,
+</span></span><span style=display:flex><span>) {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> [first, rest <span style=color:#f92672>@</span> <span style=color:#f92672>..</span>, last] <span style=color:#f92672>=</span> points {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> line_segment <span style=color:#f92672>=</span> Line::new(<span style=color:#f92672>*</span>first, <span style=color:#f92672>*</span>last);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> <span style=color:#66d9ef>let</span> Some((ix, distance)) <span style=color:#f92672>=</span>
+</span></span><span style=display:flex><span>            max_by_key(rest, <span style=color:#f92672>|</span>p<span style=color:#f92672>|</span> line_segment.perpendicular_distance_to(<span style=color:#f92672>*</span>p))
+</span></span><span style=display:flex><span>        {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>if</span> distance <span style=color:#f92672>&gt;</span> tolerance {
+</span></span><span style=display:flex><span>                <span style=color:#75715e>// note: index is the index into `rest`, but we want it relative
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                <span style=color:#75715e>// to `point`
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                <span style=color:#66d9ef>let</span> ix <span style=color:#f92672>=</span> ix <span style=color:#f92672>+</span> <span style=color:#ae81ff>1</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>                simplify_points(<span style=color:#f92672>&amp;</span>points[<span style=color:#f92672>..=</span>ix], tolerance, buffer);
+</span></span><span style=display:flex><span>                buffer.push(points[ix]);
+</span></span><span style=display:flex><span>                simplify_points(<span style=color:#f92672>&amp;</span>points[ix<span style=color:#f92672>..</span>], tolerance, buffer);
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>&mldr; And that&rsquo;s pretty much it. We&rsquo;ve implemented the full
+<em>Ramer-Douglas-Peucker algorithm</em> in about 50 lines or Rust.</p><div class="notices tip"><p>When you&rsquo;re doing recursion it&rsquo;s always nice to do a sanity check and make sure
+you&rsquo;ve implemented the reduction and base cases properly, otherwise you risk
+infinite recursion&mldr;</p><p>For our base case, the <code>if let [first, .., last]</code> slice pattern means we&rsquo;ll stop
+recursing when there are less than 2 points.</p><p>Also, because <code>rest</code> gets smaller and smaller every time we recurse we&rsquo;re
+constantly dividing the problem into smaller and smaller pieces.</p></div><h2 id=writing-tests>Writing Tests
+<a class=heading-link href=#writing-tests><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>At this point we know our code compiles, but is it actually correct?</p><p>We can start off with lines of 0, 1, or 2 points, because they&rsquo;re already as
+simple as they&rsquo;re going to get.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// arcs/src/algorithms/line_simplification.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[cfg(test)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>mod</span> tests {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>use</span> <span style=color:#66d9ef>super</span>::<span style=color:#f92672>*</span>;
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>use</span> <span style=color:#66d9ef>crate</span>::Point;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>empty_line</span>() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> points: Vec<span style=color:#f92672>&lt;</span>Point<span style=color:#f92672>&gt;</span> <span style=color:#f92672>=</span> Vec::new();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> got <span style=color:#f92672>=</span> simplify(<span style=color:#f92672>&amp;</span>points, Length::new(<span style=color:#ae81ff>1.0</span>));
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        assert!(got.is_empty());
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>line_with_one_point</span>() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> points <span style=color:#f92672>=</span> vec![Point::new(<span style=color:#ae81ff>0.0</span>, <span style=color:#ae81ff>0.0</span>)];
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> got <span style=color:#f92672>=</span> simplify(<span style=color:#f92672>&amp;</span>points, Length::new(<span style=color:#ae81ff>1.0</span>));
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        assert_eq!(got, points);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>line_with_two_points</span>() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> points <span style=color:#f92672>=</span> vec![Point::new(<span style=color:#ae81ff>0.0</span>, <span style=color:#ae81ff>0.0</span>), Point::new(<span style=color:#ae81ff>10.0</span>, <span style=color:#ae81ff>2.0</span>)];
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> got <span style=color:#f92672>=</span> simplify(<span style=color:#f92672>&amp;</span>points, Length::new(<span style=color:#ae81ff>1.0</span>));
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        assert_eq!(got, points);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>What about a perfectly straight line containing 100 points? The simplified
+version should only contain the start and end points.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// arcs/src/algorithms/line_simplification.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[cfg(test)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>mod</span> tests {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>simplify_a_straight_line_to_two_points</span>() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> points: Vec<span style=color:#f92672>&lt;</span>Point<span style=color:#f92672>&gt;</span> <span style=color:#f92672>=</span>
+</span></span><span style=display:flex><span>            (<span style=color:#ae81ff>0</span><span style=color:#f92672>..</span><span style=color:#ae81ff>100</span>).map(<span style=color:#f92672>|</span>i<span style=color:#f92672>|</span> Point::new(i <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>f64</span>, <span style=color:#ae81ff>0.0</span>)).collect();
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> should_be <span style=color:#f92672>=</span> <span style=color:#f92672>&amp;</span>[points[<span style=color:#ae81ff>0</span>], points[<span style=color:#ae81ff>99</span>]];
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> got <span style=color:#f92672>=</span> simplify(<span style=color:#f92672>&amp;</span>points, Length::new(<span style=color:#ae81ff>0.1</span>));
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        assert_eq!(got, should_be);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Next, let&rsquo;s add a bit of movement to the various points in this line. I&rsquo;m going
+to use <code>sin</code> to add a bit of &ldquo;randomness&rdquo; to each point&rsquo;s vertical component.
+As long as the vertical movement is within our threshold all points between the
+start and end should be simplified out.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// arcs/src/algorithms/line_simplification.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[cfg(test)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>mod</span> tests {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>simplify_a_horizontal_line_with_small_amounts_of_vertical_jitter</span>() {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> max_jitter <span style=color:#f92672>=</span> <span style=color:#ae81ff>0.1</span>;
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> points: Vec<span style=color:#f92672>&lt;</span>Point<span style=color:#f92672>&gt;</span> <span style=color:#f92672>=</span> (<span style=color:#ae81ff>0</span><span style=color:#f92672>..</span><span style=color:#ae81ff>100</span>)
+</span></span><span style=display:flex><span>            .map(<span style=color:#f92672>|</span>i<span style=color:#f92672>|</span> {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>let</span> jitter <span style=color:#f92672>=</span> max_jitter <span style=color:#f92672>*</span> (i <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>f64</span> <span style=color:#f92672>/</span> <span style=color:#ae81ff>100.0</span> <span style=color:#f92672>*</span> <span style=color:#66d9ef>PI</span>).sin();
+</span></span><span style=display:flex><span>                Point::new(i <span style=color:#66d9ef>as</span> <span style=color:#66d9ef>f64</span>, jitter)
+</span></span><span style=display:flex><span>            })
+</span></span><span style=display:flex><span>            .collect();
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> should_be <span style=color:#f92672>=</span> <span style=color:#f92672>&amp;</span>[points[<span style=color:#ae81ff>0</span>], points[<span style=color:#ae81ff>99</span>]];
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> got <span style=color:#f92672>=</span> simplify(<span style=color:#f92672>&amp;</span>points, Length::new(max_jitter <span style=color:#f92672>*</span> <span style=color:#ae81ff>2.0</span>));
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        assert_eq!(got, should_be);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>As a fun fact, if you were to graph this you&rsquo;d see a sine wave between 0 and 99
+with a period of 50 and amplitude of <code>0.1</code>.</p><p>Finally I thought I&rsquo;d try a more realistic curve to make sure the tests so far
+haven&rsquo;t added some bias due to their contrived nature.</p><p>For this, I needed to pull out the most sophisticated tool in my mathematical
+toolbox.</p><p><img src=/img/line-simplification-sketch.png alt="A hand-drawn sketch of several points with annotations showing how the path would be simplified"></p><p>&mldr; Pen and paper.</p><p>I&rsquo;ve drawn a series of points on a set of cartesian coordinates, and circled the
+points (blue) that would be kept. By tracing around my ruler (red) I can emulate
+the tolerance area, with anything inside the ruler boundary being discarded.</p><p>By measuring the location of each point we can write one last test.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=display:flex><span><span style=color:#75715e>// arcs/src/algorithms/line_simplification.rs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#75715e>#[cfg(test)]</span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>mod</span> tests {
+</span></span><span style=display:flex><span>    <span style=color:#f92672>..</span>.
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#[test]</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>simplify_more_realistic_line</span>() {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// Found by drawing it out on paper and using a ruler to determine
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#75715e>// point coordinates
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>let</span> line <span style=color:#f92672>=</span> vec![
+</span></span><span style=display:flex><span>            Point::new(<span style=color:#f92672>-</span><span style=color:#ae81ff>43.0</span>, <span style=color:#ae81ff>8.0</span>),
+</span></span><span style=display:flex><span>            Point::new(<span style=color:#f92672>-</span><span style=color:#ae81ff>24.0</span>, <span style=color:#ae81ff>19.0</span>),
+</span></span><span style=display:flex><span>            Point::new(<span style=color:#f92672>-</span><span style=color:#ae81ff>13.0</span>, <span style=color:#ae81ff>23.0</span>),
+</span></span><span style=display:flex><span>            Point::new(<span style=color:#f92672>-</span><span style=color:#ae81ff>8.0</span>, <span style=color:#ae81ff>36.0</span>),
+</span></span><span style=display:flex><span>            Point::new(<span style=color:#ae81ff>7.0</span>, <span style=color:#ae81ff>40.0</span>),
+</span></span><span style=display:flex><span>            Point::new(<span style=color:#ae81ff>24.0</span>, <span style=color:#ae81ff>12.0</span>),
+</span></span><span style=display:flex><span>            Point::new(<span style=color:#ae81ff>44.0</span>, <span style=color:#f92672>-</span><span style=color:#ae81ff>6.0</span>),
+</span></span><span style=display:flex><span>            Point::new(<span style=color:#ae81ff>57.0</span>, <span style=color:#ae81ff>2.0</span>),
+</span></span><span style=display:flex><span>            Point::new(<span style=color:#ae81ff>70.0</span>, <span style=color:#ae81ff>7.0</span>),
+</span></span><span style=display:flex><span>        ];
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> should_be <span style=color:#f92672>=</span> vec![line[<span style=color:#ae81ff>0</span>], line[<span style=color:#ae81ff>4</span>], line[<span style=color:#ae81ff>6</span>], line[<span style=color:#ae81ff>8</span>]];
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> ruler_width <span style=color:#f92672>=</span> Length::new(<span style=color:#ae81ff>20.0</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>let</span> got <span style=color:#f92672>=</span> simplify(<span style=color:#f92672>&amp;</span>line, ruler_width <span style=color:#f92672>/</span> <span style=color:#ae81ff>2.0</span>);
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        assert_eq!(got, should_be);
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h2 id=conclusions>Conclusions
+<a class=heading-link href=#conclusions><i class="fa-solid fa-link" aria-hidden=true title="Link to heading"></i>
+<span class=sr-only>Link to heading</span></a></h2><p>This was a lot shorter than my <a href=https://adventures.michaelfbryan.com/posts/pragmatic-global-state/>usual</a> <a href=https://adventures.michaelfbryan.com/posts/ecs-outside-of-games/>deep</a> <a href=https://adventures.michaelfbryan.com/posts/wasm-as-a-platform-for-abstraction/>dives</a> into complex
+programming topics (I think the average read time for articles on my blog is
+around 25 minutes?), but I hope it&rsquo;ll be useful if you ever need to
+implement line simplification.</p><p>Even if you aren&rsquo;t going to implement line simplification any time soon the
+algorithm itself is also quite elegant, so you might appreciate it for its
+aesthetic qualities.</p><p>In the meantime I think I&rsquo;ll keep adding bits and pieces to <a href=https://github.com/Michael-F-Bryan/arcs class=external-link target=_blank rel=noopener>arcs</a> and
+<a href=https://github.com/Michael-F-Bryan/rustmatic class=external-link target=_blank rel=noopener>experimenting with motion control</a> when I have time. Let me know
+if either of those topics interest you and I&rsquo;ll do some more write-ups as
+various things get implemented.</p></div><footer></footer></article><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css integrity=sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0 crossorigin=anonymous><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js integrity=sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4 crossorigin=anonymous></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}]})'></script></section></div><footer class=footer><section class=container>©
+2025
+Michael-F-Bryan
+·
+Powered by <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> & <a href=https://github.com/luizdepra/hugo-coder/ target=_blank rel=noopener>Coder</a>.
+[<a href=https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree/dbb621a9a787b276f42c0f30165783a6aa3065a6 target=_blank rel=noopener>dbb621a</a>]</section></footer></main><script src=/js/coder.min.6ae284be93d2d19dad1f02b0039508d9aab3180a12a06dcc71b0b0ef7825a317.js integrity="sha256-auKEvpPS0Z2tHwKwA5UI2aqzGAoSoG3McbCw73gloxc="></script><script src=/js/mermaid.min.min.9c343a21d2c1c6ad2ffc2661e9409225290bf15165a7661b9149c9a03934034c.js integrity="sha256-nDQ6IdLBxq0v/CZh6UCSJSkL8VFlp2YbkUnJoDk0A0w="></script><script src=/js/index.min.c04ed42ce6cde47e0926ae55f072b1ff2e67af9e681a00d0ffe507800d3fd657.js integrity="sha256-wE7ULObN5H4JJq5V8HKx/y5nr55oGgDQ/+UHgA0/1lc="></script><script async src="https://www.googletagmanager.com/gtag/js?id=G-M80ZBKQHKV"></script><script>var dnt,doNotTrack=!1;if(!1&&(dnt=navigator.doNotTrack||window.doNotTrack||navigator.msDoNotTrack,doNotTrack=dnt=="1"||dnt=="yes"),!doNotTrack){window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-M80ZBKQHKV")}</script></body></html>
