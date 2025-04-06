@@ -33,3 +33,10 @@ jobs:
         uses: wjdp/htmltest-action@master
         with:
           config: .htmltest.yml
+
+      - name: Run cspell
+        uses: streetsidesoftware/cspell-action@v6
+        with:
+          config: .cspell.config.yaml
+          use_cspell_files: true
+          suggestions: true

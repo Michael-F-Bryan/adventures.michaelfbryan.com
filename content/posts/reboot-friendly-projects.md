@@ -49,7 +49,7 @@ Instead, assume the dropout is part of the process — and design for it from th
 - Try: `Fixed that annoying off-by-one in chart.js—maybe revisit this later?`
 - A *Future You* trying to decode your git history will thank you.
 
-### 3. Structure Projects Modually
+### 3. Structure Projects Modularly
 
 - Make it easy to work on one part at a time.
 - Each sub-component should have:

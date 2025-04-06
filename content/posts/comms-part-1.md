@@ -41,7 +41,7 @@ pairs. This means:
 
 The way we'll be adding reliability to the underlying error-prone stream of
 bytes received from the *Serial* connection is by using a protocol called the
-*Advanced Navigation Packet Protocol* (ANPP). This is a handly little protocol
+*Advanced Navigation Packet Protocol* (ANPP). This is a handy little protocol
 *published by [*Advanced Navigation*][an] under the MIT license, with an
 [open-source Rust port][anpp-rs].
 
@@ -61,7 +61,7 @@ periodically scan through the received bytes looking for a valid header
 identify the message body (the next `Length` bytes) and identify transmission
 errors using the CRC-16 checksum.
 
-ANPP gives us a nice way of detecting when a message has been recieved
+ANPP gives us a nice way of detecting when a message has been received
 successfully, but we also need a higher-level mechanism for detecting
 transmission failures and correcting them.
 

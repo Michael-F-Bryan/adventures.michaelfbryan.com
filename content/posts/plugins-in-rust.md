@@ -15,7 +15,7 @@ using [random.org][r-o] instead of the pseudo-random numbers that a crate like
 The Rust language gives you a lot of really powerful tools for adding
 flexibility and extensibility to your applications (e.g. traits, enums,
 macros), but all of these happen at compile time. Unfortunately, to get the
-flexibility that we're looking we'll need to be able to add new functionalty at
+flexibility that we're looking we'll need to be able to add new functionality at
 runtime.
 
 This can be achieved using a technique called [Dynamic Loading][wiki].

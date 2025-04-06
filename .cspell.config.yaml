@@ -1,0 +1,17 @@
+version: "0.2"
+files:
+  - "content/**/*.md"
+dictionaryDefinitions:
+  - name: project-words
+    path: "./.project-words.txt"
+    addWords: true
+dictionaries:
+  - project-words
+  - en-au
+languageSettings:
+  - languageId: markdown
+    ignoreRegExpList:
+      - "/^\\s*```[\\s\\S]*?^\\s*```/gm"
+      - "/`[^`]+`/g"
+      - "/^\\[.*?\\]:\\s*.*$/gm"
+"$schema": https://raw.githubusercontent.com/streetsidesoftware/cspell/main/cspell.schema.json

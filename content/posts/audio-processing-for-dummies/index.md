@@ -707,7 +707,7 @@ The original clip:
 
 Now let's split it into pieces with our `wav-splitter` program. At this point
 I don't really know what values of `noise_threshold` or `release_time` are
-acceptible for this audio, but I figure `50` and `0.3s` should be usable?
+acceptable for this audio, but I figure `50` and `0.3s` should be usable?
 
 ```console
 $ ./target/release/examples/wav-splitter -o output --threshold 50 --release-time 0.3 data/N11379_KSCK.wav

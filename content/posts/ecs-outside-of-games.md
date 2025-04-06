@@ -127,21 +127,21 @@ It'd be nice to have a function for decomposing complex graphical entities into
 simpler ones (e.g. to approximate a `Spline` using arcs and lines). We can't
 give the `GraphicalEntity` class some `decompose()` method because that just
 wouldn't make sense for `Image`, so let's introduce an intermediate
-`DecomposeableEntity`.
+`DecomposableEntity`.
 
 {{< mermaid >}}
 classDiagram
-  GraphicalEntity <|-- DecomposeableEntity
+  GraphicalEntity <|-- DecomposableEntity
   GraphicalEntity <|-- Image
 
   GraphicalEntity: Stroke stroke
   GraphicalEntity: void render()
 
-  DecomposeableEntity <|-- Line
-  DecomposeableEntity <|-- Spline
-  DecomposeableEntity <|-- Circle
+  DecomposableEntity <|-- Line
+  DecomposableEntity <|-- Spline
+  DecomposableEntity <|-- Circle
 
-  class DecomposeableEntity {
+  class DecomposableEntity {
     GraphicalEntity[] decompose()
   }
 
@@ -152,33 +152,33 @@ classDiagram
 While we're at it we also want to have [hatching][hatch], a common drafting
 technique used to show which areas of a drawing are part of the same thing.
 Hatches are really just a set of diagonal lines, so it makes sense that the
-class should inherit from `DecomposeableEntity`. It's not uncommon for hatching
+class should inherit from `DecomposableEntity`. It's not uncommon for hatching
 to colour the background a different colour, so let's give it a `fill_colour`
 property.
 
 But hang on... doesn't `Circle` also have a `fill_colour` property? What if we
-DRY things up by creating a new class called `DecomposeableEntityWithFill`?
+DRY things up by creating a new class called `DecomposableEntityWithFill`?
 
 {{< mermaid >}}
 classDiagram
-  GraphicalEntity <|-- DecomposeableEntity
+  GraphicalEntity <|-- DecomposableEntity
   GraphicalEntity <|-- Image
 
   GraphicalEntity: Stroke stroke
   GraphicalEntity: void render()
 
-  DecomposeableEntity <|-- Line
-  DecomposeableEntity <|-- Spline
-  DecomposeableEntity <|-- DecomposeableEntityWithFill
-  DecomposeableEntityWithFill <|-- Circle
-  DecomposeableEntityWithFill <|-- Hatch
+  DecomposableEntity <|-- Line
+  DecomposableEntity <|-- Spline
+  DecomposableEntity <|-- DecomposableEntityWithFill
+  DecomposableEntityWithFill <|-- Circle
+  DecomposableEntityWithFill <|-- Hatch
 
-  class DecomposeableEntity {
+  class DecomposableEntity {
     GraphicalEntity[] decompose()
   }
 
   Image: byte[] pixel_buffer
-  DecomposeableEntityWithFill: Colour fill_colour
+  DecomposableEntityWithFill: Colour fill_colour
 {{< /mermaid >}}
 
 The diagonal lines in a `Hatch` don't actually exist on the drawing though.

@@ -97,7 +97,7 @@ My primary reasons for this were:
 
 - Memory usage - a document contains *a lot* of `Event`s, and by not reading
   everything into memory we can avoid large amounts of memory (memory overhead
-  with iterators is ammortised `O(1)` instead of `O(n)`)
+  with iterators is amortised `O(1)` instead of `O(n)`)
 - Flexibility - the core algorithms shouldn't need to care if the events are
   already in a buffer, streamed from the network, or the caller has already
   done some pre-processing of the events via the various iterator combinators
