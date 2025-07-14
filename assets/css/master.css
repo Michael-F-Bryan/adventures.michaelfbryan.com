@@ -21,9 +21,9 @@ div.notices > p:first-child:before {
     position: absolute;
     top: 2px;
     color: #fff;
-    font-family: "Font Awesome 5 Free";
+    font-family: "Font Awesome 6 Free";
     font-weight: 900;
-    content: "\f06a";
+    content: "\f071";
     left: 0.5em;
 }
 
