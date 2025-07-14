@@ -122,7 +122,7 @@ the private half of our deploy key to use.
 We do this by adding the **private** key to our repository as a secret called
 `SECRET_REPO_DEPLOY_KEY`.
 
-![](new-secret.png)
+![Screenshot showing the "New Secret" button in GitHub repository settings](new-secret.png)
 
 {{% notice tip %}}
 If multiple projects will need access to this private repository, you might

@@ -28,7 +28,7 @@ If you found this useful or spotted a bug, let me know on the blog's
 
 [repo]: https://github.com/Michael-F-Bryan/noise-gate
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
-[crate]: crates.io/crates/noise-gate
+[crate]: https://crates.io/crates/noise-gate
 {{% /notice %}}
 
 ## What Even Is Audio?
