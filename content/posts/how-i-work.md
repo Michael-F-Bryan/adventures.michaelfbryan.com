@@ -1,16 +1,17 @@
 ---
-title: "Inside the Engine Room: Part 1 - How I Work"
+title: "How I Work"
 date: "2025-07-14T12:00:00+08:00"
-series: ["Inside the Engine Room"]
-series_weight: 1
+tags:
+- productivity
+- about me
 ---
 
-[Check all articles in the *Inside the Engine Room* series]({{< ref "/series/inside-the-engine-room">}}).
+I thought it might be helpful to write down some of the core principles and values that guide my professional life. If you are a colleague, friend, potential employer, or just curious, this might be a good place to start.
 
 {{% notice tip %}}
-> Give me ownership, trust my judgement, keep communication open, and let me focus on building things properly.
->
-> In return, you’ll get high-quality work, honest feedback, and a teammate who’ll go the extra mile when it matters.
+Give me ownership, trust my judgement, keep communication open, and let me focus on building things properly.
+
+In return, you’ll get high-quality work, honest feedback, and a teammate who’ll go the extra mile when it matters.
 {{% /notice %}}
 
 ## Core Values
