@@ -1,6 +1,6 @@
 ---
 title: "Writing Technical Content That Actually Helps People"
-date: 2025-07-16T10:00:00+08:00
+date: "2025-07-16T10:00:00+08:00"
 description: "How to develop a writing style that makes complex technical concepts genuinely accessible without sacrificing depth"
 tags: ["writing", "communication", "technical documentation", "teaching"]
 ---
@@ -14,7 +14,9 @@ Eventually, I realized that what felt natural to me - the way I naturally think 
 But that's not how I think about problems. And apparently, it's not how most people learn either.
 
 {{% notice note %}}
-The principles and examples in this article are drawn from extensive analysis of effective technical writing patterns. You can find the complete analysis and supporting materials [on GitHub][repo].
+The principles and examples in this article are drawn from extensive analysis of effective technical writing patterns. You can find the original articles [on GitHub][repo].
+
+[repo]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
 {{% /notice %}}
 
 ## The Problem With Most Technical Writing
@@ -438,4 +440,3 @@ Remember: the best technical writing serves readers' actual needs while building
 This article demonstrates the principles it teaches. Notice how each technique is shown through concrete examples before being explained abstractly, how complexity is acknowledged upfront, and how the overall structure follows the patterns described in the content.
 {{% /notice %}}
 
-[repo]: https://github.com/example/writing-like-michael
