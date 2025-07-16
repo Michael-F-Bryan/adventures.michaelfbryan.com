@@ -23,9 +23,9 @@ The principles and examples in this article are drawn from extensive analysis of
 
 Here's what typically happens when engineers write documentation:
 
-1. **Expert Curse**: We forget what it's like to not know something
+1. **The Curse of Knowledge**: Once we learn something and become an expert, we forget what it's like to not know it
 2. **Solution-First Thinking**: We jump straight to answers without establishing context
-3. **Abstraction Overload**: We explain concepts at the wrong level of detail
+3. **Abstraction Overload**: We explain concepts at the wrong level of detail or without easing the reader into it
 4. **Authority Anxiety**: We try to sound smart instead of being helpful
 
 This creates content that serves the writer's ego more than the reader's needs. I mean, haven't we all been there? You're trying to solve a problem, you find what looks like the perfect article, and five minutes later you're somehow more confused than when you started.
