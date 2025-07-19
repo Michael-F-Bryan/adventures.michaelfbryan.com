@@ -1,5 +1,5 @@
 ---
-title: "Obsidian Tricks: Summary Callout"
+title: "Obsidian Tricks: The Summary Callout"
 date: "2025-07-19T22:36:07+08:00"
 tags: ["Obsidian", "Atomic Notes"]
 ---
