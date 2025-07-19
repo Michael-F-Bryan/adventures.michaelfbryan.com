@@ -39,27 +39,118 @@ Feel free to use this article as a prompt to generate your own summary callout �
 
 ### Technical Concepts
 
-{{% notice example %}}
-A `[[Git]]` branch is a lightweight, movable pointer to a `[[commit]]`, enabling parallel development streams within a `[[repository]]`. `[[Branches]]` allow developers to work on features or fixes independently without affecting the main codebase.
-{{% /notice %}}
+````md
+---
+aliases: Access Tokens
+---
 
-### Processes and Procedures
+> [!SUMMARY]
+> A token, typically in the [[JSON Web Tokens|JWT]] format, issued by a server
+> when the user logs in that lets users make secure calls to an API server.
 
-{{% notice example %}}
-The `[[Code Review]]` process is a systematic examination of code changes before they are merged into `[[the main branch]]`. It ensures code quality, knowledge sharing, and early bug detection.
-{{% /notice %}}
+User tokens can be used by client applications to access protected resources on
+a server on behalf of a user.
+
+Anyone that holds an access token can use it. As such, you need a way to
+minimize the fallout from a compromised access token. One method is to issue
+tokens that have a short lifespan.
+
+Here is an example access token that might be issued by [[Auth0]]:
+
+```json
+{
+  "iss": "https://YOUR_DOMAIN/",
+  "sub": "auth0|123456",
+  "aud": [
+    "my-api-identifier",
+    "https://YOUR_DOMAIN/userinfo"
+  ],
+  "azp": "YOUR_CLIENT_ID",
+  "exp": 1489179954,
+  "iat": 1489143954,
+  "scope": "openid profile email address phone read:appointments"
+}
+```
+````
+
+### Entities
+
+From my note on *Anduril Industries*:
+
+````md
+---
+aliases: Anduril
+Link: https://www.anduril.com/
+LinkedIn: https://www.linkedin.com/company/andurilindustries
+Country: [[United States]]
+tags: "#entity/organisation"
+---
+
+> [!SUMMARY]
+> A [[Tech Company]] in the [[defence]] space that develop cutting-edge military
+> technology.
+
+## Etymology
+
+Named after [Andúril](https://lotr.fandom.com/wiki/And%C3%BAril) from the
+[[Lord of the Rings]].
+
+> [!quote] JRR Tolkein
+> Very bright was that sword when it was made whole again; the light of the sun
+> shone redly in it, and the light of the moon shone cold, and its edge was hard
+> and keen. And Aragorn gave it a new name and called it Andúril, Flame of the
+> West.
+
+Known Employees:
+
+```dataview
+LIST FROM #entity/person WHERE contains(file.outlinks, [[]])
+```
+````
 
 ### Educational Content or Web Clippings
 
 Often used in conjunction with [Obsidian Web Clipper](https://obsidian.md/clipper).
 
-{{% notice example %}}
-This tutorial covers the fundamentals of `[[React Hooks]]`, including:
-- Understanding the hooks lifecycle
-- Common hooks (`useState`, `useEffect`)
-- Creating custom hooks
-Prerequisites: Basic `[[React]]` and `[[JavaScript]]` knowledge.
-{{% /notice %}}
+```md
+---
+Link: https://dannb.org/blog/2024/obsidian-use-your-notes/
+Author: "[[Dann Berg]]"
+Published: 2024-03-20
+Created: "[[April 10, 2025]]"
+tags:
+  - note/capture
+  - source/article/clipping
+---
+
+> [!Summary] TL;DR:
+> This article provides five practical methods for utilizing your notes
+> effectively, emphasizing the importance of processing, revisiting, and
+> publishing them.
+>
+> - Always process your notes after writing to enhance their clarity and usefulness.
+>   This includes re-reading, formatting key phrases, summarizing, and tagging
+>   relevant notes. Consider using [[Zettelkasten]] methodology for organization.
+> - Implement a [[Random Note Friday]] to revisit old notes and integrate them
+>   with current knowledge. Use the [[Random Note]] feature in [[Obsidian]] to
+>   discover forgotten insights.
+> - Utilize the [[Graph View]] in [[Obsidian]] to identify and connect lonely
+>   notes with others in your vault, enhancing the interconnectedness of your
+>   knowledge.
+> - Add a `> [!Summary]` to notes for quick reference and organization. This
+>   aids in creating a [[Dataview]] table for easy access to summaries across your vault.
+> - Publish your writings to solidify your understanding and build an online
+>   presence. Consider platforms like [[Medium]], [[WordPress]], or creating a
+>   [[Hugo]] site to share your insights.
+
+Congratulations. You’re now a diligent note-taker. Your [[Graph View]] makes
+internet strangers green with envy. You’ve got systems upon systems, and
+specific homes for every piece of information you want to squirrel away.
+
+Now what?
+
+...
+```
 
 You can generate it with the following prompt:
 
