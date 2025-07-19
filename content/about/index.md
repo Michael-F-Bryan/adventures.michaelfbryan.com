@@ -47,7 +47,7 @@ Outside of work, I'm deeply involved with the Communications Support Unit (CSU) 
 
 ## Personal Life
 
-I live in Perth with my partner, Gabbey, and our collection of pets (including two large dogs and several cats). We recently bought our first home in Greenmount, where I’ve been having a crash course in home and garden maintenance.
+I live in Perth with my partner, Gabbey, and our collection of pets (including two large dogs and three cats). We recently bought our first home in Greenmount, where I’ve been having a crash course in home and garden maintenance.
 
 ## Aspirations
 
@@ -56,5 +56,7 @@ Long-term, I aim to become the Chief Technical Officer of a startup focused on m
 ## Work Style and Productivity
 
 I perform best in environments that respect autonomy, flexibility, and trust. I prefer working in intense, productive bursts rather than traditional deadlines and structured schedules. Complex, interesting problems tend to pull me in, especially when I'm free to explore and create solutions without unnecessary oversight.
+
+Check out [*How I Work*]({{< relref "../posts/how-i-work.md" >}}) for more.
 
 [mvv]: https://multiversal.ventures/
