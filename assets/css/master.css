@@ -54,6 +54,10 @@ div.notices.tip > p:first-child:after {
     content: 'Tip';
 }
 
+div.notices.example > p:first-child:after {
+    content: 'Example';
+}
+
 /* Give the header a background */
 
 div.notices.warning > p:first-child {
@@ -72,6 +76,10 @@ div.notices.info > p:first-child {
     border-top: 30px solid #F0B37E;
 }
 
+div.notices.example > p:first-child {
+    border-top: 30px solid #5cb85ccc;
+}
+
 /* Background colour for the notice body */
 
 div.notices.warning {
@@ -88,6 +96,10 @@ div.notices.tip {
 
 div.notices.info {
     background: #FFF2DB;
+}
+
+div.notices.example {
+    background: #E6F9E6;
 }
 
 /* Let us link to the playpen */
