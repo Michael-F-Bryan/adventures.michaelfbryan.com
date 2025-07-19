@@ -1,7 +1,7 @@
 ---
 title: "Obsidian Tricks: The Summary Callout"
 date: "2025-07-19T22:36:07+08:00"
-tags: ["Obsidian", "Atomic Notes"]
+tags: ["Obsidian", "Personal Knowledge Management", "Atomic Notes"]
 description: |
    The summary callout is a crucial component of an Atomic Note, serving as a concise overview that captures the essence of the note's content. This section at the beginning of each note helps readers quickly grasp the main concept and decide whether to read further.
 ---
