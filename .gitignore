@@ -2,3 +2,6 @@ resources/
 public/
 *.lock
 tmp/
+
+# Scratch space used by Cursor
+_working/
