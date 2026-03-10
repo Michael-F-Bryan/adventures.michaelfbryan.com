@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "skills": {
+    "anti-ai-writing": {
+      "source": "cdeistopened/skill-stack",
+      "sourceType": "github",
+      "computedHash": "4ea3dc754baef19122a9599463810a1004524bc211c8c22cd62b8c78e8340415"
+    },
+    "clifton-sellers-content-prompts": {
+      "source": "cdeistopened/skill-stack",
+      "sourceType": "github",
+      "computedHash": "66ce5f9f2b64af44b0c8ae7dcb825d50b8397410d4c7b7fd19811bd75dfb755b"
+    },
+    "cold-open-creator": {
+      "source": "cdeistopened/skill-stack",
+      "sourceType": "github",
+      "computedHash": "cc33f657a2abfa9972f4081182c79e1305e17c8cf70644bc122f7a812ca5ebaf"
+    },
+    "ghostwriter": {
+      "source": "cdeistopened/skill-stack",
+      "sourceType": "github",
+      "computedHash": "e8396da975a2cb9cb47e124a3a06858fa3aa2a1235bf473fb047c14f37535f46"
+    },
+    "hook-and-headline-writing": {
+      "source": "cdeistopened/skill-stack",
+      "sourceType": "github",
+      "computedHash": "f6bd234e11126103281380f911452f109d20ca78f8499219d1cba3cdd476a630"
+    },
+    "podcast-blog-post-creator": {
+      "source": "cdeistopened/skill-stack",
+      "sourceType": "github",
+      "computedHash": "491a947f75ef15e714e9f1600101abd96e53f36e46304ed2d096889e71535c0a"
+    },
+    "transcript-polisher": {
+      "source": "cdeistopened/skill-stack",
+      "sourceType": "github",
+      "computedHash": "0e859118f4c8e2f91323de2eb4813cf8dd8bc940f91a3838b2324e8734b07626"
+    },
+    "voice-analyzer": {
+      "source": "cdeistopened/skill-stack",
+      "sourceType": "github",
+      "computedHash": "be683d5442e54b0d3d8e0441c72ba62b314c08fef50a4471caf9c5bf01593778"
+    },
+    "voice-matching-wizard": {
+      "source": "cdeistopened/skill-stack",
+      "sourceType": "github",
+      "computedHash": "b96aa73c6012565edace8878c6f4420353604a6ab75819042fb50b3f7a583133"
+    }
+  }
+}
