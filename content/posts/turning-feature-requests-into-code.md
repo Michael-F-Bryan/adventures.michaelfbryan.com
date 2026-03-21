@@ -1,8 +1,10 @@
 ---
-title: "How I Translate Feature Requests into Code"
-date: "2020-12-02T16:10:00+08:00"
+title: How I Translate Feature Requests into Code
+date: '2020-12-02T16:10:00+08:00'
 tags:
-- Architecture
+- Software Design
+- Computational Geometry
+- CAD
 ---
 
 As part of my previous job I worked on a CAD/CAM package, and a very common

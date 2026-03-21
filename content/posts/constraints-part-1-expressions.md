@@ -1,9 +1,10 @@
 ---
-title: "Geometric Constraint Solvers Part 1: Algebraic Expressions"
-date: "2020-07-15T00:40:00+08:00"
+title: 'Geometric Constraint Solvers Part 1: Algebraic Expressions'
+date: '2020-07-15T00:40:00+08:00'
 tags:
 - Rust
-- Geometric Constraint Solver
+- CAD
+- Computational Geometry
 ---
 
 A really powerful tool in Computer Aided Design (CAD) is the ability to apply

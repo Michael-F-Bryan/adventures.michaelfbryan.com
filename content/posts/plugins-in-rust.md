@@ -1,9 +1,10 @@
 ---
-title: "Plugins in Rust"
-date: "2019-09-30T22:04:58+08:00"
+title: Plugins in Rust
+date: '2019-09-30T22:04:58+08:00'
 tags:
 - Rust
 - FFI
+- Dynamic Loading
 ---
 
 Imagine you are implementing a calculator application and want users to be able

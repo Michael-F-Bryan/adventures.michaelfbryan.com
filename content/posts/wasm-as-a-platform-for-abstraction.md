@@ -1,9 +1,10 @@
 ---
-title: "WebAssembly as a Platform for Abstraction"
-date: "2019-12-15T11:55:00+08:00"
+title: WebAssembly as a Platform for Abstraction
+date: '2019-12-15T11:55:00+08:00'
 tags:
 - Rust
 - WebAssembly
+- Sandboxing
 ---
 
 In a project I've been playing around with recently, we've encountered the

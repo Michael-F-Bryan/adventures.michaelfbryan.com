@@ -1,10 +1,10 @@
 ---
-title: "GitHub Actions can't access private repos? Here's how to fix it"
-date: "2022-09-13T12:01:45+08:00"
+title: GitHub Actions can't access private repos? Here's how to fix it
+date: '2022-09-13T12:01:45+08:00'
 tags:
 - Rust
-- CI/CD
 - GitHub Actions
+- CI/CD
 ---
 
 When developing locally, you can add a private GitHub repository to your Rust

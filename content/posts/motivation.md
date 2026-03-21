@@ -1,8 +1,10 @@
 ---
-title: "Reflections on What Motivates a Person"
-date: "2020-04-05T19:15:00+08:00"
+title: Reflections on What Motivates a Person
+date: '2020-04-05T19:15:00+08:00'
 tags:
-- People Skills
+- Productivity
+- Career
+- Soft Skills
 ---
 
 Motivation is a funny thing.

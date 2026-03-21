@@ -1,12 +1,11 @@
 ---
-title: "A Better Frontend"
-date: "2019-09-27T03:47:00+08:00"
+title: A Better Frontend
+date: '2019-09-27T03:47:00+08:00'
 tags:
 - adventures-in-motion-control
 - Rust
+- Vue
 - WebAssembly
-- vue
-- javascript
 ---
 
 Now we've got a half-usable motion controller, we need a graphical way for

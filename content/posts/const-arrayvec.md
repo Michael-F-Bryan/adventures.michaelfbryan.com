@@ -1,8 +1,10 @@
 ---
-title: "Implementing ArrayVec Using Const Generics"
-date: "2019-11-15T00:57:00+08:00"
+title: Implementing ArrayVec Using Const Generics
+date: '2019-11-15T00:57:00+08:00'
 tags:
 - Rust
+- Const Generics
+- Embedded
 ---
 
 If you've ever done much embedded programming in Rust, you've most probably run

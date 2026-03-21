@@ -1,8 +1,10 @@
 ---
-title: "Parsing PDF Documents in Rust"
-date: "2021-01-31T21:00:00+08:00"
+title: Parsing PDF Documents in Rust
+date: '2021-01-31T21:00:00+08:00'
 tags:
 - Rust
+- PDF
+- Parsing
 ---
 
 In my spare time I'm a volunteer with my state's emergency services and we

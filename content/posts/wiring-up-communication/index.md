@@ -1,10 +1,10 @@
 ---
-title: "Wiring Up Communication"
-date: "2019-10-10T22:58:00+08:00"
+title: Wiring Up Communication
+date: '2019-10-10T22:58:00+08:00'
 tags:
 - adventures-in-motion-control
-- vue
-- javascript
+- Vue
+- JavaScript
 ---
 
 As we mentioned [in the last AiMC post][next-step], the next task is to wire up
