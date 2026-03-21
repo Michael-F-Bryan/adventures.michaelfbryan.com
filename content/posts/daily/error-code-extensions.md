@@ -1,10 +1,11 @@
 ---
-title: "Using Extension Traits to Make Error Codes More Ergonomic"
-publishDate: "2021-08-08T00:46:59+08:00"
+title: Using Extension Traits to Make Error Codes More Ergonomic
+publishDate: '2021-08-08T00:46:59+08:00'
 draft: true
 tags:
-- Daily Rust
 - Rust
+- Extension Traits
+- Errors
 series:
 - Daily Rust
 ---

@@ -1,9 +1,10 @@
 ---
-title: "I Made A Thing: Markedit"
-date: "2020-02-09T04:40:00+08:00"
+title: 'I Made A Thing: Markedit'
+date: '2020-02-09T04:40:00+08:00'
 tags:
 - Rust
-- I Made a Thing
+- Markdown
+- Automation
 ---
 
 A couple days ago I released [markedit][crates-io], a small crate for editing

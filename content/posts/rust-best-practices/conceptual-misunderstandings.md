@@ -1,9 +1,11 @@
 ---
-title: "Common Newbie Mistakes and Bad Practices in Rust: Conceptual Misunderstandings"
-publishDate: "2021-09-16T23:44:27+08:00"
+title: 'Common Newbie Mistakes and Bad Practices in Rust: Conceptual Misunderstandings'
+publishDate: '2021-09-16T23:44:27+08:00'
 draft: true
 tags:
 - Rust
+- Best Practices
+- Beginners
 series:
 - Rust Best Practices
 ---

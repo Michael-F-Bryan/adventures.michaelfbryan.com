@@ -1,9 +1,11 @@
 ---
-title: "Bring Your Own Sync"
-date: "2019-11-23T00:39:31+08:00"
+title: Bring Your Own Sync
+date: '2019-11-23T00:39:31+08:00'
 draft: true
 tags:
 - Rust
+- Concurrency
+- Atomics
 ---
 
 The other day I was looking through *The Rust Nomicon* and came across

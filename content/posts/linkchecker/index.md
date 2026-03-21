@@ -1,9 +1,10 @@
 ---
-title: "Creating a Robust, Reusable Link-Checker"
-date: "2020-05-02T19:20:00+08:00"
+title: Creating a Robust, Reusable Link-Checker
+date: '2020-05-02T19:20:00+08:00'
 tags:
 - Rust
-- I Made a Thing
+- Documentation
+- Tooling
 ---
 
 With over 68,842 downloads, one of my most successful Rust projects is a

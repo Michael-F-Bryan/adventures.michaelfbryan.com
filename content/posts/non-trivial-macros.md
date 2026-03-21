@@ -1,8 +1,10 @@
 ---
-title: "Writing Non-Trivial Macros in Rust"
-date: "2020-06-21T01:15:00+08:00"
+title: Writing Non-Trivial Macros in Rust
+date: '2020-06-21T01:15:00+08:00'
 tags:
 - Rust
+- Macros
+- Metaprogramming
 ---
 
 Macros in Rust tend to have a reputation for being complex and magical, the

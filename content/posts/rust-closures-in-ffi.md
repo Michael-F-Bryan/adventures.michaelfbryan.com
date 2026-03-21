@@ -1,10 +1,10 @@
 ---
-title: "Rust Closures in FFI"
-date: "2020-05-12T22:00:00+08:00"
+title: Rust Closures in FFI
+date: '2020-05-12T22:00:00+08:00'
 tags:
 - Rust
-- Unsafe Rust
 - FFI
+- Unsafe Rust
 ---
 
 Every now and then when using native libraries from Rust you'll be asked to

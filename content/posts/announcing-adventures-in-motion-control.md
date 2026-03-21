@@ -1,8 +1,10 @@
 ---
-title: "Announcing Adventures in Motion Control"
-date: 2019-09-01T16:27:15+08:00
+title: Announcing Adventures in Motion Control
+date: 2019-09-01 16:27:15+08:00
 tags:
 - adventures-in-motion-control
+- CNC
+- Simulation
 ---
 
 This is the first installation in my *Adventures in Motion Control* series.

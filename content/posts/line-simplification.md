@@ -1,9 +1,10 @@
 ---
-title: "Line Simplification with Ramer–Douglas–Peucker"
-date: "2020-02-23T21:56:00+08:00"
+title: Line Simplification with Ramer–Douglas–Peucker
+date: '2020-02-23T21:56:00+08:00'
 tags:
 - Rust
-- algorithms
+- Algorithms
+- Computational Geometry
 ---
 
 The other day I needed to do a fairly routine graphical operation, to

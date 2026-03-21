@@ -1,9 +1,10 @@
 ---
-title: "How I Reverse Engineered the LastPass CLI Tool"
-date: "2020-04-14T22:40:00+08:00"
+title: How I Reverse Engineered the LastPass CLI Tool
+date: '2020-04-14T22:40:00+08:00'
 tags:
 - Rust
-- I Made a Thing
+- Reverse Engineering
+- Security
 ---
 
 A couple days ago I was writing an install script for [my dotfiles][dotfiles]

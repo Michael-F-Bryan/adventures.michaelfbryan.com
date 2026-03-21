@@ -1,8 +1,13 @@
 ---
-title: "Writing Technical Content That Actually Helps People"
-date: "2025-07-16T10:00:00+08:00"
-description: "How to develop a writing style that makes complex technical concepts genuinely accessible without sacrificing depth"
-tags: ["writing", "communication", "technical documentation", "teaching"]
+title: Writing Technical Content That Actually Helps People
+date: '2025-07-16T10:00:00+08:00'
+description: How to develop a writing style that makes complex technical concepts
+  genuinely accessible without sacrificing depth
+tags:
+- Writing
+- Communication
+- Technical Documentation
+- Teaching
 toc: true
 ---
 

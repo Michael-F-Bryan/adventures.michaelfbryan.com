@@ -1,9 +1,10 @@
 ---
-title: "Simple Automation Sequences"
-date: "2019-09-14T23:55:00+08:00"
+title: Simple Automation Sequences
+date: '2019-09-14T23:55:00+08:00'
 tags:
 - adventures-in-motion-control
 - Rust
+- Automation
 ---
 
 Now we can communicate with the outside world, let's start interacting with the

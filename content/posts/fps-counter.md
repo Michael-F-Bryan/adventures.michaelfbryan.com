@@ -1,6 +1,6 @@
 ---
-title: "FPS Counter"
-date: "2019-09-03T08:50:00+08:00"
+title: FPS Counter
+date: '2019-09-03T08:50:00+08:00'
 tags:
 - adventures-in-motion-control
 - Rust

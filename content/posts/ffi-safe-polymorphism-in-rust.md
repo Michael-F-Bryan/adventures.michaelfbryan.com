@@ -1,10 +1,10 @@
 ---
-title: "FFI-Safe Polymorphism: Thin Trait Objects"
-date: "2020-12-16T02:00:00+08:00"
+title: 'FFI-Safe Polymorphism: Thin Trait Objects'
+date: '2020-12-16T02:00:00+08:00'
 tags:
 - Rust
-- Unsafe Rust
 - FFI
+- Unsafe Rust
 ---
 
 A while ago someone [posted a question][forum-post] on the Rust User Forums
