@@ -206,7 +206,7 @@ I wasn't.
 Instead, I found a bit of scrap paper and together we drew up something like
 this:
 
-{{< mermaid >}}
+```mermaid
 graph TD;
 
     Idle;
@@ -223,7 +223,7 @@ graph TD;
     Idle-- select -->select_channel;
     select_channel-- number keys -->select_channel;
     select_channel-- enter -->Idle;
-{{< /mermaid >}}
+```
 
 A programmer would immediately recognise this "map" for what it is, a *State
 Machine Diagram*. Unbeknownst to them, I had just explained a fundamental

@@ -12,6 +12,7 @@ arrayvec
 Ayush
 backlink
 backlinks
+backplane
 Bazel
 behaviour
 bindgen
@@ -46,6 +47,7 @@ dogfooding
 endeavours
 enumdir
 errno
+errgroup
 favourite
 formalise
 fread
@@ -117,6 +119,7 @@ realise
 realised
 Rebecca
 recognise
+recognising
 relref
 repr
 Repr

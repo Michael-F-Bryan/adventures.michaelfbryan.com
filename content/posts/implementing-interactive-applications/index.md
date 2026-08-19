@@ -224,7 +224,7 @@ Another way to structure this is to introduce some form of nesting. That way
 when the user is in the *"Arc Mode"* you just need to consider the states and
 transitions related to the arc mode's sub-states.
 
-{{< mermaid >}}
+```mermaid
 stateDiagram
     state "Idle" as idle
     state "Arc Mode" as arc
@@ -249,7 +249,7 @@ stateDiagram
     }
 
     state point { }
-{{< /mermaid >}}
+```
 
 There are a couple ways you can implement nesting, both with their pros and
 cons,
@@ -549,7 +549,7 @@ reader to follow.
 
 I'm envisioning something like this for our `Idle` mode.
 
-{{< mermaid >}}
+```mermaid
 stateDiagram
 
     state arc: Arc Mode
@@ -571,7 +571,7 @@ stateDiagram
         idle_dragging --> idle: Mouse Up
     }
 
-{{< /mermaid >}}
+```
 
 ### Idle Mode Keyboard Shortcuts
 
@@ -1556,7 +1556,7 @@ good to get another person's opinion.
 
 The state machine diagram for this is almost trivial.
 
-{{< mermaid >}}
+```mermaid
 stateDiagram
     state "Add Point Mode" as point
 
@@ -1567,7 +1567,7 @@ stateDiagram
         idle --> placing: Mouse Down
         placing --> idle: Mouse Up/Cancel
     }
-{{< /mermaid >}}
+```
 
 The simplicity of our state machine diagram hides a fair amount of detail
 though...

@@ -9,17 +9,6 @@ function onLoaded(cb) {
     }
 }
 
-function initializeMermaid() {
-    var config = {
-        startOnLoad: true,
-        flowchart: {
-            useMaxWidth: false,
-            htmlLabels: true
-        }
-    };
-    mermaid.initialize(config);
-}
-
 /**
  * The current theme doesn't let you get a link to a header by just clicking on
  * it.
@@ -76,5 +65,4 @@ function initializeMathJax() {
     });
 }
 
-onLoaded(initializeMermaid);
 onLoaded(addPermalinks);
