@@ -8,3 +8,6 @@ _working/
 
 # Vercel build cache
 .vercel/
+
+# Local git worktrees
+.worktrees/
