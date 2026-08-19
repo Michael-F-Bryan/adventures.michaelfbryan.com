@@ -425,7 +425,7 @@ experiences, please let me know via [the accompanying Reddit thread][reddit].
 [simplification]: {{< ref "/posts/line-simplification.md" >}}
 [law]: https://meta.wikimedia.org/wiki/Cunningham%27s_Law
 [intro-to-a-star]: https://www.redblobgames.com/pathfinding/a-star/introduction.html
-[d-i]: https://www.freecodecamp.org/news/a-quick-intro-to-dependency-injection-what-it-is-and-when-to-use-it-7578c84fa88f/
+[d-i]: https://web.archive.org/web/20240920174405/https://www.freecodecamp.org/news/a-quick-intro-to-dependency-injection-what-it-is-and-when-to-use-it-7578c84fa88f/
 [strategy]: https://refactoring.guru/design-patterns/strategy
 [seam]: https://softwareengineering.stackexchange.com/questions/132563/problem-with-understanding-seam-word
 [indirection]: https://wiki.c2.com/?OneMoreLevelOfIndirection

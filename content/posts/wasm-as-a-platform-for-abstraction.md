@@ -2124,4 +2124,4 @@ parts of my project.
 [bg-issue]: https://github.com/rust-lang/rust-bindgen/issues/1583
 [ct]: https://rust-lang.github.io/rustc-guide/compiletest.html
 [empty-linkname.rs]: https://github.com/rust-lang/rust/blob/cf7e019b42cd523d91cb350ab49acbda1b11e571/src/test/ui/empty/empty-linkname.rs
-[empty-linkname.stderr]: https://github.com/rust-lang/rust/blob/master/src/test/ui/empty/empty-linkname.stderr
+[empty-linkname.stderr]: https://github.com/rust-lang/rust/blob/main/src/test/ui/empty/empty-linkname.stderr

@@ -634,10 +634,10 @@ each other][decoupling] and the larger application, etc.).
 [octo]: https://octoprint.org/
 [m4]: https://www.machsupport.com/software/mach4/
 [linux-cnc]: http://linuxcnc.org/
-[bs]: https://bootstrap-vue.js.org/docs/
-[bs-v]: https://bootstrap-vue.js.org/
-[accordian]: https://bootstrap-vue.js.org/docs/components/collapse#accordion-support
-[tabs]: https://bootstrap-vue.js.org/docs/components/tabs#basic-usage
-[if]: https://bootstrap-vue.js.org/docs/components/form#inline-form
+[bs]: https://bootstrap-vue.org/docs/
+[bs-v]: https://bootstrap-vue.org/
+[accordian]: https://bootstrap-vue.org/docs/components/collapse
+[tabs]: https://bootstrap-vue.org/docs/components/tabs
+[if]: https://bootstrap-vue.org/docs/components/form
 [decoupling]: {{% ref "posts/top-level-infrastructure/index.md#inter-system-communication" %}}
 [messages]: {{% ref "posts/comms-part-2/index.md#making-sense-of-messages" %}}
