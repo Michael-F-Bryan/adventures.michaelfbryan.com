@@ -103,7 +103,7 @@ so there's an `Image` class which inherits from `GraphicalEntity`. However an
 `Image` is drawn completely differently to a `Line` or `Circle`, so the `stroke`
 property we introduced earlier is just bloat.
 
-{{< mermaid >}}
+```mermaid
 classDiagram
   GraphicalEntity <|-- Line
   GraphicalEntity <|-- Spline
@@ -115,7 +115,7 @@ classDiagram
 
   Circle: Colour fill_colour
   Image: byte[] pixel_buffer
-{{< /mermaid >}}
+```
 
 Okay, so maybe our original inheritance hierarchy adds some unnecessary bloat
 but it's not the end of the world... right?
@@ -129,7 +129,7 @@ give the `GraphicalEntity` class some `decompose()` method because that just
 wouldn't make sense for `Image`, so let's introduce an intermediate
 `DecomposableEntity`.
 
-{{< mermaid >}}
+```mermaid
 classDiagram
   GraphicalEntity <|-- DecomposableEntity
   GraphicalEntity <|-- Image
@@ -147,7 +147,7 @@ classDiagram
 
   Circle: Colour fill_colour
   Image: byte[] pixel_buffer
-{{< /mermaid >}}
+```
 
 While we're at it we also want to have [hatching][hatch], a common drafting
 technique used to show which areas of a drawing are part of the same thing.
@@ -159,7 +159,7 @@ property.
 But hang on... doesn't `Circle` also have a `fill_colour` property? What if we
 DRY things up by creating a new class called `DecomposableEntityWithFill`?
 
-{{< mermaid >}}
+```mermaid
 classDiagram
   GraphicalEntity <|-- DecomposableEntity
   GraphicalEntity <|-- Image
@@ -179,7 +179,7 @@ classDiagram
 
   Image: byte[] pixel_buffer
   DecomposableEntityWithFill: Colour fill_colour
-{{< /mermaid >}}
+```
 
 The diagonal lines in a `Hatch` don't actually exist on the drawing though.
 Instead they're rendered a fixed distance apart regardless of the zoom level,

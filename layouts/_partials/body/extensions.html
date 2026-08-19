@@ -1,0 +1,13 @@
+{{ if .Store.Get "hasMermaid" }}
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.13.0/dist/mermaid.min.js"
+  integrity="sha256-PiACvzM5B/rnwdaGC7x49dpBe8cLZPPSJoWBuguouWo=" crossorigin="anonymous"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    flowchart: {
+      useMaxWidth: false,
+      htmlLabels: true
+    }
+  });
+</script>
+{{ end }}

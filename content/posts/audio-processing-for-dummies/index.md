@@ -146,7 +146,7 @@ enum State {
 
 Our state machine diagram looks roughly like this:
 
-{{< mermaid >}}
+```mermaid
 graph TD;
 
   linkStyle default interpolate basis;
@@ -161,7 +161,7 @@ graph TD;
   Closing-- remaining_samples > 0 -->Closing;
   Closed-- above threshold -->Open;
   Closed-- below threshold -->Closed;
-{{< /mermaid >}}
+```
 
 We'll be using some abstractions, namely [`Frame`][frame] and
 [`Sample`][sample] from the [`sample` crate][sample-crate], to make the

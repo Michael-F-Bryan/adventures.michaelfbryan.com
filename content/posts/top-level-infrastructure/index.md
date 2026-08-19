@@ -111,7 +111,7 @@ setup before polling the various systems ad infinitum.
 
 Our app's dependency graph may look something like this:
 
-{{< mermaid >}}
+```mermaid
 graph BT;
     H[Hardware Abstraction Layer];
     B[In-Browser Simulator];
@@ -129,7 +129,7 @@ graph BT;
     S-->B;
     P-->B;
     C-->B;
-{{< /mermaid >}}
+```
 
 ## Hello, World!
 

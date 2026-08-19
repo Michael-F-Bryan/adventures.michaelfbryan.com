@@ -34,7 +34,7 @@ There are several ways to transition between control modes.
 
 This all combines to make an interesting state machine diagram.
 
-{{< mermaid >}}
+```mermaid
 graph LR;
     A[Automation];
     I((Idle));
@@ -61,7 +61,7 @@ graph LR;
     linkStyle 9 stroke:green;
     M-- Fault -->I;
     linkStyle 10 stroke:red;
-{{< /mermaid >}}
+```
 
 You may also notice that a lot of the transitions are in response to a message
 from the user via our *Communications* system. This means we'll end up declaring

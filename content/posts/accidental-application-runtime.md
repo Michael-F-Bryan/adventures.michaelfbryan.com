@@ -128,7 +128,7 @@ The uniform `ctx`-and-`error` shape also makes lifecycle and failure part of the
 
 Here's the rough shape we're heading towards, using a slice of the print farm — modules in boxes, typed topics on the arrows, resources dashed:
 
-{{< mermaid >}}
+```mermaid
 graph LR
     pc[(printer clients)] -.-> mon[MonitorPrinters]
     store[(job store)] -.-> sched[ScheduleJobs]
@@ -136,7 +136,7 @@ graph LR
     sched -- AssignmentReady --> run[RunJobs]
     pc -.-> run
     run -- JobFinished --> sched
-{{< /mermaid >}}
+```
 
 Notice the loop: completions feed back into scheduling. This is a system of peers, not a pipeline that terminates at a web handler.
 
@@ -525,7 +525,7 @@ The graceful-shutdown request that started all of this is now the boring part: `
 
 And because `New` never executed anything, the same declarations render the architecture. `fmt.Print(app.Graph().Mermaid())` emits this, verbatim:
 
-{{< mermaid >}}
+```mermaid
 graph LR
   n0["MonitorPrinters"]
   n1["SyncBackend"]
@@ -571,7 +571,7 @@ graph LR
   n14 --> n5
   n13 --> n5
   n5 --> n12
-{{< /mermaid >}}
+```
 
 This is the whiteboard sketch from back when we were diagnosing the problem — except nobody drew it, maintains it, or gets to be wrong about it. It's derived from the same signatures that `Run` executes, so it can't drift, and regenerating it after a refactor takes one command.
 
