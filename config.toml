@@ -1,7 +1,7 @@
 baseurl = "https://adventures.michaelfbryan.com/"
 title = "Michael-F-Bryan"
 theme = "hugo-coder"
-languagecode = "en"
+locale = "en"
 defaultcontentlanguage = "en"
 
 canonifyurls = false
