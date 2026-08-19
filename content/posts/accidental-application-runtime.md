@@ -33,21 +33,21 @@ func NewServer(cfg Config) (*Server, error) {
 		state:    newStateCache(),
 	}
 
-	go s.watchPrinters(context.Background())  // the dashboard needs live state
-	go s.pullJobs(context.Background())       // jobs arrive from the backend
-	go s.schedule(context.Background())       // idle printer + queued job → assignment
-	go s.runAssignments(context.Background()) // someone has to actually print things
-	go s.reportUpstream(context.Background()) // the backend wants status reports
+	go s.watchPrinters()  // the dashboard needs live state
+	go s.pullJobs()       // jobs arrive from the backend
+	go s.schedule()       // idle printer + queued job → assignment
+	go s.runAssignments() // someone has to actually print things
+	go s.reportUpstream() // the backend wants status reports
 
 	return s, nil
 }
 ```
 
-I want to be clear that there is no incompetence on display here. Every line was the natural next step at the time it was written. The application works. It prints things. And yet this setup code is hiding a problem that has nothing to do with how long it is.
+There's nothing especially bad about this code. Each line was the natural next step at the time. The application works; it prints things. The problem isn't the length of the setup code, but that it now owns all of the application's long-running work.
 
 ## Then Someone Asks for Graceful Shutdown
 
-Here's how the problem announced itself. Deploying a new version of the service means killing the process, and killing the process mid-print ruins whatever was on the beds and leaves half-claimed jobs in limbo. So a very fair request lands on your desk: when the service receives `SIGTERM`, it should stop accepting new work, let the runner get each printer to a safe stopping point, record which assignments were interrupted so the next process can pick them up, and then exit.
+The problem showed up when somebody asked for graceful shutdown. Deploying a new version of the service means killing the process, and killing the process mid-print ruins whatever was on the beds and leaves half-claimed jobs in limbo. The request is simple enough: when the service receives `SIGTERM`, it should stop accepting new work, let the runner get each printer to a safe stopping point, record which assignments were interrupted so the next process can pick them up, and then exit.
 
 You sit down to thread cancellation through the code, and the questions start piling up. Which goroutines are even running? The only way to answer is to read the setup code and everything it calls. What order should they stop in? The scheduler feeds the runner through a channel — if the scheduler exits first, who closes it, and is the runner allowed to finish draining it? The puller and the reporter both talk to the backend; do they share a shutdown deadline? Every background failure so far has just been logged and forgotten, and now some of them are supposed to trigger an orderly teardown instead. And all of these answers have to be expressed *inside an HTTP server object*, because that's the thing that owns everything.
 
@@ -57,13 +57,13 @@ None of these questions is hard on its own. What makes this the moment you stop 
 
 Every application with more than one long-lived activity has a runtime in the small, whether or not anyone designed it: something decides what those activities are, what they're allowed to touch, how they hear about each other, and when they stop. We normally reserve the word "runtime" for the machinery underneath the language, but your application has one of its own. In the print-farm service, that setup code lives in `NewServer`. Nobody chose that. The HTTP server was simply the first object that needed the shared state, so it became the place where long-running things get born, and every later addition reinforced the pattern. That's what I mean by an *accidental* application runtime.
 
-The reason this is worth naming — and the reason "the setup code is too big" misses the point — is what it does to the architecture. The service genuinely has one: five concurrent components with reasonably crisp responsibilities and well-defined data flowing between them. You could sketch it on a whiteboard in a minute, once you'd worked it out. But no artefact in the codebase expresses it. The design exists only as the side effects of wiring code: a field here, a `go` statement there, a channel threaded through two private methods. The application has outgrown the structure it started with — "a web server with some helpers" stopped being a true description a long time ago — and nothing in the code acknowledges that a larger design has emerged. The architecture is real, but hidden.
+The reason this is worth naming — and the reason "the setup code is too big" misses the point — is what it does to the architecture. The service genuinely has one: five concurrent components with fairly clear responsibilities and well-defined data flowing between them. You could sketch it on a whiteboard in a minute, once you'd worked it out. But no artefact in the codebase expresses it. The design exists only as the side effects of wiring code: a field here, a `go` statement there, a channel threaded through two private methods. The application has outgrown the structure it started with — "a web server with some helpers" stopped being a true description a long time ago — and nothing in the code acknowledges that a larger design has emerged. The architecture is real, but hidden.
 
 Graceful shutdown happened to be the request that exposed this for me. For you it might be a component you can't test without standing up the whole process, or a new feature with no obvious home, or a new team member asking "what talks to what?" and watching you open six files to answer. The symptom varies; the underlying condition — an operating architecture that's visible only indirectly — is the same.
 
 It's also not really about HTTP. The same accretion happens to a CLI command's run function, the setup code around a message-queue consumer, a GUI main window, or a `main()` that grew organically. Wherever starting the application revolves around one convenient object, that object gradually becomes the runtime. HTTP servers are just unusually good hosts for the pattern, because they're long-lived, they're created early, and every feature eventually wants to show something to a user.
 
-A quick aside on provenance: none of this is hypothetical for me. The design in the rest of this article grew out of a real Go edge service that talks to hardware, whose details aren't mine to share — so the print-farm service was written fresh for this article as an independent example that recreates the same pressures. If it feels oddly specific in places, that's why.
+None of this is hypothetical. The design grew out of a real Go edge service that talks to hardware, whose details aren't mine to share. The print-farm service was written from scratch for this article to recreate the same pressures. If it feels oddly specific in places, that's why.
 
 ## A Detour Through PX4
 
@@ -97,12 +97,12 @@ Read that signature the way you'd read a sentence. This is a long-running activi
 
 That observation became a small library, which I've called `backplane`. A module is any `func(ctx context.Context, ...dependencies) error`, and each parameter after the context declares one dependency:
 
-| Parameter type | Meaning |
-| --- | --- |
-| `chan<- T` | publish to the topic carrying `T` |
-| `<-chan T` | subscribe to the topic carrying `T` |
+| Parameter type         | Meaning                                             |
+| ---------------------- | --------------------------------------------------- |
+| `chan<- T`             | publish to the topic carrying `T`                   |
+| `<-chan T`             | subscribe to the topic carrying `T`                 |
 | `*backplane.Latest[T]` | observe the most recent `T` (we'll get to this one) |
-| anything else | a resource supplied by the caller |
+| anything else          | a resource supplied by the caller                   |
 
 A topic is identified by the exact Go type flowing through it — no topic strings to typo, no schema compiler. Any number of modules can publish or subscribe to the same type, and every subscriber receives every value.
 
@@ -116,7 +116,7 @@ fmt.Print(app.Graph().Mermaid())
 err = app.Run(ctx, printers, store)
 ```
 
-`New` *records* the module signatures; it never calls a module. That laziness is load-bearing: because declaration is separated from execution, the same declarations can produce an architecture diagram without opening a database connection, and `Run` can validate the entire wiring before a single module starts. Registering a function is simultaneously writing executable code and writing down where that code sits in the design.
+`New` *records* the module signatures; it never calls a module. Keeping declaration separate from execution means the same signatures can produce an architecture diagram without opening a database connection, while `Run` can validate the entire wiring before a single module starts. Registering a function is simultaneously writing executable code and writing down where that code sits in the design.
 
 Two contracts are worth pausing on, because they're where the accidental version went wrong.
 
@@ -124,7 +124,7 @@ First, **messages versus resources**. `PrinterState` is a flow of values; the jo
 
 Second, **messages versus calls**. Nothing forces request/response work through the bus. When an HTTP handler needs to pause a job *and tell the user whether that worked*, a direct method call on the store is the honest contract, and the module simply declares the store as a resource. Topics are for events flowing between concurrent components, not a religion about how functions may talk to each other.
 
-The uniform `ctx`-and-`error` shape is also doing quiet work. Every module must accept a context, which means every module author is confronted with cancellation as part of the ordinary contract rather than as a retrofit — the thing the print-farm service couldn't do. And every module must return an `error`, which gives failures somewhere legitimate to go besides a log line inside a forgotten goroutine.
+The uniform `ctx`-and-`error` shape also makes lifecycle and failure part of the contract. Every module must accept a context, which means every module author is confronted with cancellation as part of the ordinary contract rather than as a retrofit — the thing the print-farm service couldn't do. And every module must return an `error`, which gives failures somewhere legitimate to go besides a log line inside a forgotten goroutine.
 
 Here's the rough shape we're heading towards, using a slice of the print farm — modules in boxes, typed topics on the arrows, resources dashed:
 
@@ -147,8 +147,6 @@ If you spot a bug, in the code or the prose, let me know on the blog's [issue tr
 [repo]: https://github.com/Michael-F-Bryan/backplane
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
 {{% /notice %}}
-
-What follows is a re-derivation rather than a diary: I'm introducing each piece at the point where the need for it becomes obvious, which is far tidier than the order any of it actually happened in.
 
 ## Reading Signatures
 
@@ -188,9 +186,9 @@ Around this sits `inspectModule`, which enforces the module shape — must be a 
 
 `Run(ctx, resources...)` has two jobs: bind the caller's resources to the declared parameters, and supervise the modules.
 
-Resource binding is deliberately boring. The caller passes already-created values — no providers, no factories — and each resource parameter binds to exactly one of them: by exact type match first, otherwise by *unique* assignability, so a concrete `*SQLiteJobStore` can satisfy a `JobStore` interface parameter without ceremony. Nil values, duplicate types, ambiguous matches, missing resources, and resources nothing asked for are all rejected before any module starts. That last one — rejecting *unused* resources — occasionally annoys me for about ten seconds, and then I remember that an unused resource is almost always a wiring mistake I'd rather hear about now.
+Resource binding stays simple. The caller passes already-created values — no providers, no factories — and each resource parameter binds to exactly one of them: by exact type match first, otherwise by *unique* assignability, so a concrete `*SQLiteJobStore` can satisfy a `JobStore` interface parameter without ceremony. Nil values, duplicate types, ambiguous matches, missing resources, and resources nothing asked for are all rejected before any module starts. That last one — rejecting *unused* resources — occasionally annoys me for about ten seconds, and then I remember that an unused resource is almost always a wiring mistake I'd rather hear about now.
 
-I did consider going further and letting the library create resources too, and decided firmly against it. In practice the composition root wants to be ordinary Go at the top of `main`: open the store, `defer store.Close()`, pass it in. The moment the runtime owns resource creation, it needs ordering, error policies, health checks, and cleanup — and it has quietly become a dependency-injection framework, which is a much bigger thing than I ever wanted. It would also wreck the laziness: needing a live database connection to render an architecture diagram is silly. Backplane binds values; owning them is your job.
+I did consider going further and letting the library create resources too, and decided firmly against it. In practice the composition root wants to be ordinary Go at the top of `main`: open the store, `defer store.Close()`, pass it in. The moment the runtime owns resource creation, it needs ordering, error policies, health checks, and cleanup — and it has become a dependency-injection framework, which is a much bigger thing than I ever wanted. It would also wreck the laziness: needing a live database connection to render an architecture diagram is silly. Backplane binds values; owning them is your job.
 
 Supervision is `errgroup` semantics, because those are the semantics I always end up wanting anyway:
 
@@ -296,7 +294,7 @@ func (t *topic) deliver(value reflect.Value, contextDone reflect.SelectCase) boo
 
 The delivery contract that falls out of this is easy to state and important to internalise: **delivery is in-process, memory-only, and backpressured**. A publish blocks until every subscriber has accepted the value, so a module must treat every send as potentially blocking. There is no durability, no replay, no retry, no acknowledgement. If losing a message would matter after a crash, the message was never the right place for that information — more on this when we rebuild the print farm.
 
-The subtleties are all about endings, which is fitting for a design that was born from a shutdown problem:
+Most of the subtlety is in shutdown and completion:
 
 - **A topic completes when every module publishing to it has returned** — at
   which point the subscriber channels are closed, so
@@ -367,7 +365,7 @@ Notice what happened to HTTP. `ServeHTTP` is a real module with real dependencie
 
 The subtlest contract in the system is between the store and the bus, and it's worth spelling out because in-process buses make it very easy to lie to yourself about durability. `QueueChanged` and `AssignmentReady` are *notifications about* durable state, never the state itself. Any durable mutation follows commit-then-notify: `ScheduleJobs` claims a job in SQLite *first*, and only then announces `AssignmentReady` to wake the runner. If the process dies between the two, the claim is still in the store, and both the scheduler and runner begin by reconciling against the store rather than waiting to be told — a notification that fired in a previous process is gone forever, and the design has to be indifferent to that. The bus is a wake-up call, not a ledger.
 
-With that in mind, the scheduler is almost boring — which is the point:
+With that in mind, the scheduler is small enough to read in one pass:
 
 ```go
 func ScheduleJobs(
@@ -408,7 +406,7 @@ func ScheduleJobs(
 
 ## Streams Versus State
 
-There's one contract I've been deferring, and the rebuild is what forces it into the open. Look at who consumes `FarmState` and `JobProgress`: the HTTP module, for GET endpoints and an SSE stream to however many browser tabs happen to be open; and the backend sync module, which snapshots the farm every thirty seconds for its report.
+Rebuilding the print farm exposes one more contract. Look at who consumes `FarmState` and `JobProgress`: the HTTP module, for GET endpoints and an SSE stream to however many browser tabs happen to be open; and the backend sync module, which snapshots the farm every thirty seconds for its report.
 
 A declared subscriber is the wrong contract for both. Backpressured delivery means every subscriber can slow the publisher down — which is exactly what you want between the runner and the scheduler, and exactly what you *don't* want between the runner and someone's phone on hotel Wi-Fi. A dashboard doesn't need every intermediate progress value anyway; it needs the current one, promptly, and the freedom to miss the ones in between. A periodic reporter is even more extreme: it wants to ask "what's the state right now?" twice a minute and ignore everything else.
 
@@ -455,7 +453,7 @@ With `Latest`, the SSE handler collapses into something you'd be happy to review
 
 ## Testing the Pieces
 
-There's a quiet payoff hiding in all of this: the module boundaries are real enough to test against. Because modules are ordinary functions, testing the scheduler needs no bus, no HTTP server, and no printers — just channels and a fake store:
+The module boundaries also make testing straightforward. Because modules are ordinary functions, testing the scheduler needs no bus, no HTTP server, and no printers — just channels and a fake store:
 
 ```go
 func TestSchedulerAssignsQueuedJobToIdlePrinter(t *testing.T) {
@@ -488,13 +486,13 @@ func TestSchedulerAssignsQueuedJobToIdlePrinter(t *testing.T) {
 }
 ```
 
-That test reads like a conversation with the module: a printer went idle, so I expect an assignment, and it had better have hit the store before it hit the wire. Concurrent behaviour — the thing that's usually miserable to test — is exercised directly through the same typed channels the runtime would provide, and the commit-then-notify ordering is one assertion instead of a prayer.
+The test stays at the module boundary: a printer went idle, so an assignment should appear, and the store must be updated before the event is published. Concurrent behaviour — usually miserable to test — is exercised directly through the same typed channels the runtime would provide, and the commit-then-notify ordering is one assertion instead of a prayer.
 
 When you do want to test the wiring rather than one module, you assemble a small backplane out of test modules — a publisher that injects events, the module under test, a subscriber that records output — and `Run` it. The library's own test suite works this way, and it's also where every contract from the delivery section is pinned down: sibling survival after a `nil` return, first-error cancellation, blocked publishers unwinding on shutdown, abandoned subscriptions, the lot. Those tests exist once, in the library — instead of implicitly, nowhere, in every application.
 
 ## The Graph at the End
 
-One more payoff. Assembling the finished service looks like this — resources created and owned at the top of `main`, just as before, and every `go` statement from the old setup code now a name in a list:
+Putting the finished service together looks like this — resources created and owned at the top of `main`, just as before, and every `go` statement from the old setup code now a name in a list:
 
 ```go
 ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -606,9 +604,9 @@ If you squint, what's left is the slice of the microservices pitch I actually fi
 
 The library was the easy part; a capable Go programmer could rebuild it from this article without much trouble, and you're welcome to. The part I'd actually like you to take away is the diagnosis.
 
-Somewhere in a codebase near you, there's a piece of setup code — perhaps a run function or a consumer loop — that starts goroutines it has no particular right to own, because it happened to be standing nearby when each of them needed a home. The application it belongs to has probably outgrown the structure it started with, and its real architecture is in there, working, invisible. Next time you're in that code, before reaching for a service boundary or a framework, try asking the smaller question first: *what are the long-running parts of this application, what flows between them, and where is any of that written down?*
+The pattern to watch for is setup code — perhaps a run function or a consumer loop — that starts several goroutines simply because it already has access to their dependencies. The application may have outgrown its original structure even though the real architecture is still only visible in its wiring. Before reaching for a service boundary or a framework, try asking the smaller question first: *what are the long-running parts of this application, what flows between them, and where is any of that written down?*
 
-If the answer is "nowhere", that's not a failing to be ashamed of — it's just the code telling you a design has emerged and would like to be acknowledged. Writing it down might mean a bus like this one, or it might not. Making the hidden architecture explicit is the move; everything else is mechanism.
+If the answer is "nowhere", that doesn't mean the code is bad. It means a design has emerged without being written down. A bus like this one is one way to make it explicit, but the mechanism is secondary. The important part is writing down the architecture the application already has.
 
 [px4]: https://px4.io/
 [px4-arch]: https://docs.px4.io/main/en/concept/architecture
