@@ -118,12 +118,6 @@ err = app.Run(ctx, printers, store)
 
 `New` *records* the module signatures; it never calls a module. Keeping declaration separate from execution means the same signatures can produce an architecture diagram without opening a database connection, while `Run` can validate the entire wiring before a single module starts. Registering a function is simultaneously writing executable code and writing down where that code sits in the design.
 
-## Why Not Wire It Explicitly?
-
-Ordinary module functions, explicitly constructed channels, and an `errgroup` are the baseline, not a lesser design. They already give you explicit dependencies, cancellation, joining, and functions you can test directly. If that composition root remains easy to read, I would keep it.
-
-Backplane earns its place when the same mechanics start repeating: fan-out and topic completion, validation before anything starts, type-based resource binding, and a topology derived from the declarations that actually run. The point is not that every concurrent Go service needs a runtime library. It is that once those contracts have become application infrastructure, writing them once is better than rebuilding them around every goroutine.
-
 Two contracts are worth pausing on, because they're where the accidental version went wrong.
 
 First, **messages versus resources**. `PrinterState` is a flow of values; the job store is a capability. The accidental runtime blurred these — the state cache, the store, and the subscriptions all lived as fields on one struct, and everything touched everything. Here, a stream is a channel parameter and a resource is any other parameter, and the two are wired completely differently.
@@ -155,6 +149,12 @@ If you spot a bug, in the code or the prose, let me know on the blog's [issue tr
 [repo]: https://github.com/sunfish-robotics/backplane
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
 {{% /notice %}}
+
+## Why Not Wire It Explicitly?
+
+Ordinary module functions, explicitly constructed channels, and an `errgroup` are the baseline, not a lesser design. They already give you explicit dependencies, cancellation, joining, and functions you can test directly. If that composition root remains easy to read, I would keep it.
+
+Backplane earns its place when the same mechanics start repeating: fan-out and topic completion, validation before anything starts, type-based resource binding, and a topology derived from the declarations that actually run. The point is not that every concurrent Go service needs a runtime library. It is that once those contracts have become application infrastructure, writing them once is better than rebuilding them around every goroutine.
 
 ## Reading Signatures
 
@@ -232,7 +232,7 @@ for _, inv := range invocations {
 return group.Wait()
 ```
 
-A module returning `nil` finishes quietly and its siblings carry on — a finite publisher is a perfectly normal module, not a special kind. The first module to return an error cancels every sibling's context. Cancelling the context you passed to `Run` shuts the whole application down. And `Run` doesn't return until every module has, so "the process exited" means "every component actually stopped", not "main fell off the end". That gives errors a strong meaning: modules absorb or retry recoverable failures, returning an error means the application cannot safely continue, and returning `nil` means the component intentionally completed. The deferred bookkeeping — `inv.done` and `publisherDone()` — is each module telling its topics that it's finished; the next section is about why they care.
+A module returning `nil` finishes quietly and its siblings carry on — a finite publisher is a perfectly normal module, not a special kind. The first module to return an error cancels every sibling's context. Cancelling the context you passed to `Run` shuts the whole application down. And `Run` doesn't return until every module has, so "the process exited" means "every component actually stopped", not "main fell off the end". That gives errors a strong meaning: modules absorb or retry recoverable failures, and returning an error means the application cannot safely continue. The deferred bookkeeping — `inv.done` and `publisherDone()` — is each module telling its topics that it's finished; the next section is about why they care.
 
 One deliberate omission: there is no way to add a module while the application is running. The set is fixed at `New`. A module that needs short-lived workers spawns its own goroutines, joins them before returning, and folds their failures into its own error — that's an implementation detail of the module, not a new node in the architecture. Every use case I came up with for dynamic registration was served better by a static module that sits mostly idle, and keeping the set fixed is precisely what makes the graph trustworthy.
 
@@ -372,7 +372,7 @@ func BuildFarmState(ctx context.Context, printers <-chan PrinterState,
 
 Notice what happened to HTTP. `ServeHTTP` is a real module with real dependencies — it can pause a job through the store and answer for the result — but it's one peer among six. It no longer gives birth to anything. Notice, too, `BuildFarmState`: a module that consumes three topics and publishes a derived one, with no I/O at all. The accidental runtime had this logic as a cache bolted onto the server; here it's a first-class component you can read, replace, or test on its own.
 
-The subtlest contract in the system is between the store and the bus, and it's worth spelling out because in-process buses make it very easy to lie to yourself about durability. `QueueChanged` and `AssignmentReady` are *notifications about* durable state, never the state itself. Any durable mutation follows commit-then-notify: `ScheduleJobs` claims a job in SQLite *first*, and only then announces `AssignmentReady` to wake the runner. If the process dies between the two, the claim is still in the store, and both the scheduler and runner begin by reconciling against the store rather than waiting to be told — a notification that fired in a previous process is gone forever, and the design has to be indifferent to that. The bus is a wake-up call, not a ledger.
+The subtlest contract in the system is between the store and the bus, and it's worth spelling out because in-process buses make it very easy to lie to yourself about durability. `QueueChanged` and `AssignmentReady` are *notifications about* durable state, never the state itself. Any durable mutation follows commit-then-notify: `ScheduleJobs` claims a job in SQLite *first*, and only then announces `AssignmentReady` to wake the runner. If the process dies between the two, the claim is still in the store. After restart, the scheduler and runner reconcile against the store rather than treating a notification as evidence — a notification that fired in a previous process is gone forever, and the design has to be indifferent to that. The bus is a wake-up call, not a ledger.
 
 With that in mind, the scheduler is small enough to read in one pass:
 
@@ -386,11 +386,6 @@ func ScheduleJobs(
 	assignments chan<- AssignmentReady,
 ) error {
 	printers := map[PrinterID]PrinterState{}
-
-	// Recover work that was queued before this process existed.
-	if err := assignWork(ctx, jobs, printers, assignments); err != nil {
-		return err
-	}
 
 	for {
 		select {
@@ -423,7 +418,7 @@ func ScheduleJobs(
 }
 ```
 
-Here closure disables that input by replacing it with a nil channel. If a particular application's scheduler should stop when one of its producers finishes, it can return instead; the important part is distinguishing closure from a real zero value.
+When one of those channels closes, the loop disables it by setting it to nil. If a particular application's scheduler should stop when one of its producers finishes, it can return instead; the important part is distinguishing closure from a real zero value.
 
 `assignWork` finds idle printers, asks the store for the highest-priority job each is capable of printing, durably claims the pair, and announces it. The scheduling rule itself could grow much smarter without anything else in the system changing, because everything it knows arrives through those parameters.
 
@@ -509,7 +504,7 @@ func TestSchedulerAssignsQueuedJobToIdlePrinter(t *testing.T) {
 }
 ```
 
-The test stays at the module boundary: a printer went idle, so an assignment should appear, and the store must be updated before the event is published. Concurrent behaviour — usually miserable to test — is exercised directly through the same typed channels the runtime would provide, and the commit-then-notify ordering is one assertion instead of a prayer.
+The test stays at the module boundary: a printer went idle, so an assignment should appear, and the store must be updated before the event is published. Concurrent behaviour — usually miserable to test — is exercised directly through the same typed channels the runtime would provide, and the commit-then-notify ordering becomes an assertion at the module boundary.
 
 When you do want to test the wiring rather than one module, you assemble a small backplane out of test modules — a publisher that injects events, the module under test, a subscriber that records output — and `Run` it. The library's own test suite works this way, and it's also where every contract from the delivery section is pinned down: sibling survival after a `nil` return, first-error cancellation, blocked publishers unwinding on shutdown, abandoned subscriptions, the lot. Those tests exist once, in the library — instead of implicitly, nowhere, in every application.
 
