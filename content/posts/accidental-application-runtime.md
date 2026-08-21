@@ -1,6 +1,6 @@
 ---
 title: The Accidental Application Runtime
-date: '2026-08-19T21:00:00+08:00'
+date: '2026-08-21T18:00:00+08:00'
 tags:
 - Go
 - Architecture
