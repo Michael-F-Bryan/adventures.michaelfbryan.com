@@ -152,7 +152,7 @@ That loop also creates a liveness constraint. Fan-out is sequential and backpres
 
 If you spot a bug, in the code or the prose, let me know on the blog's [issue tracker][issue]!
 
-[repo]: https://github.com/Michael-F-Bryan/backplane
+[repo]: https://github.com/sunfish-robotics/backplane
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
 {{% /notice %}}
 
