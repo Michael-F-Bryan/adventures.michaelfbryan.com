@@ -5,3 +5,6 @@ tmp/
 
 # Scratch space used by Cursor
 _working/
+
+# Vercel build cache
+.vercel/
