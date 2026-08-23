@@ -131,11 +131,7 @@ func AssertFileTreeMatches(t *testing.T, expectedDir, targetDir string) {
 
 	pruneEmptyDirs(targetDir)
 }
-```
 
-{{% expand "The file-walking helpers" %}}
-
-```go
 // readTree walks dir and returns its file contents keyed by path relative to
 // dir. A missing dir is treated as an empty tree so the first run of
 // AssertFileTreeMatches against a not-yet-created target directory works.
@@ -184,8 +180,6 @@ func pruneEmptyDirs(dir string) {
 	}
 }
 ```
-
-{{% /expand %}}
 
 The deletion pass distinguishes this helper from calling `EnsureFileContents()` in a loop. Because stale files get removed, the target directory has to be *wholly owned* by the generator. A handwritten file dropped into that directory will survive until the next test run. Put generated output in its own directory, with the ownership clear from its name or a README.
 
@@ -356,8 +350,6 @@ A test that boots a container, provisions a database, or touches the network cha
 
 The generated code has a slower cost too. A 216,000-line client bloats clones and history, and every regeneration produces diffs that no human will read line by line. Reviewers adapt by skimming, which makes it easier for an important change to slip through. Vendoring the schema gives reviewers a smaller contract-level diff to focus on, but the repository cost remains. No single regeneration makes the project obviously worse, so the effect can take time to notice.
 
-Generated trees need an unambiguous ownership boundary, because the reconciler deletes what it doesn't recognise. Generated files should announce themselves with a `// Code generated ... DO NOT EDIT.` header and are not a customisation seam. Necessary changes belong in the authoritative source, the generator, or an explicit deterministic post-processing stage like the normalisation step above. If every consumer can regenerate the output cheaply and reproducibly, build-time generation may be simpler, at the price of the navigation, documentation, and reviewability that committed code provides.
-
 ## When It Fits
 
 The clearest trigger is noticing that a project has acquired a CLI incantation somebody must remember to run. Unless the project will never evolve, that instruction is easy to miss. Putting the derivation in a test gives the project an executable check instead.
@@ -366,7 +358,7 @@ The second half of the judgement is about the generation itself, because the tes
 
 None of this means you should go hunting for places to introduce code generation this week. It's a tool-belt pattern to recognise when a useful derivation starts depending on human memory.
 
-Next time you catch yourself writing "after changing X, remember to run Y" in a README, that is a reasonable point to consider this pattern. It won't remove the cost of generation, but it can remove one fragile instruction from the project.
+Next time you catch yourself writing *"after changing X, remember to run Y"* in a README, that is a reasonable point to consider this pattern. It won't remove the cost of generation, but it can remove one fragile instruction from the project.
 
 [self-modifying-code]: https://matklad.github.io/2022/03/26/self-modifying-code.html
 [ungrammar]: https://rust-analyzer.github.io/blog/2020/10/24/introducing-ungrammar.html
