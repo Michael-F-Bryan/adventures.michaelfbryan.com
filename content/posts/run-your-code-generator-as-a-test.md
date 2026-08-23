@@ -14,9 +14,9 @@ At some point in a project's life, somebody runs a code generator. Maybe they po
 
 That sentence is where the trouble starts. The project now contains two representations of the same information, an authoritative one and a derived one, and the only thing keeping them consistent is a human remembering to run a command.
 
-I've used a pattern for years that removes the remembering: run the generator from the test suite, compare its output against what's checked in, repair any difference, and fail the test so the change still gets reviewed. It's a small amount of code, it works with any deterministic generator, and once it's in place the derived code simply can't drift without CI telling you about it. This article walks through the two helpers that make it work, a complete worked example that generates a Go client from a running web application, and the costs you accept by adopting it.
+I've used a pattern for years: run the generator from the test suite, compare its output against what's checked in, repair any difference, and fail the test so the change still gets reviewed. It's a small amount of code and works with any deterministic generator. CI then has a way to report drift instead of relying on a README instruction.
 
-## The Command Somebody Has to Remember
+## How Generated Code Drifts
 
 A one-off generation is fine on the day it happens. The generated code matches its source because both were touched in the same sitting, and everybody involved still remembers how the pieces fit together. The problem is that projects evolve, and the moment either side can change, the derivation can rot in two different directions.
 
@@ -24,7 +24,7 @@ The first direction is the obvious one: the authoritative input changes and nobo
 
 The second direction is sneakier. Somebody needs a small change, notices it would be quickest to make it in the generated file, and patches it directly. The patch works, it gets committed, and it quietly becomes load-bearing. Months later somebody else re-runs the generator for an unrelated reason and the patch evaporates, usually without anyone noticing until whatever depended on it breaks.
 
-Both failures have the same root cause. Re-running the generator is a task that is almost always redundant; 99% of the time the output wouldn't change, so there's no feedback loop teaching anyone to do it. Humans are bad at remembering rarely-needed chores, and a README can document the command but can't make anyone run it. If keeping two representations consistent matters, the check needs to be executable, and the natural place for an executable check is the test suite. CI already runs it, and every developer already knows what a red test means.
+Both failures have the same root cause. Re-running the generator is almost always redundant; 99% of the time the output wouldn't change, so there's no feedback loop teaching anyone to do it. Humans are bad at remembering rarely-needed chores. A README can document the command, but the test suite can run it in CI and give developers a familiar red test when the representations diverge.
 
 ## Run the Generator From a Test
 
@@ -72,9 +72,7 @@ func TestLookupTableIsUpToDate(t *testing.T) {
 }
 ```
 
-The behaviour on drift looks strange the first time you see it: the helper *fixes* the file and then fails anyway. Why not just fix it and pass, or fail without touching anything?
-
-Because each half of that behaviour serves a different audience. Writing the file means a developer who runs the test locally is left with the correct output sitting in their working tree, as a concrete diff they can read in their usual tools, rather than a wall of "expected X, got Y" output and a chore still ahead of them. Failing the test means CI can never go green on a commit whose generated code didn't match its source, because CI's rewritten file is thrown away with the build machine. The failure message tells the developer exactly what happened and what to do next: inspect the diff, commit it, rerun. On the second run the file already matches and the test passes. Every regeneration therefore passes through a human and through code review, exactly like a handwritten change would.
+The behaviour on drift looks strange the first time you see it: the helper *fixes* the file and then fails anyway. Writing the file leaves a developer running the test locally with a concrete diff to inspect, rather than a wall of expected-versus-actual output and another command to run. Failing the test keeps CI red, because any rewrite made on the build machine disappears with it. The next run sees matching contents and passes.
 
 ### `AssertFileTreeMatches()`
 
@@ -189,13 +187,13 @@ func pruneEmptyDirs(dir string) {
 
 {{% /expand %}}
 
-The deletion pass is what makes this helper genuinely different from calling `EnsureFileContents()` in a loop, and it's also where the sharpest edge lives. Because stale files get removed, the target directory has to be *wholly owned* by the generator. A handwritten file dropped into that directory will survive exactly until the next test run. That's a boundary worth establishing deliberately: generated output goes in its own directory, handwritten code lives elsewhere, and the directory's ownership is obvious from its name or a README inside it.
+The deletion pass distinguishes this helper from calling `EnsureFileContents()` in a loop. Because stale files get removed, the target directory has to be *wholly owned* by the generator. A handwritten file dropped into that directory will survive until the next test run. Put generated output in its own directory, with the ownership clear from its name or a README.
 
-With both helpers in hand, the overall contract is worth spelling out once. The authoritative input (the schema, the migrations, the grammar) remains the only place where intentional changes happen. The test regenerates the derived code exactly and compares it byte-for-byte, which catches both drift directions from earlier: stale output when the source changed, and manual edits to the output itself. And because the output is checked in rather than produced at build time, everyone downstream still gets the good parts of committed code: jump-to-definition, autocomplete, docs rendered from the source, diffs that show up in review, and no requirement that every consumer has the generator toolchain installed.
+Together, the helpers establish the contract. The authoritative input (the schema, the migrations, the grammar) is where intentional changes happen. The test regenerates the derived code and compares it byte-for-byte, so changes to either side show up as a failing test. Checked-in output still gives downstream users jump-to-definition, autocomplete, rendered documentation, reviewable diffs, and no requirement to install the generator toolchain.
 
-## Generate a Client From a Running API
+## A Real OpenAPI Client
 
-To show the whole pattern working end to end, I want a generator that somebody would actually use, against a source of truth that actually changes. Generating an API client from a real application's OpenAPI document fits both requirements, so the worked example uses [Mealie][mealie], a self-hosted recipe manager and meal planner with a FastAPI backend. Mealie ships as a single container, publishes versioned images, and serves a live OpenAPI 3.1 document from `/openapi.json`. It's standing in for whatever service your project consumes; the interesting part is the derivation, not the recipes.
+The worked example uses [Mealie][mealie], a self-hosted recipe manager and meal planner with a FastAPI backend. Mealie ships as a single container, publishes versioned images, and serves a live OpenAPI 3.1 document from `/openapi.json`. It stands in for whatever service your project consumes; the interesting part is the derivation, not the recipes.
 
 The test we're building does the following, every time the suite runs:
 
@@ -227,9 +225,9 @@ func TestMealieClientIsUpToDate(t *testing.T) {
 }
 ```
 
-One design decision is invisible in that listing but important: this test never imports the generated client. If a bad schema ever produces a client that doesn't compile, a test that imported it couldn't build either, and the one tool capable of regenerating a working client would be broken by the very problem it exists to fix. Keeping the codegen test free of dependencies on its own output preserves the repair path.
+This test never imports the generated client. If a bad schema produces a client that doesn't compile, a test that imported it couldn't build either. The codegen test must remain independent of its output so it can still repair it.
 
-### Capture the API Description
+### Fetch and Stabilise the Schema
 
 The container setup is ordinary `os/exec` plumbing around Docker, so I'll show the parts that carry decisions and describe the rest. The image is pinned by both tag and digest, which makes the test's answer to "which version of the API are we generating against?" exact:
 
@@ -258,7 +256,7 @@ func startMealie(t *testing.T) (baseURL string) {
 
 Publishing onto a Docker-assigned ephemeral port means two copies of the test can run at once without fighting over a port number, and `t.Cleanup` removes the container even when the test fails. Readiness is a polling loop against `GET /api/app/about`, which conveniently also reports the running application's version, so the test log records which release actually answered.
 
-Fetching `/openapi.json` is a plain HTTP GET. Vendoring the response verbatim doesn't work, though, and the reasons are worth separating carefully because they're two different problems that are easy to blur together.
+Fetching `/openapi.json` is a plain HTTP GET. Vendoring the response verbatim doesn't work, for two separate reasons.
 
 The first problem is a generator capability gap. `ogen` v1.24.0 can't generate code for a handful of OpenAPI features that Mealie's document happens to use, most notably object-valued `default` values (23 of them). That's handled entirely in `ogen`'s own config file, without touching the JSON:
 
@@ -316,35 +314,35 @@ Two details here. Invoking `ogen` through `go run` against a `tool` directive in
 codegen.AssertFileTreeMatches(t, generatedDir, "client")
 ```
 
-I'd like to say the example worked first try, but the second run of the test failed, and the failure is a better advertisement for the pattern than a clean run would have been. Mealie's document attaches `default` as a sibling of `$ref` in 52 places, and one referenced enum (`PlanEntryType`) is given *conflicting* defaults by different parents: `"breakfast"` in three places, `"dinner"` in one. `ogen` resolves that conflict in whatever order it happens to walk a map, so `oas_defaults_gen.go` genuinely flip-flopped between `PlanEntryType("dinner")` and `PlanEntryType("breakfast")` on consecutive runs. The test reported the file as drifted, overwrote it, and failed, which is exactly what it's supposed to do when generation isn't deterministic; it just found the nondeterminism in the toolchain rather than in a colleague's manual edit. The fix went into the normalisation step: drop every `default` that sits beside a `$ref`. Those siblings are legal in OpenAPI 3.1, but when four parents disagree about a referenced schema's default there is no single value that can be preserved deterministically, so for this generator those defaults carry no information worth vendoring. After that, back-to-back runs against fresh containers pass.
+The second run of the test exposed another determinism problem. Mealie's document attaches `default` as a sibling of `$ref` in 52 places, and one referenced enum (`PlanEntryType`) is given *conflicting* defaults by different parents: `"breakfast"` in three places, `"dinner"` in one. `ogen` resolves that conflict in whatever order it happens to walk a map, so `oas_defaults_gen.go` genuinely flip-flopped between `PlanEntryType("dinner")` and `PlanEntryType("breakfast")` on consecutive runs.
 
-### Review a Version Bump
+The test reported the file as drifted, overwrote it, and failed. The fix went into the normalisation step: drop every `default` that sits beside a `$ref`. Those siblings are legal in OpenAPI 3.1, but when four parents disagree about a referenced schema's default there is no single value that can be preserved deterministically, so for this generator those defaults carry no information worth vendoring. After that, back-to-back runs against fresh containers pass.
 
-The point of all this machinery is the developer experience when something real changes, so let's walk through the intended loop. A new Mealie release comes out. You update `pinnedImage` to the new tag and digest, and run the test. It fails, reporting `schema/openapi.json` as out of date and updated in place and each client file whose generated contents changed as overwritten, with every message ending in the same instruction: inspect the diff, commit it, and rerun this test.
+### What a Version Bump Looks Like
 
-Your working tree now contains the updated schema and the regenerated client. `git diff` on the schema shows the new endpoints and changed models in OpenAPI terms; the client diff shows the same change as Go. You read both, commit them alongside the one-line version bump, rerun the test, and it passes. The entire cost of tracking a new upstream release is: change one constant, run one test, review one diff.
+When a new Mealie release comes out, you update `pinnedImage` to the new tag and digest and run the test. It fails, reporting `schema/openapi.json` as out of date and updated in place and each changed client file as overwritten. Every message tells you to inspect the diff, commit it, and rerun the test.
+
+Your working tree contains the updated schema and regenerated client. `git diff` on the schema shows the new endpoints and changed models in OpenAPI terms; the client diff shows the same change as Go. You read both, commit them alongside the version bump, and rerun the test.
 
 The same loop catches tampering. While testing this example I appended a comment to `oas_client_gen.go` and deleted `oas_validators_gen.go` outright; the next run overwrote the patched file, recreated the deleted one, and failed with a message pointing at each. A manual edit to generated code can still be *made*, but it can't quietly survive.
 
 For scale: against Mealie v3.23.1 the vendored schema is a 31,276-line JSON document (178 paths, 246 component schemas) and the generated client is 20 files totalling a little over 216,000 lines. The full test takes about 10–13 seconds on my machine, nearly all of it waiting for the container to boot.
 
-## Other Places I Have Used This Pattern
+## Other Uses
 
-Nothing about the pattern is specific to OpenAPI or to Docker; any deterministic derivation from an authoritative source can sit behind the same pair of helpers. A few from my own projects, briefly.
+Nothing about the pattern is specific to OpenAPI or Docker. A few examples from my own projects show the range.
 
 **Database migrations to ORM models.** On a work project (a Python application I can't show here), the test suite creates a throwaway PostgreSQL database, applies every migration to it, then reflects selected schemas and generates typed SQLAlchemy models, with each generated module passed through an ensure-up-to-date helper. Migrations stay the single source of truth for the database's shape, while the rest of the application gets an ORM's autocomplete and type checking. It's worth acknowledging that this is the reverse of what many frameworks do: Django and friends treat the models as authoritative and generate migrations from them, which is a perfectly good trade when the framework owns the database. Reflection-based generation earns its keep when the migrations, not the models, are the thing you need to trust.
 
 **Unityped syntax trees to typed AST wrappers.** In [WIT-LSP][wit-lsp], my language server for WIT (the interface-definition language used by the WebAssembly component model), the parser produces a loosely typed Tree-sitter syntax tree, and a generator derives strongly typed Rust wrappers (typed nodes, accessor methods, the lot) from Tree-sitter's node metadata. The [`ast_is_up_to_date` test][wit-lsp-ast] regenerates the wrappers, formats them, and reconciles the checked-in file. The idea of pairing a unityped concrete syntax tree with a generated, strongly typed AST layer comes from Matklad's [Introducing Ungrammar][ungrammar], which is worth reading if you work on language tooling.
 
-**Source declarations to explicit registries.** WIT-LSP also scans its own Rust source for the variants of a `Diagnostic` enum and [generates][wit-lsp-diag] an `all_diagnostics()` function listing every one. Adding a diagnostic is just adding an enum variant; the registry can't be forgotten because a test regenerates it from the enum itself.
-
-**Registries to reference documentation.** That same diagnostic registry carries each diagnostic's code, severity, and a Markdown description; a further derivation serialises the metadata to a checked-in JSON file, and the docs build renders it into an HTML error-code index. Source declarations feed a registry, the registry feeds structured metadata, and the metadata feeds published documentation, with a freshness test at each hop so no layer can silently fall behind the one before it.
+**Source declarations to reference documentation.** WIT-LSP scans its Rust source for the variants of a `Diagnostic` enum and [generates][wit-lsp-diag] an `all_diagnostics()` function listing every one. The registry carries each diagnostic's code, severity, and Markdown description; its metadata is serialised to a checked-in JSON file, and the docs build renders it into an HTML error-code index. Adding a diagnostic means adding an enum variant; freshness tests at each hop keep the registry and documentation aligned with the source.
 
 ## Costs and Failure Modes
 
 The pattern isn't free, and the failures divide by timescale: some break the loop the moment you hit them, while others tax the project so gradually that nobody notices until the tax is large.
 
-### Failures That Break the Loop Immediately
+### Immediate Failures
 
 **Non-deterministic generation.** The whole scheme rests on byte-for-byte comparison, so any instability in the output turns the freshness test into a machine that rewrites files at random. The Mealie example hit this twice before it settled: once from timestamps baked into the schema, once from the generator resolving conflicting defaults in map-iteration order. Unstable iteration, embedded timestamps, absolute paths, and locale-dependent formatting are the usual suspects. The fix is always the same: find the source of instability and normalise it away in a deterministic step, or fix the generator.
 
@@ -352,27 +350,23 @@ The pattern isn't free, and the failures divide by timescale: some break the loo
 
 **Dependency cycles.** If the codegen test depends, even transitively, on the code it generates, then broken generated output can stop the test from compiling, and the repair path is wedged shut. This is why `TestMealieClientIsUpToDate` never imports the client it maintains. It's an easy rule to state and a surprisingly easy one to violate by accident, because the generated package is usually the most convenient one to reach for.
 
-### Costs That Accumulate
+### Long-term Costs
 
-The slower failures are behavioural, and they're the ones with the larger long-term impact.
+A test that boots a container, provisions a database, or touches the network changes the cost of the test suite. Ten seconds sounds cheap until it's one of a dozen such tests and a suite that used to run in two seconds takes three minutes. Developers run slow suites less often or move the slow tests into a suite that runs less often, and the feedback loop gets longer. The `testing.Short()` guard in the worked example is a small concession; these tests still belong in CI on every change and on developer machines when relevant.
 
-A test that boots a container, or provisions a database, or touches the network, is a different animal to the rest of your unit tests. Ten seconds sounds cheap until it's one of a dozen such tests and the suite that used to run in two seconds now takes three minutes. Developers respond to slow suites in predictable ways: they run tests less often, or they carve the slow ones into a separate suite that runs less often, and either way the feedback loop the pattern depends on gets longer. The `testing.Short()` guard in the worked example is a small concession to this; the honest answer is that these tests belong in CI on every change and on developer machines when relevant, and keeping that arrangement healthy takes ongoing attention.
+The generated code has a slower cost too. A 216,000-line client bloats clones and history, and every regeneration produces diffs that no human will read line by line. Reviewers adapt by skimming, which makes it easier for an important change to slip through. Vendoring the schema gives reviewers a smaller contract-level diff to focus on, but the repository cost remains. No single regeneration makes the project obviously worse, so the effect can take time to notice.
 
-The other slow cost is the generated code itself. A 216,000-line client is not a neutral thing to keep in a repository. It bloats clones and history forever, and every regeneration produces diffs that no human will genuinely read line by line. Reviewers adapt by skimming, and a culture of skimming large diffs is exactly the environment where an important change slips through. The worked example softens this by vendoring the schema too, so review can focus on the small contract-level diff and treat the client diff as its mechanical consequence, but the repository cost remains. These are frog-in-the-pot problems: no single regeneration makes anything obviously worse, so the cost only becomes visible in hindsight.
+Generated trees need an unambiguous ownership boundary, because the reconciler deletes what it doesn't recognise. Generated files should announce themselves with a `// Code generated ... DO NOT EDIT.` header and are not a customisation seam. Necessary changes belong in the authoritative source, the generator, or an explicit deterministic post-processing stage like the normalisation step above. If every consumer can regenerate the output cheaply and reproducibly, build-time generation may be simpler, at the price of the navigation, documentation, and reviewability that committed code provides.
 
-A few operational rules follow from the same concerns. Generated trees need an unambiguous ownership boundary, because the reconciler deletes what it doesn't recognise. The other two rules are answers to the same question: where is a necessary change allowed to go? Never into the generated files themselves, which should announce themselves loudly (a `// Code generated ... DO NOT EDIT.` header at minimum) and are not a customisation seam; a change belongs in the authoritative source, in the generator, or in an explicit deterministic post-processing stage like the normalisation step above. And sometimes the answer is that the output shouldn't be checked in at all: if every consumer can regenerate it cheaply and reproducibly, build-time generation avoids the review load and repository growth entirely, at the price of the navigation, documentation, and reviewability that committed code provides.
+## When It Fits
 
-## When I Reach for It
-
-Rather than a checklist, here's the shape of the situation that makes me reach for this pattern.
-
-The clearest trigger is noticing that a project has acquired a CLI incantation somebody must remember to run. Unless the project will never evolve, that instruction is a promise waiting to be broken, and moving the derivation into a test converts it from a memory problem into an ordinary red-test problem, the kind every developer already knows how to respond to.
+The clearest trigger is noticing that a project has acquired a CLI incantation somebody must remember to run. Unless the project will never evolve, that instruction is easy to miss. Putting the derivation in a test gives the project an executable check instead.
 
 The second half of the judgement is about the generation itself, because the test pattern only makes generated code *maintainable*, not worthwhile. Code generation brings real magic into a project: a build step people have to understand, large diffs, permanent history growth. It earns those costs when the derived interface is substantially better than what you'd write against otherwise. A typed client instead of hand-rolled HTTP calls, typed AST nodes instead of stringly-typed tree access, ORM models that match the real database, or the removal of genuinely large amounts of boilerplate. If the generated code is only a mild convenience, the honest move is to not generate it, and then there's nothing for the test to keep fresh.
 
-None of this means you should go hunting for places to introduce code generation this week. It's a tool-belt pattern: cheap to remember, and you'll recognise the project that needs it when you're standing in it.
+None of this means you should go hunting for places to introduce code generation this week. It's a tool-belt pattern to recognise when a useful derivation starts depending on human memory.
 
-Next time you catch yourself writing "after changing X, remember to run Y" in a README, consider giving that sentence to the test suite instead. The helpers involved are about a hundred lines, and the idea has solid prior art in Matklad's self-modifying-code post. You still pay for the container boots and the oversized diffs, but the generated code stays exactly what its source says it should be, and nobody has to remember anything.
+Next time you catch yourself writing "after changing X, remember to run Y" in a README, that is a reasonable point to consider this pattern. It won't remove the cost of generation, but it can remove one fragile instruction from the project.
 
 [self-modifying-code]: https://matklad.github.io/2022/03/26/self-modifying-code.html
 [ungrammar]: https://rust-analyzer.github.io/blog/2020/10/24/introducing-ungrammar.html
