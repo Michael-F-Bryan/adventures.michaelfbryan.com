@@ -243,8 +243,8 @@ unstable features.
 
 {{< figure
     src="/img/nightly-experimental-api.png"
-    link="https://doc.rust-lang.org/stable/proc_macro/tracked_path/fn.path.html"
-    caption="Unstable feature annotation used in proc_macro::tracked_path::path()"
+    link="https://doc.rust-lang.org/nightly/proc_macro/tracked_path/fn.path.html"
+    caption="Unstable feature annotation used in proc_macro::tracked_path::path() (nightly docs)"
     alt="A screenshot of the proc_macro::tracked_path::path() docs" >}}
 
 By adding `#![feature(doc_cfg)]` to the top of your `lib.rs`, any crate can get

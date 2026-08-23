@@ -1329,7 +1329,7 @@ green threading (*"goroutines"*) are a really good example of this.
 [mdbook]: https://github.com/rust-lang/mdBook
 [trpl]: https://doc.rust-lang.org/book/
 [rustc-dev]: https://rustc-dev-guide.rust-lang.org/
-[chalk-book]: https://rust-lang.github.io/chalk/book/html/index.html
+[chalk-book]: https://rust-lang.github.io/chalk/book/
 [pr-408]: https://github.com/rust-lang/chalk/pull/408/
 [crate]: https://crates.io/crates/linkcheck
 [codespan]: https://crates.io/crates/codespan

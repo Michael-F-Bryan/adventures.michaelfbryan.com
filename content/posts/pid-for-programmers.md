@@ -27,9 +27,9 @@ desired input and its actual value.
 
 The textbook description for a PID controller is done using math:
 
-{{% latex %}}
+$$
 Output = K_P e(t) + K_I \int e(t) dt + K_D \frac{d}{dt} e(t)
-{{% /latex %}}
+$$
 
 This article will be building on top of Brett Beauregard's
 [Improving the Beginner’s PID][intro]. If we translate the above equations into

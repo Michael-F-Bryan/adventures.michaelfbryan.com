@@ -39,7 +39,6 @@ of my daylight hours through the week), but I'm also referring to the things
 I do in my spare time like toy projects, [thought experiments][ecs], and
 personal development.
 
-[ecs]: http://localhost:1313/posts/ecs-outside-of-games/
 [ecs]: {{< ref "ecs-outside-of-games/" >}}
 {{% /notice %}}
 

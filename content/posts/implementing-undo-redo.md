@@ -208,12 +208,12 @@ Imagine a contrived example where the user opens a 100 line document then
 adds another 100 lines to the end of a document, one line at a time. The
 application's memory usage would look something like this:
 
-{{% latex %}}
+$$\begin{align}
     memory\_usage_0 &= 100 * line\_cost \\
     memory\_usage_{N+1} &= memory\_usage_N + (memory\_usage_N + line\_cost) \\
     \therefore memory\_usage(n) &\approx O \large( n^2 \large) \\
     where ~ n&: \text{Depth of Undo/Redo buffer}
-{{% /latex %}}
+\end{align}$$
 
 To make matters worse, when study common usage patterns (i.e. watch over
 someone's shoulder as they use your software) you'll see the vast majority
