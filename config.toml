@@ -32,6 +32,22 @@ colorscheme = "auto"
 [markup.goldmark.renderer]
 unsafe = true
 
+# Hand math blocks to KaTeX verbatim. Without this, Goldmark treats the body of
+# a $$...$$ block as ordinary markdown and eats its backslashes: \\ row
+# separators collapse to \, so an align environment renders as one run-on line
+# instead of several, and \_ collapses to _, so escaped underscores render as
+# subscripts. KaTeX raises no error in either case -- it just renders the wrong
+# equation -- so nothing in CI catches it. The delimiters below match the
+# display delimiters the theme configures KaTeX with in
+# layouts/partials/posts/math.html, so anything KaTeX will render survives
+# Goldmark intact. Inline $...$ is deliberately excluded: posts use $ for shell
+# prompts and prices far more often than for math.
+[markup.goldmark.extensions.passthrough]
+enable = true
+
+[markup.goldmark.extensions.passthrough.delimiters]
+block = [['$$', '$$'], ['\[', '\]']]
+
 [[params.social]]
 name = "Github"
 icon = "fa fa-github fa-2x"
