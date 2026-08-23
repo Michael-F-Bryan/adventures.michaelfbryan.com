@@ -14,17 +14,17 @@ At some point in a project's life, somebody runs a code generator. Maybe they po
 
 That sentence is where the trouble starts. The project now contains two representations of the same information, an authoritative one and a derived one, and the only thing keeping them consistent is a human remembering to run a command.
 
-I've used a pattern for years: run the generator from the test suite, compare its output against what's checked in, repair any difference, and fail the test so the change still gets reviewed. It's a small amount of code and works with any deterministic generator. CI then has a way to report drift instead of relying on a README instruction.
+I've used a version of the same pattern for years. Run the generator from the test suite, compare its output with what's checked in, fix any difference in place, and then fail the test anyway so the change still gets reviewed. It's not much code, and it gives CI something concrete to complain about instead of relying on that README instruction.
 
 ## How Generated Code Drifts
 
-A one-off generation is fine on the day it happens. The generated code matches its source because both were touched in the same sitting, and everybody involved still remembers how the pieces fit together. The problem is that projects evolve, and the moment either side can change, the derivation can rot in two different directions.
+A one-off generation is usually fine on the day it happens. The generated code matches its source because both were touched in the same sitting, and everybody involved still remembers how the pieces fit together. The trouble tends to show up later, once either side can change on its own.
 
-The first direction is the obvious one: the authoritative input changes and nobody re-runs the generator. The API grows an endpoint, the schema gains a column, the config file gets a new entry, and the generated code keeps describing the old world. Nothing fails at the time. The mismatch surfaces weeks later as a runtime error, or as a confused developer wondering why the field they can see in the schema doesn't exist on the generated type.
+The obvious case is that the authoritative input changes and nobody re-runs the generator. The API grows an endpoint, the schema gains a column, the config file gets a new entry, and the generated code keeps describing the old world. Nothing fails at the time. The mismatch surfaces weeks later as a runtime error, or as a confused developer wondering why the field they can see in the schema doesn't exist on the generated type.
 
-The second direction is sneakier. Somebody needs a small change, notices it would be quickest to make it in the generated file, and patches it directly. The patch works, it gets committed, and it quietly becomes load-bearing. Months later somebody else re-runs the generator for an unrelated reason and the patch evaporates, usually without anyone noticing until whatever depended on it breaks.
+You can also get drift in the other direction. Somebody needs a small change, notices it would be quickest to make it in the generated file, and patches it directly. The patch works, it gets committed, and it quietly becomes load-bearing. Months later somebody else re-runs the generator for an unrelated reason and the patch evaporates, usually without anyone noticing until whatever depended on it breaks.
 
-Both failures have the same root cause. Re-running the generator is almost always redundant; 99% of the time the output wouldn't change, so there's no feedback loop teaching anyone to do it. Humans are bad at remembering rarely-needed chores. A README can document the command, but the test suite can run it in CI and give developers a familiar red test when the representations diverge.
+In both cases, re-running the generator is a chore that matters only occasionally. Most runs wouldn't change anything, so there's no feedback loop teaching anyone to remember it. A README can document the command, but the test suite can run it in CI and give developers a familiar red test when the representations diverge.
 
 ## Run the Generator From a Test
 
@@ -183,13 +183,13 @@ func pruneEmptyDirs(dir string) {
 
 The deletion pass distinguishes this helper from calling `EnsureFileContents()` in a loop. Because stale files get removed, the target directory has to be *wholly owned* by the generator. A handwritten file dropped into that directory will survive until the next test run. Put generated output in its own directory, with the ownership clear from its name or a README.
 
-Together, the helpers establish the contract. The authoritative input (the schema, the migrations, the grammar) is where intentional changes happen. The test regenerates the derived code and compares it byte-for-byte, so changes to either side show up as a failing test. Checked-in output still gives downstream users jump-to-definition, autocomplete, rendered documentation, reviewable diffs, and no requirement to install the generator toolchain.
+With those two helpers, intentional changes still happen in the authoritative input (the schema, the migrations, the grammar), and the test checks the derived code byte-for-byte. I still prefer to check the output in because downstream users get jump-to-definition, autocomplete, rendered documentation, and ordinary reviewable diffs without needing the generator toolchain installed.
 
 ## A Real OpenAPI Client
 
 The worked example uses [Mealie][mealie], a self-hosted recipe manager and meal planner with a FastAPI backend. Mealie ships as a single container, publishes versioned images, and serves a live OpenAPI 3.1 document from `/openapi.json`. It stands in for whatever service your project consumes; the interesting part is the derivation, not the recipes.
 
-The test we're building does the following, every time the suite runs:
+The finished test does the following every time the suite runs:
 
 1. start the pinned Mealie release in Docker and wait for it to come up;
 2. fetch its OpenAPI document and normalise it into a stable form;
@@ -197,7 +197,7 @@ The test we're building does the following, every time the suite runs:
 4. run a pinned version of `ogen` over the vendored schema, into a temporary directory; and
 5. reconcile the checked-in client tree with `AssertFileTreeMatches()`.
 
-Here's the test itself, which is short enough to read in one go:
+Getting there wasn't quite as linear as that list makes it look, particularly once the real OpenAPI document started exposing determinism problems. The test itself is short enough to read in one go:
 
 ```go
 func TestMealieClientIsUpToDate(t *testing.T) {
@@ -250,9 +250,9 @@ func startMealie(t *testing.T) (baseURL string) {
 
 Publishing onto a Docker-assigned ephemeral port means two copies of the test can run at once without fighting over a port number, and `t.Cleanup` removes the container even when the test fails. Readiness is a polling loop against `GET /api/app/about`, which conveniently also reports the running application's version, so the test log records which release actually answered.
 
-Fetching `/openapi.json` is a plain HTTP GET. Vendoring the response verbatim doesn't work, for two separate reasons.
+Fetching `/openapi.json` is a plain HTTP GET. Vendoring the response verbatim didn't work.
 
-The first problem is a generator capability gap. `ogen` v1.24.0 can't generate code for a handful of OpenAPI features that Mealie's document happens to use, most notably object-valued `default` values (23 of them). That's handled entirely in `ogen`'s own config file, without touching the JSON:
+For a start, `ogen` v1.24.0 can't generate code for a handful of OpenAPI features that Mealie's document happens to use, most notably object-valued `default` values (23 of them). I could handle those entirely in `ogen`'s own config file without touching the JSON:
 
 ```yaml
 # ogen.yml
@@ -269,7 +269,7 @@ generator:
     - "sum types with same names"
 ```
 
-The second problem is determinism, and it lives in the document itself. Two of Mealie's schema properties embed a `default` that FastAPI computed at the moment the server process built its schema: the current wall-clock time, down to the microsecond. Fetch the document from two freshly started containers and you get two byte-different schemas even though nothing about the API changed. The normalisation step strips any string default shaped like an RFC 3339 timestamp, on the reasoning that a default which looks like a wall-clock instant didn't come from the schema author. It then re-encodes the whole document with Go's `encoding/json`, which sorts object keys and indents consistently, so two normalised fetches of an unchanged schema are byte-identical.
+That got `ogen` running, but the document still wasn't stable. Two of Mealie's schema properties embed a `default` that FastAPI computed at the moment the server process built its schema: the current wall-clock time, down to the microsecond. Fetch the document from two freshly started containers and you get two byte-different schemas even though nothing about the API changed. The normalisation step strips any string default shaped like an RFC 3339 timestamp, on the reasoning that a default which looks like a wall-clock instant didn't come from the schema author. It then re-encodes the whole document with Go's `encoding/json`, which sorts object keys and indents consistently, so two normalised fetches of an unchanged schema are byte-identical.
 
 With the document stable, the `EnsureFileContents()` call in the test above vendors it as `schema/openapi.json`. The vendored schema earns its place in the repository independently of the client. It's an auditable observation of what that exact release actually serves, so when a version bump changes the API, the schema diff shows *what* changed at the contract level before you ever look at generated Go.
 
@@ -302,7 +302,7 @@ func runOgen(t *testing.T, schemaPath string) (generatedDir string) {
 }
 ```
 
-Two details here. Invoking `ogen` through `go run` against a `tool` directive in `go.mod` pins the generator's version the same way any other dependency is pinned, so every machine that runs this test runs the same `ogen`. And generating into `t.TempDir()` means generation either completes as a whole or fails without side effects; a generator crash can't leave the committed client half-overwritten. Only after `ogen` succeeds does the reconciliation touch the real tree:
+Invoking `ogen` through `go run` against a `tool` directive in `go.mod` pins the generator's version the same way as any other dependency, so every machine runs the same `ogen`. I generate into `t.TempDir()` because I don't want a failed generator leaving the committed client half-overwritten. The reconciliation only touches the real tree after `ogen` succeeds:
 
 ```go
 codegen.AssertFileTreeMatches(t, generatedDir, "client")
@@ -334,11 +334,11 @@ Nothing about the pattern is specific to OpenAPI or Docker. A few examples from 
 
 ## Costs and Failure Modes
 
-The pattern isn't free, and the failures divide by timescale: some break the loop the moment you hit them, while others tax the project so gradually that nobody notices until the tax is large.
+The pattern isn't free. Some problems break the loop immediately; others just make the project a little heavier each time you regenerate.
 
 ### Immediate Failures
 
-**Non-deterministic generation.** The whole scheme rests on byte-for-byte comparison, so any instability in the output turns the freshness test into a machine that rewrites files at random. The Mealie example hit this twice before it settled: once from timestamps baked into the schema, once from the generator resolving conflicting defaults in map-iteration order. Unstable iteration, embedded timestamps, absolute paths, and locale-dependent formatting are the usual suspects. The fix is always the same: find the source of instability and normalise it away in a deterministic step, or fix the generator.
+**Non-deterministic generation.** The whole scheme rests on byte-for-byte comparison, so any instability in the output turns the freshness test into a machine that rewrites files at random. The Mealie example hit this twice before it settled: once from timestamps baked into the schema, once from the generator resolving conflicting defaults in map-iteration order. Unstable iteration, embedded timestamps, absolute paths, and locale-dependent formatting are the usual suspects. There isn't much of a shortcut here: find the source of the instability and normalise it away, or fix the generator.
 
 **Unpinned tools.** If two developers have different versions of the generator installed, the checked-in output ping-pongs between them and every regeneration is suspect. Pin the generator the same way you pin every other dependency; the `tool` directive in `go.mod` does this for Go, lockfiles do it elsewhere. The container digest in the worked example is the same principle applied to the upstream service.
 
@@ -352,13 +352,11 @@ The generated code has a slower cost too. A 216,000-line client bloats clones an
 
 ## When It Fits
 
-The clearest trigger is noticing that a project has acquired a CLI incantation somebody must remember to run. Unless the project will never evolve, that instruction is easy to miss. Putting the derivation in a test gives the project an executable check instead.
+I normally reach for this pattern when a project has acquired a CLI incantation that somebody needs to remember to run. That sort of instruction is easy to miss, especially when it only matters once every few months. Putting the derivation in a test means I don't need to pretend the README will be enough.
 
-The second half of the judgement is about the generation itself, because the test pattern only makes generated code *maintainable*, not worthwhile. Code generation brings real magic into a project: a build step people have to understand, large diffs, permanent history growth. It earns those costs when the derived interface is substantially better than what you'd write against otherwise. A typed client instead of hand-rolled HTTP calls, typed AST nodes instead of stringly-typed tree access, ORM models that match the real database, or the removal of genuinely large amounts of boilerplate. If the generated code is only a mild convenience, the honest move is to not generate it, and then there's nothing for the test to keep fresh.
+This doesn't answer whether the generated code is worth having. Code generation brings real magic into a project: a build step people have to understand, large diffs, permanent history growth. I think it earns those costs when the derived interface is substantially better than what you'd write against otherwise: a typed client instead of hand-rolled HTTP calls, typed AST nodes instead of stringly-typed tree access, ORM models that match the real database, or the removal of genuinely large amounts of boilerplate. If the result is only a mild convenience, I'd rather not generate it in the first place.
 
-None of this means you should go hunting for places to introduce code generation this week. It's a tool-belt pattern to recognise when a useful derivation starts depending on human memory.
-
-Next time you catch yourself writing *"after changing X, remember to run Y"* in a README, that is a reasonable point to consider this pattern. It won't remove the cost of generation, but it can remove one fragile instruction from the project.
+I wouldn't go hunting for places to introduce code generation just to use this pattern. But when I catch myself writing *"after changing X, remember to run Y"* in a README, I now stop and see whether a test can own that chore instead. It doesn't make generation free. It does mean one less thing has to live in somebody's head.
 
 [self-modifying-code]: https://matklad.github.io/2022/03/26/self-modifying-code.html
 [ungrammar]: https://rust-analyzer.github.io/blog/2020/10/24/introducing-ungrammar.html
