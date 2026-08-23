@@ -32,6 +32,7 @@ commercialise
 containerising
 cplusplus
 Culting
+customisation
 customise
 dakom
 danielhenrymantilla
@@ -83,6 +84,7 @@ lpass
 Makefiles
 malloc
 markedit
+Matklad
 matthieum
 mdbook
 memcpy
@@ -95,8 +97,10 @@ mish
 Modularly
 Multiversal
 navmesh
+normalisation
 Nomicon
 Nystrom
+ogen
 optimise
 Optimise
 orbtk
@@ -137,12 +141,14 @@ setpoint
 sharedfolderid
 smol
 solidworks
+sqlc
 specialise
 spkr
 Spolsky
 stabilised
 staticlib
 stdint
+stringly
 structopt
 synchronisation
 texel
