@@ -314,9 +314,50 @@ The test reported the file as drifted, overwrote it, and failed. The fix went in
 
 ### What a Version Bump Looks Like
 
-When a new Mealie release comes out, you update `pinnedImage` to the new tag and digest and run the test. It fails, reporting `schema/openapi.json` as out of date and updated in place and each changed client file as overwritten. Every message tells you to inspect the diff, commit it, and rerun the test.
+Here's the bump from Mealie v3.22.0 to v3.23.1. The only handwritten change is the pin:
 
-Your working tree contains the updated schema and regenerated client. `git diff` on the schema shows the new endpoints and changed models in OpenAPI terms; the client diff shows the same change as Go. You read both, commit them alongside the version bump, and rerun the test.
+```diff
+-const pinnedImage = "ghcr.io/mealie-recipes/mealie:v3.22.0@sha256:36c28f0642fb6c75fae8997a2d55994631b9b4bcffba3016c208fc132a4c1e69"
++const pinnedImage = "ghcr.io/mealie-recipes/mealie:v3.23.1@sha256:5fc5cebedddb3952c1ee78f20faf42ab7e49986813fd314745aa97978a4a13eb"
+```
+
+Then I run the freshness test. `ogen` prints several hundred lines of warnings for this schema, so I've cut those and most of the repeated file messages from the output below:
+
+```console
+$ go test ./mealie/ -run TestMealieClientIsUpToDate -count=1
+--- FAIL: TestMealieClientIsUpToDate (10.56s)
+    mealie_client_test.go:22: Mealie is ready, reported version v3.23.1
+    mealie_client_test.go:29: schema/openapi.json was out of date and has been updated in place; inspect the diff, commit it, and rerun this test
+    mealie_client_test.go:32: client/oas_client_gen.go had drifted from the generated output and has been overwritten; inspect the diff, commit it, and rerun this test
+    mealie_client_test.go:32: client/oas_schemas_gen.go had drifted from the generated output and has been overwritten; inspect the diff, commit it, and rerun this test
+FAIL
+FAIL    codegenexample/mealie    10.986s
+FAIL
+```
+
+The failure is expected. At this point the test has already updated the schema and regenerated every client file affected by the new contract:
+
+```console
+$ git diff --stat
+ mealie/client/oas_client_gen.go            | 395 +++++++++++++--
+ mealie/client/oas_handlers_gen.go          | 570 +++++++++++++++++++--
+ mealie/client/oas_request_decoders_gen.go  | 490 ++++++++++++++++--
+ mealie/client/oas_router_gen.go            | 768 ++++++++++++++++++-----------
+ mealie/client/oas_schemas_gen.go           | 358 +++++++++++++-
+ ...
+ mealie/docker.go                           |   2 +-
+ mealie/schema/openapi.json                 | 365 ++++++++++++--
+ 19 files changed, 3463 insertions(+), 664 deletions(-)
+```
+
+After reviewing the schema and client diffs, I run the same test again:
+
+```console
+$ go test ./mealie/ -run TestMealieClientIsUpToDate -count=1
+ok      codegenexample/mealie    9.513s
+```
+
+The first run produces the diff; the second confirms that the checked-in output now matches a fresh generation.
 
 The same loop catches tampering. While testing this example I appended a comment to `oas_client_gen.go` and deleted `oas_validators_gen.go` outright; the next run overwrote the patched file, recreated the deleted one, and failed with a message pointing at each. A manual edit to generated code can still be *made*, but it can't quietly survive.
 
