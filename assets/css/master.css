@@ -594,3 +594,118 @@ hr:after {
         font-size: 2.3rem;
     }
 }
+
+/* Make icon-only controls and archive navigation explicit and operable. */
+
+.navigation .menu-button {
+    background: transparent;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    height: 4.4rem;
+    padding: 0;
+    width: 4.4rem;
+}
+
+.float-container .colorscheme-toggle {
+    align-items: center;
+    background: rgba(127, 127, 127, 0.22);
+    border: 0;
+    border-radius: 0.4rem;
+    color: inherit;
+    cursor: pointer;
+    display: flex;
+    font-size: 2rem;
+    height: 4.4rem;
+    justify-content: center;
+    opacity: 0.7;
+    width: 4.4rem;
+}
+
+.float-container .colorscheme-toggle:hover,
+.float-container .colorscheme-toggle:focus-visible {
+    opacity: 1;
+}
+
+.archive-pagination {
+    margin-top: 6rem;
+}
+
+.archive-pagination .pagination {
+    align-items: center;
+    display: flex;
+    gap: 0.4rem;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+}
+
+.archive-pagination .pagination li {
+    padding: 0;
+    width: auto;
+}
+
+.archive-pagination .pagination a,
+.archive-pagination .pagination span {
+    align-items: center;
+    display: inline-flex;
+    justify-content: center;
+    min-height: 4.4rem;
+    min-width: 4.4rem;
+    padding: 0 0.8rem;
+}
+
+.archive-pagination .pagination [aria-current="page"] {
+    border: 1px solid rgba(127, 127, 127, 0.45);
+    border-radius: 0.4rem;
+}
+
+.pagination__direction {
+    min-width: 11rem;
+}
+
+.pagination__direction:first-child {
+    text-align: right;
+}
+
+@media only screen and (max-width: 768px) {
+    .navigation {
+        position: relative;
+    }
+
+    .navigation .navigation-list {
+        background: #fff;
+        left: 0;
+        padding: 0.8rem 2rem;
+        position: absolute;
+        right: 0;
+        top: 6rem;
+        width: 100%;
+    }
+
+    .navigation .navigation-list.is-open {
+        max-height: 100rem;
+        opacity: 1;
+        visibility: visible;
+    }
+
+    .navigation .navigation-list.is-open a {
+        color: #212121;
+    }
+
+    body.colorscheme-dark .navigation .navigation-list {
+        background: #212121;
+    }
+
+    body.colorscheme-dark .navigation .navigation-list.is-open a {
+        color: #dadada;
+    }
+
+    .archive-pagination .pagination > li:not(.pagination__direction):not(.pagination__current) {
+        display: none;
+    }
+
+    .pagination__direction {
+        min-width: 10rem;
+    }
+}
