@@ -1,62 +1,34 @@
 ---
-title: "About Me"
+title: "About"
+description: "Michael Bryan is a software engineer in Perth working on autonomous underwater vehicles, developer tooling, and resilient software systems."
 ---
 
-I'm Michael Bryan, a software engineer based in Perth, WA, with a passion for building resilient systems and elegant solutions.
+I'm Michael Bryan, a software engineer based in Perth, Western Australia. I like working on systems where software has to meet the real world: hardware behaves badly, networks disappear, and recovery matters more than a tidy happy path.
 
-## Professional Overview
+## What I do
 
-I'm currently a **Senior Software Engineer** at [Multiversal Ventures][mvv], primarily focused on developing robust web crawlers at scale and leveraging ML to extract information from US healthcare websites.
+I'm a software engineer and founding member at [Sunfish Robotics](https://www.sunfish-robotics.com/), where we're building autonomous underwater vehicles. My work spans autonomy, control, mission behaviour, vehicle integration, telemetry, and the tools needed to operate the whole system without guesswork.
 
-I specialise in writing precise, maintainable code and consider myself an expert in Rust, with extensive experience in Go, TypeScript, React, and GraphQL. I'm particularly passionate about compilers, type-safe code, and designing parsers that gracefully handle errors.
+Before Sunfish, I worked on large-scale web crawlers and ML-assisted data extraction at Multiversal Ventures. I also spent several years working on WebAssembly at [Wasmer](https://wasmer.io/) and [HotG](https://hotg.ai/), including the browser-focused [`@wasmer/sdk`](https://www.npmjs.com/package/@wasmer/sdk).
 
-- Strong typing advocate for clearer, bug-free code.
-- Enthusiastic about systems design and architecture.
+Rust and Go are the languages I reach for most often, but the interesting part is usually the boundary around the code: protocols, hardware, generated interfaces, operational tooling, and the assumptions that fail once a system leaves a developer's laptop.
 
-### Previous Roles
+## Selected work
 
-- **Senior Software Engineer**, [Wasmer](https://wasmer.io) (2022-2024)
-  - Worked on Wasmer's *WebAssembly Systems Interface* implementations for server and browser.
-  - Created the [`@wasmer/sdk` package](https://www.npmjs.com/package/@wasmer/sdk), enabling multi-threaded and multi-process applications in the browser.
-  - Built integrations allowing easy inclusion of WebAssembly packages into Python and JavaScript applications.
-- **Rust Engineer**, [Hammer of the Gods (HotG)](https://hotg.ai/) (2021-2022)
-  - Developed a solution for containerising ML pipelines using WebAssembly, targeting edge platforms.
-- **Software Engineer**, [Wintech Engineering](https://wintechengineering.com.au/) (2016-2020)
-  - Rewrote Wintech's CAD/CAM software in C# and maintained embedded systems for CNC machines.
+- [`include_dir`](https://github.com/Michael-F-Bryan/include_dir) embeds an entire directory tree in a Rust binary.
+- [`wit-lsp`](https://github.com/Michael-F-Bryan/wit-lsp) is a language server for WebAssembly's WIT interface definition language.
+- [`mdbook-linkcheck`](https://github.com/Michael-F-Bryan/mdbook-linkcheck) checks links while building an mdBook.
 
-## Technical Interests
+Most of my writing starts with something I needed to understand properly. Recent examples include [*The Accidental Application Runtime*]({{< relref "../posts/accidental-application-runtime.md" >}}), [*Run Your Code Generator as a Test*]({{< relref "../posts/run-your-code-generator-as-a-test.md" >}}), and [*How I Work*]({{< relref "../posts/how-i-work.md" >}}).
 
-My technical curiosity extends into areas like WebAssembly, machine learning, and computational geometry. I find satisfaction in automating away complexity and creating elegant solutions that "just work."
+## Community
 
-### Notable Projects
+Outside work, I volunteer with the Western Australian State Emergency Service's DUM-C unit, where I focus on capability recruitment and radio communications. I've been involved since 2018, and still enjoy the mix of technical problem-solving, teaching, and helping a team operate effectively when conditions are less than ideal.
 
-- [`wit-lsp`](https://github.com/Michael-F-Bryan/wit-lsp): Compiler and Language Server Protocol for WebAssembly's WIT interface definition language, inspired by Rust Analyzer.
-- [`include_dir`](https://github.com/Michael-F-Bryan/include_dir): An evolution of the `include_str!()` and `include_bytes!()` macros for embedding an entire directory tree into your binary.
+## Away from the keyboard
 
-## Personal Knowledge Management
+I live in Perth with my partner, Gabbey, two large dogs, three cats, and a house that keeps finding new ways to require maintenance. I also use Obsidian heavily enough that my notes are considerably more organised than my desk.
 
-I'm a heavy user of Obsidian, applying Tiago Forte's CODE and PARA systems to organise my thoughts, tasks, and projects. I prefer structured, visual, and highly queryable notes—my vault is probably more organised than my desk.
+## Contact
 
-## Volunteer and Community Engagement
-
-Outside of work, I'm deeply involved with the Communications Support Unit (CSU) of the Western Australian State Emergency Service as the **Training Manager**. I've been with CSU since 2018, became a team leader in 2021, and stepped into the Training Manager role in 2023.
-
-- Responsible for developing training programs, organising DFES accredited courses, and managing recruitment.
-- Endorsed Trainer Assessor, frequently delivering DFES courses, especially focused on radio communications.
-- Committed to improving accountability, knowledge sharing, and team effectiveness.
-
-## Personal Life
-
-I live in Perth with my partner, Gabbey, and our collection of pets (including two large dogs and three cats). We recently bought our first home in Greenmount, where I’ve been having a crash course in home and garden maintenance.
-
-## Aspirations
-
-Long-term, I aim to become the Chief Technical Officer of a startup focused on machine learning, WebAssembly, or computational geometry. I'm continually working to sharpen my skills in project management, leadership, and making strategic technical decisions.
-
-## Work Style and Productivity
-
-I perform best in environments that respect autonomy, flexibility, and trust. I prefer working in intense, productive bursts rather than traditional deadlines and structured schedules. Complex, interesting problems tend to pull me in, especially when I'm free to explore and create solutions without unnecessary oversight.
-
-Check out [*How I Work*]({{< relref "../posts/how-i-work.md" >}}) for more.
-
-[mvv]: https://multiversal.ventures/
+The easiest way to follow my work is through [GitHub](https://github.com/Michael-F-Bryan), [LinkedIn](https://www.linkedin.com/in/michael-bryan-564889199/), or the site's [RSS feed](/index.xml). For direct enquiries, email [consulting@michaelfbryan.com](mailto:consulting@michaelfbryan.com).

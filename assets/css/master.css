@@ -487,6 +487,21 @@ hr:after {
     }
 }
 
+/* Keep standalone pages readable without making them look like post archives. */
+
+.container.page {
+    max-width: 86rem;
+}
+
+.content .page p {
+    text-align: left;
+}
+
+.content .page article > p:first-of-type {
+    font-size: 2rem;
+    line-height: 1.65;
+}
+
 /* Give the archive enough context to browse without opening every post. */
 
 .posts-index {
