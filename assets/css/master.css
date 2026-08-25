@@ -597,6 +597,13 @@ hr:after {
 
 /* Make icon-only controls and archive navigation explicit and operable. */
 
+.navigation .navigation-link[aria-current="page"] {
+    font-weight: 700;
+    text-decoration-line: underline;
+    text-decoration-thickness: 0.18rem;
+    text-underline-offset: 0.45rem;
+}
+
 .navigation .menu-button {
     background: transparent;
     border: 0;
@@ -691,6 +698,12 @@ hr:after {
 
     .navigation .navigation-list.is-open a {
         color: #212121;
+    }
+
+    .navigation .navigation-link {
+        align-items: center;
+        display: inline-flex;
+        min-height: 4.4rem;
     }
 
     body.colorscheme-dark .navigation .navigation-list {

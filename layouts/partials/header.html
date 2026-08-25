@@ -1,4 +1,5 @@
 <nav class="navigation" aria-label="Primary navigation">
+  {{ $page := . }}
   <section class="container">
     {{ with .Site }}
     <a class="navigation-title" href="{{ absLangURL "" }}">
@@ -19,8 +20,13 @@
       <ul class="navigation-list" id="primary-navigation">
         {{ with .Site.Menus.main}}
           {{ range sort . }}
+            {{ $active := hasPrefix $page.RelPermalink .URL }}
             <li class="navigation-item">
-              <a class="navigation-link {{ .Params.class }}" href="{{ index (apply (slice .URL) (.Params.urlFunc | default "relLangURL") ".") 0 }}">{{ .Name }}</a>
+              <a
+                class="navigation-link {{ .Params.class }}"
+                href="{{ index (apply (slice .URL) (.Params.urlFunc | default "relLangURL") ".") 0 }}"
+                {{ if $active }}aria-current="page"{{ end }}
+              >{{ .Name }}</a>
             </li>
           {{ end }}
         {{ end }}
