@@ -4,7 +4,7 @@
 {{ define "content" }}
   <section class="container post">
     <article>
-      <header>
+      <header class="post-header">
         <div class="post-title">
           <h1 class="title">
             <a class="title-link" href="{{ .Permalink | safeURL }}">
@@ -12,44 +12,57 @@
             </a>
           </h1>
         </div>
-        <div class="post-meta">
-          <div class="date">
-            <span class="posted-on">
-              <i class="fa-solid fa-calendar" aria-hidden="true"></i>
-              <time datetime="{{ .Date.Format "2006-01-02T15:04:05Z07:00" }}">
-                {{ .Date | time.Format (.Site.Params.dateFormat | default "January 2, 2006" ) }}
-              </time>
-            </span>
-            <span class="reading-time">
-              <i class="fa-solid fa-clock" aria-hidden="true"></i>
-              {{ i18n "reading_time" .ReadingTime }}
-            </span>
-          </div>
-          {{ with .GetTerms "authors" }}{{ partial "taxonomy/authors.html" . }}{{ end }}
-          {{ with .GetTerms "categories" }}{{ partial "taxonomy/categories.html" . }}{{ end }}
-          {{ with .GetTerms "tags" }}{{ partial "taxonomy/tags.html" . }}{{ end }}
-        </div>
       </header>
 
-      <div class="post-content">
-        {{ if .Params.featuredImage }}
-          <img src="{{ .Params.featuredImage | relURL }}" alt="Featured image"/>
-        {{ end }}
-        {{ partial "toc.html" . }}
-        {{ .Content }}
+      <div class="post-layout">
+        <div class="post-main">
+          <div class="post-content">
+            {{ if .Params.featuredImage }}
+              <img src="{{ .Params.featuredImage | relURL }}" alt="Featured image"/>
+            {{ end }}
+
+            {{ $mobileToc := partial "toc.html" (dict "page" . "variant" "mobile") }}
+            {{ $content := .Content }}
+            {{ if $mobileToc }}
+              {{ $marker := "<!--post-toc-mobile-->" }}
+              {{ $markedContent := replaceRE `(<h2[^>]*>)` (printf "%s$1" $marker) $content 1 }}
+              {{ if eq $markedContent $content }}
+                {{ $content = printf "%s%s" $content $mobileToc }}
+              {{ else }}
+                {{ $content = replace $markedContent $marker $mobileToc }}
+              {{ end }}
+            {{ end }}
+            {{ $content | safeHTML }}
+          </div>
+
+          <footer>
+            <div class="post-meta post-meta--footer">
+              <div class="date">
+                <span class="posted-on">
+                  <i class="fa-solid fa-calendar" aria-hidden="true"></i>
+                  <time datetime="{{ .Date.Format "2006-01-02T15:04:05Z07:00" }}">
+                    {{ .Date | time.Format (.Site.Params.dateFormat | default "January 2, 2006" ) }}
+                  </time>
+                </span>
+              </div>
+              {{ with .GetTerms "authors" }}{{ partial "taxonomy/authors.html" . }}{{ end }}
+              {{ with .GetTerms "categories" }}{{ partial "taxonomy/categories.html" . }}{{ end }}
+              {{ with .GetTerms "tags" }}{{ partial "taxonomy/tags.html" . }}{{ end }}
+            </div>
+
+            {{ partial "posts/series.html" . }}
+            {{ partial "posts/disqus.html" . }}
+            {{ partial "posts/commento.html" . }}
+            {{ partial "posts/utterances.html" . }}
+            {{ partial "posts/giscus.html" . }}
+            {{ partial "posts/mastodon.html" . }}
+            {{ partial "posts/telegram.html" . }}
+            {{ partial "posts/cusdis.html" . }}
+          </footer>
+        </div>
+
+        {{ partial "toc.html" (dict "page" . "variant" "desktop") }}
       </div>
-
-
-      <footer>
-        {{ partial "posts/series.html" . }}
-        {{ partial "posts/disqus.html" . }}
-        {{ partial "posts/commento.html" . }}
-        {{ partial "posts/utterances.html" . }}
-        {{ partial "posts/giscus.html" . }}
-        {{ partial "posts/mastodon.html" . }}
-        {{ partial "posts/telegram.html" . }}
-        {{ partial "posts/cusdis.html" . }}
-      </footer>
     </article>
 
     {{ partial "posts/math.html" . }}

@@ -1,20 +1,28 @@
-{{ if or (and (not (isset .Params "toc"))
-              (gt .Page.ReadingTime .Site.Params.toc_reading_time_threshold))
-         .Params.toc }}
-<div class="notices tip">
-    <p>
-        I often like exploring a topic in great depth and writing about my
-        thoughts and experiences as I go along.
-    </p>
-
-    <p>
-        This is more of an extended essay than an article to be read in a
-        single sitting. Feel free to read it one piece at a time, or just
-        skip to the bits that look interesting.
-    </p>
-
-    <p>Here, have a <em>Table of Contents</em>:</p>
-
-    {{ .Page.TableOfContents }}
-</div>
-{{ end }}
+{{- $page := .page -}}
+{{- if not (index $page.Params "hide-toc") -}}
+  {{- $tocID := printf "post-toc-%s" .variant -}}
+  {{- $toc := replace $page.TableOfContents "id=\"TableOfContents\"" (printf "id=\"%s\"" $tocID) -}}
+  {{- if eq .variant "desktop" }}
+<aside class="post-toc post-toc--desktop" aria-label="Table of contents">
+  <div class="post-toc__heading">
+    <span>Contents</span>
+    <span class="post-toc__reading-time">
+      <i class="fa-solid fa-clock" aria-hidden="true"></i>
+      {{ i18n "reading_time" $page.ReadingTime }}
+    </span>
+  </div>
+  {{ $toc | safeHTML }}
+</aside>
+  {{- else }}
+<details class="post-toc post-toc--mobile">
+  <summary>
+    <span>Contents</span>
+    <span class="post-toc__reading-time">
+      <i class="fa-solid fa-clock" aria-hidden="true"></i>
+      {{ i18n "reading_time" $page.ReadingTime }}
+    </span>
+  </summary>
+  {{ $toc | safeHTML }}
+</details>
+  {{- end -}}
+{{- end -}}

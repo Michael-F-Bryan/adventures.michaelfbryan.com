@@ -21,18 +21,15 @@ recompiling on every change.
 
 ## Custom Short-Codes and Templates
 
-You can customise whether a page should receive the *"I've written a long
-article but you don't need to read it all in one hit, here's a table of
-contents"* message.
+Every post gets responsive table-of-contents navigation. On desktop, it stays in
+a sticky sidebar. On mobile, it appears in a collapsed disclosure immediately
+before the first second-level heading.
 
-The logic goes something like this:
+An author can hide the table of contents for a particular page in its
+frontmatter:
 
-```python
-def should_show_toc():
-    if "toc" in frontMatter:
-        return frontMatter["toc"]
-    else:
-        return page.readingTime > Site.Params.toc_reading_time_threshold
+```yaml
+hide-toc: true
 ```
 
 ### Deployment

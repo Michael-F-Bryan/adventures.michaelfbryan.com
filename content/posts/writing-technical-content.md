@@ -8,7 +8,6 @@ tags:
 - Communication
 - Technical Documentation
 - Teaching
-toc: true
 ---
 
 I've been writing technical content for years, and I'll be honest - I never really thought about *how* I was writing it. I just wrote the way I think and communicate naturally. Kind of like a stream-of-consciousness documentary of my problem-solving process.

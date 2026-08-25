@@ -25,7 +25,6 @@ description = "A place to document my thoughts and experiments"
 keywords = "blog,developer,personal"
 customCSS = ["css/master.css"]
 commit = "https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree"
-toc_reading_time_threshold = 15
 math = true
 colorscheme = "auto"
 
