@@ -288,3 +288,136 @@ hr:after {
         padding-top: 0.9rem;
     }
 }
+
+/* Make the homepage a route into the writing, not just a calling card. */
+
+.home {
+    align-items: start;
+    display: grid;
+    gap: 6rem;
+    grid-template-columns: minmax(0, 38rem) minmax(0, 1fr);
+    margin: 6rem auto;
+    max-width: 112rem;
+}
+
+.content .home-intro,
+.content .home-latest__header {
+    margin: 0;
+}
+
+.home-intro {
+    position: sticky;
+    top: 4rem;
+}
+
+.home-intro__eyebrow,
+.home-latest time {
+    font-size: 1.4rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.content .home-intro h1 {
+    font-size: 4.8rem;
+    line-height: 1.05;
+    margin: 1.2rem 0 2rem;
+}
+
+.home-intro__copy {
+    font-size: 2rem;
+    line-height: 1.55;
+    margin: 0;
+    text-align: left;
+}
+
+.home-intro__actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.8rem;
+    margin-top: 3rem;
+}
+
+.home-intro__actions a {
+    font-weight: 700;
+}
+
+.home-intro__primary {
+    border: 1px solid currentColor;
+    border-radius: 0.4rem;
+    padding: 0.8rem 1.4rem;
+    text-decoration: none;
+}
+
+.home-intro__social ul {
+    display: flex;
+    gap: 1.8rem;
+    list-style: none;
+    margin: 3rem 0 0;
+    padding: 0;
+}
+
+.home-intro__social a {
+    color: inherit;
+    font-size: 1.8rem;
+}
+
+.home-latest__header {
+    align-items: baseline;
+    display: flex;
+    justify-content: space-between;
+}
+
+.content .home-latest__header h2 {
+    font-size: 2.8rem;
+    margin: 0;
+}
+
+.home-latest__list {
+    list-style: none;
+    margin: 2rem 0 0;
+    padding: 0;
+}
+
+.home-latest__list li {
+    border-top: 1px solid rgba(127, 127, 127, 0.35);
+    padding: 2.4rem 0;
+}
+
+.home-latest__list li:last-child {
+    border-bottom: 1px solid rgba(127, 127, 127, 0.35);
+}
+
+.content .home-latest h3 {
+    font-size: 2.4rem;
+    line-height: 1.25;
+    margin: 0.8rem 0 1rem;
+}
+
+.home-latest h3 a {
+    text-decoration: none;
+}
+
+.home-latest article p {
+    margin: 0;
+    text-align: left;
+}
+
+@media only screen and (max-width: 768px) {
+    .home {
+        display: block;
+        margin: 3rem auto;
+    }
+
+    .home-intro {
+        position: static;
+    }
+
+    .content .home-intro h1 {
+        font-size: 4rem;
+    }
+
+    .home-latest {
+        margin-top: 6rem;
+    }
+}
