@@ -1,0 +1,9 @@
+{{- $external := findRE "^(https?:)?//" (lower .Destination) -}}
+{{- $playground := strings.Contains (lower .Destination) "play.rust-lang.org" -}}
+<a href="{{ .Destination | safeURL }}"{{ with .Title }} title="{{ . }}"{{ end }}{{ if $external }} class="external-link{{ if $playground }} code-playground-link{{ end }}" target="_blank" rel="noopener"{{ end }}>
+  {{- if $playground -}}
+    Run this example
+  {{- else -}}
+    {{ .Text | safeHTML }}
+  {{- end -}}
+</a>

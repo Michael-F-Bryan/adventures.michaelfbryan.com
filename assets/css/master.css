@@ -44,6 +44,60 @@
     padding-left: 2.2rem;
 }
 
+.code-block {
+    background: #272822;
+    border-radius: 1rem;
+    margin: 2rem 0;
+    overflow: hidden;
+    position: relative;
+}
+
+.code-toolbar {
+    align-items: center;
+    background: rgba(0, 0, 0, 0.28);
+    color: #ddd;
+    display: flex;
+    font-family: monospace;
+    font-size: 1.3rem;
+    justify-content: space-between;
+    padding: 0.55rem 1rem;
+}
+
+.code-toolbar__language {
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.code-toolbar__copy {
+    background: transparent;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    min-height: 4rem;
+    padding: 0.6rem 1rem;
+}
+
+.code-toolbar__copy:hover,
+.code-toolbar__copy:focus-visible {
+    color: #fff;
+    text-decoration: underline;
+    text-underline-offset: 0.25rem;
+}
+
+.highlight.code-block pre {
+    border-radius: 0;
+    margin: 0;
+    overscroll-behavior-x: contain;
+    padding: 1rem 1.2rem 1.3rem;
+}
+
+.code-playground-link {
+    display: inline-block;
+    font-weight: 700;
+    margin-top: -0.5rem;
+}
+
 /* Let us link to the playpen */
 
 .playpen {
