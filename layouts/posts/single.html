@@ -36,20 +36,6 @@
           </div>
 
           <footer>
-            <div class="post-meta post-meta--footer">
-              <div class="date">
-                <span class="posted-on">
-                  <i class="fa-solid fa-calendar" aria-hidden="true"></i>
-                  <time datetime="{{ .Date.Format "2006-01-02T15:04:05Z07:00" }}">
-                    {{ .Date | time.Format (.Site.Params.dateFormat | default "January 2, 2006" ) }}
-                  </time>
-                </span>
-              </div>
-              {{ with .GetTerms "authors" }}{{ partial "taxonomy/authors.html" . }}{{ end }}
-              {{ with .GetTerms "categories" }}{{ partial "taxonomy/categories.html" . }}{{ end }}
-              {{ with .GetTerms "tags" }}{{ partial "taxonomy/tags.html" . }}{{ end }}
-            </div>
-
             {{ partial "posts/series.html" . }}
             {{ partial "posts/disqus.html" . }}
             {{ partial "posts/commento.html" . }}

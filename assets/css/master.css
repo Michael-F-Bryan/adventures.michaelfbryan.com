@@ -241,9 +241,58 @@ hr:after {
     margin: 0.55rem 0;
 }
 
-.post-meta--footer {
-    border-top: 1px solid rgba(127, 127, 127, 0.35);
-    padding-top: 1.6rem;
+.post-context {
+    border-bottom: 1px solid rgba(127, 127, 127, 0.35);
+    margin-bottom: 1.4rem;
+    padding-bottom: 1.4rem;
+}
+
+.post-context dl {
+    margin: 0;
+}
+
+.post-context dl > div {
+    display: grid;
+    gap: 0.8rem;
+    grid-template-columns: 7.6rem 1fr;
+}
+
+.post-context dl > div + div {
+    margin-top: 0.4rem;
+}
+
+.post-context dt,
+.post-context dd {
+    margin: 0;
+}
+
+.post-context dt,
+.post-context__topics > span {
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.post-context__topics {
+    margin-top: 1rem;
+}
+
+.post-context__topics ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.8rem;
+    list-style: none;
+    margin: 0.4rem 0 0;
+    padding: 0;
+}
+
+.post-context__topics li {
+    margin: 0;
+}
+
+.post-context__topics a {
+    text-decoration: none;
 }
 
 @media only screen and (min-width: 961px) {

@@ -1,0 +1,32 @@
+<div class="post-context">
+  <dl>
+    <div>
+      <dt>Published</dt>
+      <dd>
+        <time datetime="{{ .Date.Format "2006-01-02" }}">
+          {{ .Date | time.Format "2 Jan 2006" }}
+        </time>
+      </dd>
+    </div>
+    {{ if ne (.Lastmod.Format "2006-01-02") (.Date.Format "2006-01-02") }}
+    <div>
+      <dt>Updated</dt>
+      <dd>
+        <time datetime="{{ .Lastmod.Format "2006-01-02" }}">
+          {{ .Lastmod | time.Format "2 Jan 2006" }}
+        </time>
+      </dd>
+    </div>
+    {{ end }}
+  </dl>
+  {{ with .GetTerms "tags" }}
+  <div class="post-context__topics">
+    <span>Topics</span>
+    <ul>
+      {{ range first 4 . }}
+      <li><a href="{{ .RelPermalink }}">{{ .LinkTitle }}</a></li>
+      {{ end }}
+    </ul>
+  </div>
+  {{ end }}
+</div>
