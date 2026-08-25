@@ -190,6 +190,19 @@ hr:after {
     min-width: 0;
 }
 
+.post-content {
+    font-size: 1.8rem;
+    line-height: 1.7;
+}
+
+.content .post-content p {
+    text-align: left;
+}
+
+.post-content li + li {
+    margin-top: 0.45rem;
+}
+
 .post-toc {
     font-size: 1.4rem;
     line-height: 1.45;
@@ -235,14 +248,14 @@ hr:after {
 
 @media only screen and (min-width: 961px) {
     .container.post {
-        max-width: 118rem;
+        max-width: 104rem;
     }
 
     .post-layout {
         align-items: start;
         display: grid;
         gap: 3.2rem;
-        grid-template-columns: minmax(0, 86rem) 24rem;
+        grid-template-columns: minmax(0, 72rem) 24rem;
         justify-content: center;
     }
 
