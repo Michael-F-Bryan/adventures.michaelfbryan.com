@@ -1,105 +1,47 @@
-div.notices {
-    margin: 2rem 0;
-    position: relative;
+.notice {
+    --notice-accent: #6ab0de;
+    background: rgba(127, 127, 127, 0.08);
+    border-left: 0.35rem solid var(--notice-accent);
+    margin: 2.4rem 0;
+    padding: 1.3rem 1.6rem;
 }
 
-div.notices>* {
-    padding: 15px;
-    display: block;
-    margin-top: 0rem;
-    margin-bottom: 0rem;
-    color: #666;
+.notice--warning {
+    --notice-accent: #d9822b;
 }
 
-div.notices>ul {
-    padding-left: 40px;
+.notice--tip,
+.notice--example {
+    --notice-accent: #5b9f68;
 }
 
-/* The notice "header" */
-
-div.notices > p:first-child:before {
-    position: absolute;
-    top: 2px;
-    color: #fff;
-    font-family: "Font Awesome 6 Free";
-    font-weight: 900;
-    content: "\f071";
-    left: 0.5em;
+.notice--info {
+    --notice-accent: #b88746;
 }
 
-/* Style the header text */
-
-div.notices > p:first-child:after {
-    position: absolute;
-    top: 2px;
-    color: #fff;
-    left: 2em;
+.notice__label {
+    align-items: center;
+    color: var(--notice-accent);
+    display: flex;
+    font-size: 1.4rem;
+    font-weight: 700;
+    gap: 0.7rem;
+    letter-spacing: 0.03em;
+    margin: 0 0 0.7rem;
+    text-transform: uppercase;
 }
 
-/* header text */
-
-div.notices.info > p:first-child:after {
-    content: 'Info';
+.notice__body > :first-child {
+    margin-top: 0;
 }
 
-div.notices.warning > p:first-child:after {
-    content: 'Warning';
+.notice__body > :last-child {
+    margin-bottom: 0;
 }
 
-div.notices.note p:first-child:after {
-    content: 'Note';
-}
-
-div.notices.tip > p:first-child:after {
-    content: 'Tip';
-}
-
-div.notices.example > p:first-child:after {
-    content: 'Example';
-}
-
-/* Give the header a background */
-
-div.notices.warning > p:first-child {
-    border-top: 30px solid #d9534fcc;
-}
-
-div.notices.note > p:first-child {
-    border-top: 30px solid #6ab0de;
-}
-
-div.notices.tip > p:first-child {
-    border-top: 30px solid #5cb85ccc;
-}
-
-div.notices.info > p:first-child {
-    border-top: 30px solid #F0B37E;
-}
-
-div.notices.example > p:first-child {
-    border-top: 30px solid #5cb85ccc;
-}
-
-/* Background colour for the notice body */
-
-div.notices.warning {
-    background: #FAE2E2;
-}
-
-div.notices.note {
-    background: #E7F2FA;
-}
-
-div.notices.tip {
-    background: #E6F9E6;
-}
-
-div.notices.info {
-    background: #FFF2DB;
-}
-
-div.notices.example {
-    background: #E6F9E6;
+.notice__body ul,
+.notice__body ol {
+    padding-left: 2.2rem;
 }
 
 /* Let us link to the playpen */
