@@ -82,9 +82,15 @@ type = "application/rss+xml"
 [[menu.main]]
 name = "Blog"
 url  = "/posts/"
+weight = 1
+[[menu.main]]
+name = "Topics"
+url = "/tags/"
+weight = 2
 [[menu.main]]
 name = "About"
 url = "/about/"
+weight = 3
 
 [pagination]
 pageSize = 20

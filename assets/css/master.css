@@ -434,3 +434,111 @@ hr:after {
         margin-top: 6rem;
     }
 }
+
+/* Give the archive enough context to browse without opening every post. */
+
+.posts-index {
+    max-width: 90rem;
+}
+
+.content .posts-index__intro {
+    align-items: end;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5rem;
+}
+
+.content .posts-index__intro h1 {
+    margin-bottom: 0.8rem;
+}
+
+.posts-index__intro p {
+    margin: 0;
+    text-align: left;
+}
+
+.posts-index__topics {
+    flex: 0 0 auto;
+    font-weight: 700;
+    margin-left: 3rem;
+}
+
+.content .posts-index__list > h2 {
+    border-bottom: 1px solid rgba(127, 127, 127, 0.35);
+    font-size: 2rem;
+    letter-spacing: 0.04em;
+    margin: 4rem 0 0;
+    padding-bottom: 0.8rem;
+}
+
+.posts-index__entry {
+    padding: 2.8rem 0;
+}
+
+.posts-index__entry + .posts-index__entry {
+    border-top: 1px solid rgba(127, 127, 127, 0.22);
+}
+
+.posts-index__meta {
+    display: flex;
+    font-size: 1.4rem;
+    gap: 1.2rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.posts-index__meta span::before {
+    content: "·";
+    margin-right: 1.2rem;
+}
+
+.content .posts-index__entry h3 {
+    font-size: 2.6rem;
+    line-height: 1.25;
+    margin: 0.8rem 0 1rem;
+}
+
+.posts-index__entry h3 a {
+    text-decoration: none;
+}
+
+.posts-index__entry > p {
+    margin: 0;
+    max-width: 72ch;
+    text-align: left;
+}
+
+.posts-index__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+    list-style: none;
+    margin: 1.4rem 0 0;
+    padding: 0;
+}
+
+.posts-index__tags a {
+    border: 1px solid rgba(127, 127, 127, 0.35);
+    border-radius: 999px;
+    display: block;
+    font-size: 1.3rem;
+    padding: 0.25rem 0.8rem;
+    text-decoration: none;
+}
+
+@media only screen and (max-width: 768px) {
+    .content .posts-index__intro {
+        align-items: start;
+        display: block;
+        margin-bottom: 4rem;
+    }
+
+    .posts-index__topics {
+        display: inline-block;
+        margin: 1.5rem 0 0;
+    }
+
+    .content .posts-index__entry h3 {
+        font-size: 2.3rem;
+    }
+}
