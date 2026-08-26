@@ -3,8 +3,8 @@ title: 'Obsidian Tricks: Daily Notes'
 date: '2025-07-28T12:00:00+08:00'
 tags:
 - Obsidian
-- Personal Knowledge Management
-- Note Taking
+- Knowledge Management
+- Productivity
 description: Daily notes are the secret sauce that transforms a collection of random
   notes into a living, breathing knowledge system. They're like having a personal
   assistant who remembers not just what happened, but when it happened and who was

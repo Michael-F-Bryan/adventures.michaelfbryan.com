@@ -4,9 +4,9 @@ date: '2019-12-29T20:11:44+08:00'
 draft: true
 math: true
 tags:
-- Architecture
-- Undo Redo
+- Rust
 - Interactive Applications
+- Undo Redo
 ---
 
 Alongside copy and paste, being able to undo and redo changes is one of those

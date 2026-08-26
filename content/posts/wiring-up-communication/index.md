@@ -2,9 +2,11 @@
 title: Wiring Up Communication
 date: '2019-10-10T22:58:00+08:00'
 tags:
-- adventures-in-motion-control
-- Vue
-- JavaScript
+- TypeScript
+- Vue.js
+- Protocol Design
+series:
+- Adventures in Motion Control
 ---
 
 As we mentioned [in the last AiMC post][next-step], the next task is to wire up

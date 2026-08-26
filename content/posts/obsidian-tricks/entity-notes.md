@@ -3,8 +3,7 @@ title: 'Obsidian Tricks: Entity Notes'
 date: '2025-07-23T12:00:00+08:00'
 tags:
 - Obsidian
-- Personal Knowledge Management
-- Atomic Notes
+- Knowledge Management
 description: An entity is a person, place, or organization that you want to track
   in your Second Brain. By creating separate notes in your Obsidian vault for each
   entity and using the power of backlinks, you can create a rich, interconnected knowledge

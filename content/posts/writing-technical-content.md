@@ -4,10 +4,9 @@ date: '2025-07-16T10:00:00+08:00'
 description: How to develop a writing style that makes complex technical concepts
   genuinely accessible without sacrificing depth
 tags:
-- Writing
+- Technical Writing
+- Documentation
 - Communication
-- Technical Documentation
-- Teaching
 ---
 
 I've been writing technical content for years, and I'll be honest - I never really thought about *how* I was writing it. I just wrote the way I think and communicate naturally. Kind of like a stream-of-consciousness documentary of my problem-solving process.

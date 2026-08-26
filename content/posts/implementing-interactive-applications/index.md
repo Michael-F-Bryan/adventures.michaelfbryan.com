@@ -3,8 +3,8 @@ title: Creating Interactive Applications While Maintaining Your Sanity
 date: '2020-02-06T23:43:00+08:00'
 tags:
 - Rust
-- Architecture
-- UX
+- State Machines
+- Interactive Applications
 ---
 
 One of the primary reasons computers are so ubiquitous in modern society is

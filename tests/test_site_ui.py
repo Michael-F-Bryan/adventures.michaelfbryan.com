@@ -12,22 +12,30 @@ class NavigationParser(HTMLParser):
         self.current_links = []
         self.buttons = {}
         self.pagination_links = []
+        self.see_also_links = []
         self._in_pagination = False
+        self._in_see_also = False
 
     def handle_starttag(self, tag, attrs):
         attributes = dict(attrs)
         if tag == "nav" and attributes.get("aria-label") == "Posts pagination":
             self._in_pagination = True
+        if tag == "section" and "see-also" in (attributes.get("class") or "").split():
+            self._in_see_also = True
         if tag == "a" and attributes.get("aria-current") == "page":
             self.current_links.append(attributes.get("href"))
         if tag == "button" and attributes.get("id"):
             self.buttons[attributes["id"]] = attributes
         if tag == "a" and self._in_pagination:
             self.pagination_links.append(attributes)
+        if tag == "a" and self._in_see_also:
+            self.see_also_links.append(attributes.get("href"))
 
     def handle_endtag(self, tag):
         if tag == "nav" and self._in_pagination:
             self._in_pagination = False
+        if tag == "section" and self._in_see_also:
+            self._in_see_also = False
 
 
 def parse(relative_path):
@@ -62,6 +70,13 @@ class SiteNavigationTests(unittest.TestCase):
         parser = parse("posts/index.html")
         next_links = [link for link in parser.pagination_links if link.get("rel") == "next"]
         self.assertEqual(len(next_links), 1)
+
+    def test_series_articles_link_to_other_installments(self):
+        parser = parse("posts/working-with-gcode/index.html")
+
+        self.assertIn("/posts/wiring-up-communication/", parser.see_also_links)
+        self.assertIn("/posts/a-better-frontend/", parser.see_also_links)
+        self.assertNotIn("/posts/working-with-gcode/", parser.see_also_links)
 
 
 if __name__ == "__main__":

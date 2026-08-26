@@ -2,9 +2,11 @@
 title: Working With G-Code
 date: '2019-10-18T00:05:00+08:00'
 tags:
-- adventures-in-motion-control
 - Rust
-- G-code
+- G-Code
+- Parsing
+series:
+- Adventures in Motion Control
 ---
 
 As mentioned in [the previous post][next-step] there are a handful of tasks

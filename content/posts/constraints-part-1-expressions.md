@@ -4,7 +4,7 @@ date: '2020-07-15T00:40:00+08:00'
 tags:
 - Rust
 - CAD
-- Computational Geometry
+- Parsing
 ---
 
 A really powerful tool in Computer Aided Design (CAD) is the ability to apply

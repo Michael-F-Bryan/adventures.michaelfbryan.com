@@ -4,7 +4,7 @@ publishDate: '2025-03-30T12:59:58+08:00'
 tags:
 - Rust
 - WebAssembly
-- Dependency Injection
+- Software Architecture
 ---
 
 Have you ever been in a situation where, because of how the code is structured, it's practically impossible to inject a dependency into the component that needs it? Even global variables - ubiquitously reviled for their ability to do "spooky action at a distance" - weren't spooky enough.

@@ -4,8 +4,7 @@ date: '2022-08-07T16:14:07+08:00'
 tags:
 - Rust
 - WebAssembly
-- Cargo
-- WAPM
+- Developer Tools
 ---
 
 

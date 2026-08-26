@@ -4,7 +4,6 @@ publishDate: '2021-09-16T23:44:27+08:00'
 draft: true
 tags:
 - Rust
-- Best Practices
 - Ecosystem
 series:
 - Rust Best Practices

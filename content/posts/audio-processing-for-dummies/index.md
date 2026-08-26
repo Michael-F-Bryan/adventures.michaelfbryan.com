@@ -3,8 +3,6 @@ title: Audio Processing for Dummies
 date: '2019-10-27T23:34:00+08:00'
 tags:
 - Rust
-- Audio
-- DSP
 ---
 
 In my spare time I'm an emergency services volunteer, and one of the tasks our
