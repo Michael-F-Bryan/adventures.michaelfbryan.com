@@ -1,12 +1,6 @@
 {
   "version": 1,
   "skills": {
-    "anti-ai-writing": {
-      "source": "cdeistopened/skill-stack",
-      "sourceType": "github",
-      "skillPath": ".claude/skills/anti-ai-writing/SKILL.md",
-      "computedHash": "4ea3dc754baef19122a9599463810a1004524bc211c8c22cd62b8c78e8340415"
-    },
     "clifton-sellers-content-prompts": {
       "source": "cdeistopened/skill-stack",
       "sourceType": "github",
@@ -18,12 +12,6 @@
       "sourceType": "github",
       "skillPath": ".claude/skills/cold-open-creator/SKILL.md",
       "computedHash": "cc33f657a2abfa9972f4081182c79e1305e17c8cf70644bc122f7a812ca5ebaf"
-    },
-    "ghostwriter": {
-      "source": "cdeistopened/skill-stack",
-      "sourceType": "github",
-      "skillPath": ".claude/skills/ghostwriter/SKILL.md",
-      "computedHash": "e8396da975a2cb9cb47e124a3a06858fa3aa2a1235bf473fb047c14f37535f46"
     },
     "hook-and-headline-writing": {
       "source": "cdeistopened/skill-stack",
@@ -42,12 +30,6 @@
       "sourceType": "github",
       "skillPath": ".claude/skills/transcript-polisher/SKILL.md",
       "computedHash": "0e859118f4c8e2f91323de2eb4813cf8dd8bc940f91a3838b2324e8734b07626"
-    },
-    "voice-matching-wizard": {
-      "source": "cdeistopened/skill-stack",
-      "sourceType": "github",
-      "skillPath": ".claude/skills/voice-matching-wizard/SKILL.md",
-      "computedHash": "b96aa73c6012565edace8878c6f4420353604a6ab75819042fb50b3f7a583133"
     }
   }
 }
