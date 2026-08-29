@@ -2,6 +2,7 @@
 title: The Accidental Application Runtime
 date: '2026-08-21T18:00:00+08:00'
 lastmod: '2026-08-26T15:15:33+08:00'
+description: NewServer started five goroutines, then someone asked for graceful shutdown. Here's how I made a Go service's hidden architecture explicit.
 tags:
 - Go
 - Software Architecture

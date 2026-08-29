@@ -3,7 +3,7 @@ title: Run Your Code Generator as a Test
 date: '2026-08-23T22:05:47+08:00'
 lastmod: '2026-08-26T15:15:33+08:00'
 draft: false
-description: Generated code can give a project a much nicer interface, but it also introduces another maintenance step. This article shows the test pattern I use to keep generated files aligned with their source, catch manual edits, and leave every change available for review.
+description: Vendored ogen clients and OpenAPI schemas drift the moment somebody forgets a README instruction or hand-edits the output. Here's how I catch both.
 tags:
 - Go
 - Code Generation
