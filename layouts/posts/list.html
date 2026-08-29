@@ -10,9 +10,14 @@
             {{ title (i18n (lower .Title)) | default .Title }}
           </a>
         </h1>
-        <p>Essays, experiments, and field notes from building software.</p>
+        {{ $all := where .Site.RegularPages "Section" "posts" }}
+        <p>
+          {{ len $all }} posts, going back to
+          {{ (index $all.ByDate 0).Date.Format "2006" }}. Some of them have
+          aged better than others.
+        </p>
       </div>
-      <a class="posts-index__topics" href="{{ relLangURL "tags/" }}">Browse by topic</a>
+      <a class="posts-index__topics" href="{{ relLangURL "tags/" }}">By topic</a>
     </header>
 
     {{ .Content }}

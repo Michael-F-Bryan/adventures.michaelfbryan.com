@@ -1,14 +1,14 @@
 <section class="container home">
   <header class="home-intro">
-    <p class="home-intro__eyebrow">Software engineering field notes</p>
-    <h1>{{ .Site.Params.author }}</h1>
+    <p class="home-intro__eyebrow">Perth, Western Australia</p>
+    <h1>Michael Bryan</h1>
     <p class="home-intro__copy">
-      I write about Rust, Go, WebAssembly, developer tooling, and the systems
-      behind them.
+      I write things down here after I've worked through them properly &mdash;
+      mostly Rust, Go, WebAssembly, and developer tooling.
     </p>
-    <nav class="home-intro__actions" aria-label="Start here">
-      <a class="home-intro__primary" href="{{ relLangURL "posts/" }}">Browse all posts</a>
-      <a href="{{ relLangURL "about/" }}">About me</a>
+    <nav class="home-intro__actions" aria-label="Site sections">
+      <a class="home-intro__primary" href="{{ relLangURL "posts/" }}">All posts</a>
+      <a href="{{ relLangURL "about/" }}">About</a>
     </nav>
     <div class="home-intro__social">
       {{ partialCached "home/social.html" . }}
@@ -17,8 +17,7 @@
 
   <section class="home-latest" aria-labelledby="latest-writing">
     <header class="home-latest__header">
-      <h2 id="latest-writing">Latest writing</h2>
-      <a href="{{ relLangURL "posts/" }}">The full archive</a>
+      <h2 id="latest-writing">Recent posts</h2>
     </header>
     <ol class="home-latest__list">
       {{ range first 3 (where .Site.RegularPages.ByDate.Reverse "Section" "posts") }}
