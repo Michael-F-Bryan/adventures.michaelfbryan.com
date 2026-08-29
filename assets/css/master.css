@@ -1,105 +1,101 @@
-div.notices {
+.notice {
+    --notice-accent: #6ab0de;
+    background: rgba(127, 127, 127, 0.08);
+    border-left: 0.35rem solid var(--notice-accent);
+    margin: 2.4rem 0;
+    padding: 1.3rem 1.6rem;
+}
+
+.notice--warning {
+    --notice-accent: #d9822b;
+}
+
+.notice--tip,
+.notice--example {
+    --notice-accent: #5b9f68;
+}
+
+.notice--info {
+    --notice-accent: #b88746;
+}
+
+.notice__label {
+    align-items: center;
+    color: var(--notice-accent);
+    display: flex;
+    font-size: 1.4rem;
+    font-weight: 700;
+    gap: 0.7rem;
+    letter-spacing: 0.03em;
+    margin: 0 0 0.7rem;
+    text-transform: uppercase;
+}
+
+.notice__body > :first-child {
+    margin-top: 0;
+}
+
+.notice__body > :last-child {
+    margin-bottom: 0;
+}
+
+.notice__body ul,
+.notice__body ol {
+    padding-left: 2.2rem;
+}
+
+.code-block {
+    background: #272822;
+    border-radius: 1rem;
     margin: 2rem 0;
+    overflow: hidden;
     position: relative;
 }
 
-div.notices>* {
-    padding: 15px;
-    display: block;
-    margin-top: 0rem;
-    margin-bottom: 0rem;
-    color: #666;
+.code-toolbar {
+    align-items: center;
+    background: rgba(0, 0, 0, 0.28);
+    color: #ddd;
+    display: flex;
+    font-family: monospace;
+    font-size: 1.3rem;
+    justify-content: space-between;
+    padding: 0.55rem 1rem;
 }
 
-div.notices>ul {
-    padding-left: 40px;
+.code-toolbar__language {
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
 }
 
-/* The notice "header" */
+.code-toolbar__copy {
+    background: transparent;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    min-height: 4rem;
+    padding: 0.6rem 1rem;
+}
 
-div.notices > p:first-child:before {
-    position: absolute;
-    top: 2px;
+.code-toolbar__copy:hover,
+.code-toolbar__copy:focus-visible {
     color: #fff;
-    font-family: "Font Awesome 6 Free";
-    font-weight: 900;
-    content: "\f071";
-    left: 0.5em;
+    text-decoration: underline;
+    text-underline-offset: 0.25rem;
 }
 
-/* Style the header text */
-
-div.notices > p:first-child:after {
-    position: absolute;
-    top: 2px;
-    color: #fff;
-    left: 2em;
+.highlight.code-block pre {
+    border-radius: 0;
+    margin: 0;
+    overscroll-behavior-x: contain;
+    padding: 1rem 1.2rem 1.3rem;
 }
 
-/* header text */
-
-div.notices.info > p:first-child:after {
-    content: 'Info';
-}
-
-div.notices.warning > p:first-child:after {
-    content: 'Warning';
-}
-
-div.notices.note p:first-child:after {
-    content: 'Note';
-}
-
-div.notices.tip > p:first-child:after {
-    content: 'Tip';
-}
-
-div.notices.example > p:first-child:after {
-    content: 'Example';
-}
-
-/* Give the header a background */
-
-div.notices.warning > p:first-child {
-    border-top: 30px solid #d9534fcc;
-}
-
-div.notices.note > p:first-child {
-    border-top: 30px solid #6ab0de;
-}
-
-div.notices.tip > p:first-child {
-    border-top: 30px solid #5cb85ccc;
-}
-
-div.notices.info > p:first-child {
-    border-top: 30px solid #F0B37E;
-}
-
-div.notices.example > p:first-child {
-    border-top: 30px solid #5cb85ccc;
-}
-
-/* Background colour for the notice body */
-
-div.notices.warning {
-    background: #FAE2E2;
-}
-
-div.notices.note {
-    background: #E7F2FA;
-}
-
-div.notices.tip {
-    background: #E6F9E6;
-}
-
-div.notices.info {
-    background: #FFF2DB;
-}
-
-div.notices.example {
-    background: #E6F9E6;
+.code-playground-link {
+    display: inline-block;
+    font-weight: 700;
+    margin-top: -0.5rem;
 }
 
 /* Let us link to the playpen */
@@ -190,6 +186,19 @@ hr:after {
     min-width: 0;
 }
 
+.post-content {
+    font-size: 1.8rem;
+    line-height: 1.7;
+}
+
+.content .post-content p {
+    text-align: left;
+}
+
+.post-content li + li {
+    margin-top: 0.45rem;
+}
+
 .post-toc {
     font-size: 1.4rem;
     line-height: 1.45;
@@ -228,21 +237,77 @@ hr:after {
     margin: 0.55rem 0;
 }
 
-.post-meta--footer {
-    border-top: 1px solid rgba(127, 127, 127, 0.35);
-    padding-top: 1.6rem;
+.post-toc nav a[aria-current="location"] {
+    font-weight: 700;
+    text-decoration-line: underline;
+    text-decoration-thickness: 0.15rem;
+    text-underline-offset: 0.3rem;
+}
+
+.post-context {
+    border-bottom: 1px solid rgba(127, 127, 127, 0.35);
+    margin-bottom: 1.4rem;
+    padding-bottom: 1.4rem;
+}
+
+.post-context dl {
+    margin: 0;
+}
+
+.post-context dl > div {
+    display: grid;
+    gap: 0.8rem;
+    grid-template-columns: 7.6rem 1fr;
+}
+
+.post-context dl > div + div {
+    margin-top: 0.4rem;
+}
+
+.post-context dt,
+.post-context dd {
+    margin: 0;
+}
+
+.post-context dt,
+.post-context__topics > span {
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.post-context__topics {
+    margin-top: 1rem;
+}
+
+.post-context__topics ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.8rem;
+    list-style: none;
+    margin: 0.4rem 0 0;
+    padding: 0;
+}
+
+.post-context__topics li {
+    margin: 0;
+}
+
+.post-context__topics a {
+    text-decoration: none;
 }
 
 @media only screen and (min-width: 961px) {
     .container.post {
-        max-width: 118rem;
+        max-width: 104rem;
     }
 
     .post-layout {
         align-items: start;
         display: grid;
         gap: 3.2rem;
-        grid-template-columns: minmax(0, 86rem) 24rem;
+        grid-template-columns: minmax(0, 72rem) 24rem;
         justify-content: center;
     }
 
@@ -286,5 +351,389 @@ hr:after {
         border-top: 1px solid rgba(127, 127, 127, 0.35);
         margin-top: 0.9rem;
         padding-top: 0.9rem;
+    }
+}
+
+/* Make the homepage a route into the writing, not just a calling card. */
+
+.home {
+    align-items: start;
+    display: grid;
+    gap: 6rem;
+    grid-template-columns: minmax(0, 38rem) minmax(0, 1fr);
+    margin: 6rem auto;
+    max-width: 112rem;
+}
+
+.content .home-intro,
+.content .home-latest__header {
+    margin: 0;
+}
+
+.home-intro {
+    position: sticky;
+    top: 4rem;
+}
+
+.home-intro__eyebrow,
+.home-latest time {
+    font-size: 1.4rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.content .home-intro h1 {
+    font-size: 4.8rem;
+    line-height: 1.05;
+    margin: 1.2rem 0 2rem;
+}
+
+.home-intro__copy {
+    font-size: 2rem;
+    line-height: 1.55;
+    margin: 0;
+    text-align: left;
+}
+
+.home-intro__actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.8rem;
+    margin-top: 3rem;
+}
+
+.home-intro__actions a {
+    font-weight: 700;
+}
+
+.home-intro__primary {
+    border: 1px solid currentColor;
+    border-radius: 0.4rem;
+    padding: 0.8rem 1.4rem;
+    text-decoration: none;
+}
+
+.home-intro__social ul {
+    display: flex;
+    gap: 1.8rem;
+    list-style: none;
+    margin: 3rem 0 0;
+    padding: 0;
+}
+
+.home-intro__social a {
+    color: inherit;
+    font-size: 1.8rem;
+}
+
+.home-latest__header {
+    align-items: baseline;
+    display: flex;
+    justify-content: space-between;
+}
+
+.content .home-latest__header h2 {
+    font-size: 2.8rem;
+    margin: 0;
+}
+
+.home-latest__list {
+    list-style: none;
+    margin: 2rem 0 0;
+    padding: 0;
+}
+
+.home-latest__list li {
+    border-top: 1px solid rgba(127, 127, 127, 0.35);
+    padding: 2.4rem 0;
+}
+
+.home-latest__list li:last-child {
+    border-bottom: 1px solid rgba(127, 127, 127, 0.35);
+}
+
+.content .home-latest h3 {
+    font-size: 2.4rem;
+    line-height: 1.25;
+    margin: 0.8rem 0 1rem;
+}
+
+.home-latest h3 a {
+    text-decoration: none;
+}
+
+.home-latest article p {
+    margin: 0;
+    text-align: left;
+}
+
+@media only screen and (max-width: 768px) {
+    .home {
+        display: block;
+        margin: 3rem auto;
+    }
+
+    .home-intro {
+        position: static;
+    }
+
+    .content .home-intro h1 {
+        font-size: 4rem;
+    }
+
+    .home-latest {
+        margin-top: 6rem;
+    }
+}
+
+/* Keep standalone pages readable without making them look like post archives. */
+
+.container.page {
+    max-width: 86rem;
+}
+
+.content .page p {
+    text-align: left;
+}
+
+.content .page article > p:first-of-type {
+    font-size: 2rem;
+    line-height: 1.65;
+}
+
+/* Give the archive enough context to browse without opening every post. */
+
+.posts-index {
+    max-width: 90rem;
+}
+
+.content .posts-index__intro {
+    align-items: end;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5rem;
+}
+
+.content .posts-index__intro h1 {
+    margin-bottom: 0.8rem;
+}
+
+.posts-index__intro p {
+    margin: 0;
+    text-align: left;
+}
+
+.posts-index__topics {
+    flex: 0 0 auto;
+    font-weight: 700;
+    margin-left: 3rem;
+}
+
+.content .posts-index__list > h2 {
+    border-bottom: 1px solid rgba(127, 127, 127, 0.35);
+    font-size: 2rem;
+    letter-spacing: 0.04em;
+    margin: 4rem 0 0;
+    padding-bottom: 0.8rem;
+}
+
+.posts-index__entry {
+    padding: 2.8rem 0;
+}
+
+.posts-index__entry + .posts-index__entry {
+    border-top: 1px solid rgba(127, 127, 127, 0.22);
+}
+
+.posts-index__meta {
+    display: flex;
+    font-size: 1.4rem;
+    gap: 1.2rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.posts-index__meta span::before {
+    content: "·";
+    margin-right: 1.2rem;
+}
+
+.content .posts-index__entry h3 {
+    font-size: 2.6rem;
+    line-height: 1.25;
+    margin: 0.8rem 0 1rem;
+}
+
+.posts-index__entry h3 a {
+    text-decoration: none;
+}
+
+.posts-index__entry > p {
+    margin: 0;
+    max-width: 72ch;
+    text-align: left;
+}
+
+.posts-index__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+    list-style: none;
+    margin: 1.4rem 0 0;
+    padding: 0;
+}
+
+.posts-index__tags a {
+    border: 1px solid rgba(127, 127, 127, 0.35);
+    border-radius: 999px;
+    display: block;
+    font-size: 1.3rem;
+    padding: 0.25rem 0.8rem;
+    text-decoration: none;
+}
+
+@media only screen and (max-width: 768px) {
+    .content .posts-index__intro {
+        align-items: start;
+        display: block;
+        margin-bottom: 4rem;
+    }
+
+    .posts-index__topics {
+        display: inline-block;
+        margin: 1.5rem 0 0;
+    }
+
+    .content .posts-index__entry h3 {
+        font-size: 2.3rem;
+    }
+}
+
+/* Make icon-only controls and archive navigation explicit and operable. */
+
+.navigation .navigation-link[aria-current="page"] {
+    font-weight: 700;
+    text-decoration-line: underline;
+    text-decoration-thickness: 0.18rem;
+    text-underline-offset: 0.45rem;
+}
+
+.navigation .menu-button {
+    background: transparent;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    height: 4.4rem;
+    padding: 0;
+    width: 4.4rem;
+}
+
+.float-container .colorscheme-toggle {
+    align-items: center;
+    background: rgba(127, 127, 127, 0.22);
+    border: 0;
+    border-radius: 0.4rem;
+    color: inherit;
+    cursor: pointer;
+    display: flex;
+    font-size: 2rem;
+    height: 4.4rem;
+    justify-content: center;
+    opacity: 0.7;
+    width: 4.4rem;
+}
+
+.float-container .colorscheme-toggle:hover,
+.float-container .colorscheme-toggle:focus-visible {
+    opacity: 1;
+}
+
+.archive-pagination {
+    margin-top: 6rem;
+}
+
+.archive-pagination .pagination {
+    align-items: center;
+    display: flex;
+    gap: 0.4rem;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+}
+
+.archive-pagination .pagination li {
+    padding: 0;
+    width: auto;
+}
+
+.archive-pagination .pagination a,
+.archive-pagination .pagination span {
+    align-items: center;
+    display: inline-flex;
+    justify-content: center;
+    min-height: 4.4rem;
+    min-width: 4.4rem;
+    padding: 0 0.8rem;
+}
+
+.archive-pagination .pagination [aria-current="page"] {
+    border: 1px solid rgba(127, 127, 127, 0.45);
+    border-radius: 0.4rem;
+}
+
+.pagination__direction {
+    min-width: 11rem;
+}
+
+.pagination__direction:first-child {
+    text-align: right;
+}
+
+@media only screen and (max-width: 768px) {
+    .navigation {
+        position: relative;
+    }
+
+    .navigation .navigation-list {
+        background: #fff;
+        left: 0;
+        padding: 0.8rem 2rem;
+        position: absolute;
+        right: 0;
+        top: 6rem;
+        width: 100%;
+    }
+
+    .navigation .navigation-list.is-open {
+        max-height: 100rem;
+        opacity: 1;
+        visibility: visible;
+    }
+
+    .navigation .navigation-list.is-open a {
+        color: #212121;
+    }
+
+    .navigation .navigation-link {
+        align-items: center;
+        display: inline-flex;
+        min-height: 4.4rem;
+    }
+
+    body.colorscheme-dark .navigation .navigation-list {
+        background: #212121;
+    }
+
+    body.colorscheme-dark .navigation .navigation-list.is-open a {
+        color: #dadada;
+    }
+
+    .archive-pagination .pagination > li:not(.pagination__direction):not(.pagination__current) {
+        display: none;
+    }
+
+    .pagination__direction {
+        min-width: 10rem;
     }
 }

@@ -3,8 +3,8 @@ title: 'A Thought Experiment: Using the ECS Pattern Outside of Game Engines'
 date: '2019-12-28T00:00:00+08:00'
 tags:
 - Rust
-- ECS
-- Architecture
+- Software Architecture
+- CAD
 ---
 
 It's been about 6 months since I watched Catherine West's excellent [Using

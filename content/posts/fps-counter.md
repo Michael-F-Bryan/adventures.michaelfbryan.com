@@ -2,9 +2,10 @@
 title: FPS Counter
 date: '2019-09-03T08:50:00+08:00'
 tags:
-- adventures-in-motion-control
 - Rust
 - WebAssembly
+series:
+- Adventures in Motion Control
 ---
 
 As mentioned in [the previous article][the-next-step] the next task is to

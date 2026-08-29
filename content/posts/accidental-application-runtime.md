@@ -3,9 +3,8 @@ title: The Accidental Application Runtime
 date: '2026-08-21T18:00:00+08:00'
 tags:
 - Go
-- Architecture
+- Software Architecture
 - Concurrency
-- Software Design
 ---
 
 Imagine you look after the software for a small 3D-print farm: a rack of printers and a Go service running on a box in the corner. The service started life as a dashboard. Somebody wanted to see what each printer was doing without walking over to it, so you wrote a little HTTP server, and because the handlers needed live printer state, the server's setup code connected to the printers and started a goroutine to poll them. That was completely reasonable.

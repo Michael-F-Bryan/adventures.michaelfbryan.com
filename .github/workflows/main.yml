@@ -24,6 +24,9 @@ jobs:
       - name: Build
         run: hugo --minify --enableGitInfo
 
+      - name: Test rendered UI contracts
+        run: python3 -m unittest discover -s tests -v
+
       - name: Run htmltest
         uses: wjdp/htmltest-action@master
         with:

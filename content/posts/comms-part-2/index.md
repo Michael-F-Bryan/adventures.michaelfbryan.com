@@ -2,9 +2,11 @@
 title: 'The Communications System: Part 2'
 date: '2019-09-08T01:20:00+08:00'
 tags:
-- adventures-in-motion-control
 - Rust
-- Messaging
+- Protocol Design
+- WebAssembly
+series:
+- Adventures in Motion Control
 ---
 
 Now we have a mechanism for transferring bytes from the frontend to the

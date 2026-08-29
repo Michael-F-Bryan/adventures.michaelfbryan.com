@@ -3,8 +3,7 @@ title: 'I Made A Thing: Markedit'
 date: '2020-02-09T04:40:00+08:00'
 tags:
 - Rust
-- Markdown
-- Automation
+- Developer Tools
 ---
 
 A couple days ago I released [markedit][crates-io], a small crate for editing

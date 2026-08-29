@@ -2,9 +2,9 @@
 title: 'Embracing a New Chapter: My Farewell to Wasmer and the Journey Ahead'
 date: '2024-01-30T17:00:00+08:00'
 tags:
-- WebAssembly
 - Career
 - Wasmer
+- WebAssembly
 ---
 
 ## Introduction

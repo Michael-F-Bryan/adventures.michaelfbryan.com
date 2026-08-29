@@ -3,8 +3,8 @@ title: Deserializing Binary Data Files in Rust
 date: '2021-06-20T00:30:00+08:00'
 tags:
 - Rust
+- FFI
 - Unsafe Rust
-- Interop
 ---
 
 The other day, someone on the Rust user forums posted [a question][question]

@@ -2,9 +2,11 @@
 title: Initial Motion System
 date: '2019-09-18T20:00:00+08:00'
 tags:
-- adventures-in-motion-control
 - Rust
+- Embedded Systems
 - State Machines
+series:
+- Adventures in Motion Control
 ---
 
 Now we've got [some simple automation][previous] code, lets start a proper

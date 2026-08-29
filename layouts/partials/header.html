@@ -1,0 +1,51 @@
+<nav class="navigation" aria-label="Primary navigation">
+  {{ $page := . }}
+  <section class="container">
+    {{ with .Site }}
+    <a class="navigation-title" href="{{ absLangURL "" }}">
+      {{ .Title }}
+    </a>
+    {{ end }}
+    {{ if or .Site.Menus.main hugo.IsMultilingual }}
+      <button
+        class="menu-button float-right"
+        id="navigation-toggle"
+        type="button"
+        aria-controls="primary-navigation"
+        aria-expanded="false"
+      >
+        <i class="fa-solid fa-bars fa-fw" aria-hidden="true"></i>
+        <span class="sr-only">Toggle navigation</span>
+      </button>
+      <ul class="navigation-list" id="primary-navigation">
+        {{ with .Site.Menus.main}}
+          {{ range sort . }}
+            {{ $active := hasPrefix $page.RelPermalink .URL }}
+            <li class="navigation-item">
+              <a
+                class="navigation-link {{ .Params.class }}"
+                href="{{ index (apply (slice .URL) (.Params.urlFunc | default "relLangURL") ".") 0 }}"
+                {{ if $active }}aria-current="page"{{ end }}
+              >{{ .Name }}</a>
+            </li>
+          {{ end }}
+        {{ end }}
+        {{ if hugo.IsMultilingual }}
+          {{ $node := . }}
+          {{ .Scratch.Set "separator" true }}
+          {{ range (default .Site.Home.AllTranslations .Translations) }}
+            {{ if ne $.Site.Language .Language }}
+              {{ if $node.Scratch.Get "separator" }}
+                <li class="navigation-item menu-separator"><span>|</span></li>
+                {{ $node.Scratch.Set "separator" false }}
+              {{ end }}
+              <li class="navigation-item">
+                <a href="{{ .RelPermalink }}">{{ .Language.LanguageName | emojify }}</a>
+              </li>
+            {{ end }}
+          {{ end }}
+        {{ end }}
+      </ul>
+    {{ end }}
+  </section>
+</nav>

@@ -3,7 +3,7 @@ title: 'gcode 0.7: one parser core for streaming visitors and a thin AST'
 date: '2026-03-21T21:00:00+08:00'
 tags:
 - Rust
-- G-code
+- G-Code
 - Open Source
 ---
 `gcode` 0.7.0 is on [crates.io](https://crates.io/crates/gcode). If you have been on 0.6.1 (the last stable line that matched the mental model I shipped years ago), this release will break your build on purpose. That is intentional semver: the crate still parses G-code, but the way you plug into parsing is new.

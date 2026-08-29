@@ -2,10 +2,11 @@
 title: A Better Frontend
 date: '2019-09-27T03:47:00+08:00'
 tags:
-- adventures-in-motion-control
-- Rust
-- Vue
 - WebAssembly
+- TypeScript
+- Vue.js
+series:
+- Adventures in Motion Control
 ---
 
 Now we've got a half-usable motion controller, we need a graphical way for

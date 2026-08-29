@@ -3,8 +3,8 @@ title: 'Common Newbie Mistakes and Bad Practices in Rust: Bad Habits'
 publishDate: '2021-09-27T18:30:00+08:00'
 tags:
 - Rust
-- Best Practices
 - Beginners
+- Software Design
 series:
 - Rust Best Practices
 ---

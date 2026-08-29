@@ -1,62 +1,38 @@
 ---
-title: "About Me"
+title: "About"
+description: "Michael Bryan is a software engineer in Perth working on autonomous underwater vehicles, developer tooling, and resilient software systems."
 ---
 
-I'm Michael Bryan, a software engineer based in Perth, WA, with a passion for building resilient systems and elegant solutions.
+I'm Michael Bryan, a software engineer in Perth, Western Australia. Most of my work has involved software that eventually needs to deal with something messy outside the program: a machine, a protocol, a flaky network, or another person trying to use it. I tend to enjoy that part.
 
-## Professional Overview
+## What I do
 
-I'm currently a **Senior Software Engineer** at [Multiversal Ventures][mvv], primarily focused on developing robust web crawlers at scale and leveraging ML to extract information from US healthcare websites.
+I'm a software engineer and founding member at [Sunfish Robotics](https://www.sunfish-robotics.com/). We're building autonomous underwater vehicles.
 
-I specialise in writing precise, maintainable code and consider myself an expert in Rust, with extensive experience in Go, TypeScript, React, and GraphQL. I'm particularly passionate about compilers, type-safe code, and designing parsers that gracefully handle errors.
+In practice, that means bouncing between Go services, PX4 integrations, telemetry, operator tools, and whatever the bench is doing that day. A fair bit of the job is glue code. The difficult bits usually turn up at the boundaries, where software meets hardware or two systems disagree about what a message means.
 
-- Strong typing advocate for clearer, bug-free code.
-- Enthusiastic about systems design and architecture.
+Before Sunfish, I worked on large-scale web crawlers and ML-assisted data extraction at Multiversal Ventures. Earlier than that, I spent several years working on WebAssembly at [Wasmer](https://wasmer.io/) and [HotG](https://hotg.ai/). One of the more visible results was [`@wasmer/sdk`](https://www.npmjs.com/package/@wasmer/sdk), which lets you run multi-threaded and multi-process WebAssembly applications in the browser.
 
-### Previous Roles
+Rust and Go are the languages I reach for most often. I have a soft spot for parsers, protocol code, generated interfaces, and other places where being a little pedantic saves a lot of confusion later.
 
-- **Senior Software Engineer**, [Wasmer](https://wasmer.io) (2022-2024)
-  - Worked on Wasmer's *WebAssembly Systems Interface* implementations for server and browser.
-  - Created the [`@wasmer/sdk` package](https://www.npmjs.com/package/@wasmer/sdk), enabling multi-threaded and multi-process applications in the browser.
-  - Built integrations allowing easy inclusion of WebAssembly packages into Python and JavaScript applications.
-- **Rust Engineer**, [Hammer of the Gods (HotG)](https://hotg.ai/) (2021-2022)
-  - Developed a solution for containerising ML pipelines using WebAssembly, targeting edge platforms.
-- **Software Engineer**, [Wintech Engineering](https://wintechengineering.com.au/) (2016-2020)
-  - Rewrote Wintech's CAD/CAM software in C# and maintained embedded systems for CNC machines.
+## Selected work
 
-## Technical Interests
+I've published quite a few small tools and libraries over the years. These are three that still come up regularly:
 
-My technical curiosity extends into areas like WebAssembly, machine learning, and computational geometry. I find satisfaction in automating away complexity and creating elegant solutions that "just work."
+- [`include_dir`](https://github.com/Michael-F-Bryan/include_dir) embeds an entire directory tree in a Rust binary.
+- [`wit-lsp`](https://github.com/Michael-F-Bryan/wit-lsp) is a language server for WebAssembly's WIT interface definition language.
+- [`mdbook-linkcheck`](https://github.com/Michael-F-Bryan/mdbook-linkcheck) checks links while building an mdBook.
 
-### Notable Projects
+This blog is where I write things down after I've spent long enough working through them that the notes might be useful to someone else. A few representative posts are [*The Accidental Application Runtime*]({{< relref "../posts/accidental-application-runtime.md" >}}), [*Run Your Code Generator as a Test*]({{< relref "../posts/run-your-code-generator-as-a-test.md" >}}), and [*How I Work*]({{< relref "../posts/how-i-work.md" >}}).
 
-- [`wit-lsp`](https://github.com/Michael-F-Bryan/wit-lsp): Compiler and Language Server Protocol for WebAssembly's WIT interface definition language, inspired by Rust Analyzer.
-- [`include_dir`](https://github.com/Michael-F-Bryan/include_dir): An evolution of the `include_str!()` and `include_bytes!()` macros for embedding an entire directory tree into your binary.
+## Community
 
-## Personal Knowledge Management
+Outside work, I volunteer with the Communications Support Unit, a State Emergency Service unit focused on communications. I joined in 2018 and have since contributed through training, recruitment, and unit leadership. The details change over time, but the common thread is helping the unit build and sustain the people and capability it needs.
 
-I'm a heavy user of Obsidian, applying Tiago Forte's CODE and PARA systems to organise my thoughts, tasks, and projects. I prefer structured, visual, and highly queryable notes—my vault is probably more organised than my desk.
+## Away from the keyboard
 
-## Volunteer and Community Engagement
+I live in Perth with my partner, Gabbey, two large dogs, three cats, and a house that keeps finding new ways to require maintenance. I also use Obsidian heavily enough that my notes are considerably more organised than my desk.
 
-Outside of work, I'm deeply involved with the Communications Support Unit (CSU) of the Western Australian State Emergency Service as the **Training Manager**. I've been with CSU since 2018, became a team leader in 2021, and stepped into the Training Manager role in 2023.
+## Contact
 
-- Responsible for developing training programs, organising DFES accredited courses, and managing recruitment.
-- Endorsed Trainer Assessor, frequently delivering DFES courses, especially focused on radio communications.
-- Committed to improving accountability, knowledge sharing, and team effectiveness.
-
-## Personal Life
-
-I live in Perth with my partner, Gabbey, and our collection of pets (including two large dogs and three cats). We recently bought our first home in Greenmount, where I’ve been having a crash course in home and garden maintenance.
-
-## Aspirations
-
-Long-term, I aim to become the Chief Technical Officer of a startup focused on machine learning, WebAssembly, or computational geometry. I'm continually working to sharpen my skills in project management, leadership, and making strategic technical decisions.
-
-## Work Style and Productivity
-
-I perform best in environments that respect autonomy, flexibility, and trust. I prefer working in intense, productive bursts rather than traditional deadlines and structured schedules. Complex, interesting problems tend to pull me in, especially when I'm free to explore and create solutions without unnecessary oversight.
-
-Check out [*How I Work*]({{< relref "../posts/how-i-work.md" >}}) for more.
-
-[mvv]: https://multiversal.ventures/
+You can find my code on [GitHub](https://github.com/Michael-F-Bryan), while [LinkedIn](https://www.linkedin.com/in/michael-bryan-564889199/) has the conventional career-history version. The blog has an [RSS feed](/index.xml) if that's your thing. For direct enquiries, email [consulting@michaelfbryan.com](mailto:consulting@michaelfbryan.com).

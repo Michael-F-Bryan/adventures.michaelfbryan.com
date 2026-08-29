@@ -1,0 +1,26 @@
+{{ $paginator := .Paginator }}
+{{ if gt $paginator.TotalPages 1 }}
+<nav class="archive-pagination" aria-label="Posts pagination">
+  <ul class="pagination">
+    <li class="pagination__direction">
+      {{ if $paginator.HasPrev }}
+      <a href="{{ $paginator.Prev.URL }}" rel="prev">← Newer posts</a>
+      {{ end }}
+    </li>
+    {{ range $paginator.Pagers }}
+    <li{{ if eq . $paginator }} class="pagination__current"{{ end }}>
+      {{ if eq . $paginator }}
+      <span aria-current="page" aria-label="Page {{ .PageNumber }}">{{ .PageNumber }}</span>
+      {{ else }}
+      <a href="{{ .URL }}" aria-label="Page {{ .PageNumber }}">{{ .PageNumber }}</a>
+      {{ end }}
+    </li>
+    {{ end }}
+    <li class="pagination__direction">
+      {{ if $paginator.HasNext }}
+      <a href="{{ $paginator.Next.URL }}" rel="next">Older posts →</a>
+      {{ end }}
+    </li>
+  </ul>
+</nav>
+{{ end }}

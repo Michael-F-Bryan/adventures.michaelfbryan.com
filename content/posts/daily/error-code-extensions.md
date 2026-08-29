@@ -5,7 +5,7 @@ draft: true
 tags:
 - Rust
 - Extension Traits
-- Errors
+- Error Handling
 series:
 - Daily Rust
 ---

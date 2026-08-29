@@ -1,4 +1,17 @@
-{{ $_hugo_config := `{ "version": 1 }` }}
-<div class="notices {{ .Get 0 }}" {{ if len .Params | eq 2 }} id="{{ .Get 1 }}" {{ end }}>
+{{- $kind := .Get 0 | default "note" -}}
+{{- $icons := dict
+    "example" "fa-flask"
+    "info" "fa-circle-info"
+    "note" "fa-note-sticky"
+    "tip" "fa-lightbulb"
+    "warning" "fa-triangle-exclamation"
+-}}
+<aside class="notice notice--{{ $kind }}"{{ if len .Params | eq 2 }} id="{{ .Get 1 }}"{{ end }}>
+  <p class="notice__label">
+    <i class="fa-solid {{ index $icons $kind | default "fa-circle-info" }}" aria-hidden="true"></i>
+    <span>{{ $kind | title }}</span>
+  </p>
+  <div class="notice__body">
     {{ .Inner }}
-</div>
+  </div>
+</aside>

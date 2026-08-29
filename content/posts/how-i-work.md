@@ -2,9 +2,9 @@
 title: How I Work
 date: '2025-07-14T12:00:00+08:00'
 tags:
-- Productivity
 - Career
-- Meta
+- Productivity
+- Communication
 ---
 
 I thought it might be helpful to write down some of the core principles and values that guide my professional life. If you are a colleague, friend, potential employer, or just curious, this might be a good place to start.

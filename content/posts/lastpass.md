@@ -3,8 +3,8 @@ title: How I Reverse Engineered the LastPass CLI Tool
 date: '2020-04-14T22:40:00+08:00'
 tags:
 - Rust
-- Reverse Engineering
 - Security
+- Reverse Engineering
 ---
 
 A couple days ago I was writing an install script for [my dotfiles][dotfiles]

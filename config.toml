@@ -24,6 +24,7 @@ info = "Rustacean, Freelancer, and Open-Source Enthusiast"
 description = "A place to document my thoughts and experiments"
 keywords = "blog,developer,personal"
 customCSS = ["css/master.css"]
+customJS = ["js/post-toc.js", "js/code-tools.js", "js/site-controls.js"]
 commit = "https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/tree"
 math = true
 colorscheme = "auto"
@@ -82,9 +83,15 @@ type = "application/rss+xml"
 [[menu.main]]
 name = "Blog"
 url  = "/posts/"
+weight = 1
+[[menu.main]]
+name = "Topics"
+url = "/tags/"
+weight = 2
 [[menu.main]]
 name = "About"
 url = "/about/"
+weight = 3
 
 [pagination]
 pageSize = 20

@@ -4,8 +4,8 @@ date: '2019-09-16T20:42:04+08:00'
 draft: true
 tags:
 - Rust
-- Control Theory
-- Algorithms
+- Embedded Systems
+- Motion Control
 math: true
 ---
 

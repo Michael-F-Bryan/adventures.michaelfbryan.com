@@ -5,9 +5,8 @@ draft: false
 description: Generated code can give a project a much nicer interface, but it also introduces another maintenance step. This article shows the test pattern I use to keep generated files aligned with their source, catch manual edits, and leave every change available for review.
 tags:
 - Go
-- Testing
 - Code Generation
-- OpenAPI
+- Testing
 ---
 
 At some point in a project's life, somebody runs a code generator. Maybe they point a client generator at an OpenAPI document, or feed a `.proto` file to `protoc`, or write a small script that turns a config file into a lookup table. The output is genuinely useful, so it gets committed, and the project's interfaces improve overnight. Then, being diligent, the author adds a line to the README: *"After changing the schema, re-run `make generate` and commit the result."*

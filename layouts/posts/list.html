@@ -1,0 +1,52 @@
+{{ define "title" }}
+  {{ title (i18n (lower .Title)) | default .Title }} · {{ .Site.Title }}
+{{ end }}
+{{ define "content" }}
+  <section class="container posts-index">
+    <header class="posts-index__intro">
+      <div>
+        <h1 class="title">
+          <a class="title-link" href="{{ .Permalink | safeURL }}">
+            {{ title (i18n (lower .Title)) | default .Title }}
+          </a>
+        </h1>
+        <p>Essays, experiments, and field notes from building software.</p>
+      </div>
+      <a class="posts-index__topics" href="{{ relLangURL "tags/" }}">Browse by topic</a>
+    </header>
+
+    {{ .Content }}
+
+    <div class="posts-index__list">
+      {{ $currentYear := "" }}
+      {{ range .Paginator.Pages }}
+        {{ $year := .Date.Format "2006" }}
+        {{ if ne $year $currentYear }}
+          {{ $currentYear = $year }}
+          <h2>{{ $year }}</h2>
+        {{ end }}
+        <article class="posts-index__entry">
+          <div class="posts-index__meta">
+            <time datetime="{{ .Date.Format "2006-01-02" }}">
+              {{ .Date | time.Format "2 January" }}
+            </time>
+            <span>{{ i18n "reading_time" .ReadingTime }}</span>
+          </div>
+          <h3>
+            <a href="{{ .Params.externalLink | default .RelPermalink }}">{{ .Title }}</a>
+          </h3>
+          <p>{{ .Params.description | default .Summary | plainify | htmlUnescape | truncate 200 }}</p>
+          {{ with first 3 (.GetTerms "tags") }}
+          <ul class="posts-index__tags" aria-label="Topics">
+            {{ range . }}
+            <li><a href="{{ .RelPermalink }}">{{ .LinkTitle }}</a></li>
+            {{ end }}
+          </ul>
+          {{ end }}
+        </article>
+      {{ end }}
+    </div>
+
+    {{ partial "pagination.html" . }}
+  </section>
+{{ end }}

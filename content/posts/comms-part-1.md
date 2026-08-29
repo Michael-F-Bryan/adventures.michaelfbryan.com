@@ -2,9 +2,11 @@
 title: 'The Communications System: Part 1'
 date: '2019-09-06T23:00:00+08:00'
 tags:
-- adventures-in-motion-control
 - Rust
-- Protocols
+- Protocol Design
+- Embedded Systems
+series:
+- Adventures in Motion Control
 ---
 
 ## Prelude

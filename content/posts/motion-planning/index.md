@@ -3,9 +3,11 @@ title: Motion Planning
 date: '2019-11-06T07:52:36+08:00'
 draft: true
 tags:
-- adventures-in-motion-control
-- Rust
-- G-code
+- Motion Control
+- Embedded Systems
+- G-Code
+series:
+- Adventures in Motion Control
 ---
 
 When we left off [last time][next-step] we'd created a `Translator` which

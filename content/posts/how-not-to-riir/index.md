@@ -4,7 +4,7 @@ date: '2019-10-20T19:45:00+08:00'
 tags:
 - Rust
 - FFI
-- Interop
+- Unsafe Rust
 ---
 
 Once you get past the growing pains of the *Borrow Checker* and realise Rust
