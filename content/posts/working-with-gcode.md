@@ -1,6 +1,7 @@
 ---
 title: Working With G-Code
 date: '2019-10-18T00:05:00+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Rust
 - G-Code
@@ -9,16 +10,13 @@ series:
 - Adventures in Motion Control
 ---
 
-As mentioned in [the previous post][next-step] there are a handful of tasks
-which may be tackled next, but only one of them really allows us to make progress
-towards our goal of implementing the simulated firmware for a 3D Printer.
+As mentioned in [the previous post][next-step] there are a handful of tasks which may be tackled next, but only one of them really allows us to make progress towards our goal of implementing the simulated firmware for a 3D Printer.
 
 Let's send the motion controller some g-code.
 
 ## Creating Message types
 
-If we want to send g-code programs between the frontend and backend we'll need
-to make a couple message definitions.
+If we want to send g-code programs between the frontend and backend we'll need to make a couple message definitions.
 
 ```rust
 // motion/src/gcode.rs
@@ -35,9 +33,7 @@ pub struct GcodeProgram<'a> {
 }
 ```
 
-Something to keep in mind is the full `GcodeProgram` message needs to fit
-inside an `anpp::Packet`. That means we'll need to limit the length of the
-`text` field.
+Something to keep in mind is the full `GcodeProgram` message needs to fit inside an `anpp::Packet`. That means we'll need to limit the length of the `text` field.
 
 ```rust
 // motion/src/gcode.rs
@@ -64,9 +60,7 @@ impl<'a> GcodeProgram<'a> {
 }
 ```
 
-We'll also need to add the same definitions to the frontend code. For the sake
-of convenience, the `sim` crate will expose a WASM function for writing a
-`GcodeProgram` message to a `Uint8Array`.
+We'll also need to add the same definitions to the frontend code. For the sake of convenience, the `sim` crate will expose a WASM function for writing a `GcodeProgram` message to a `Uint8Array`.
 
 ```rust
 // sim/src/utils.rs
@@ -87,20 +81,14 @@ pub fn encode_gcode_program(first_line: u32, text: &str) -> Uint8Array {
 ```
 
 {{% notice note %}}
-The `Pwrite` trait from `scroll` is used here to copy the `GcodeProgram`
-message's fields directly to a byte buffer. `GcodeProgram` uses a `&str`
-borrowed string so we actually needed to manually implement
-`scroll::ctx::TryIntoCtx` instead of using the custom derive.
+The `Pwrite` trait from `scroll` is used here to copy the `GcodeProgram` message's fields directly to a byte buffer. `GcodeProgram` uses a `&str` borrowed string so we actually needed to manually implement `scroll::ctx::TryIntoCtx` instead of using the custom derive.
 
-The details have been elided for simplicity (and because the implementation is
-rather straightforward), but check [`motion/src/gcode.rs`][1] out on GitHub if
-you're interested in how `scroll`'s `TryIntoCtx` trait can be implemented.
+The details have been elided for simplicity (and because the implementation is rather straightforward), but check [`motion/src/gcode.rs`][1] out on GitHub if you're interested in how `scroll`'s `TryIntoCtx` trait can be implemented.
 
 [1]: https://github.com/Michael-F-Bryan/adventures-in-motion-control/blob/d95e8805f866ed92a73a5e7a060163a262796f8d/motion/src/gcode.rs
 {{% /notice %}}
 
-Next, we'll add the corresponding TypeScript class and a method for converting
-it to an ANPP `Packet`.
+Next, we'll add the corresponding TypeScript class and a method for converting it to an ANPP `Packet`.
 
 ```ts
 // frontend/src/messaging.ts
@@ -130,11 +118,9 @@ function toPacket(request: Request): Packet {
 
 ## Sending the Messages
 
-Now we've got definitions for a `GcodeProgram` message, we'll need a way to
-construct and send those messages from the frontend to the backend.
+Now we've got definitions for a `GcodeProgram` message, we'll need a way to construct and send those messages from the frontend to the backend.
 
-Let's add a text input to the `Controls` panel which can be used to send g-code
-to the backend one line at a time.
+Let's add a text input to the `Controls` panel which can be used to send g-code to the backend one line at a time.
 
 ```vue
 // frontend/src/components/Control.vue
@@ -182,11 +168,9 @@ export default class Controls extends Vue {
 </script>
 ```
 
-That's about all the frontend code we'll need to write today. Let's move on to
-the backend.
+That's about all the frontend code we'll need to write today. Let's move on to the backend.
 
-At the moment, our `Router` isn't letting the `Motion` system know when a
-`GcodeProgram` message is received. Let's fix that.
+At the moment, our `Router` isn't letting the `Motion` system know when a `GcodeProgram` message is received. Let's fix that.
 
 
 ```rust
@@ -205,10 +189,7 @@ impl<'a> MessageHandler for Router<'a> {
         }
 ```
 
-To make the compiler happy, we'll implement
-`aimc_hal::messaging::Handler<GcodeProgram<'_>>` for `Motion` though using the
-good old `unimplemented!()` macro. We can use the panic message and backtrace as
-a crude sanity check to make sure everything is wired up correctly.
+To make the compiler happy, we'll implement `aimc_hal::messaging::Handler<GcodeProgram<'_>>` for `Motion` though using the good old `unimplemented!()` macro. We can use the panic message and backtrace as a crude sanity check to make sure everything is wired up correctly.
 
 ```rust
 // motion/src/motion.rs
@@ -222,8 +203,7 @@ impl Handler<GcodeProgram<'_>> for Motion {
 }
 ```
 
-Typing `G90 asdf` into the *"Manual g-code"* box and pressing enter gives us a
-nice stack trace containing the `GcodeProgram` message:
+Typing `G90 asdf` into the *"Manual g-code"* box and pressing enter gives us a nice stack trace containing the `GcodeProgram` message:
 
 ```
 panicked at 'not yet implemented: Received a GcodeProgram { first_line: 0, text: "G90 asdf" }', motion/src/motion.rs:85:9
@@ -251,14 +231,10 @@ Excellent!
 
 ## Processing the G-Code Program
 
-Now we're able to send a gcode program as text to the backend we need to turn
-it into something more machine-readable. Fortunately most of the heavy lifting
-of parsing is already handled for us, courtesy of the [`gcode`][gcode] crate.
+Now we're able to send a gcode program as text to the backend we need to turn it into something more machine-readable. Fortunately most of the heavy lifting of parsing is already handled for us, courtesy of the [`gcode`][gcode] crate.
 
 
-The first step is to create a `Translator` for turning the generic
-*"received the number `01` `G` command with arguments `(X, 42.0)` and `(Y,
--3.14)` on line 123"* message into something more specific to our use case.
+The first step is to create a `Translator` for turning the generic *"received the number `01` `G` command with arguments `(X, 42.0)` and `(Y, -3.14)` on line 123"* message into something more specific to our use case.
 
 ```rust
 // motion/src/movements/mod.rs
@@ -277,21 +253,14 @@ impl<'a, C: Callbacks + ?Sized> Callbacks for &'a mut C {}
 ```
 
 {{% notice note %}}
-If you are familiar with parsers, this would be referred to as a *Push
-Parser*. We're notifying the caller of parse results via callbacks that get
-invoked during the parsing process.
+If you are familiar with parsers, this would be referred to as a *Push Parser*. We're notifying the caller of parse results via callbacks that get invoked during the parsing process.
 
-An alternative approach is called *Pull Parsing*. This is where the caller
-will ask the parse for the next item, typically implemented using the
-`Iterator` trait.
+An alternative approach is called *Pull Parsing*. This is where the caller will ask the parse for the next item, typically implemented using the `Iterator` trait.
 
-*Push Parsing* happens to be slightly easier to implement and test in this
-case, so that's what we'll go with.
+*Push Parsing* happens to be slightly easier to implement and test in this case, so that's what we'll go with.
 {{% /notice %}}
 
-We'll also want a way to report warnings (e.g. unsupported commands) or
-errors (e.g. *"this command would move an axis out of bounds"*) back to the
-user.
+We'll also want a way to report warnings (e.g. unsupported commands) or errors (e.g. *"this command would move an axis out of bounds"*) back to the user.
 
 ```rust
 // motion/src/movements/mod.rs
@@ -307,8 +276,7 @@ pub trait Callbacks {
 }
 ```
 
-For convenience, we'll make a helper method which uses parses text using the
-`gcode` crate then iterates over every command invoking `translate()`.
+For convenience, we'll make a helper method which uses parses text using the `gcode` crate then iterates over every command invoking `translate()`.
 
 ```rust
 // motion/src/movements/mod.rs
@@ -334,8 +302,7 @@ impl Translator {
 }
 ```
 
-Annoyingly, the gcode language is only loosly specified with each vendor using
-their own dialect and associating different meanings to different commands.
+Annoyingly, the gcode language is only loosly specified with each vendor using their own dialect and associating different meanings to different commands.
 
 For our purposes we'll only need to support the most common commands, though.
 
@@ -365,10 +332,7 @@ Some links for further reading:
 - [The NIST RS274NGC Interpreter](https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=823374)
 {{% /notice %}}
 
-To turn the gcode commands into something more usable we're going to need a
-type to represent a 3-dimensional point in space. We *could* pull in a 3rd party
-geometry library for this, but sometimes [*"a little copying is better than a
-little dependency"*][proverbs].
+To turn the gcode commands into something more usable we're going to need a type to represent a 3-dimensional point in space. We *could* pull in a 3rd party geometry library for this, but sometimes [*"a little copying is better than a little dependency"*][proverbs].
 
 ```rust
 // motion/src/movements/point.rs
@@ -431,8 +395,7 @@ impl Point {
 impl Add<Point> for Point { ... }
 ```
 
-We also need some helper enums to keep track of the coordinate system and units
-being used.
+We also need some helper enums to keep track of the coordinate system and units being used.
 
 ```rust
 // motion/movements/translator.rs
@@ -456,9 +419,7 @@ impl Default for Units {
 }
 ```
 
-Next, let's add a couple methods which use these enums to calculate absolute
-locations and the end position for a *motion* command. The `Translator` type
-will need a couple new fields too.
+Next, let's add a couple methods which use these enums to calculate absolute locations and the end position for a *motion* command. The `Translator` type will need a couple new fields too.
 
 ```rust
 // motion/src/movements/translator.rs
@@ -523,8 +484,7 @@ impl Translator {
 }
 ```
 
-We need a way to notify the caller when a motion is translated, so the
-`Callbacks` trait needs a couple more methods.
+We need a way to notify the caller when a motion is translated, so the `Callbacks` trait needs a couple more methods.
 
 ```rust
 // motion/src/movements/translator.rs
@@ -565,8 +525,7 @@ pub enum Direction {
 }
 ```
 
-From here on out, processing a `GCode` command becomes mostly a mechanical
-process of:
+From here on out, processing a `GCode` command becomes mostly a mechanical process of:
 
 1. `match`ing on the `Mnemonic`
 2. `match`ing on the `major_number`
@@ -576,8 +535,7 @@ process of:
    - Update some internal state (e.g. if changing from inches to millimetres)
    - Maybe notify the caller if something unexpected/invalid was encountered
 
-Let's handle the *Miscellaneous* commands first, seeing as there's only one
-of them (`M30`).
+Let's handle the *Miscellaneous* commands first, seeing as there's only one of them (`M30`).
 
 ```rust
 // motion/src/movements/translator.rs
@@ -603,9 +561,7 @@ impl Translator {
 }
 ```
 
-Handling the motion commands requires us to massage the arguments a bit to take
-into account things like units and coordinate systems, so when `match`ing on the
-`major_number` we'll pull the handling code into their own methods.
+Handling the motion commands requires us to massage the arguments a bit to take into account things like units and coordinate systems, so when `match`ing on the `major_number` we'll pull the handling code into their own methods.
 
 ```rust
 // motion/src/movements/translator.rs
@@ -648,8 +604,7 @@ impl Translator {
 }
 ```
 
-The dwell command (`G04`) is easiest to handle. It has a single required
-argument, `P`, the time to wait in seconds.
+The dwell command (`G04`) is easiest to handle. It has a single required argument, `P`, the time to wait in seconds.
 
 ```rust
 // motion/src/movements/translator.rs
@@ -668,10 +623,7 @@ impl Translator {
 }
 ```
 
-The linear interpolate commands (`G00` and `G01`) are a bit more complicated.
-We need to determine the end point and feed rate (using the helpers defined
-earlier) then after notifying the caller, the `Translator`'s state needs to be
-updated with the new values.
+The linear interpolate commands (`G00` and `G01`) are a bit more complicated. We need to determine the end point and feed rate (using the helpers defined earlier) then after notifying the caller, the `Translator`'s state needs to be updated with the new values.
 
 ```rust
 // motion/src/movements/translator.rs
@@ -694,14 +646,9 @@ impl Translator {
 }
 ```
 
-And finally, we need to implement the circular interpolation commands (`G02` and
-`G03`). Circular interpolation is handled in much the same way as linear
-interpolation, except we also need to account for the centre point and direction
-of movement.
+And finally, we need to implement the circular interpolation commands (`G02` and `G03`). Circular interpolation is handled in much the same way as linear interpolation, except we also need to account for the centre point and direction of movement.
 
-To make things simpler, we'll require the user to specify the centre location
-using `I` and `J`. Working with different definitions or in different planes is
-left as an exercise for later.
+To make things simpler, we'll require the user to specify the centre location using `I` and `J`. Working with different definitions or in different planes is left as an exercise for later.
 
 ```rust
 // motion/src/movements/translator.rs
@@ -740,9 +687,7 @@ impl Translator {
 
 ## The Next Step
 
-Now we're able to parse a string into strongly-typed instructions for the motion
-planner, the next step is to bring this machine to life and start executing
-those instructions!
+Now we're able to parse a string into strongly-typed instructions for the motion planner, the next step is to bring this machine to life and start executing those instructions!
 
 [next-step]: {{< ref "wiring-up-communication/index.md#the-next-step" >}}
 [gcode]: https://crates.io/crates/gcodekk

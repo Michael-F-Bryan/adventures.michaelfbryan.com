@@ -1,22 +1,16 @@
 ---
 title: How to not RiiR
 date: '2019-10-20T19:45:00+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Rust
 - FFI
 - Unsafe Rust
 ---
 
-Once you get past the growing pains of the *Borrow Checker* and realise Rust
-gives you the power to do things which would be unheard of (or just plain
-dangerous) in other languages, the temptation to [*Rewrite it in Rust*][riir]
-can be quite strong. However at best, the temptation to *RiiR* is unproductive
-(unnecessary duplication of effort), and at worst it can promote the creation
-of buggy software (why would *you* be better equipped to write a library for
-some domain-specific purpose than the original author?).
+Once you get past the growing pains of the *Borrow Checker* and realise Rust gives you the power to do things which would be unheard of (or just plain dangerous) in other languages, the temptation to [*Rewrite it in Rust*][riir] can be quite strong. However at best, the temptation to *RiiR* is unproductive (unnecessary duplication of effort), and at worst it can promote the creation of buggy software (why would *you* be better equipped to write a library for some domain-specific purpose than the original author?).
 
-A much better alternative is to reuse the original library and just publish a
-safe interface to it.
+A much better alternative is to reuse the original library and just publish a safe interface to it.
 
 - [Getting Started](#getting-started)
 - [Building `chmlib-sys`](#building-chmlib-sys)
@@ -30,13 +24,9 @@ safe interface to it.
 - [Where To From Here?](#where-to-from-here)
 
 {{% notice note %}}
-This article actually works towards a real-world project, I want to extract
-some information from existing CHM files without doing all the hard work
-myself. I'm lazy like that.
+This article actually works towards a real-world project, I want to extract some information from existing CHM files without doing all the hard work myself. I'm lazy like that.
 
-The [chmlib crate is published on crates.io](https://crate.io/crates/chmlib),
-and the source code is [available on GitHub][repo]. If you found this useful
-or spotted a bug, let me know on the blog's [issue tracker][issue]!
+The [chmlib crate is published on crates.io](https://crate.io/crates/chmlib), and the source code is [available on GitHub][repo]. If you found this useful or spotted a bug, let me know on the blog's [issue tracker][issue]!
 
 [repo]: https://github.com/Michael-F-Bryan/chmlib
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
@@ -44,19 +34,15 @@ or spotted a bug, let me know on the blog's [issue tracker][issue]!
 
 ## Getting Started
 
-The first step in interfacing with a native library is to understand how it was
-originally intended to work.
+The first step in interfacing with a native library is to understand how it was originally intended to work.
 
 {{% notice info %}}
-Not only does this show us how to use the library, it also acts as a sanity
-check to make sure it builds, as well as providing build instructions and
-potential tests or examples.
+Not only does this show us how to use the library, it also acts as a sanity check to make sure it builds, as well as providing build instructions and potential tests or examples.
 
 **Do not skip this step!**
 {{% /notice %}}
 
-The library we'll be binding to is [CHMLib][chmlib], a C library for reading
-*Microsoft HTML Help Files* (`.chm`).
+The library we'll be binding to is [CHMLib][chmlib], a C library for reading *Microsoft HTML Help Files* (`.chm`).
 
 First, we'll make a new project and vendor `CHMLib` using git submodules.
 
@@ -79,8 +65,7 @@ $ git submodule add git@github.com:jedwing/CHMLib.git vendor/CHMLib
   Resolving deltas: 100% (45/45), done.
 ```
 
-We can then use the `tree` command to see what files are contained in the
-repository.
+We can then use the `tree` command to see what files are contained in the repository.
 
 ```command
 $ tree vendor/CHMLib
@@ -114,37 +99,23 @@ vendor/CHMLib
 2 directories, 23 files
 ```
 
-It looks like the original library uses [GNU Autotools][at] as a build system.
-This may be problematic because it'll require all users of our `chmlib` crate
-(and their users) to have Autotools installed.
+It looks like the original library uses [GNU Autotools][at] as a build system. This may be problematic because it'll require all users of our `chmlib` crate (and their users) to have Autotools installed.
 
 {{% notice note %}}
-If possible we'll try to avoid this "viral" need to install a dependency
-system-wide by invoking the C compiler manually, but file that thought away
-for later.
+If possible we'll try to avoid this "viral" need to install a dependency system-wide by invoking the C compiler manually, but file that thought away for later.
 {{% /notice %}}
 
-Upon further inspection, the `lzx.h` and `lzx.c` files are vendored copies of
-code for decompression using the [LZX][lzx] compression algorithm. Normally it'd
-be better to link with whatever `lzx` library is installed on the user's
-machine so we receive updates, but it'll be a lot easier to compile it into
-`chmlib`.
+Upon further inspection, the `lzx.h` and `lzx.c` files are vendored copies of code for decompression using the [LZX][lzx] compression algorithm. Normally it'd be better to link with whatever `lzx` library is installed on the user's machine so we receive updates, but it'll be a lot easier to compile it into `chmlib`.
 
-The `enum_chmLib.c`, `enumdir_chmLib.c`, and `extract_chmLib.c` appear to be
-examples displaying the usage of `chm_enumerate()`, `chm_enumerate_dir()`, and
-`chm_retrieve_object()` respectively. These should be useful...
+The `enum_chmLib.c`, `enumdir_chmLib.c`, and `extract_chmLib.c` appear to be examples displaying the usage of `chm_enumerate()`, `chm_enumerate_dir()`, and `chm_retrieve_object()` respectively. These should be useful...
 
-The `test_chmLib.c` file appears to be another example, this time showing how
-to find a single document from the CHM file and extract it to disk.
+The `test_chmLib.c` file appears to be another example, this time showing how to find a single document from the CHM file and extract it to disk.
 
-`chm_http.c` appears to be a simple HTTP server which serves the contents of a
-CHM file online. Let's ignore it for now.
+`chm_http.c` appears to be a simple HTTP server which serves the contents of a CHM file online. Let's ignore it for now.
 
-Now we've had a look around the various files under `vendor/CHMLib/src/`, let's
-try to build the library.
+Now we've had a look around the various files under `vendor/CHMLib/src/`, let's try to build the library.
 
-To be perfectly honest, this library is small enough that I can kinda stumble my
-way through until one of the examples runs.
+To be perfectly honest, this library is small enough that I can kinda stumble my way through until one of the examples runs.
 
 ```console
 $ clang chm_lib.c enum_chmLib.c -o enum_chmLib
@@ -207,18 +178,12 @@ Hmm, looks like even help files pull in jQuery ¯\\\_(ツ)\_/¯
 
 ## Building `chmlib-sys`
 
-Now we can kinda use CHMLib we need to write a `chmlib-sys` crate which will
-manage building the native library so it can be linked by `rustc`, and declare
-the various functions it exposes.
+Now we can kinda use CHMLib we need to write a `chmlib-sys` crate which will manage building the native library so it can be linked by `rustc`, and declare the various functions it exposes.
 
-To build the library we'll need to write a `build.rs` file. This will invoke the
-C compiler using the [`cc`][cc] crate and send various messages to `rust` to
-make sure everything links properly.
+To build the library we'll need to write a `build.rs` file. This will invoke the C compiler using the [`cc`][cc] crate and send various messages to `rust` to make sure everything links properly.
 
 {{% notice info %}}
-For our purposes we can pass all the hard work off to the [`cc`][cc] crate, but
-normally it's not that simple. Check out the [docs on build scripts][build-rs]
-for more detailed information.
+For our purposes we can pass all the hard work off to the [`cc`][cc] crate, but normally it's not that simple. Check out the [docs on build scripts][build-rs] for more detailed information.
 
 [build-rs]: https://doc.rust-lang.org/cargo/reference/build-scripts.html
 [cc]: https://docs.rs/cc
@@ -257,10 +222,7 @@ fn main() {
 }
 ```
 
-We also need to tell `cargo` that `chmlib-sys` links to the `chmlib` native
-library. Cargo will make sure only one crate in a dependency graph can link to
-a particular native library, this helps prevent undecipherable linker errors
-due to duplicate symbols or accidentally using incompatible C libraries.
+We also need to tell `cargo` that `chmlib-sys` links to the `chmlib` native library. Cargo will make sure only one crate in a dependency graph can link to a particular native library, this helps prevent undecipherable linker errors due to duplicate symbols or accidentally using incompatible C libraries.
 
 ```diff
 --- a/chmlib-sys/Cargo.toml
@@ -281,11 +243,9 @@ due to duplicate symbols or accidentally using incompatible C libraries.
  cc = { version = "1.0" }
 ```
 
-Next we need to declare the various functions exposed by the `chmlib` C library
-so they can be called from Rust.
+Next we need to declare the various functions exposed by the `chmlib` C library so they can be called from Rust.
 
-There's a project called [bindgen][bg] which does exactly this. You give it a
-header file and it'll automatically generate FFI bindings.
+There's a project called [bindgen][bg] which does exactly this. You give it a header file and it'll automatically generate FFI bindings.
 
 ```console
 $ cargo install bindgen
@@ -316,13 +276,10 @@ $ tail src/lib.rs
 ```
 
 {{% notice tip %}}
-I would highly recommend browsing the [Bindgen User
-Guide](https://rust-lang.github.io/rust-bindgen/) If you want to know how to
-tweak the output.
+I would highly recommend browsing the [Bindgen User Guide](https://rust-lang.github.io/rust-bindgen/) If you want to know how to tweak the output.
 {{% /notice %}}
 
-At this point it's worth writing a small [*Smoke Test*][st] to make sure things
-link properly and we can call functions from the C library.
+At this point it's worth writing a small [*Smoke Test*][st] to make sure things link properly and we can call functions from the C library.
 
 ```rust
 // chmlib-sys/tests/smoke_test.rs
@@ -376,14 +333,9 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 ## Writing a Safe Rust Wrapper
 
-We can now *technically* use the CHMLib from Rust, but it requires a lot of
-`unsafe` to call library functions. That's okay for a quick'n'dirty
-implementation, but if this is going to be published to crates.io it's worth
-writing a safe wrapper around the `unsafe` code.
+We can now *technically* use the CHMLib from Rust, but it requires a lot of `unsafe` to call library functions. That's okay for a quick'n'dirty implementation, but if this is going to be published to crates.io it's worth writing a safe wrapper around the `unsafe` code.
 
-Looking at the `chmlib-sys` crate with `cargo doc --open` shows it exposes half
-a dozen functions, most of which accept a `*mut ChmFile` as the first parameter.
-This maps quite nicely to object methods.
+Looking at the `chmlib-sys` crate with `cargo doc --open` shows it exposes half a dozen functions, most of which accept a `*mut ChmFile` as the first parameter. This maps quite nicely to object methods.
 
 {{% expand "CHMLib Header File" %}}
 ```c
@@ -534,25 +486,21 @@ int chm_enumerate_dir(struct chmFile *h,
 ```
 {{% /expand %}}
 
-Let's start off by creating a type that uses `chm_open()` in its constructor and
-calls `chm_close()` in its destructor.
+Let's start off by creating a type that uses `chm_open()` in its constructor and calls `chm_close()` in its destructor.
 
 ```rust
 pub unsafe extern "C" fn chm_open(filename: *const c_char) -> *mut chmFile;
 pub unsafe extern "C" fn chm_close(h: *mut chmFile);
 ```
 
-To make error handling easier we'll pull in the [`thiserror`][te] crate to
-automatically derive `std::error::Error`.
+To make error handling easier we'll pull in the [`thiserror`][te] crate to automatically derive `std::error::Error`.
 
 ```console
 $ cd chmlib
 $ cargo add thiserror
 ```
 
-We now need some way to convert from a `std::path::Path` to a `*const c_char`.
-Unfortunately, due to various OS-specific quirks [this][1] [isn't][2]
-[simple][3].
+We now need some way to convert from a `std::path::Path` to a `*const c_char`. Unfortunately, due to various OS-specific quirks [this][1] [isn't][2] [simple][3].
 
 ```rust
 // chmlib/src/lib.rs
@@ -581,9 +529,7 @@ fn path_to_cstring(path: &Path) -> Result<CString, InvalidPath> {
 pub struct InvalidPath;
 ```
 
-Next we'll create a `ChmFile` which contains a non-null pointer to a
-`chmlib_sys::chmFile`. If `chm_open()` returns a null pointer we'll know that
-opening the file failed and some sort of error occurred.
+Next we'll create a `ChmFile` which contains a non-null pointer to a `chmlib_sys::chmFile`. If `chm_open()` returns a null pointer we'll know that opening the file failed and some sort of error occurred.
 
 ```rust
 // chmlib/src/lib.rs
@@ -629,8 +575,7 @@ pub enum OpenError {
 }
 ```
 
-To make sure we're not leaking memory, we can use `valgrind` to run a test that
-constructs a `ChmFile` then immediately drops it.
+To make sure we're not leaking memory, we can use `valgrind` to run a test that constructs a `ChmFile` then immediately drops it.
 
 The test:
 
@@ -697,16 +642,11 @@ pub unsafe extern "C" fn chm_resolve_object(
 ) -> c_int;
 ```
 
-This is a fallible operation, so the `chm_resolve_object()` function returns a
-status code indicating success or failure and a pointer to some `chmUnitInfo`
-object which will be populated if something was found.
+This is a fallible operation, so the `chm_resolve_object()` function returns a status code indicating success or failure and a pointer to some `chmUnitInfo` object which will be populated if something was found.
 
-The [`std::mem::MaybeUninit`][uninit] type was create for the exact purpose of
-representing the `ui` "out pointer".
+The [`std::mem::MaybeUninit`][uninit] type was create for the exact purpose of representing the `ui` "out pointer".
 
-For now we'll create an empty `UnitInfo` struct to be the Rust equivalent of
-`chmUnitInfo`. It will be populated when we start reading items out of the
-`ChmFile`.
+For now we'll create an empty `UnitInfo` struct to be the Rust equivalent of `chmUnitInfo`. It will be populated when we start reading items out of the `ChmFile`.
 
 ```rust
 // chmlib/src/lib.rs
@@ -748,9 +688,7 @@ impl UnitInfo {
 ```
 
 {{% notice info %}}
-Note that `ChmFile::find()` takes `&mut self`, even though none of our Rust code
-seems to do any mutation. This is because under the hood it uses things like
-`fseek()` to move back and forth around a file... which mutates internal state.
+Note that `ChmFile::find()` takes `&mut self`, even though none of our Rust code seems to do any mutation. This is because under the hood it uses things like `fseek()` to move back and forth around a file... which mutates internal state.
 {{% /notice %}}
 
 We can test that `ChmFile::find()` works using the sample CHM file from before.
@@ -770,8 +708,7 @@ fn find_an_item_in_the_sample() {
 
 ### Enumerating Items in a CHM File
 
-CHMLib exposes an API for inspecting items in the CHM file filtering the items
-to inspect based on a bitmask.
+CHMLib exposes an API for inspecting items in the CHM file filtering the items to inspect based on a bitmask.
 
 We'll be using the `bitflags` crate.
 
@@ -802,8 +739,7 @@ bitflags::bitflags! {
 }
 ```
 
-We also need an `extern "C"` adaptor to use a Rust closure as a normal
-function pointer.
+We also need an `extern "C"` adaptor to use a Rust closure as a normal function pointer.
 
 ```rust
 // chmlib/src/lib.rs
@@ -842,21 +778,12 @@ where
 ```
 
 {{% notice warning %}}
-This `function_wrapper` is a fairly tricky bit of `unsafe` code and there are
-a couple things to keep in mind:
+This `function_wrapper` is a fairly tricky bit of `unsafe` code and there are a couple things to keep in mind:
 
 - The `state` pointer **must** point to an instance of our `F` closure
-- Unwinding the stack from Rust to C is Undefined behaviour, and our `closure`
-  may trigger a panic. We need to use `std::panic::catch_unwind()` to prevent
-  panics from escaping the `function_wrapper`.
-- The `chmlib_sys::chmFile` passed to `function_wrapper` is also pointed to by
-  the calling `ChmFile`. We need to make sure `closure` is the only thing able
-  to mutate the `chmlib_sys::chmFile` otherwise we'll open ourselves up to
-  race conditions
-- We want to pass a `&mut ChmFile` to the closure which means we'll need to
-  construct a temporary one on the stack using the `file` pointer. However if
-  it gets dropped then the `chmlib_sys::chmFile` will be freed prematurely. This
-  can be prevented using `std::mem::ManuallyDrop`.
+- Unwinding the stack from Rust to C is Undefined behaviour, and our `closure` may trigger a panic. We need to use `std::panic::catch_unwind()` to prevent panics from escaping the `function_wrapper`.
+- The `chmlib_sys::chmFile` passed to `function_wrapper` is also pointed to by the calling `ChmFile`. We need to make sure `closure` is the only thing able to mutate the `chmlib_sys::chmFile` otherwise we'll open ourselves up to race conditions
+- We want to pass a `&mut ChmFile` to the closure which means we'll need to construct a temporary one on the stack using the `file` pointer. However if it gets dropped then the `chmlib_sys::chmFile` will be freed prematurely. This can be prevented using `std::mem::ManuallyDrop`.
 {{% /notice %}}
 
 We can now use `function_wrapper` to implement `ChmFile::for_each()`.
@@ -911,18 +838,14 @@ impl ChmFile {
 ```
 
 {{% notice info %}}
-This trick works by using the `F` type parameter to instantiate
-`function_wrapper` for our closure type. This is a trick that comes up often
-when wanting to pass a Rust closure across the FFI barrier.
+This trick works by using the `F` type parameter to instantiate `function_wrapper` for our closure type. This is a trick that comes up often when wanting to pass a Rust closure across the FFI barrier.
 {{% /notice %}}
 
 ### Reading File Contents
 
-The last function we need to wrap is actually reading the contents of a file
-into memory with `chm_retrieve_object()`.
+The last function we need to wrap is actually reading the contents of a file into memory with `chm_retrieve_object()`.
 
-The implementation is almost trivial, and quite similar to the `std::io::Read`
-trait except with the addition of a starting `offset`.
+The implementation is almost trivial, and quite similar to the `std::io::Read` trait except with the addition of a starting `offset`.
 
 ```rust
 // chmlib/src/lib.rs
@@ -961,16 +884,13 @@ impl ChmFile {
 pub struct ReadError;
 ```
 
-It would be nice to provide more useful error messages than *"the read failed"*,
-but reading through the source code for `chm_retrieve_object()` shows it doesn't
-differentiate between:
+It would be nice to provide more useful error messages than *"the read failed"*, but reading through the source code for `chm_retrieve_object()` shows it doesn't differentiate between:
 
 - Returning `0` when all data is read
 - Invalid arguments - null pointers or out of bounds reads return `0`
 - failed file reads - `man 2 read` says `read()` may return `-1` and
 set `errno`
-- decompression failure - not being able to `malloc()` a scratch buffer or
-  the decompression algorithm encountering malformed input will return `-1`
+- decompression failure - not being able to `malloc()` a scratch buffer or the decompression algorithm encountering malformed input will return `-1`
 
 We can also test the `ChmFile::read()` function by looking for known input.
 
@@ -1003,23 +923,15 @@ fn read_an_item() {
 
 ## Implementing the Examples
 
-We've now covered the vast majority of the CHMLib API and by this point most
-people would be happy to call it a day, however it's worth taking the time to
-make the crate more approachable for our users. This is primarily accomplished
-by adding examples and documentation, two things I've noticed the Rust and Go
-communities tend to put a lot of effort into (probably thanks to `rustdoc` and
-`godoc` being first-class citizens in the language toolchain).
+We've now covered the vast majority of the CHMLib API and by this point most people would be happy to call it a day, however it's worth taking the time to make the crate more approachable for our users. This is primarily accomplished by adding examples and documentation, two things I've noticed the Rust and Go communities tend to put a lot of effort into (probably thanks to `rustdoc` and `godoc` being first-class citizens in the language toolchain).
 
-Luckily the underlying CHMLib came with examples, so we should just be able
-to port them to use the `chmlib` crate.
+Luckily the underlying CHMLib came with examples, so we should just be able to port them to use the `chmlib` crate.
 
-It's also useful as a sanity check to make sure the underlying library and our
-wrapper generate the same output.
+It's also useful as a sanity check to make sure the underlying library and our wrapper generate the same output.
 
 ### Enumerating All Items
 
-This example opens the provided CHM file and generates a table with information
-about all items inside.
+This example opens the provided CHM file and generates a table with information about all items inside.
 
 {{% expand "Original Example" %}}
 ```c
@@ -1117,9 +1029,7 @@ int main(int c, char **v)
 ```
 {{% /expand %}}
 
-The `_print_ui()` function can be translated to Rust quite with ease. It's just
-creating a description based on the `UnitInfo`'s flags and string concatenation,
-then playing around with padding to generate tabulated output.
+The `_print_ui()` function can be translated to Rust quite with ease. It's just creating a description based on the `UnitInfo`'s flags and string concatenation, then playing around with padding to generate tabulated output.
 
 ```rust
 // chmlib/examples/enumerate-items.rs
@@ -1152,8 +1062,7 @@ fn describe_item(item: UnitInfo) {
 }
 ```
 
-Then the `main()` function will do some naive command-line argument parsing before
-opening the file and passing `describe()` to `ChmFile::for_each()`.
+Then the `main()` function will do some naive command-line argument parsing before opening the file and passing `describe()` to `ChmFile::for_each()`.
 
 ```rust
 // chmlib/examples/enumerate-items.rs
@@ -1176,8 +1085,7 @@ fn main() {
 }
 ```
 
-As a sanity check we'll compare the output from our Rust example with the
-original.
+As a sanity check we'll compare the output from our Rust example with the original.
 
 ```console
 $ cargo run --example enumerate-items topics.classic.chm > rust-example.txt
@@ -1190,9 +1098,7 @@ $ echo $?
 0
 ```
 
-The diff indicates both examples generate identical output, but to make sure
-`diff` is actually doing something let's inject some dodgy output and see the
-`diff` complain.
+The diff indicates both examples generate identical output, but to make sure `diff` is actually doing something let's inject some dodgy output and see the `diff` complain.
 
 ```diff
 diff --git a/chmlib/examples/enumerate-items.rs b/chmlib/examples/enumerate-items.rs
@@ -1449,12 +1355,9 @@ int main(int c, char **v)
 
 {{% /expand %}}
 
-The original example is quite verbose due to C's lack of high-level abstractions
-and crippled standard library, hopefully our example will be much more readable.
+The original example is quite verbose due to C's lack of high-level abstractions and crippled standard library, hopefully our example will be much more readable.
 
-The interesting code lies inside our `extract()` function. The code is rather
-self-explanatory, so I'll let you read that instead of describing the process
-of extracting items in plain English.
+The interesting code lies inside our `extract()` function. The code is rather self-explanatory, so I'll let you read that instead of describing the process of extracting items in plain English.
 
 ```rust
 // chmlib/examples/extract.rs
@@ -1507,9 +1410,7 @@ fn extract(
 }
 ```
 
-Compared to `extract()`, our `main()` function is relatively simple, with the
-handling of failures during extraction being the only real difference from the
-previous example.
+Compared to `extract()`, our `main()` function is relatively simple, with the handling of failures during extraction being the only real difference from the previous example.
 
 ```rust
 // chmlib/examples/extract.rs
@@ -1537,8 +1438,7 @@ fn main() {
 }
 ```
 
-Running this example against our sample CHM file gives us a set of files which
-can be opened using a normal web browser.
+Running this example against our sample CHM file gives us a set of files which can be opened using a normal web browser.
 
 ```console
 $ cargo run --example extract -- ./topics.classic.chm ./extracted
@@ -1562,36 +1462,21 @@ $ firefox topics.classic/default.html
 (opens default.html in firefox)
 ```
 
-Some of the JavaScript is broken (I'm assuming implementation quirks with the
-Microsoft Help viewer?) and there is no search functionality, but overall the
-website is quite usable.
+Some of the JavaScript is broken (I'm assuming implementation quirks with the Microsoft Help viewer?) and there is no search functionality, but overall the website is quite usable.
 
 ## Where To From Here?
 
-The `chmlib` crate is now essentially feature complete and (with a couple minor
-tweaks) ready to be published to crates.io.
+The `chmlib` crate is now essentially feature complete and (with a couple minor tweaks) ready to be published to crates.io.
 
 There are a couple places I've left as an exercise to the reader, though:
 
-- If the `closure` in `ChmFile::for_each()` or
-  `ChmFile::for_each_item_in_dir()` panic, we should resume unwinding after
-  returning from C to Rust instead of swallowing the error.
+- If the `closure` in `ChmFile::for_each()` or `ChmFile::for_each_item_in_dir()` panic, we should resume unwinding after returning from C to Rust instead of swallowing the error.
 
-- It'd be nice if the simple case of iterating over every item in a `ChmFile`
-  didn't need to return `Continuation::Continue` for the closure passed to
-  `ChmFile::for_each()` and friends. This could probably be implemented by
-  accepting `F: FnMut(&mut ChmFile, UnitInfo) -> C` where `C: Into<Continuation>`
-  and then adding an `impl From<()> for Continuation`.
+- It'd be nice if the simple case of iterating over every item in a `ChmFile` didn't need to return `Continuation::Continue` for the closure passed to `ChmFile::for_each()` and friends. This could probably be implemented by accepting `F: FnMut(&mut ChmFile, UnitInfo) -> C` where `C: Into<Continuation>` and then adding an `impl From<()> for Continuation`.
 
-- Errors encountered during iteration (e.g. like our `extract()` example) should
-  also be passed back to the caller of `ChmFile::for_each()` and abort iteration
-  early. This could tie in with the previous point by adding an implementation
-  of `impl<E> From<Result<(), E>> for Continuation where E: Error + 'static`
+- Errors encountered during iteration (e.g. like our `extract()` example) should also be passed back to the caller of `ChmFile::for_each()` and abort iteration early. This could tie in with the previous point by adding an implementation of `impl<E> From<Result<(), E>> for Continuation where E: Error + 'static`
 
-- Having to manually copy chunks into an intermediate buffer before writing them
-  to a `File` in the `extract()` example is annoying. We may want to add a
-  convenience function which will call `ChmFile:read()` in a loop and write the
-  entire item into some `std::io::Write`r.
+- Having to manually copy chunks into an intermediate buffer before writing them to a `File` in the `extract()` example is annoying. We may want to add a convenience function which will call `ChmFile:read()` in a loop and write the entire item into some `std::io::Write`r.
 
 [riir]: https://transitiontech.ca/random/RIIR
 [chmlib]: https://github.com/jedwing/CHMLib

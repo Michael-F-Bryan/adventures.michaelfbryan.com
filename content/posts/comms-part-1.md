@@ -1,6 +1,7 @@
 ---
 title: 'The Communications System: Part 1'
 date: '2019-09-06T23:00:00+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Rust
 - Protocol Design
@@ -11,42 +12,25 @@ series:
 
 ## Prelude
 
-The *Communications* system is arguably one of the most important parts of
-our simulator. After all, it's kinda hard to debug a program when you can't
-ask it why something isn't working.
+The *Communications* system is arguably one of the most important parts of our simulator. After all, it's kinda hard to debug a program when you can't ask it why something isn't working.
 
-The user will interact with our simulated motion controller via a single
-*Serial Port*, which we'll be modelling as a simple thing which sends and
-receives bytes. Serial ports are a fairly old technology, and have several
-drawbacks compared to the Ethernet and TCP protocols that most programmers
-are familiar with.
+The user will interact with our simulated motion controller via a single *Serial Port*, which we'll be modelling as a simple thing which sends and receives bytes. Serial ports are a fairly old technology, and have several drawbacks compared to the Ethernet and TCP protocols that most programmers are familiar with.
 
 - There are no "packets" (i.e. bring your own [frames][framing])
-- There's no guarantee the other side has received a message (i.e. bring your
-  own [ACKs][ack]) - or even that there's anyone on the other end!
-- If you receive data, there's no guarantee it wasn't garbled during
-  transmission (i.e. bring your own [error detection and correction][er])
+- There's no guarantee the other side has received a message (i.e. bring your own [ACKs][ack]) - or even that there's anyone on the other end!
+- If you receive data, there's no guarantee it wasn't garbled during transmission (i.e. bring your own [error detection and correction][er])
 
-This all combines to make the *Serial* protocol an [unreliable][reliability]
-one. Reliable protocols can be built on top of unreliable ones, we just need to
-be smarter.
+This all combines to make the *Serial* protocol an [unreliable][reliability] one. Reliable protocols can be built on top of unreliable ones, we just need to be smarter.
 
-For simplicity, we'll design the communications system using request-response
-pairs. This means:
+For simplicity, we'll design the communications system using request-response pairs. This means:
 
-- For every message sent to the simulator, there will be a corresponding
-  response message
-  - This implies that no response means the request wasn't received and should
-    be resent (or ignored if non-critical)
+- For every message sent to the simulator, there will be a corresponding response message
+  - This implies that no response means the request wasn't received and should be resent (or ignored if non-critical)
 - Responses will always be sent in the order their requests arrived in
 
 ## Building Reliability
 
-The way we'll be adding reliability to the underlying error-prone stream of
-bytes received from the *Serial* connection is by using a protocol called the
-*Advanced Navigation Packet Protocol* (ANPP). This is a handy little protocol
-*published by [*Advanced Navigation*][an] under the MIT license, with an
-[open-source Rust port][anpp-rs].
+The way we'll be adding reliability to the underlying error-prone stream of bytes received from the *Serial* connection is by using a protocol called the *Advanced Navigation Packet Protocol* (ANPP). This is a handy little protocol *published by [*Advanced Navigation*][an] under the MIT license, with an [open-source Rust port][anpp-rs].
 
 Each message sent using ANPP will be laid out as:
 
@@ -58,35 +42,21 @@ Each message sent using ANPP will be laid out as:
 | `0x4`  | 1     | Header check-byte (XOR of bytes `0..4`) |
 | `0x5`  | < 256 | Body                                    |
 
-This lets us receive bytes one-by-one over the *Serial* port, then we can
-periodically scan through the received bytes looking for a valid header
-(sequence of 5 bytes which equal `0` when XOR'd together). From there we can
-identify the message body (the next `Length` bytes) and identify transmission
-errors using the CRC-16 checksum.
+This lets us receive bytes one-by-one over the *Serial* port, then we can periodically scan through the received bytes looking for a valid header (sequence of 5 bytes which equal `0` when XOR'd together). From there we can identify the message body (the next `Length` bytes) and identify transmission errors using the CRC-16 checksum.
 
-ANPP gives us a nice way of detecting when a message has been received
-successfully, but we also need a higher-level mechanism for detecting
-transmission failures and correcting them.
+ANPP gives us a nice way of detecting when a message has been received successfully, but we also need a higher-level mechanism for detecting transmission failures and correcting them.
 
-The easiest way to do this is called [Automatic Repeat reQuest][arq], i.e. tell
-the sender to resend because an error was detected, and/or automatically resend
-the previous message if it hasn't been answered after X seconds.
+The easiest way to do this is called [Automatic Repeat reQuest][arq], i.e. tell the sender to resend because an error was detected, and/or automatically resend the previous message if it hasn't been answered after X seconds.
 
 ## Sending Data to the Communications System
 
-Data can be received at any time in a normal microcontroller. The typical way to
-handle this is by either frequently polling the pins wired up to our serial
-port, or to configure the microcontroller to automatically invoke a callback
-whenever a byte is received.
+Data can be received at any time in a normal microcontroller. The typical way to handle this is by either frequently polling the pins wired up to our serial port, or to configure the microcontroller to automatically invoke a callback whenever a byte is received.
 
-In this case the interrupt approach seems quite natural due to JavaScript's
-callback-based nature.
+In this case the interrupt approach seems quite natural due to JavaScript's callback-based nature.
 
-All bytes the simulator receives will need to be stored in a buffer until the
-next tick.
+All bytes the simulator receives will need to be stored in a buffer until the next tick.
 
-We can model the way data is passed to the `Communications` system by giving
-the new `comms` crate a `Rx` trait:
+We can model the way data is passed to the `Communications` system by giving the new `comms` crate a `Rx` trait:
 
 ```rust
 // comms/src/lib.rs
@@ -103,8 +73,7 @@ pub trait Rx {
 }
 ```
 
-We'll also give the WASM code a way to write data to a buffer owned by our
-`App`.
+We'll also give the WASM code a way to write data to a buffer owned by our `App`.
 
 ```rust
 // sim/src/app.rs
@@ -137,21 +106,14 @@ impl Inputs {
 ```
 
 {{% notice note %}}
-In most microcontrollers an *Interrupt Service Routine* is a function that
-takes no arguments and returns nothing (`fn()`), meaning the only way to send
-data from the ISR to the main application is via `static` memory.
+In most microcontrollers an *Interrupt Service Routine* is a function that takes no arguments and returns nothing (`fn()`), meaning the only way to send data from the ISR to the main application is via `static` memory.
 
-This is more of an implementation detail than anything else. For our purposes
-using a method on `App` makes things simpler and easier to test, so we'll do
-that. At the end of the day, thanks to the `Rx` trair our `Communications`
-system doesn't really care *where* bytes come from, just that we can give it
-a buffer of recently received data.
+This is more of an implementation detail than anything else. For our purposes using a method on `App` makes things simpler and easier to test, so we'll do that. At the end of the day, thanks to the `Rx` trair our `Communications` system doesn't really care *where* bytes come from, just that we can give it a buffer of recently received data.
 {{% /notice %}}
 
 ## Decoding Received Data
 
-Now we've got a way to send data between the frontend and the backend, lets
-start coding the `Communications` system which is in charge of decoding packets.
+Now we've got a way to send data between the frontend and the backend, lets start coding the `Communications` system which is in charge of decoding packets.
 
 ```rust
 // comms/src/lib.rs
@@ -171,11 +133,7 @@ impl<I: Rx, O> System<I, O> for Communications {
 }
 ```
 
-The `poll()` method for `Communications` is really simple. You copy data from
-`inputs.received()` into `self.decoder` (using
-[`Decoder::push_data()`][push_data]), then keep calling
-[`Decoder::decode()`][decode] to read packets until it returns a
-[`DecodeError::RequiresMoreData`][needs-data].
+The `poll()` method for `Communications` is really simple. You copy data from `inputs.received()` into `self.decoder` (using [`Decoder::push_data()`][push_data]), then keep calling [`Decoder::decode()`][decode] to read packets until it returns a [`DecodeError::RequiresMoreData`][needs-data].
 
 ```rust
 // comms/src/lib.rs
@@ -200,19 +158,11 @@ impl<I: Rx, O> System<I, O> for Communications {
 
 This looks fairly straightforward, but it's raised three questions:
 
-- **A:** how do we want to handle decoder buffer overflows? If we're
-  receiving more data than we can process and can't increase the buffer size
-  (buffers have a size defined at compile-time) then we need to drop data. The
-  question then becomes whether to drop data already in the buffer, or drop
-  data we haven't had a chance to look at yet?
+- **A:** how do we want to handle decoder buffer overflows? If we're receiving more data than we can process and can't increase the buffer size (buffers have a size defined at compile-time) then we need to drop data. The question then becomes whether to drop data already in the buffer, or drop data we haven't had a chance to look at yet?
 - **B:** We've got a valid packet... now what?
-- **C:** Invalid CRCs indicate that a message was garbled in transit. Should we
-  just ignore the error, or do we want to keep track of how many CRC errors
-  we've had and report it to the frontend at some point?
+- **C:** Invalid CRCs indicate that a message was garbled in transit. Should we just ignore the error, or do we want to keep track of how many CRC errors we've had and report it to the frontend at some point?
 
-For now, lets handle **A** by clearing the `Decoder` buffer. This lets us get
-rid of garbled data left over from previous `poll()`s and start with a clean
-slate.
+For now, lets handle **A** by clearing the `Decoder` buffer. This lets us get rid of garbled data left over from previous `poll()`s and start with a clean slate.
 
 ```rust
 // comms/src/lib.rs
@@ -238,24 +188,14 @@ impl<I: Rx, O> System<I, O> for Communications {
 ```
 
 {{% notice tip %}}
-Either way, this situation isn't ideal. We don't want to drop data at all, so
-ideally the frontend wouldn't send more data than the `Communications` system
-can handle.
+Either way, this situation isn't ideal. We don't want to drop data at all, so ideally the frontend wouldn't send more data than the `Communications` system can handle.
 
-This gives us an effective limit of
-[`anpp::Decoder::DEFAULT_DECODER_BUFFER_SIZE`][buffer-size] (512 bytes) per
-`poll()` of the `Communications` system. Considering will be polling the
-simulator from `requestAnimationFrame()`, and `requestAnimationFrame()` only
-fires when the browser redraws (about 60Hz, or every 16ms), this limits the
-entire application to a maximum transfer rate of `512*60 = 30720` bytes per
-second.
+This gives us an effective limit of [`anpp::Decoder::DEFAULT_DECODER_BUFFER_SIZE`][buffer-size] (512 bytes) per `poll()` of the `Communications` system. Considering will be polling the simulator from `requestAnimationFrame()`, and `requestAnimationFrame()` only fires when the browser redraws (about 60Hz, or every 16ms), this limits the entire application to a maximum transfer rate of `512*60 = 30720` bytes per second.
 
 [buffer-size]: https://docs.rs/anpp/1.0.1/anpp/struct.Decoder.html#associatedconstant.DEFAULT_DECODER_BUFFER_SIZE
 {{% /notice %}}
 
-**B** is easy enough to solve. The `Communications` system is only concerned
-with the receiving and transmitting of messages, so it should let the rest of
-the application decide *how* a message should be handled and what to reply with.
+**B** is easy enough to solve. The `Communications` system is only concerned with the receiving and transmitting of messages, so it should let the rest of the application decide *how* a message should be handled and what to reply with.
 
 ```rust
 // comms/src/lib.rs
@@ -341,19 +281,12 @@ impl<T: Tx, M> Outputs<T, M> {
 ```
 
 {{% notice note %}}
-Later on we may want to deal with a `CommsError::UnknownMessageType` by sending
-back some sort of *"Not Acknowledged"* message, but for now we'll panic.
+Later on we may want to deal with a `CommsError::UnknownMessageType` by sending back some sort of *"Not Acknowledged"* message, but for now we'll panic.
 {{% /notice %}}
 
-To represent the transfer side of a serial port we'll introduce a `Tx` trait.
-We *could* have merged `handle_message()` and `send()` into a single trait,
-but that wouldn't make logical sense. The `Tx` trait is implemented by some
-bit of hardware that connects to the outside world, while a `MessageHandler`
-is used to communicate with the rest of the application.
+To represent the transfer side of a serial port we'll introduce a `Tx` trait. We *could* have merged `handle_message()` and `send()` into a single trait, but that wouldn't make logical sense. The `Tx` trait is implemented by some bit of hardware that connects to the outside world, while a `MessageHandler` is used to communicate with the rest of the application.
 
-To make things more ergonomic, `Tx` and `MessageHandler` are implemented for
-mutable references. That lets a caller just pass in a mutable reference to
-existing types, i.e. `Outputs::new(&mut some_tx, &mut some_handler)`.
+To make things more ergonomic, `Tx` and `MessageHandler` are implemented for mutable references. That lets a caller just pass in a mutable reference to existing types, i.e. `Outputs::new(&mut some_tx, &mut some_handler)`.
 
 ```rust
 // comms/src/lib.rs
@@ -369,10 +302,7 @@ impl<'a, M: MessageHandler> MessageHandler for &'a mut M {
 }
 ```
 
-To handle **C** (CRC errors), we'll give the `MessageHandler` a method that'll
-be called whenever a CRC error occurs. That way the component in charge of
-routing messages can note down how many errors have occurred within a single
-run.
+To handle **C** (CRC errors), we'll give the `MessageHandler` a method that'll be called whenever a CRC error occurs. That way the component in charge of routing messages can note down how many errors have occurred within a single run.
 
 ```rust
 // comms/src/lib.rs
@@ -404,9 +334,7 @@ pub trait MessageHandler {
 
 ## The Next Step
 
-We've now set things up so we can receive input from the frontend and decode the
-data into raw `Packet`s, the next step is to start defining the various messages
-our system will use and wire up a `MessageHandler`.
+We've now set things up so we can receive input from the frontend and decode the data into raw `Packet`s, the next step is to start defining the various messages our system will use and wire up a `MessageHandler`.
 
 [framing]: https://en.wikipedia.org/wiki/Frame_(networking)
 [ack]: https://en.wikipedia.org/wiki/Acknowledgement_(data_networks)

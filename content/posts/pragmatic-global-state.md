@@ -1,70 +1,39 @@
 ---
 title: A Pragmatic Approach To Global State
 date: '2020-02-17T22:22:47+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Rust
 - FFI
 - Third-Party Code
 ---
 
-One of the first things I learned when programming professionally is that
-*global variables are bad*. We all take it for granted that it's bad practice
-to write code that relies heavily on global state but the other day I was
-working with a 3rd party native library, and it reminded *why* these best
-practices come about.
+One of the first things I learned when programming professionally is that *global variables are bad*. We all take it for granted that it's bad practice to write code that relies heavily on global state but the other day I was working with a 3rd party native library, and it reminded *why* these best practices come about.
 
-There are a couple factors which made this particular library's use of global
-mutable state rather ugly to work with,
+There are a couple factors which made this particular library's use of global mutable state rather ugly to work with,
 
-- Thread safety - mutating something from two concurrent threads of execution
-  without proper synchronisation is a [data race][data-race], a common form of
-  *Undefined Behaviour*. This means the library can only ever be used from one
-  place at a time.
-- Brittle code - Relying on global state often means the code expects to be
-  run in a very specific order. Failing to invoke functions in the correct
-  order can lead to memory issues (e.g. leaks or double-frees) and
-  accidentally corrupting the library's state
-- Poor testability - when code is mutating global variables there's no way to
-  inject mocks (e.g. to `assert!()` specific conditions) or make sure
-  individual chunks of functionality work. You are often reduced to writing
-  one or two high-level integration tests which execute the "happy path", and
-  when an error occurs it's hard to narrow it down to just one function
+- Thread safety - mutating something from two concurrent threads of execution without proper synchronisation is a [data race][data-race], a common form of *Undefined Behaviour*. This means the library can only ever be used from one place at a time.
+- Brittle code - Relying on global state often means the code expects to be run in a very specific order. Failing to invoke functions in the correct order can lead to memory issues (e.g. leaks or double-frees) and accidentally corrupting the library's state
+- Poor testability - when code is mutating global variables there's no way to inject mocks (e.g. to `assert!()` specific conditions) or make sure individual chunks of functionality work. You are often reduced to writing one or two high-level integration tests which execute the "happy path", and when an error occurs it's hard to narrow it down to just one function
 
 {{% notice info %}}
-To be clear, when I refer to *"global state"* I am referring to variables in
-a program (typically declared with the keyword `static` in languages like C#,
-Java, and Rust) which live for the lifetime of the program, only ever have
-one instance, and where all uses of the variable are hard-coded to use that
-instance (i.e. code refers to the variable by name instead of via a reference).
+To be clear, when I refer to *"global state"* I am referring to variables in a program (typically declared with the keyword `static` in languages like C#, Java, and Rust) which live for the lifetime of the program, only ever have one instance, and where all uses of the variable are hard-coded to use that instance (i.e. code refers to the variable by name instead of via a reference).
 
-These variables don't necessarily need to be publicly accessible. All of
-these problems occur when using [static local variables][slv] inside a
-function or class. The core problems related to having static lifetime and
-code directly referencing the variable are still there.
+These variables don't necessarily need to be publicly accessible. All of these problems occur when using [static local variables][slv] inside a function or class. The core problems related to having static lifetime and code directly referencing the variable are still there.
 
 [slv]: https://en.wikipedia.org/wiki/Local_variable#Static_local_variables
 {{% /notice %}}
 
-For my use case it's not really viable to use a different library because the
-alternatives don't necessarily have the features we need. We also can't
-rewrite the code to not use global mutable state because it's closed-source,
-and even then would require tens of developer-years of effort. Which is tens of
-developer-years more than I have to spare.
+For my use case it's not really viable to use a different library because the alternatives don't necessarily have the features we need. We also can't rewrite the code to not use global mutable state because it's closed-source, and even then would require tens of developer-years of effort. Which is tens of developer-years more than I have to spare.
 
-This necessitates a more pragmatic solution. In short, we needed to find a
-way to use this 3rd party library without it polluting the rest of the
-application too much.
+This necessitates a more pragmatic solution. In short, we needed to find a way to use this 3rd party library without it polluting the rest of the application too much.
 
-I'll be implementing this in Rust primarily because it's quite good at
-enforcing guarantees via the type system, but the general ideas aren't really
-language-specific. It may just require more runtime checks.
+I'll be implementing this in Rust primarily because it's quite good at enforcing guarantees via the type system, but the general ideas aren't really language-specific. It may just require more runtime checks.
 
 {{% notice note %}}
-The code written in this article is available [on GitHub][repo]. Feel free to
-browse through and steal code or inspiration.
+The code written in this article is available [on GitHub][repo]. Feel free to browse through and steal code or inspiration.
 
-If you found this useful or spotted a bug, let me know on the blog's
-[issue tracker][issue]!
+If you found this useful or spotted a bug, let me know on the blog's [issue tracker][issue]!
 
 [repo]: https://github.com/Michael-F-Bryan/stateful-native-library
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
@@ -72,22 +41,13 @@ If you found this useful or spotted a bug, let me know on the blog's
 
 ## Getting Acquainted
 
-It would be a bit overwhelming to show you the full code, so I've prepared a
-rough example we can play around with.
+It would be a bit overwhelming to show you the full code, so I've prepared a rough example we can play around with.
 
-Another important point to emphasize is the 3rd party library which initially
-inspired this experiment is native code (I think it's written in C++). The
-reason this is important is because it works touches memory directly and a
-bug doesn't just mean an exception gets thrown, we could segfault and tear
-down the entire process.
+Another important point to emphasize is the 3rd party library which initially inspired this experiment is native code (I think it's written in C++). The reason this is important is because it works touches memory directly and a bug doesn't just mean an exception gets thrown, we could segfault and tear down the entire process.
 
-My decision to write use it from Rust also means we'll need to write some
-`unsafe` code when crossing the language boundary and enforcing invariants.
-This is actually *a good thing*! It gives us several easy-to-find places to
-start from when troubleshooting a crash.
+My decision to write use it from Rust also means we'll need to write some `unsafe` code when crossing the language boundary and enforcing invariants. This is actually *a good thing*! It gives us several easy-to-find places to start from when troubleshooting a crash.
 
-Without further ado, here's a header file defining the high-level interface of
-the library we'll be working with.
+Without further ado, here's a header file defining the high-level interface of the library we'll be working with.
 
 ```c
 // native/stateful.h
@@ -163,19 +123,14 @@ int stateful_get_output_by_index(int index, int *value);
 ```
 
 {{% notice note %}}
-The difficulty with trying to explain complex architecture is to find the
-sweet spot between simplifying so much that people miss the point or the
-example feels contrived, and providing so much detail that the reader loses
-track of what's going on amongst the various moving parts.
+The difficulty with trying to explain complex architecture is to find the sweet spot between simplifying so much that people miss the point or the example feels contrived, and providing so much detail that the reader loses track of what's going on amongst the various moving parts.
 
-Unfortunately, that means our `stateful.h` needs to be more than a couple
-functions long to do this topic justice.
+Unfortunately, that means our `stateful.h` needs to be more than a couple functions long to do this topic justice.
 {{% /notice %}}
 
 There's quite a lot going on here, so let's unpack it a bit.
 
-Fortunately, this library does a pretty decent job of handling errors and most
-of the time functions will give you some sort of return code.
+Fortunately, this library does a pretty decent job of handling errors and most of the time functions will give you some sort of return code.
 
 ```c
 // The various possible return codes.
@@ -192,9 +147,7 @@ enum
 
 In reality there are going to be a lot more error cases, but you get the gist.
 
-The library needs to initialize some global state before first use and do
-cleanup at the end, so our `stateful` library has `open()` and `close()`
-functions.
+The library needs to initialize some global state before first use and do cleanup at the end, so our `stateful` library has `open()` and `close()` functions.
 
 ```c
 // Initialize the library. MUST be run before any other function.
@@ -204,11 +157,9 @@ int stateful_open();
 int stateful_close();
 ```
 
-(I don't know about you, but usually when I see this sort of code I'll start
-thinking of using [RAII][raii])
+(I don't know about you, but usually when I see this sort of code I'll start thinking of using [RAII][raii])
 
-After initializing the library we need to set some global parameters. These are
-various knobs and levers that are used to alter how the input is processed.
+After initializing the library we need to set some global parameters. These are various knobs and levers that are used to alter how the input is processed.
 
 ```c
 // Begin setting parameters. MUST be run before any parameters can be set.
@@ -219,9 +170,7 @@ int stateful_set_int_var(const char *name, int value);
 int stateful_end_setting_parameters();
 ```
 
-You can see that we need to explicitly start and stop setting parameters. The
-functions themselves take no arguments, which is a big give-away that the code
-mutates global state under the hood.
+You can see that we need to explicitly start and stop setting parameters. The functions themselves take no arguments, which is a big give-away that the code mutates global state under the hood.
 
 Next we've got functions for setting up the input.
 
@@ -242,9 +191,7 @@ int stateful_end_adding_group();
 int stateful_end_adding_items();
 ```
 
-If you squint, you'll see that the input is a list of individual named items
-or groups of items. The `Input` that we're building procedurally might look
-something like this (if written in Rust):
+If you squint, you'll see that the input is a list of individual named items or groups of items. The `Input` that we're building procedurally might look something like this (if written in Rust):
 
 ```rust
 enum ItemValue {
@@ -264,8 +211,7 @@ type Inputs = Vec<Item>;
 static mut TEMP_INPUTS: Inputs = ...;
 ```
 
-Now we've set the algorithm's parameters and created our input, we can execute
-the code.
+Now we've set the algorithm's parameters and created our input, we can execute the code.
 
 ```c
 // A callback used to notify the caller when progress is made.
@@ -277,11 +223,7 @@ typedef int (*result_cb)(int number_of_results);
 int stateful_execute(progress_cb progress, result_cb result);
 ```
 
-You'll notice this uses callback functions to notify the caller of progress and
-when the results are ready. This wouldn't normally be a problem, except the
-code doesn't let us provide some sort of `void *` pointer to user-provided data.
-That means the only way our callbacks will be able to pass information to the
-caller is by itself using static variables.
+You'll notice this uses callback functions to notify the caller of progress and when the results are ready. This wouldn't normally be a problem, except the code doesn't let us provide some sort of `void *` pointer to user-provided data. That means the only way our callbacks will be able to pass information to the caller is by itself using static variables.
 
 Finally, we get a couple functions for inspecting the output.
 
@@ -292,19 +234,14 @@ int stateful_get_num_outputs(int *value);
 int stateful_get_output_by_index(int index, int *value);
 ```
 
-Something to keep in mind is they can only be called from inside our
-`result_cb` callback. Other than that, the functions are pretty ordinary.
+Something to keep in mind is they can only be called from inside our `result_cb` callback. Other than that, the functions are pretty ordinary.
 
 {{% notice info %}}
-I'm going to be deliberately vague about what `stateful_execute()` actually
-does. For our purposes the computation isn't actually relevant, we're mainly
-concerned about *how* you can make use of such a "stateful" library while
-maintaining nice things like,
+I'm going to be deliberately vague about what `stateful_execute()` actually does. For our purposes the computation isn't actually relevant, we're mainly concerned about *how* you can make use of such a "stateful" library while maintaining nice things like,
 
 - thread-safety
 - memory-safety
-- statically ensuring at compile time that it is impossible to do things out
-  of order
+- statically ensuring at compile time that it is impossible to do things out of order
 {{% /notice %}}
 
 If it helps, think of `stateful_execute()` as something like this:
@@ -325,16 +262,12 @@ We take a set of parameters and list of inputs and return a list of integers.
 
 We have two main goals for this exercise,
 
-- Create a safe wrapper which lets us use this library while maintaining memory
-  and thread-safety
+- Create a safe wrapper which lets us use this library while maintaining memory and thread-safety
 - Use the type system to *make illegal states unrepresentable*
 
-The first goal can be fulfilled fairly easily, because this library can only be
-used by one bit of code at a time (`static` variables aren't thread-safe) we
-can make a type which represents a "handle" to the library.
+The first goal can be fulfilled fairly easily, because this library can only be used by one bit of code at a time (`static` variables aren't thread-safe) we can make a type which represents a "handle" to the library.
 
-We can then write our code in such a way that calling a function from our
-`stateful` library *needs* you to have a valid handle.
+We can then write our code in such a way that calling a function from our `stateful` library *needs* you to have a valid handle.
 
 ```rust
 // src/lib.rs
@@ -347,11 +280,9 @@ pub struct Library {
 }
 ```
 
-Something to note is the use of `PhantomData<*const ()>` here. This makes sure
-`Library` is `!Send` and `!Sync` (i.e. it can't be used from another thread).
+Something to note is the use of `PhantomData<*const ()>` here. This makes sure `Library` is `!Send` and `!Sync` (i.e. it can't be used from another thread).
 
-We can double-check that `Library` can't be used from other threads by adding
-the [`static_assertions` crate][static-assert] as a dev-dependency...
+We can double-check that `Library` can't be used from other threads by adding the [`static_assertions` crate][static-assert] as a dev-dependency...
 
 ```console
 $ cargo add --dev static_assertions
@@ -383,8 +314,7 @@ If we add an impl for `Send`, running `cargo test` will show a build failure.
 +unsafe impl Send for Library {}
 ```
 
-The error message leaves a lot to be desired, but this is what you'd see if
-`Library` were `Send`.
+The error message leaves a lot to be desired, but this is what you'd see if `Library` were `Send`.
 
 ```console
 $ cargo test
@@ -403,10 +333,7 @@ error[E0282]: type annotations needed for `fn() {<Library as tests::_::{{closure
 error: aborting due to previous error
 ```
 
-Now we have a thread-safe `Library` type, we also need to make sure it's not
-possible to create more than one `Library` at a time. This can be done easily
-enough using a flag (`AtomicBool`) which is set to `true` when `Library` is
-created and `false` when it is destroyed.
+Now we have a thread-safe `Library` type, we also need to make sure it's not possible to create more than one `Library` at a time. This can be done easily enough using a flag (`AtomicBool`) which is set to `true` when `Library` is created and `false` when it is destroyed.
 
 ```rust
 // src/lib.rs
@@ -439,12 +366,9 @@ pub enum Error {
 }
 ```
 
-Yes I know the irony in using a `static` variable to workaround another
-library's zealous use of `static` variables, but sometimes you've got to
-break a couple eggs to make an omelette 🤷‍
+Yes I know the irony in using a `static` variable to workaround another library's zealous use of `static` variables, but sometimes you've got to break a couple eggs to make an omelette 🤷‍
 
-To make sure we've implemented this correctly, let's write a test which
-deliberately tries to create multiple `Library` handles at the same time.
+To make sure we've implemented this correctly, let's write a test which deliberately tries to create multiple `Library` handles at the same time.
 
 ```rust
 // lib/src.rs
@@ -476,24 +400,15 @@ mod tests {
 }
 ```
 
-Next, to ensure functions aren't called out of order we can create some sort
-of type-level state machine.
+Next, to ensure functions aren't called out of order we can create some sort of type-level state machine.
 
-This idea was originally taken from [a thread on the Rust users
-forum][u.rl.o]. You'll notice the approach we're taking is uncannily similar
-to the solution proposed by [@Yandros][yandros],
+This idea was originally taken from [a thread on the Rust users forum][u.rl.o]. You'll notice the approach we're taking is uncannily similar to the solution proposed by [@Yandros][yandros],
 
-> I would wrap the library using a type-level state machine to make misusage
-> simply not compile; If necessary, you can even use the singleton pattern to
-> enforce no concurrency problems (which would be the only part checked at
-> runtime).
+> I would wrap the library using a type-level state machine to make misusage simply not compile; If necessary, you can even use the singleton pattern to enforce no concurrency problems (which would be the only part checked at runtime).
 
-One of the invariants we'd like to maintain is that when setting parameters
-it should be impossible to use any non-parameter-setting functionality.
+One of the invariants we'd like to maintain is that when setting parameters it should be impossible to use any non-parameter-setting functionality.
 
-This is where lifetimes really show their power. Using a `&mut Library`
-reference, the compiler can statically ensure some `SettingParameters` type
-(which we're about to create) has unique access to our `Library`.
+This is where lifetimes really show their power. Using a `&mut Library` reference, the compiler can statically ensure some `SettingParameters` type (which we're about to create) has unique access to our `Library`.
 
 ```rust
 // src/lib.rs
@@ -521,14 +436,9 @@ impl<'lib> SettingParameters<'lib> {
 }
 ```
 
-You'll notice I'm deliberately leaving the body for `boolean()` and
-`integer()` as `unimplemented!()`. We're just setting up the infrastructure
-for this "type-level state machine" for now and will execute the actual FFI
-calls in a bit.
+You'll notice I'm deliberately leaving the body for `boolean()` and `integer()` as `unimplemented!()`. We're just setting up the infrastructure for this "type-level state machine" for now and will execute the actual FFI calls in a bit.
 
-Once we've set the various parameters we need to start constructing our inputs.
-This can be done using some sort of `RecipeBuilder` which leverages the
-`&mut Library` trick from `SettingParameters`.
+Once we've set the various parameters we need to start constructing our inputs. This can be done using some sort of `RecipeBuilder` which leverages the `&mut Library` trick from `SettingParameters`.
 
 ```rust
 // src/lib.rs
@@ -552,26 +462,15 @@ impl<'lib> RecipeBuilder<'lib> {
 }
 ```
 
-Now we've got a problem, how can you add a group of items to the "recipe"? We
-need to make sure it's not possible to call `RecipeBuilder::add_item()` while
-in the middle of constructing a group because it could mess up the library's
-internals.
+Now we've got a problem, how can you add a group of items to the "recipe"? We need to make sure it's not possible to call `RecipeBuilder::add_item()` while in the middle of constructing a group because it could mess up the library's internals.
 
 {{% notice tip %}}
-This may seem a bit extreme, but it's quite possible that adding a new item
-triggers a resize in our `TEMP_INPUTS` vector which invalidates any references
-that may have been used when constructing the group.
+This may seem a bit extreme, but it's quite possible that adding a new item triggers a resize in our `TEMP_INPUTS` vector which invalidates any references that may have been used when constructing the group.
 
-I *really* don't want something like this to happen because it's one of those
-bugs that will be almost impossible to pinpoint in the wild. It's better to
-take the conservative approach here and just outlaw things like
-`RecipeBuilder::add_item()` when building a group.
+I *really* don't want something like this to happen because it's one of those bugs that will be almost impossible to pinpoint in the wild. It's better to take the conservative approach here and just outlaw things like `RecipeBuilder::add_item()` when building a group.
 {{% /notice %}}
 
-If you think for a moment, that's the same problem we had with `Library` when
-we wanted to make sure you can *either* be creating a recipe using the
-`RecipeBuilder`, or setting parameters with `SettingParameters`. We just need to
-add another layer of `&mut`s!
+If you think for a moment, that's the same problem we had with `Library` when we wanted to make sure you can *either* be creating a recipe using the `RecipeBuilder`, or setting parameters with `SettingParameters`. We just need to add another layer of `&mut`s!
 
 ```rust
 // src/lib.rs
@@ -597,13 +496,9 @@ impl<'r, 'lib> GroupBuilder<'r, 'lib> {
 }
 ```
 
-Next, I'm going to continue with this builder pattern theme and give
-`RecipeBuilder` a `build()` method which returns a `Recipe`. Here our
-`Recipe` will just be an empty type indicating we've fully assembled the
-inputs.
+Next, I'm going to continue with this builder pattern theme and give `RecipeBuilder` a `build()` method which returns a `Recipe`. Here our `Recipe` will just be an empty type indicating we've fully assembled the inputs.
 
-It acts as a "token" indicating all inputs are constructed and we're ready to
-call `stateful_execute()`.
+It acts as a "token" indicating all inputs are constructed and we're ready to call `stateful_execute()`.
 
 ```rust
 // src/lib.rs
@@ -623,11 +518,9 @@ pub struct Recipe<'lib> {
 }
 ```
 
-If you've been keeping up, we're now at the point where everything is
-initialized and we're ready to consume this `Recipe` to get the output.
+If you've been keeping up, we're now at the point where everything is initialized and we're ready to consume this `Recipe` to get the output.
 
-It seems odd for a `Recipe` to know how to execute itself, so we'll create
-some sort of top-level `execute()` function instead of adding it as a method.
+It seems odd for a `Recipe` to know how to execute itself, so we'll create some sort of top-level `execute()` function instead of adding it as a method.
 
 ```rust
 // src/lib.rs
@@ -644,9 +537,7 @@ pub struct Output {
 }
 ```
 
-To make sure the code we've written prevents invalid uses of `Library`, let's
-use Rustdoc's `compile_fail` feature to document our functions with examples
-we expect `rustc` to reject.
+To make sure the code we've written prevents invalid uses of `Library`, let's use Rustdoc's `compile_fail` feature to document our functions with examples we expect `rustc` to reject.
 
 ```rust
 // src/lib.rs
@@ -678,17 +569,11 @@ impl Library {
 }
 ```
 
-Looking back, you can see that fulfilling the `!Send` and `!Sync` goal was
-quite easy to do. By making sure `Library: !Send + !Sync`, anything
-referencing `Library` is also `!Send + !Sync`.
+Looking back, you can see that fulfilling the `!Send` and `!Sync` goal was quite easy to do. By making sure `Library: !Send + !Sync`, anything referencing `Library` is also `!Send + !Sync`.
 
-On the other hand, ensuring functions can only be called in the correct order
-is a lot more invasive. We needed to restructure our entire API using complex
-concepts like lifetimes and RAII to encode the logical equivalent of a
-type-level state machine.
+On the other hand, ensuring functions can only be called in the correct order is a lot more invasive. We needed to restructure our entire API using complex concepts like lifetimes and RAII to encode the logical equivalent of a type-level state machine.
 
-Here's a more detailed example showing the error messages a user would get if
-they tried to do things in the wrong order.
+Here's a more detailed example showing the error messages a user would get if they tried to do things in the wrong order.
 
 ```rust
 #[test]
@@ -772,17 +657,13 @@ error: could not compile `stateful-native-library`.
 To learn more, run the command again with --verbose.
 ```
 
-It's moments like these that make you appreciate how useful the concept of
-lifetimes can be, and just how readable `rustc`'s error messages are 🙂
+It's moments like these that make you appreciate how useful the concept of lifetimes can be, and just how readable `rustc`'s error messages are 🙂
 
 ## Creating FFI Bindings
 
-While you were reading through that previous section I took the liberty of
-preparing some C++ code which satisfies the `stateful.h` interface.
+While you were reading through that previous section I took the liberty of preparing some C++ code which satisfies the `stateful.h` interface.
 
-The code isn't entirely relevant, but it's all [on GitHub][native] if you're
-curious. I don't write C++ full time, so let me know if you spot any bugs or
-code which could have been written better.
+The code isn't entirely relevant, but it's all [on GitHub][native] if you're curious. I don't write C++ full time, so let me know if you spot any bugs or code which could have been written better.
 
 {{% expand "a big wall of code" %}}
 ```cpp
@@ -1091,9 +972,7 @@ int stateful_get_output_by_index(int index, int *value)
 ```
 {{% /expand %}}
 
-The first step in using our stateful library from Rust is to make sure `cargo`
-automatically compiles the code for us. Luckily [the `cc` crate][cc] was
-designed for exactly this purpose.
+The first step in using our stateful library from Rust is to make sure `cargo` automatically compiles the code for us. Luckily [the `cc` crate][cc] was designed for exactly this purpose.
 
 First we need to add `cc` as a `build `dependency.
 
@@ -1124,9 +1003,7 @@ fn main() {
 }
 ```
 
-Next we need declarations that for the functions in `stateful.h` that can be
-called from Rust. These sorts of things are a pain to do by hand, so I almost
-always use [`bindgen`][bg] for this.
+Next we need declarations that for the functions in `stateful.h` that can be called from Rust. These sorts of things are a pain to do by hand, so I almost always use [`bindgen`][bg] for this.
 
 I ended up using this particular set of incantations:
 
@@ -1157,9 +1034,7 @@ We also need to update `lib.rs` to include `src/bindings.rs` as a sub-module.
 mod bindings;
 ```
 
-Before going any further I'd like to double-check the `stateful` native library
-is linked with our Rust code properly. The easiest way to do that is with a
-simple [smoke test][smoke-test].
+Before going any further I'd like to double-check the `stateful` native library is linked with our Rust code properly. The easiest way to do that is with a simple [smoke test][smoke-test].
 
 ```rust
 // src/lib.rs
@@ -1182,28 +1057,18 @@ mod tests {
 ```
 
 {{% notice tip %}}
-It's always a good idea to do these sorts of sanity checks. For one, you've
-added a test that verifies you can always link with the native library, plus it
-also lets you identify other build problems early on.
+It's always a good idea to do these sorts of sanity checks. For one, you've added a test that verifies you can always link with the native library, plus it also lets you identify other build problems early on.
 
-Ironically, while writing that smoke test and saying how important it is to
-have them, I kept having compilation errors because the linker wasn't able to
-find `stateful_open()` and `stateful_close()`.
+Ironically, while writing that smoke test and saying how important it is to have them, I kept having compilation errors because the linker wasn't able to find `stateful_open()` and `stateful_close()`.
 
-It turns out I forgot to add a `#ifdef __cplusplus extern "C" {` line to
-`stateful.h` to prevent the compiler from mangling the symbols for our
-`stateful_*`. It took a couple minutes of staring at linker errors, but after
-compiling `stateful.cpp` manually and using `nm stateful.o | grep ' T '` I
-noticed the mangled names and figured out what was going on.
+It turns out I forgot to add a `#ifdef __cplusplus extern "C" {` line to `stateful.h` to prevent the compiler from mangling the symbols for our `stateful_*`. It took a couple minutes of staring at linker errors, but after compiling `stateful.cpp` manually and using `nm stateful.o | grep ' T '` I noticed the mangled names and figured out what was going on.
 {{% /notice %}}
 
 ## Writing a Safe Interface to libstateful
 
-We're now ready to go from declaring our type-level state machine to giving it
-some behaviour to execute when transitioning from state to state.
+We're now ready to go from declaring our type-level state machine to giving it some behaviour to execute when transitioning from state to state.
 
-To make things easier we're going to define a helper trait for converting from
-a return code to a `Result<(), Error>`.
+To make things easier we're going to define a helper trait for converting from a return code to a `Result<(), Error>`.
 
 ```rust
 // src/lib.rs
@@ -1228,8 +1093,7 @@ impl IntoResult for c_int {
 }
 ```
 
-By itself this trait isn't overly interesting, but we can leverage it to enable
-`?` for error handling.
+By itself this trait isn't overly interesting, but we can leverage it to enable `?` for error handling.
 
 This also gives us a chance to flesh out the `Error` enum.
 
@@ -1251,9 +1115,7 @@ pub enum Error {
 
 ### Proper RAII
 
-Now that's out of the way, the first part to address is our `Library` type.
-At the moment we're just setting a flag to `true` and returning a `Library`
-handle, but we aren't actually initializing the underlying library.
+Now that's out of the way, the first part to address is our `Library` type. At the moment we're just setting a flag to `true` and returning a `Library` handle, but we aren't actually initializing the underlying library.
 
 ```diff
  // src/lib.rs
@@ -1274,11 +1136,9 @@ handle, but we aren't actually initializing the underlying library.
      }
 ```
 
-You can also see how that `IntoResult` trait helps to remove the visual noise
-associated with constant error checks.
+You can also see how that `IntoResult` trait helps to remove the visual noise associated with constant error checks.
 
-When the `Library` gets destroyed we need to make sure everything gets cleaned
-up.
+When the `Library` gets destroyed we need to make sure everything gets cleaned up.
 
 ```diff
  // src/lib.rs
@@ -1295,15 +1155,10 @@ up.
 ```
 
 {{% notice note %}}
-The ordering of operations is important here. We want to make sure the
-`LIBRARY_IN_USE` flag is set to `true` for the entire time we're interacting
-with the underlying code.
+The ordering of operations is important here. We want to make sure the `LIBRARY_IN_USE` flag is set to `true` for the entire time we're interacting with the underlying code.
 {{% /notice %}}
 
-Our `SettingParameters` and `RecipeBuilder` types use RAII to represent when
-the library is in a certain state. We'll need to call the corresponding
-`*_start_*` and `*_end_*` functions when constructing and destroying them to
-make sure their lifetimes align with the state of the native library.
+Our `SettingParameters` and `RecipeBuilder` types use RAII to represent when the library is in a certain state. We'll need to call the corresponding `*_start_*` and `*_end_*` functions when constructing and destroying them to make sure their lifetimes align with the state of the native library.
 
 ```diff
  // src/lib.rs
@@ -1345,12 +1200,7 @@ make sure their lifetimes align with the state of the native library.
 +}
 ```
 
-You'll notice that I've introduced a `cant_fail!()` macro here. I've
-introduced an assertion which will blow up loudly if that assumption isn't
-valid. Because we're using the type system to statically guarantee code can't
-be executed out of order and that the arguments we provide are always valid,
-these otherwise infallible functions should fail quickly and loudly to
-indicate a possible programming error.
+You'll notice that I've introduced a `cant_fail!()` macro here. I've introduced an assertion which will blow up loudly if that assumption isn't valid. Because we're using the type system to statically guarantee code can't be executed out of order and that the arguments we provide are always valid, these otherwise infallible functions should fail quickly and loudly to indicate a possible programming error.
 
 ```rust
 // src/lib.rs
@@ -1369,16 +1219,9 @@ macro_rules! cant_fail {
 }
 ```
 
-We need to do a bit more work when adding calls to
-`stateful_start_adding_group()` and `stateful_end_adding_group()` for our
-`GroupBuilder` because it is the first proper function that we need to
-provide arguments for.
+We need to do a bit more work when adding calls to `stateful_start_adding_group()` and `stateful_end_adding_group()` for our `GroupBuilder` because it is the first proper function that we need to provide arguments for.
 
-To help convert between a Rust `&str` and `const char *` we can use the
-[`std::ffi::CString`][cstring] type. The constructor can fail with a `NulError`
-if a string contains an internal `null` byte, but considering most "proper"
-strings in Rust won't ever contain `null` it seems fair to simplify the API by
-panicking instead of propagating the error.
+To help convert between a Rust `&str` and `const char *` we can use the [`std::ffi::CString`][cstring] type. The constructor can fail with a `NulError` if a string contains an internal `null` byte, but considering most "proper" strings in Rust won't ever contain `null` it seems fair to simplify the API by panicking instead of propagating the error.
 
 ```rust
 // src/lib.rs
@@ -1408,9 +1251,7 @@ impl<'r, 'lib> Drop for GroupBuilder<'r, 'lib> {
 
 ### Finishing It Off
 
-At this point it's just a case of grepping for any remaining functions
-containing `unimplemented!()` and translating the arguments so they can be
-passed to the corresponding functions in our `stateful` library.
+At this point it's just a case of grepping for any remaining functions containing `unimplemented!()` and translating the arguments so they can be passed to the corresponding functions in our `stateful` library.
 
 First up are the methods on `SettingParameters`.
 
@@ -1459,8 +1300,7 @@ impl<'lib> RecipeBuilder<'lib> {
 }
 ```
 
-Our `GroupBuilder` also has an `unimplemented!()` method that needs
-implementing.
+Our `GroupBuilder` also has an `unimplemented!()` method that needs implementing.
 
 ```rust
 // src/lib.rs
@@ -1481,29 +1321,21 @@ impl<'r, 'lib> GroupBuilder<'r, 'lib> {
 
 The only remaining `unimplemented!()` is in our `execute()` function.
 
-This one is a little tricky because we somehow need to pass results from the
-"finished" callback back to our `execute()` function so they can be returned to
-the caller.
+This one is a little tricky because we somehow need to pass results from the "finished" callback back to our `execute()` function so they can be returned to the caller.
 
-Unfortunately, we don't have the option of passing a pointer to some state
-we can put the result in, so we'll need to stash it in a temporary `static`
-variable.
+Unfortunately, we don't have the option of passing a pointer to some state we can put the result in, so we'll need to stash it in a temporary `static` variable.
 
 {{% notice tip %}}
-If you are ever designing a C API, the *correct* way to implement non-trivial
-callbacks is by accepting a `void *` user data pointer.
+If you are ever designing a C API, the *correct* way to implement non-trivial callbacks is by accepting a `void *` user data pointer.
 
-I would highly recommend checking out [this question on StackOverflow][so] for
-more!
+I would highly recommend checking out [this question on StackOverflow][so] for more!
 
 [so]: https://stackoverflow.com/questions/50874154/what-is-the-use-of-userdata-in-callback-register-function-in-c
 {{% /notice %}}
 
-Because this function is pretty long, I'm going to break it up into a couple
-chunks.
+Because this function is pretty long, I'm going to break it up into a couple chunks.
 
-First we have our temporary variables. This is a place to store our temporary
-result and a pointer to the data attached to the `progress` closure.
+First we have our temporary variables. This is a place to store our temporary result and a pointer to the data attached to the `progress` closure.
 
 ```rust
 // src/lib.rs
@@ -1521,11 +1353,7 @@ where
 }
 ```
 
-Next we've got a definition for the actual `on_progress()` function we'll be
-passing to `stateful_execute()`. This uses a trick where you instantiate the
-generic `on_progress<F>()` function with a particular type, turning it into a
-non-generic function which is specialised for the closure type passed to
-`execute()`.
+Next we've got a definition for the actual `on_progress()` function we'll be passing to `stateful_execute()`. This uses a trick where you instantiate the generic `on_progress<F>()` function with a particular type, turning it into a non-generic function which is specialised for the closure type passed to `execute()`.
 
 ```rust
 // src/lib.rs
@@ -1553,12 +1381,9 @@ where
 }
 ```
 
-If that explanation makes your head hurt a little, just hang in there, it should
-get a bit clearer once we see how it gets used.
+If that explanation makes your head hurt a little, just hang in there, it should get a bit clearer once we see how it gets used.
 
-Next we define an `on_finished()` function to pass to `stateful_execute()`. This
-keeps reading outputs until there are no more, and saves them to the
-`TEMPORARY_RESULT` static variable.
+Next we define an `on_finished()` function to pass to `stateful_execute()`. This keeps reading outputs until there are no more, and saves them to the `TEMPORARY_RESULT` static variable.
 
 ```rust
 // src/lib.rs
@@ -1639,24 +1464,14 @@ where
 }
 ```
 
-I'm not going to explain this in much detail because it should hopefully be
-fairly readable and well commented. Plus, reading the source code is always a
-more accurate explanation of what is going on than several paragraphs of
-English.
+I'm not going to explain this in much detail because it should hopefully be fairly readable and well commented. Plus, reading the source code is always a more accurate explanation of what is going on than several paragraphs of English.
 
-The most important thing to note is the liberal sprinkling of comments
-starting with `// Safety`. These are hints to other developers (or myself 6
-months from now) about the various invariants which need to be upheld, and the
-reason I believe this `unsafe` code is sound.
+The most important thing to note is the liberal sprinkling of comments starting with `// Safety`. These are hints to other developers (or myself 6 months from now) about the various invariants which need to be upheld, and the reason I believe this `unsafe` code is sound.
 
 {{% notice note %}}
-This `execute()` function contains about 80 lines of `unsafe` code. If you
-see something that looks a bit funny, please let me know either in the
-[`stateful-native-library` repository][repo] or [this blog's issue
-tracker][issue].
+This `execute()` function contains about 80 lines of `unsafe` code. If you see something that looks a bit funny, please let me know either in the [`stateful-native-library` repository][repo] or [this blog's issue tracker][issue].
 
-Writing correct code is very important to me, especially when it is being
-read or used by others!
+Writing correct code is very important to me, especially when it is being read or used by others!
 
 [repo]: https://github.com/Michael-F-Bryan/stateful-native-library
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
@@ -1664,8 +1479,7 @@ read or used by others!
 
 ## Making Sure It Works
 
-Now we've gone to all the effort of binding to our `stateful` native library,
-let's write a small program which uses it.
+Now we've gone to all the effort of binding to our `stateful` native library, let's write a small program which uses it.
 
 To that end, I've created the following contrived example,
 
@@ -1742,9 +1556,7 @@ $ cargo run --example basic-usage
 Got Output { items: [6, 4, 7, 5, 5, 3, 4, 2, 6, 5, 1, 1, 3, 2] }
 ```
 
-Running the `basic-usage` example compiled with optimisations (which I would
-expect to be more likely to show UB) under `valgrind` seems to show no obvious
-problems.
+Running the `basic-usage` example compiled with optimisations (which I would expect to be more likely to show UB) under `valgrind` seems to show no obvious problems.
 
 ```console
 $ valgrind target/release/examples/basic-usage
@@ -1776,18 +1588,11 @@ Got Output { items: [6, 4, 7, 5, 5, 3, 4, 2, 6, 5, 1, 1, 3, 2] }
 
 ## Conclusions
 
-In an ideal world all code would be perfect and we'd never need to worry about
-data races or accidentally putting a system in an invalid state.
+In an ideal world all code would be perfect and we'd never need to worry about data races or accidentally putting a system in an invalid state.
 
-Unfortunately, this *isn't* an ideal world so we need to develop techniques
-that allow us to keep working under less than ideal conditions while limiting
-the negative effects they can have on the rest of a codebase.
+Unfortunately, this *isn't* an ideal world so we need to develop techniques that allow us to keep working under less than ideal conditions while limiting the negative effects they can have on the rest of a codebase.
 
-As it turns out, Rust's type system and its concept of lifetimes are really
-powerful tools for taking errors that other languages could only detect at
-runtime and promoting them to compilation failures. That's one of the things
-I really like about the language, more often than not *if it compiles, it
-works*.
+As it turns out, Rust's type system and its concept of lifetimes are really powerful tools for taking errors that other languages could only detect at runtime and promoting them to compilation failures. That's one of the things I really like about the language, more often than not *if it compiles, it works*.
 
 [data-race]: https://doc.rust-lang.org/nomicon/races.html
 [static-assert]: https://crates.io/crates/static_assertions

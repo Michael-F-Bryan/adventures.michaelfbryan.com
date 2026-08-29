@@ -1,52 +1,31 @@
 ---
 title: Creating Interactive Applications While Maintaining Your Sanity
 date: '2020-02-06T23:43:00+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Rust
 - State Machines
 - Interactive Applications
 ---
 
-One of the primary reasons computers are so ubiquitous in modern society is
-their ability to let humans and software cooperate to achieve a desired goal.
-That is, to be interactive.
+One of the primary reasons computers are so ubiquitous in modern society is their ability to let humans and software cooperate to achieve a desired goal. That is, to be interactive.
 
-Creating interactive applications can be pretty annoying for a programmer.
-Unlike a computer which is predictable and will blindly follow any
-instructions given to it,
+Creating interactive applications can be pretty annoying for a programmer. Unlike a computer which is predictable and will blindly follow any instructions given to it,
 
-- Humans are unpredictable. They like to press buttons and push features further
-  than they were originally intended
-- Humans have a habit of asking for special cases (*"Feature X works really
-  well, but when I click on this triangle while holding shift and tilting my
-  head at an angle, it should really do Y instead. It's not a big feature, can
-  you just add?"*)
-- Humans often don't know what they want, meaning even if you implement
-  something exactly as described to you users will still complain about it not
-  doing the right thing
-- The real world is messy, and letting users interact with your program is a
-  really effective way of mixing the messy outside world with the nice
-  structured world inside a computer
-- Also, users are the ones funding your pay check so you should probably try
-  to keep them happy 😁
+- Humans are unpredictable. They like to press buttons and push features further than they were originally intended
+- Humans have a habit of asking for special cases (*"Feature X works really well, but when I click on this triangle while holding shift and tilting my head at an angle, it should really do Y instead. It's not a big feature, can you just add?"*)
+- Humans often don't know what they want, meaning even if you implement something exactly as described to you users will still complain about it not doing the right thing
+- The real world is messy, and letting users interact with your program is a really effective way of mixing the messy outside world with the nice structured world inside a computer
+- Also, users are the ones funding your pay check so you should probably try to keep them happy 😁
 
-The ideas and concepts shown in this article aren't overly advanced. In fact,
-if you've been programming for a couple months (especially if it's part of a
-formal Computer Science program) you're probably already familiar with them.
+The ideas and concepts shown in this article aren't overly advanced. In fact, if you've been programming for a couple months (especially if it's part of a formal Computer Science program) you're probably already familiar with them.
 
-The difference between an "ordinary" programmer and a Software Engineer isn't
-in how many advanced concepts they know, it's the ability to identify a
-pattern, understand why it exists, and employ it to solve a problem. The
-experienced software engineer will do this in a way which won't make them sad
-6 months from now when they need to revisit the code because the boss has
-asked for a shiny new feature.
+The difference between an "ordinary" programmer and a Software Engineer isn't in how many advanced concepts they know, it's the ability to identify a pattern, understand why it exists, and employ it to solve a problem. The experienced software engineer will do this in a way which won't make them sad 6 months from now when they need to revisit the code because the boss has asked for a shiny new feature.
 
 {{% notice note %}}
-The code written in this article is available [on GitHub][repo]. Feel free to
-browse through and steal code or inspiration.
+The code written in this article is available [on GitHub][repo]. Feel free to browse through and steal code or inspiration.
 
-If you found this useful or spotted a bug, let me know on the blog's
-[issue tracker][issue]!
+If you found this useful or spotted a bug, let me know on the blog's [issue tracker][issue]!
 
 [repo]: https://github.com/Michael-F-Bryan/arcs
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
@@ -61,22 +40,14 @@ Before we write any code we need to do two things,
 
 This step is arguably the most important. Many a project has been ruined
 
-I work in the CNC industry, and one of my tasks is the development and
-maintenance of an application for Computer Aided Design. So when I say the
-word *"interactive"* I think of the user being able to adding items to a
-drawing through a sequence of mouse clicks and key presses while receiving
-visual feedback in real time.
+I work in the CNC industry, and one of my tasks is the development and maintenance of an application for Computer Aided Design. So when I say the word *"interactive"* I think of the user being able to adding items to a drawing through a sequence of mouse clicks and key presses while receiving visual feedback in real time.
 
 For example, if you wanted to draw an arc on the canvas you might
 
 1. Select the arc tool
-2. Click where you want the arc's centre to be on the canvas (this draws a dot
-   where you clicked)
-3. Click another location to set the arc's start point (drawing another dot,
-   plus a line between the two dots to indicate the arc's radius)
-4. Move the cursor to where you want the arc's end point to be (as you move the
-   cursor a temporary arc is drawn on the canvas to show what it would look like
-   if you placed the arc's end point at the cursor location)
+2. Click where you want the arc's centre to be on the canvas (this draws a dot where you clicked)
+3. Click another location to set the arc's start point (drawing another dot, plus a line between the two dots to indicate the arc's radius)
+4. Move the cursor to where you want the arc's end point to be (as you move the cursor a temporary arc is drawn on the canvas to show what it would look like if you placed the arc's end point at the cursor location)
 5. Click to place the end point, actually adding the arc to the drawing
 
 {{< figure
@@ -85,32 +56,17 @@ For example, if you wanted to draw an arc on the canvas you might
     alt="Drawing an arc using SolidWorks"
 >}}
 
-The typical way to implement this is with a state machine. You'll add a variable
-(typically an integer) to your window, then when something happens (e.g. a mouse
-click) there is a switch statement which will execute the desired code depending
-on the current state.
+The typical way to implement this is with a state machine. You'll add a variable (typically an integer) to your window, then when something happens (e.g. a mouse click) there is a switch statement which will execute the desired code depending on the current state.
 
-To be fair, this kinda works. However it doesn't foster robustness or long
-term maintainability.
+To be fair, this kinda works. However it doesn't foster robustness or long term maintainability.
 
-The cause for this is two-fold, a "state" is scattered around half a dozen
-different event handlers and buried inside large switch-case statements. That
-means adding a new state or adjusting an existing one tends to look a lot like
-[shotgun surgery][shotgun] with changes spread out across the app.
+The cause for this is two-fold, a "state" is scattered around half a dozen different event handlers and buried inside large switch-case statements. That means adding a new state or adjusting an existing one tends to look a lot like [shotgun surgery][shotgun] with changes spread out across the app.
 
-The second reason using a simple integer to track the current state is that a
-"state" often constitutes more than a simple "I am doing X".
+The second reason using a simple integer to track the current state is that a "state" often constitutes more than a simple "I am doing X".
 
-See those lines and annotations used to provide the user with visual feedback
-in the gif? Where do you think they're stored? If a "state" is just an
-integer these temporary variables will typically be stored as fields attached
-to the `Window`. Not only does this add a lot of unnecessary fields to an
-already bloated object, a lot of these fields are only valid during specific
-states and we have no way to statically ensure that a field will be
-initialized or destroyed at the correct time.
+See those lines and annotations used to provide the user with visual feedback in the gif? Where do you think they're stored? If a "state" is just an integer these temporary variables will typically be stored as fields attached to the `Window`. Not only does this add a lot of unnecessary fields to an already bloated object, a lot of these fields are only valid during specific states and we have no way to statically ensure that a field will be initialized or destroyed at the correct time.
 
-This becomes especially painful when writing Rust because you can't just ignore
-a `null` field... Almost as if the code is trying to tell us something 🤔
+This becomes especially painful when writing Rust because you can't just ignore a `null` field... Almost as if the code is trying to tell us something 🤔
 
 ```rust
 const STATE_IDLE: u32 = 0;
@@ -137,24 +93,19 @@ struct Window {
 }
 ```
 
-I have seen such code monsters inside 10,000+ line `Window` classes in the
-wild. They are not fun to maintain or debug.
+I have seen such code monsters inside 10,000+ line `Window` classes in the wild. They are not fun to maintain or debug.
 
 Please don't do this.
 
 A much better solution is to use something like the [*State Pattern*][state].
 
 {{% notice tip %}}
-It may sound weird for someone who is both a Functional Programming fan and
-diehard Rust coder to be promoting object-oriented design patterns, but bear
-with me.
+It may sound weird for someone who is both a Functional Programming fan and diehard Rust coder to be promoting object-oriented design patterns, but bear with me.
 
 There is method to this madness.
 {{% /notice %}}
 
-The idea behind the *State Pattern* is pretty simple, encapsulate everything
-about a particular "state" into an object which can respond to events and
-trigger transitions to other states.
+The idea behind the *State Pattern* is pretty simple, encapsulate everything about a particular "state" into an object which can respond to events and trigger transitions to other states.
 
 In code the state pattern looks something like this:
 
@@ -177,52 +128,29 @@ enum Transition {
 }
 ```
 
-To complete the pattern, our `Window` just needs to propagate events to the
-current state and possibly switch to a new state based on the returned
-`Transition`.
+To complete the pattern, our `Window` just needs to propagate events to the current state and possibly switch to a new state based on the returned `Transition`.
 
 {{% notice info %}}
-Although all code in this article is written in Rust, there's nothing really
-Rust-specific going on here.
+Although all code in this article is written in Rust, there's nothing really Rust-specific going on here.
 
-I just happen to be working on adding interactivity to the WebAssembly demo
-for [arcs][arcs], a CAD library I'm writing from scratch based on my
-experiences in other languages.
+I just happen to be working on adding interactivity to the WebAssembly demo for [arcs][arcs], a CAD library I'm writing from scratch based on my experiences in other languages.
 
 [arcs]: https://github.com/Michael-F-Bryan/arcs
 {{% /notice %}}
 
-Another very important aspect of this pattern is how it is completely
-*decoupled* from the `Window` (as far as each `State` is concerned, it doesn't
-even know the `Window` exists).
+Another very important aspect of this pattern is how it is completely *decoupled* from the `Window` (as far as each `State` is concerned, it doesn't even know the `Window` exists).
 
-When your `State` doesn't know anything about the rest of the world and can
-only interact with data passed to it as parameters it becomes almost trivial
-to test. Create a dummy drawing in memory, instantiate the `State`, then call
-an event handler and make sure it behaves as expected.
+When your `State` doesn't know anything about the rest of the world and can only interact with data passed to it as parameters it becomes almost trivial to test. Create a dummy drawing in memory, instantiate the `State`, then call an event handler and make sure it behaves as expected.
 
 ### Nested States
 
-At this point you need to look at your application and ask whether it makes
-sense for a state to have a "sub-state", and how you want to represent
-sub-states.
+At this point you need to look at your application and ask whether it makes sense for a state to have a "sub-state", and how you want to represent sub-states.
 
-To make this idea of nested states more concrete, consider the example from
-before where we were adding an arc to the canvas. Clicking the *"Arc"* tool
-transitioned to the *"Adding Arc"* state, but we hadn't actually started drawing
-anything on the canvas at that point. It was only after clicking that we started
-the process of drawing an arc.
+To make this idea of nested states more concrete, consider the example from before where we were adding an arc to the canvas. Clicking the *"Arc"* tool transitioned to the *"Adding Arc"* state, but we hadn't actually started drawing anything on the canvas at that point. It was only after clicking that we started the process of drawing an arc.
 
-You *could* make every possible tool and action part of the same state
-machine, but if we were to draw the state machine diagram it'd require a
-massive whiteboard. It also wouldn't fit in your head. Especially when you
-consider that users should be able to cancel pretty much any action midway
-through (e.g. if they put the arc's centre in the wrong spot or didn't mean
-to enter arc mode at all).
+You *could* make every possible tool and action part of the same state machine, but if we were to draw the state machine diagram it'd require a massive whiteboard. It also wouldn't fit in your head. Especially when you consider that users should be able to cancel pretty much any action midway through (e.g. if they put the arc's centre in the wrong spot or didn't mean to enter arc mode at all).
 
-Another way to structure this is to introduce some form of nesting. That way
-when the user is in the *"Arc Mode"* you just need to consider the states and
-transitions related to the arc mode's sub-states.
+Another way to structure this is to introduce some form of nesting. That way when the user is in the *"Arc Mode"* you just need to consider the states and transitions related to the arc mode's sub-states.
 
 ```mermaid
 stateDiagram
@@ -251,77 +179,46 @@ stateDiagram
     state point { }
 ```
 
-There are a couple ways you can implement nesting, both with their pros and
-cons,
+There are a couple ways you can implement nesting, both with their pros and cons,
 
-1. Give a top-level state ("mode") its own set of nested state machines as
-   required
-2. Go one step higher in the ladder of abstraction and use a *stack* of `State`s
-   (also called a [Pushdown Automata][pda]), introducing `Push` and `Pop`
-   operations to `Transition` and sending events to the top-most `State`
+1. Give a top-level state ("mode") its own set of nested state machines as required
+2. Go one step higher in the ladder of abstraction and use a *stack* of `State`s (also called a [Pushdown Automata][pda]), introducing `Push` and `Pop` operations to `Transition` and sending events to the top-most `State`
 
-Using nested state machines means your states can be custom-tailored for the
-current mode and make assumptions based on the other states within their state
-machine.
+Using nested state machines means your states can be custom-tailored for the current mode and make assumptions based on the other states within their state machine.
 
-On the other hand, pushdown automata promote code reuse. If you want to share
-behaviour between different modes it's just a case of pushing the state onto
-the stack and when the set of interactions triggered by the state are done it
-will "return" to the original state by popping itself from the stack.
+On the other hand, pushdown automata promote code reuse. If you want to share behaviour between different modes it's just a case of pushing the state onto the stack and when the set of interactions triggered by the state are done it will "return" to the original state by popping itself from the stack.
 
-This reusability means you can avoid a lot of code duplication. However, because
-your states need to be more generic by their very nature you aren't able to
-make as many assumptions about what is going on in the big picture.
+This reusability means you can avoid a lot of code duplication. However, because your states need to be more generic by their very nature you aren't able to make as many assumptions about what is going on in the big picture.
 
 {{% notice tip %}}
-Something else to consider is whether it's possible to trigger a transition
-from outside the state machine.
+Something else to consider is whether it's possible to trigger a transition from outside the state machine.
 
-A typical example of this is when the user clicks a toolbar button to start
-using a different tool. In this case if a transition is triggered you need a
-way to tell the current mode it has been cancelled and it needs to clean up
-after itself, otherwise you risk leaving temporary artifacts around which the
-user can't interact.
+A typical example of this is when the user clicks a toolbar button to start using a different tool. In this case if a transition is triggered you need a way to tell the current mode it has been cancelled and it needs to clean up after itself, otherwise you risk leaving temporary artifacts around which the user can't interact.
 
-The way this is implemented will change depending on whether you're using
-nested state machines or a pushdown automata.
+The way this is implemented will change depending on whether you're using nested state machines or a pushdown automata.
 {{% /notice %}}
 
-Like a lot of things where the real world is involved there are trade-offs,
-and it's the Software Engineer's job to figure out which alternative would be
-the least bad in the long term.
+Like a lot of things where the real world is involved there are trade-offs, and it's the Software Engineer's job to figure out which alternative would be the least bad in the long term.
 
 ## The Infrastructure
 
-The first step in making our application interactive is to create the
-fundamental infrastructure our code will be built on top of.
+The first step in making our application interactive is to create the fundamental infrastructure our code will be built on top of.
 
-The `arcs` demo app won't be *too* complex, so we'll take the nested state
-machine route instead of using pushdown automata. In this case we're
-preferring to make the app easier to reason about at the cost of writing
-duplicate code when modes have behaviour in common.
+The `arcs` demo app won't be *too* complex, so we'll take the nested state machine route instead of using pushdown automata. In this case we're preferring to make the app easier to reason about at the cost of writing duplicate code when modes have behaviour in common.
 
 {{% notice info %}}
-A lot of the content from now on will be focused around [the `arcs` CAD
-library][arcs] because I want to make a demo people can use when evaluating the library
-and as a form of [dogfooding][df].
+A lot of the content from now on will be focused around [the `arcs` CAD library][arcs] because I want to make a demo people can use when evaluating the library and as a form of [dogfooding][df].
 
-In [a previous article][prev] I've gone into a fair amount of detail
-regarding its design, in particular the use of an *Entity Component System*
-architecture, so you may want to have a skim through that if you start
-feeling lost.
+In [a previous article][prev] I've gone into a fair amount of detail regarding its design, in particular the use of an *Entity Component System* architecture, so you may want to have a skim through that if you start feeling lost.
 
 [arcs]: https://github.com/Michael-F-Bryan/arcs
 [df]: https://en.wikipedia.org/wiki/Eating_your_own_dog_food
 [prev]: {{< ref "/posts/ecs-outside-of-games.md" >}}
 {{% /notice %}}
 
-We don't want our `State`s to be coupled to any particular implementation of
-the `Drawing`, instead it just needs to know what can be done with a drawing.
-This also makes testing a lot easier because we can insert mocks if necessary.
+We don't want our `State`s to be coupled to any particular implementation of the `Drawing`, instead it just needs to know what can be done with a drawing. This also makes testing a lot easier because we can insert mocks if necessary.
 
-For now the `Drawing` trait can be left empty. We'll add things to it as the
-various modes are implemented.
+For now the `Drawing` trait can be left empty. We'll add things to it as the various modes are implemented.
 
 ```rust
 // demo/src/modes/mod.rs
@@ -337,8 +234,7 @@ For now we only care about four events,
 - The mouse has moved
 - A button was pressed on the keyboard
 
-Combined with an `on_cancelled()` method, this gives us a nice starting point
-for the `State` trait.
+Combined with an `on_cancelled()` method, this gives us a nice starting point for the `State` trait.
 
 ```rust
 // demo/src/modes/mod.rs
@@ -391,14 +287,10 @@ pub enum Transition {
 ```
 
 {{% notice tip %}}
-You'll notice we've given each event handler a default implementation which
-just returns `Transition::DoNothing`. This is a convenience thing so states
-can ignore events they don't care about without needing to explicitly write a
-no-op event handler.
+You'll notice we've given each event handler a default implementation which just returns `Transition::DoNothing`. This is a convenience thing so states can ignore events they don't care about without needing to explicitly write a no-op event handler.
 {{% /notice %}}
 
-We also need to create types which provide information about the event that has
-occurred.
+We also need to create types which provide information about the event that has occurred.
 
 ```rust
 // demo/src/modes/mod.rs
@@ -452,26 +344,17 @@ pub enum VirtualKeyCode {
 ```
 
 {{% notice info %}}
-You may have noticed the `MouseEventArgs` has two fields for the mouse's
-location. That's because the mouse has both a physical location on the screen
-(referred to as `CanvasSpace` by `arcs`) and an equivalent location on the
-drawing (referred to as `DrawingSpace`).
+You may have noticed the `MouseEventArgs` has two fields for the mouse's location. That's because the mouse has both a physical location on the screen (referred to as `CanvasSpace` by `arcs`) and an equivalent location on the drawing (referred to as `DrawingSpace`).
 
-The `euclid` library exposes types which can be "tagged" with the coordinate
-space they belong to, ensuring you can't accidentally mix up coordinates in
-`DrawingSpace` and `CanvasSpace`.
+The `euclid` library exposes types which can be "tagged" with the coordinate space they belong to, ensuring you can't accidentally mix up coordinates in `DrawingSpace` and `CanvasSpace`.
 
-For examples of why we might want to avoid this, look up [*The Mars Climate
-Orbiter*][mco]. For more details on the various coordinate spaces, see the
-[`arcs` crate docs][docs].
+For examples of why we might want to avoid this, look up [*The Mars Climate Orbiter*][mco]. For more details on the various coordinate spaces, see the [`arcs` crate docs][docs].
 
 [mco]: https://en.wikipedia.org/wiki/Mars_Climate_Orbiter
 [docs]: https://michael-f-bryan.github.io/arcs/arcs/index.html
 {{% /notice %}}
 
-We'll almost certainly want to print the state of the world to the console at
-some point (you have no idea how helpful this is when debugging complex
-interactions!), so let's also require that all `State`s implement `Debug`.
+We'll almost certainly want to print the state of the world to the console at some point (you have no idea how helpful this is when debugging complex interactions!), so let's also require that all `State`s implement `Debug`.
 
 ```rust
 // demo/src/modes/mod.rs
@@ -485,25 +368,15 @@ pub trait State: Debug {
 
 ## Idle Mode
 
-We usually refer to the base `State` for an application as *Idle*. This is where
-the user isn't in the middle of an interaction and the computer is waiting to
-do something.
+We usually refer to the base `State` for an application as *Idle*. This is where the user isn't in the middle of an interaction and the computer is waiting to do something.
 
 {{% notice note %}}
-As a convention I'll refer to top-level `State`s as *Modes* (i.e. `IdleMode`,
-`AddArcMode`, `AddPointMode`, etc.), with any sub-states being referred to as
-just states.
+As a convention I'll refer to top-level `State`s as *Modes* (i.e. `IdleMode`, `AddArcMode`, `AddPointMode`, etc.), with any sub-states being referred to as just states.
 
-This is just something I've noticed when watching people train new users at
-work. I'm not sure how widespread the convention is. The top-level `State`
-that a user has conscious control over (e.g. by clicking buttons on the
-toolbar) normally gets referred to as a *Mode*, and intermediate `State`s
-created while performing an action inside a mode aren't normally significant
-enough (to an end user) to get a bespoke name.
+This is just something I've noticed when watching people train new users at work. I'm not sure how widespread the convention is. The top-level `State` that a user has conscious control over (e.g. by clicking buttons on the toolbar) normally gets referred to as a *Mode*, and intermediate `State`s created while performing an action inside a mode aren't normally significant enough (to an end user) to get a bespoke name.
 {{% /notice %}}
 
-First we need to create a type representig the `Idle` state and implement
-`State` for it.
+First we need to create a type representig the `Idle` state and implement `State` for it.
 
 ```rust
 // demo/src/modes/idle.rs
@@ -516,8 +389,7 @@ pub struct Idle;
 impl State for Idle {}
 ```
 
-We'll also need to tell Rust that `idle.rs` is part of the `modes` module and
-we want the `Idle` mode publicly accessible.
+We'll also need to tell Rust that `idle.rs` is part of the `modes` module and we want the `Idle` mode publicly accessible.
 
 ```rust
 // demo/src/modes/mod.rs
@@ -527,8 +399,7 @@ mod idle;
 pub use idle::Idle;
 ```
 
-Next we need to figure out what we want our `Idle` mode to do. Some normal
-responsibilities for an `Idle` mode are,
+Next we need to figure out what we want our `Idle` mode to do. Some normal responsibilities for an `Idle` mode are,
 
 - Clicking on one or more objects to select them
 - Triggering a "drag" action when the user clicks and drags on an object
@@ -541,10 +412,7 @@ In addition to this we can hard-code a couple keyboard shortcuts.
 - `P` - transitions to `PointMode` for drawing points
 
 {{% notice note %}}
-This is mainly because I'm lazy and don't want to mess around with giving the
-`arcs` demo a toolbar for changing modes just yet, but not having to worry
-about external transitions right away should also make it easier for the
-reader to follow.
+This is mainly because I'm lazy and don't want to mess around with giving the `arcs` demo a toolbar for changing modes just yet, but not having to worry about external transitions right away should also make it easier for the reader to follow.
 {{% /notice %}}
 
 I'm envisioning something like this for our `Idle` mode.
@@ -575,10 +443,7 @@ stateDiagram
 
 ### Idle Mode Keyboard Shortcuts
 
-The keyboard shortcuts for changing to `AddArcMode` and friends is easy enough
-to implement. We just need to handle the `on_key_pressed()` event and `match`
-on the key that was pressed, returning a `Transition::ChangeState` if it's
-a button we support.
+The keyboard shortcuts for changing to `AddArcMode` and friends is easy enough to implement. We just need to handle the `on_key_pressed()` event and `match` on the key that was pressed, returning a `Transition::ChangeState` if it's a button we support.
 
 ```rust
 // demo/src/modes/idle.rs
@@ -605,8 +470,7 @@ impl State for Idle {
 }
 ```
 
-We haven't actually created `AddArcMode`, `AddPointMode`, and `AddLineMode` yet,
-so let's stub out some code for them.
+We haven't actually created `AddArcMode`, `AddPointMode`, and `AddLineMode` yet, so let's stub out some code for them.
 
 ```rust
 // demo/src/modes/add_point_mode.rs
@@ -650,12 +514,9 @@ pub use add_line_mode::AddLineMode;
 pub use add_point_mode::AddPointMode;
 ```
 
-This code isn't overly interesting. I've just created a couple new types and
-done the bare minimum so they can be used as `State`s.
+This code isn't overly interesting. I've just created a couple new types and done the bare minimum so they can be used as `State`s.
 
-I've also given them default constructors because it makes switching to that
-mode easier, this works when there isn't any setup that needs to be done to
-enter a state (e.g. no need to create temporary objects).
+I've also given them default constructors because it makes switching to that mode easier, this works when there isn't any setup that needs to be done to enter a state (e.g. no need to create temporary objects).
 
 To make sure we are actually changing state we can write a test.
 
@@ -687,8 +548,7 @@ mod tests {
 }
 ```
 
-(I also decided to extract creating the `KeyboardEventArgs` with
-`VirtualKeyCode::A` into its own `KeyboardEventArgs::pressing()` constructor)
+(I also decided to extract creating the `KeyboardEventArgs` with `VirtualKeyCode::A` into its own `KeyboardEventArgs::pressing()` constructor)
 
 ```rust
 // demo/src/modes/mod.rs
@@ -704,21 +564,11 @@ impl KeyboardEventArgs {
 }
 ```
 
-The tricky bit is figuring out how to ensure we actually got the state we
-expected (that `...` on the `Transition::ChangeState` branch). Every `State`
-must implement `Debug` so in theory we could get the debug representation and
-do some sort of `repr.contains("AddArcMode")`, but that's a bit *too* ~~hacky~~
-brittle for my liking.
+The tricky bit is figuring out how to ensure we actually got the state we expected (that `...` on the `Transition::ChangeState` branch). Every `State` must implement `Debug` so in theory we could get the debug representation and do some sort of `repr.contains("AddArcMode")`, but that's a bit *too* ~~hacky~~ brittle for my liking.
 
-Another option is to use the [`std::any::Any` trait][any] as an escape hatch
-intended for testing purposes. This is a bit like the `Object` in Java where
-you can have a pointer to *something* and then try to downcast it to a more
-specific type.
+Another option is to use the [`std::any::Any` trait][any] as an escape hatch intended for testing purposes. This is a bit like the `Object` in Java where you can have a pointer to *something* and then try to downcast it to a more specific type.
 
-The best way to implement this is by saying anything implementing `State` needs
-to have an `as_any(&self) -> &dyn Any` method. To avoid needing to manually
-write this it can be pulled out into a trait which is automatically implemented
-by any type that is `Any`.
+The best way to implement this is by saying anything implementing `State` needs to have an `as_any(&self) -> &dyn Any` method. To avoid needing to manually write this it can be pulled out into a trait which is automatically implemented by any type that is `Any`.
 
 ```rust
 // demo/src/modes/mod.rs
@@ -745,8 +595,7 @@ pub trait State: Debug + AsAny {
 }
 ```
 
-To make the testing code easier I'll also add a method to `Transition` which lets
-us check whether it will change to a particular `State`.
+To make the testing code easier I'll also add a method to `Transition` which lets us check whether it will change to a particular `State`.
 
 ```rust
 // demo/src/modes/mod.rs
@@ -764,8 +613,7 @@ impl Transition {
 }
 ```
 
-Now we can write tests for our three keyboard shortcuts. Thanks to the helper
-functions we made along the way our tests are actually pretty readable.
+Now we can write tests for our three keyboard shortcuts. Thanks to the helper functions we made along the way our tests are actually pretty readable.
 
 ```rust
 // demo/src/modes/idle.rs
@@ -810,19 +658,11 @@ mod tests {
 ```
 
 {{% notice note %}}
-Some would argue the use of `std::any::Any` in Rust to do downcasting or
-dynamic type checking is a bit of a code smell for a strongly typed language,
-and I would be inclined to agree with them.
+Some would argue the use of `std::any::Any` in Rust to do downcasting or dynamic type checking is a bit of a code smell for a strongly typed language, and I would be inclined to agree with them.
 
-In normal production code, changing logic based on something's type at
-runtime can result in brittleness and invisible coupling. It also hints that
-maybe there's actually some deeper abstraction trying to get out, and the
-need to have dynamic checks is your code's way of telling you this.
+In normal production code, changing logic based on something's type at runtime can result in brittleness and invisible coupling. It also hints that maybe there's actually some deeper abstraction trying to get out, and the need to have dynamic checks is your code's way of telling you this.
 
-That said, we're not trying to change the main program's behaviour using
-dynamic typing. This is mainly for testing purposes, and *maybe* also a tool of
-last resort if we realise we've engineered ourselves into a corner with this
-architecture six months down the track.
+That said, we're not trying to change the main program's behaviour using dynamic typing. This is mainly for testing purposes, and *maybe* also a tool of last resort if we realise we've engineered ourselves into a corner with this architecture six months down the track.
 {{% /notice %}}
 
 We should also add a test to make sure pressing other keys does nothing.
@@ -864,45 +704,25 @@ impl Transition {
 
 ### Dragging
 
-Dragging is one of those things which just comes naturally for a human.
-Because we're used to picking things up and moving them in the real world
-without much mental exertion, people don't stop to think how complex your
-basic "drag" interaction can be.
+Dragging is one of those things which just comes naturally for a human. Because we're used to picking things up and moving them in the real world without much mental exertion, people don't stop to think how complex your basic "drag" interaction can be.
 
-The *"Happy Path"* looks something like this... When in idle mode, if the
-user presses the left mouse button we'll mark whatever is under the cursor as
-"selected". Then if we receive "mouse moved" events, all selected items get
-translated by the amount the mouse has moved. When the mouse button is
-released, we stop dragging and "commit" the changes to some sort of
-`UndoRedoBuffer` so the user can undo or redo the drag.
+The *"Happy Path"* looks something like this... When in idle mode, if the user presses the left mouse button we'll mark whatever is under the cursor as "selected". Then if we receive "mouse moved" events, all selected items get translated by the amount the mouse has moved. When the mouse button is released, we stop dragging and "commit" the changes to some sort of `UndoRedoBuffer` so the user can undo or redo the drag.
 
 We also need to consider a bunch of edge cases,
 
 - What do you do if the user clicks in the middle of nowhere?
-- How can a user cancel dragging midway through (e.g. if the drag was accidental)
-  and what happens to the objects being dragged?
-- How do we handle *debouncing*? Often, when a user tries to click something
-  the mouse will move by a couple pixels between the "mouse down" and "mouse
-  up" events. If we naively interpreted this as a drag then you'll get lots of
-  complaints saying *"things jump a bit whenever I try to select them"*
+- How can a user cancel dragging midway through (e.g. if the drag was accidental) and what happens to the objects being dragged?
+- How do we handle *debouncing*? Often, when a user tries to click something the mouse will move by a couple pixels between the "mouse down" and "mouse up" events. If we naively interpreted this as a drag then you'll get lots of complaints saying *"things jump a bit whenever I try to select them"*
 
 {{% notice note %}}
-Interactivity almost always needs to be paired with some sort of Undo/Redo
-mechanism. This lets users undo accidental changes or look back in time to see
-what the world looked like several changes ago.
+Interactivity almost always needs to be paired with some sort of Undo/Redo mechanism. This lets users undo accidental changes or look back in time to see what the world looked like several changes ago.
 
-I'm not going to talk about Undo/Redo mechanisms too much here (I'm still
-trying to think of a nice way to implement it in `arcs`), other than to
-mention that having a robust way to apply and revert changes to the world is
-important... And like a lot of things, they can be tricky to implement in a
-way that will scale and allow you to maintain some semblance of sanity in the
-long term.
+I'm not going to talk about Undo/Redo mechanisms too much here (I'm still trying to think of a nice way to implement it in `arcs`), other than to mention that having a robust way to apply and revert changes to the world is important... And like a lot of things, they can be tricky to implement in a way that will scale and allow you to maintain some semblance of sanity in the long term.
 {{% /notice %}}
 
 At this point we'll need to give `Idle` its own nested state machine.
 
-I'll call the initial state `WaitingToSelect` seeing as that's what it does...
-Plus `Idle` is already taken.
+I'll call the initial state `WaitingToSelect` seeing as that's what it does... Plus `Idle` is already taken.
 
 ```rust
 // demo/src/modes/idle.rs
@@ -917,8 +737,7 @@ struct WaitingToSelect;
 impl State for WaitingToSelect {}
 ```
 
-We also need to update `Idle` to have a `nested` field and give it a default
-constructor that sets `nested` to the `WaitingToSelect` state.
+We also need to update `Idle` to have a `nested` field and give it a default constructor that sets `nested` to the `WaitingToSelect` state.
 
 ```rust
 // demo/src/modes/idle.rs
@@ -937,8 +756,7 @@ impl Default for Idle {
 }
 ```
 
-To implement `WaitingToSelect` we'll need to handle the `on_mouse_down()`
-event and ask the `Drawing` for a list of items under the cursor.
+To implement `WaitingToSelect` we'll need to handle the `on_mouse_down()` event and ask the `Drawing` for a list of items under the cursor.
 
 That requires `Drawing` to have some sort of `entities_under_point()` method.
 
@@ -964,18 +782,9 @@ pub trait Drawing {
 }
 ```
 
-A caller asks the `Drawing` an iterator over the entities underneath some
-`location` on the drawing. We've decided to use an iterator here instead of
-greedily storing the results in a `Vec` because the number of items under the
-cursor can be potentially massive (imagine zooming all the way out and clicking,
-the *entire* drawing would be "under" the cursor). Additionally a lot of code
-will just care about the first object found under the cursor, so we can avoid
-unnecessary work by being lazy.
+A caller asks the `Drawing` an iterator over the entities underneath some `location` on the drawing. We've decided to use an iterator here instead of greedily storing the results in a `Vec` because the number of items under the cursor can be potentially massive (imagine zooming all the way out and clicking, the *entire* drawing would be "under" the cursor). Additionally a lot of code will just care about the first object found under the cursor, so we can avoid unnecessary work by being lazy.
 
-Unfortunately the iterator itself needs to use dynamic dispatch so we can
-make `Drawing` object safe. There's no real way to avoid the allocation while
-maintaining object safety, but it shouldn't be too bad considering how
-expensive these lookups can be.
+Unfortunately the iterator itself needs to use dynamic dispatch so we can make `Drawing` object safe. There's no real way to avoid the allocation while maintaining object safety, but it shouldn't be too bad considering how expensive these lookups can be.
 
 Now we can stub out the body for `on_mouse_down()`.
 
@@ -1000,8 +809,7 @@ impl State for WaitingToSelect {
 }
 ```
 
-Looking back at the intended behaviour, it seems like we'll need to update
-`Drawing` with a way to select a specific object and unselect everything.
+Looking back at the intended behaviour, it seems like we'll need to update `Drawing` with a way to select a specific object and unselect everything.
 
 ```rust
 // demo/src/modes/mod.rs
@@ -1052,13 +860,9 @@ struct DraggingSelection;
 impl State for DraggingSelection {}
 ```
 
-Now we need to implement `DraggingSelection`, the actual dragging action. The
-code for this is pretty simple, when `on_mouse_move()` gets called we ned to
-calculate how much the cursor has been moved and translate all selected
-entities accordingly.
+Now we need to implement `DraggingSelection`, the actual dragging action. The code for this is pretty simple, when `on_mouse_move()` gets called we ned to calculate how much the cursor has been moved and translate all selected entities accordingly.
 
-We aren't worrying about Undo/Redo at this point, so when the mouse button is
-released (`on_mouse_up()`) we just switch back to the `WaitingToSelect` state.
+We aren't worrying about Undo/Redo at this point, so when the mouse button is released (`on_mouse_up()`) we just switch back to the `WaitingToSelect` state.
 
 ```rust
 // demo/src/modes/mod.rs
@@ -1102,31 +906,17 @@ impl State for DraggingSelection {
 }
 ```
 
-The implementation is deliberately simple for now. We aren't even handling
-debounce or cancellation, but you might see how you'd implement them.
+The implementation is deliberately simple for now. We aren't even handling debounce or cancellation, but you might see how you'd implement them.
 
 ## A Brief Intermission For Refactoring
 
-I don't know about you, but we've only written a couple states so far and I'm
-already feeling like that `Drawing` trait will turn into a massive interface
-pretty quickly. Every time we need to interact with the drawing we need to add
-more methods, and as the proverb goes, *"The bigger the interface, the weaker
-the abstraction"*.
+I don't know about you, but we've only written a couple states so far and I'm already feeling like that `Drawing` trait will turn into a massive interface pretty quickly. Every time we need to interact with the drawing we need to add more methods, and as the proverb goes, *"The bigger the interface, the weaker the abstraction"*.
 
-Our `Drawing` interface (the interface a `State` can use to interact with the
-outside world) also seems to have a bit of an identitiy crisis on its hands.
-Despite being called a `Drawing`, this interface comes across as something
-which gives us access to the ECS's [`specs::World`][specs-world], has a
-`Viewport` representing which part of the drawing is being displayed,
-contains the `UndoRedoBuffer`, and maybe some knobs and levers for
-communicating with the UI (e.g. to request that the canvas gets redrawn).
+Our `Drawing` interface (the interface a `State` can use to interact with the outside world) also seems to have a bit of an identitiy crisis on its hands. Despite being called a `Drawing`, this interface comes across as something which gives us access to the ECS's [`specs::World`][specs-world], has a `Viewport` representing which part of the drawing is being displayed, contains the `UndoRedoBuffer`, and maybe some knobs and levers for communicating with the UI (e.g. to request that the canvas gets redrawn).
 
-Using this interpretation, the current `Drawing` trait seems a little...
-confused.
+Using this interpretation, the current `Drawing` trait seems a little... confused.
 
-Even its name isn't quite correct. We aren't necessarily giving each `State` a
-reference to the drawing, they're getting contextual information relevant to
-the drawing and application as a whole. Hmm... How about `ApplicationContext`?
+Even its name isn't quite correct. We aren't necessarily giving each `State` a reference to the drawing, they're getting contextual information relevant to the drawing and application as a whole. Hmm... How about `ApplicationContext`?
 
 ```rust
 // demo/src/modes/mod.rs
@@ -1155,16 +945,11 @@ pub trait State: Debug + AsAny {
     ...
 ```
 
-Now we have a way to access the `World`, the methods that were previously
-required for `Drawing` (i.e. `ApplicationContext`) can be implemented as
-provided methods.
+Now we have a way to access the `World`, the methods that were previously required for `Drawing` (i.e. `ApplicationContext`) can be implemented as provided methods.
 
 But first we need to give `arcs` a way to mark things as *Selected*.
 
-See, I kinda lied to you earlier when we implemented `WaitingToSelect`. At
-the time I only ever ran the code under test using a mock `Drawing`, but now
-is as good a time as any seeing as we need to give `ApplicationContext` a set
-of `select()` and `unselect_all()` methods.
+See, I kinda lied to you earlier when we implemented `WaitingToSelect`. At the time I only ever ran the code under test using a mock `Drawing`, but now is as good a time as any seeing as we need to give `ApplicationContext` a set of `select()` and `unselect_all()` methods.
 
 ```rust
 // arcs/src/components/selected.rs
@@ -1208,9 +993,7 @@ pub trait ApplicationContext {
 }
 ```
 
-The [`arcs::algorithms::Translate`][translate] algorithm can be used to make
-`translate_selection()` almost trivial. The only hard part is deciphering the
-type returned by `system_data()`.
+The [`arcs::algorithms::Translate`][translate] algorithm can be used to make `translate_selection()` almost trivial. The only hard part is deciphering the type returned by `system_data()`.
 
 ```rust
 // demo/src/modes/mod.rs
@@ -1238,29 +1021,15 @@ pub trait ApplicationContext {
 
 ## Wiring it Up to the UI
 
-We now have a system for letting users interact with the application in a
-structured way, let's wire it up to the UI and make sure it actually works!
+We now have a system for letting users interact with the application in a structured way, let's wire it up to the UI and make sure it actually works!
 
-The browser demo for `arcs` is written using a framework called [seed][seed].
-The framework itself is fairly lightweight, with the idea being you provide a
-`update()` function which takes some "message" and uses it to update your
-`Model`, and a a `view()` method which will create a representation of your
-UI ("virtual DOM") and wire up functions to turn a JavaScript event into a
-message to be sent to `update()`.
+The browser demo for `arcs` is written using a framework called [seed][seed]. The framework itself is fairly lightweight, with the idea being you provide a `update()` function which takes some "message" and uses it to update your `Model`, and a a `view()` method which will create a representation of your UI ("virtual DOM") and wire up functions to turn a JavaScript event into a message to be sent to `update()`.
 
-At the moment the UI already kinda handles click events. I was previously using
-it to test my math for coordinate transforms (converting from pixel locations
-on a canvas to the corresponding point on the drawing) were correct by clicking
-on the canvas and making sure it rendered a dot under my cursor.
+At the moment the UI already kinda handles click events. I was previously using it to test my math for coordinate transforms (converting from pixel locations on a canvas to the corresponding point on the drawing) were correct by clicking on the canvas and making sure it rendered a dot under my cursor.
 
-It's not overly high-tech (essentially the graphical equivalent of debugging
-with print statements) but it's a good feeling when you can click on the
-canvas and know that under the hood you've implemented all the machinery for
-a zoomable, pannable viewport, plus enough rendering to start drawing coloured
-dots.
+It's not overly high-tech (essentially the graphical equivalent of debugging with print statements) but it's a good feeling when you can click on the canvas and know that under the hood you've implemented all the machinery for a zoomable, pannable viewport, plus enough rendering to start drawing coloured dots.
 
-First we need to update the code handling the `Msg::Clicked` message to call
-`on_mouse_down()` on our `Model` (we'll implement it in a bit).
+First we need to update the code handling the `Msg::Clicked` message to call `on_mouse_down()` on our `Model` (we'll implement it in a bit).
 
 ```diff
  fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
@@ -1331,11 +1100,7 @@ We also need to give `Model` a `current_state` field.
  }
 ```
 
-To start using `current_state` we'll need something to act as our `State`'s
-`ApplicationContext`. I've decided to pull this out into a "view" struct
-which borrows some of our `Model`'s fields. We can't use `Model` as the
-`ApplicationContext` because it owns our `current_state`, and passing `&mut
-self` to `self.current_state` is no bueno.
+To start using `current_state` we'll need something to act as our `State`'s `ApplicationContext`. I've decided to pull this out into a "view" struct which borrows some of our `Model`'s fields. We can't use `Model` as the `ApplicationContext` because it owns our `current_state`, and passing `&mut self` to `self.current_state` is no bueno.
 
 ```rust
 // demo/src/lib.rs
@@ -1356,8 +1121,7 @@ impl<'model> ApplicationContext for Context<'model> {
 }
 ```
 
-Now we can finally write our `Model::on_mouse_down()` method. All it does is
-construct a couple arguments then calls `self.current_state.on_mouse_down()`.
+Now we can finally write our `Model::on_mouse_down()` method. All it does is construct a couple arguments then calls `self.current_state.on_mouse_down()`.
 
 For convenience, I've pulled `Transition` handling into its own function.
 
@@ -1399,8 +1163,7 @@ Okay, let's spin up the dev server and give it a test run...
 
 <video controls src="it-doesnt-work.webm" type="video/webm" style="width:100%"></video>
 
-Hmm... I clicked around and nothing seems to happen. Are we even calling
-`on_mouse_down()`?
+Hmm... I clicked around and nothing seems to happen. Are we even calling `on_mouse_down()`?
 
 ```diff
  impl Model {
@@ -1421,9 +1184,7 @@ Hmm... I clicked around and nothing seems to happen. Are we even calling
 
 <video controls src="it-kinda-works.webm" type="video/webm" style="width:100%"></video>
 
-Soo... looks like everything is working as intended. The problem is that our
-`Idle` mode is in the `WaitingToSelect` state, but there's nothing on our canvas
-to select. I'm going to declare that a success and keep going.
+Soo... looks like everything is working as intended. The problem is that our `Idle` mode is in the `WaitingToSelect` state, but there's nothing on our canvas to select. I'm going to declare that a success and keep going.
 
 Next, let's wire up keyboard presses.
 
@@ -1439,8 +1200,7 @@ First we need to add a `KeyPressed` variant to `Msg`.
  }
 ```
 
-Then we need to register for the key pressed event and make sure it gets turned
-into a `Msg::KeyPressed` message.
+Then we need to register for the key pressed event and make sure it gets turned into a `Msg::KeyPressed` message.
 
 ```diff
  fn view(model: &Model) -> impl View<Msg> {
@@ -1483,8 +1243,7 @@ into a `Msg::KeyPressed` message.
  }
 ```
 
-We can now implement the `Msg::KeyPressed` handler like we did with
-`Msg::Clicked`.
+We can now implement the `Msg::KeyPressed` handler like we did with `Msg::Clicked`.
 
 ```diff
  fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
@@ -1518,41 +1277,23 @@ We can now implement the `Msg::KeyPressed` handler like we did with
  }
 ```
 
-I ended up needing to use [this hack][so] because `<canvas>` elements don't
-actually support key up/down events, but now we can receive keyboard events and
-even change to `AddArcMode` when `VirtualKeyCode::A` is pressed!
+I ended up needing to use [this hack][so] because `<canvas>` elements don't actually support key up/down events, but now we can receive keyboard events and even change to `AddArcMode` when `VirtualKeyCode::A` is pressed!
 
 <video controls src="keyboard-events.webm" type="video/webm" style="width:100%"></video>
 
-The crazy part is I spent longer troubleshooting the `<canvas>` keyboard event
-browser quirk than I did re-working the UI to use proper modes. Sure, it doesn't
-actually do anything at the moment, but that's just because there's no mode for
-adding points to the drawing.
+The crazy part is I spent longer troubleshooting the `<canvas>` keyboard event browser quirk than I did re-working the UI to use proper modes. Sure, it doesn't actually do anything at the moment, but that's just because there's no mode for adding points to the drawing.
 
 ## Add Point Mode
 
-I didn't want to finish off without at least showing you a dot that we can drag
-around the screen sp let's implement `AddPointMode`.
+I didn't want to finish off without at least showing you a dot that we can drag around the screen sp let's implement `AddPointMode`.
 
-The first thing we need to do is define how `AddPointMode` will react to actions
-from the user. Normally I'll use a whiteboard for this and bounce ideas off
-coworkers, but you've got to make do with what you've got.
+The first thing we need to do is define how `AddPointMode` will react to actions from the user. Normally I'll use a whiteboard for this and bounce ideas off coworkers, but you've got to make do with what you've got.
 
-Our `AddPointMode` won't be as simple as *"place a point wherever the user
-clicks"*. If you watch how users interact with a CAD program you'll notice they
-tend to hold the mouse button down and fine-tune where they want the point to go
-before releasing the button and "committing" the change.
+Our `AddPointMode` won't be as simple as *"place a point wherever the user clicks"*. If you watch how users interact with a CAD program you'll notice they tend to hold the mouse button down and fine-tune where they want the point to go before releasing the button and "committing" the change.
 
-Sometimes they'll realise midway through that they didn't want to place a point,
-so you need to give the user a way to cancel the interaction. In the wild, I've
-seen roughly two ways people try to do this, one is to hit `<ctrl-Z>` ("I want
-to undo the point I've started creating") and the other is to press `<esc>`
-("I want to **escape** this interaction").
+Sometimes they'll realise midway through that they didn't want to place a point, so you need to give the user a way to cancel the interaction. In the wild, I've seen roughly two ways people try to do this, one is to hit `<ctrl-Z>` ("I want to undo the point I've started creating") and the other is to press `<esc>` ("I want to **escape** this interaction").
 
-As someone who seeks out the vim keybindings for pretty much every editor or
-IDE they use, pressing `<esc>` seems the more natural of the two. That said,
-I just admitted I'm biased plus I'm not your "ordinary" user, so it's always
-good to get another person's opinion.
+As someone who seeks out the vim keybindings for pretty much every editor or IDE they use, pressing `<esc>` seems the more natural of the two. That said, I just admitted I'm biased plus I'm not your "ordinary" user, so it's always good to get another person's opinion.
 
 The state machine diagram for this is almost trivial.
 
@@ -1569,11 +1310,9 @@ stateDiagram
     }
 ```
 
-The simplicity of our state machine diagram hides a fair amount of detail
-though...
+The simplicity of our state machine diagram hides a fair amount of detail though...
 
-First, let's create a `WaitingToPlace` state to act as `AddPointMode`'s base
-state.
+First, let's create a `WaitingToPlace` state to act as `AddPointMode`'s base state.
 
 ```rust
 // arcs/demo/src/modes/add_point_mode.rs
@@ -1616,8 +1355,7 @@ impl State for WaitingToPlace {
 }
 ```
 
-Next we need a `PlacingPoint` state which will keep track of our temporary point
-and let us drag it around the screen.
+Next we need a `PlacingPoint` state which will keep track of our temporary point and let us drag it around the screen.
 
 ```rust
 // demo/src/modes/add_point_mode.rs
@@ -1632,8 +1370,7 @@ impl PlacingPoint {
 }
 ```
 
-Next we need to implement the relevant event handlers. For `PlacingPoint` we'll
-need to
+Next we need to implement the relevant event handlers. For `PlacingPoint` we'll need to
 
 - Transition back to `WaitingToPlace` when the mouse is released
 - Delete the `temp_point` if we get an `on_cancelled()` event
@@ -1677,9 +1414,7 @@ impl State for PlacingPoint {
 }
 ```
 
-So we've defined the state machine for `AddPointMode`, but if we want anything
-to happen we'll need to make sure `AddPointMode` propagates `on_mouse_up()`,
-`on_mouse_down()`, and `on_mouse_move()` to them.
+So we've defined the state machine for `AddPointMode`, but if we want anything to happen we'll need to make sure `AddPointMode` propagates `on_mouse_up()`, `on_mouse_down()`, and `on_mouse_move()` to them.
 
 ```rust
 // demo/src/modes/add_point_mode.rs
@@ -1735,8 +1470,7 @@ impl State for AddPointMode {
 
 
 
-While we're at it, we should make sure pressing the escape key cancels the
-current mode and switches back to the `Idle` state.
+While we're at it, we should make sure pressing the escape key cancels the current mode and switches back to the `Idle` state.
 
 ```rust
 // demo/src/modes/add_point_mode.rs
@@ -1768,8 +1502,7 @@ impl State for AddPointMode {
 }
 ```
 
-The top-level application is also only handling mouse down events so we'll need
-to add event handlers and `Msg` variants for `MouseUp` and `MouseMove`.
+The top-level application is also only handling mouse down events so we'll need to add event handlers and `Msg` variants for `MouseUp` and `MouseMove`.
 
 ```diff
 
@@ -1875,50 +1608,24 @@ to add event handlers and `Msg` variants for `MouseUp` and `MouseMove`.
 ```
 
 {{% notice note %}}
-It's annoying that we need to implement this sort of dragging a second time
-instead of just reusing the code from our `Idle` mode, but that's the
-trade-off we made back when thinking up a design. I'm also feeling funny
-about needing to constantly propagate events down to nested state machines.
+It's annoying that we need to implement this sort of dragging a second time instead of just reusing the code from our `Idle` mode, but that's the trade-off we made back when thinking up a design. I'm also feeling funny about needing to constantly propagate events down to nested state machines.
 
-If we were using a pushdown automata, dragging the current selection around
-would be a simple case of pushing the `DraggingSelection` state onto the stack,
-then when the mouse is released it would be popped and return control back to
-`AddPointMode`.
+If we were using a pushdown automata, dragging the current selection around would be a simple case of pushing the `DraggingSelection` state onto the stack, then when the mouse is released it would be popped and return control back to `AddPointMode`.
 
-Likewise, events would be sent directly to the innermost `State` so there'd be
-no need to explicitly propagate them down.
+Likewise, events would be sent directly to the innermost `State` so there'd be no need to explicitly propagate them down.
 
-It's all about trade-offs. In this case, dragging is simple enough I'm okay with
-writing it twice because it means we know exactly what's going on when
-`DraggingSelection` runs. If we were using a pushdown automata
-`DraggingSelection` would have no way of knowing which assumptions are being
-made by states higher in the stack so it might be easier to introduce bugs, or
-at least some form of *"spooky action at a distance"*.
+It's all about trade-offs. In this case, dragging is simple enough I'm okay with writing it twice because it means we know exactly what's going on when `DraggingSelection` runs. If we were using a pushdown automata `DraggingSelection` would have no way of knowing which assumptions are being made by states higher in the stack so it might be easier to introduce bugs, or at least some form of *"spooky action at a distance"*.
 
-You could even combine pushdown automata with some sort of bubbling mechanism
-where a state will explicitly say whether the event is "handled", allowing
-events to be sent to the innermost state first and continually bubbled up
-until someone handles the event or we reach the top of the stack. This is how
-a lot of GUIs do things (e.g. `preventDefault()` in the browser) to allow
-components to be composable, but I feel like that'd just make our already
-complex mode system even harder to reason about...
+You could even combine pushdown automata with some sort of bubbling mechanism where a state will explicitly say whether the event is "handled", allowing events to be sent to the innermost state first and continually bubbled up until someone handles the event or we reach the top of the stack. This is how a lot of GUIs do things (e.g. `preventDefault()` in the browser) to allow components to be composable, but I feel like that'd just make our already complex mode system even harder to reason about...
 {{% /notice %}}
 
-Something I'd also like to draw your attention to is how little code that
-required. Sure we needed to duplicate some of the dragging logic, but overall
-it was pretty simple to plug new functionality into our app.
+Something I'd also like to draw your attention to is how little code that required. Sure we needed to duplicate some of the dragging logic, but overall it was pretty simple to plug new functionality into our app.
 
 ## Conclusions
 
-Looking back, I'm not 100% sure we should have gone the *Nested State Machine*
-route instead of using a *Pushdown Automata*.
+Looking back, I'm not 100% sure we should have gone the *Nested State Machine* route instead of using a *Pushdown Automata*.
 
-Having to constantly propagate events down to inner state machines is a bit
-annoying to do in Rust, and the various tricks we could have employed to make
-the process easier would end up making the code less readable. The large
-projects I've needed to implement interactivity for in the past have all had
-some form of inheritance, and using inheritance this delegation could be solved
-quite elegantly.
+Having to constantly propagate events down to inner state machines is a bit annoying to do in Rust, and the various tricks we could have employed to make the process easier would end up making the code less readable. The large projects I've needed to implement interactivity for in the past have all had some form of inheritance, and using inheritance this delegation could be solved quite elegantly.
 
 {{% expand "Example of event delegation in C#" %}}
 ```cs
@@ -1960,19 +1667,9 @@ abstract class StateWithNestedStateMachine: State // name subject to much bikesh
 ```
 {{% /expand %}}
 
-That said, even if it required a bit more code having everything written out
-explicitly means our mode system is pretty easy to understand at a glance.
-When troubleshooting there's no need for contextual knowledge (i.e. knowing that
-a particular branch can only be hit when something a couple levels higher in the
-pushdown automata stack is in a particular state) and you can just follow the
-code.
+That said, even if it required a bit more code having everything written out explicitly means our mode system is pretty easy to understand at a glance. When troubleshooting there's no need for contextual knowledge (i.e. knowing that a particular branch can only be hit when something a couple levels higher in the pushdown automata stack is in a particular state) and you can just follow the code.
 
-I've found that to tackle these sorts of problems outside of toy projects, you
-*really* need to make sure your implementation is backed by a formal model or
-pattern. Implementing interactivity by attaching intermediate variables to your
-top-level `Window` (or `Model` in our case) and throwing more switch-case
-statements at the problem is a great way to create a code monster and make your
-successors/coworkers/future self hate you.
+I've found that to tackle these sorts of problems outside of toy projects, you *really* need to make sure your implementation is backed by a formal model or pattern. Implementing interactivity by attaching intermediate variables to your top-level `Window` (or `Model` in our case) and throwing more switch-case statements at the problem is a great way to create a code monster and make your successors/coworkers/future self hate you.
 
 And yes, if you are curious, we can indeed now draw points on the canvas 🎉
 

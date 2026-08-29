@@ -1,42 +1,27 @@
 ---
 title: How I Reverse Engineered the LastPass CLI Tool
 date: '2020-04-14T22:40:00+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Rust
 - Security
 - Reverse Engineering
 ---
 
-A couple days ago I was writing an install script for [my dotfiles][dotfiles]
-and reached a point where I wanted to grab some secrets (my SSH keys) from my
-LastPass vault and copy them to the file system.
+A couple days ago I was writing an install script for [my dotfiles][dotfiles] and reached a point where I wanted to grab some secrets (my SSH keys) from my LastPass vault and copy them to the file system.
 
-This is easy enough to do using the browser plugin, or even when working with
-their [command line tool (`lpass`)][lastpass-cli] in an interactive way, but
-I found there was no way to ask `lpass` which files are attached to a secret,
-and get the output in a machine readable format.
+This is easy enough to do using the browser plugin, or even when working with their [command line tool (`lpass`)][lastpass-cli] in an interactive way, but I found there was no way to ask `lpass` which files are attached to a secret, and get the output in a machine readable format.
 
-Like most self-respecting members of the open-source community, I [filed an
-issue][issue-547] on their GitHub page and in the meantime I started digging
-into the source code to find where changes might need to be made. That way I
-can make the change myself if it's easy enough, or I'll be able to provide
-someone else with a bit more information.
+Like most self-respecting members of the open-source community, I [filed an issue][issue-547] on their GitHub page and in the meantime I started digging into the source code to find where changes might need to be made. That way I can make the change myself if it's easy enough, or I'll be able to provide someone else with a bit more information.
 
-However, reading through the source code got me thinking. There currently
-aren't any libraries for working with LastPass, and although the `lpass` tool
-is GPL'd and the source code is freely accessible on GitHub, by reading the
-source code you can quickly tell it was only ever intended as a command-line
-tool.
+However, reading through the source code got me thinking. There currently aren't any libraries for working with LastPass, and although the `lpass` tool is GPL'd and the source code is freely accessible on GitHub, by reading the source code you can quickly tell it was only ever intended as a command-line tool.
 
 Soo..... Why not rewrite it in Rust?
 
 {{% notice note %}}
-The code written in this article is available [on GitHub][repo] and
-[published on crates.io][crate]. Feel free to browse through and steal code
-or inspiration.
+The code written in this article is available [on GitHub][repo] and [published on crates.io][crate]. Feel free to browse through and steal code or inspiration.
 
-If you found this useful or spotted a bug, let me know on the blog's
-[issue tracker][issue]!
+If you found this useful or spotted a bug, let me know on the blog's [issue tracker][issue]!
 
 [repo]: https://github.com/Michael-F-Bryan/lastpass
 [crate]: https://crates.io/crates/lastpass
@@ -45,64 +30,39 @@ If you found this useful or spotted a bug, let me know on the blog's
 
 ## A Quick Note On Goals
 
-In the long run, I'd like for this to be a fully-featured library for working
-with a LastPass vault. Although, in the short term I'm going to make a beeline
-for downloading and decrypting attachments, seeing as that was the original
-inspiration for this endeavour.
+In the long run, I'd like for this to be a fully-featured library for working with a LastPass vault. Although, in the short term I'm going to make a beeline for downloading and decrypting attachments, seeing as that was the original inspiration for this endeavour.
 
-Someone may want to create a nice command-line tool on top of the library, but
-I don't have any intention of being that someone (for now, anyways).
+Someone may want to create a nice command-line tool on top of the library, but I don't have any intention of being that someone (for now, anyways).
 
-I've also got a lot of experience writing FFI code, so I'd like to write
-bindings so the library is usable from Python (my dotfiles install script is
-written in Python) and C. I might wait a bit to flesh out the crate's API
-though, that way I'll have a better idea of how the bindings should be
-consumed and it'll reduce unnecessary code churn.
+I've also got a lot of experience writing FFI code, so I'd like to write bindings so the library is usable from Python (my dotfiles install script is written in Python) and C. I might wait a bit to flesh out the crate's API though, that way I'll have a better idea of how the bindings should be consumed and it'll reduce unnecessary code churn.
 
 The `lpass` tool has roughly three responsibilities,
 
 1. Communicate with the LastPass HTTP API
 2. Perform the appropriate crypto so we can encrypt/decrypt the LastPass vault
-3. Use the file system and a daemon to allow caching of the vault and persist
-   login sessions across multiple invocations of the `lpass` command (e.g. so
-   you don't need to keep entering your master password every time)
+3. Use the file system and a daemon to allow caching of the vault and persist login sessions across multiple invocations of the `lpass` command (e.g. so you don't need to keep entering your master password every time)
 
-As a library, the third point is usually left up to the frontend application
-so we've already made our job 33% easier.
+As a library, the third point is usually left up to the frontend application so we've already made our job 33% easier.
 
-I'd also consider the HTTP bit a solved problem. The [`reqwest`][reqwest]
-crate provides a robust and fully-featured asynchronous HTTP client, and we
-can leverage [`serde`][serde]'s serialization superpowers to make sending or
-receiving structured data a breeze.
+I'd also consider the HTTP bit a solved problem. The [`reqwest`][reqwest] crate provides a robust and fully-featured asynchronous HTTP client, and we can leverage [`serde`][serde]'s serialization superpowers to make sending or receiving structured data a breeze.
 
-I'm a little worried about the crypto side of things. On one hand, we don't
-need to implement any cryptography routines ourselves (the [`aes`][aes] and
-[`pbkdf2`][pbkdf2] crates already exist and are well-respected), but it's
-easy to mess things up an accidentally introduce a security vulnerability.
+I'm a little worried about the crypto side of things. On one hand, we don't need to implement any cryptography routines ourselves (the [`aes`][aes] and [`pbkdf2`][pbkdf2] crates already exist and are well-respected), but it's easy to mess things up an accidentally introduce a security vulnerability.
 
 I figure the best course of action here is to just copy what `lpass` do.
 
 {{% notice warning %}}
-If you've read this far hopefully you've realised this isn't one of those
-*"LastPass is broken!"* posts. I'm just reverse-engineering how the `lpass`
-program works so I can implement it myself and publish it as a library.
+If you've read this far hopefully you've realised this isn't one of those *"LastPass is broken!"* posts. I'm just reverse-engineering how the `lpass` program works so I can implement it myself and publish it as a library.
 
-If anything, after spending several hours banging my head against a wall and
-trying to figure out why things weren't working, I can assure you that the
-LastPass does a pretty good job at keeping people out.
+If anything, after spending several hours banging my head against a wall and trying to figure out why things weren't working, I can assure you that the LastPass does a pretty good job at keeping people out.
 
-I've also deliberately only consulted freely accessible information, namely
-the `lastpass-cli` project's source code, so this should also be fine from a
-copyright standpoint. The resulting [`lastpass`][crate] crate has also been
-published under the GPL because it's considered a derived work.
+I've also deliberately only consulted freely accessible information, namely the `lastpass-cli` project's source code, so this should also be fine from a copyright standpoint. The resulting [`lastpass`][crate] crate has also been published under the GPL because it's considered a derived work.
 
 [crate]: https://crates.io/crates/lastpass
 {{% /notice %}}
 
 ## Baby Steps
 
-After creating the repository, the first thing to do is get a copy of the
-`lastpass/lastpas-cli` project so we can refer to the source code when needed.
+After creating the repository, the first thing to do is get a copy of the `lastpass/lastpas-cli` project so we can refer to the source code when needed.
 
 ```console
 $ git submodule init
@@ -114,16 +74,9 @@ Receiving objects: 100% (2388/2388), 821.19 KiB | 463.00 KiB/s, done.
 Resolving deltas: 100% (1565/1565), done.
 ```
 
-There are a couple strategies you can use when trying to reverse engineer an
-existing application. The *Bottom-Up* strategy involves finding the snippet
-of code you care about (e.g. sending a HTTP request to the login endpoint)
-and tracing backwards to see how you construct the right inputs. On the other
-hand, the *Top-Down* approach starts at `main()` and steps through the program
-until you hit the juicy parts, similar to how a debugger works.
+There are a couple strategies you can use when trying to reverse engineer an existing application. The *Bottom-Up* strategy involves finding the snippet of code you care about (e.g. sending a HTTP request to the login endpoint) and tracing backwards to see how you construct the right inputs. On the other hand, the *Top-Down* approach starts at `main()` and steps through the program until you hit the juicy parts, similar to how a debugger works.
 
-My first aim will be to log in and get any necessary session tokens. I know the
-LastPass API endpoint for logging in will almost certainly be a string starting
-with `login`, so we can start from there.
+My first aim will be to log in and get any necessary session tokens. I know the LastPass API endpoint for logging in will almost certainly be a string starting with `login`, so we can start from there.
 
 ```console
 $ rg '"login' vendor/lastpass-cli
@@ -142,9 +95,7 @@ vendor/lastpass-cli/cmd.h
 75:#define cmd_login_usage "login [--trust] [--plaintext-key [--force, -f]] " color_usage " USERNAME"
 ```
 
-I'm guessing the file we're looking for is the aptly-named `endpoints-login.c`.
-Opening the file up and jumping to the appropriate lines show there are three
-login functions.
+I'm guessing the file we're looking for is the aptly-named `endpoints-login.c`. Opening the file up and jumping to the appropriate lines show there are three login functions.
 
 ```c
 // vendor/lastpass-cli/endpoints-login.c
@@ -219,32 +170,15 @@ static bool otp_login(const char *login_server, const unsigned char key[KDF_HASH
 }
 ```
 
-So it looks like there are 3 methods for doing login... I'm guessing the
-`ordinary_login()` is for a standard username/password login and `oob_login()`
-and `otp_login()` are for multi-factor authentication where you've got an
-out-of-band authentication device (e.g. a USB dongle) or are using an app that
-uses one-time-pads (e.g. the Google Authenticator app).
+So it looks like there are 3 methods for doing login... I'm guessing the `ordinary_login()` is for a standard username/password login and `oob_login()` and `otp_login()` are for multi-factor authentication where you've got an out-of-band authentication device (e.g. a USB dongle) or are using an app that uses one-time-pads (e.g. the Google Authenticator app).
 
-I don't care about multi-factor authentication for now, so let's have a skim
-through `ordinary_login()` and try to identify the important bits.
+I don't care about multi-factor authentication for now, so let's have a skim through `ordinary_login()` and try to identify the important bits.
 
-I'm not 100% sure what the `_v` suffix in `http_post_lastpass_v()` means, but
-it seems to be a function that sends a HTTP POST request to `lastpass.com`.
-The two `NULL` parameters are a pointer to a session (presumably for auth,
-but we haven't logged in yet so we don't have one) and a place to put the
-`reply` string's length (which we don't care about because it's a
-null-terminated string).
+I'm not 100% sure what the `_v` suffix in `http_post_lastpass_v()` means, but it seems to be a function that sends a HTTP POST request to `lastpass.com`. The two `NULL` parameters are a pointer to a session (presumably for auth, but we haven't logged in yet so we don't have one) and a place to put the `reply` string's length (which we don't care about because it's a null-terminated string).
 
-From there, it looks like the response body is parsed as XML into a `session`
-using `xml_ok_session()`. Interestingly, we need to pass in a `key`, so
-presumably parts of the response will be encrypted with our master password.
-If parsing was successful, the parsed session is "returned" to the caller via
-the `session` pointer and we leave the function. The rest of the function
-seems to be around identifying the cause for a login failure, so we can
-ignore it for the time being.
+From there, it looks like the response body is parsed as XML into a `session` using `xml_ok_session()`. Interestingly, we need to pass in a `key`, so presumably parts of the response will be encrypted with our master password. If parsing was successful, the parsed session is "returned" to the caller via the `session` pointer and we leave the function. The rest of the function seems to be around identifying the cause for a login failure, so we can ignore it for the time being.
 
-Looking up the stack to the function that calls `ordinary_login()`, we reach
-`lastpass_login()`.
+Looking up the stack to the function that calls `ordinary_login()`, we reach `lastpass_login()`.
 
 ```c
 // vendor/lastpass-cli/endpoints-login.c
@@ -272,20 +206,13 @@ struct session *lastpass_login(const char *username, const char hash[KDF_HEX_LEN
 }
 ```
 
-It looks like this is responsible for constructing the POST data and sending
-a request to `ordinary_login()`. I've elided the bits afterwards because they
-just fall back to the out-of-band and one-time-pad logins.
+It looks like this is responsible for constructing the POST data and sending a request to `ordinary_login()`. I've elided the bits afterwards because they just fall back to the out-of-band and one-time-pad logins.
 
-If you squint at `append_post()` calls in the previous snippet, you'll see
-that we're constructing the key-value pairs to submit a HTML form.
+If you squint at `append_post()` calls in the previous snippet, you'll see that we're constructing the key-value pairs to submit a HTML form.
 
-At this point we actually know enough to start sending login requests to the
-LastPass API!
+At this point we actually know enough to start sending login requests to the LastPass API!
 
-I'm going to use the HTTP client from the [`reqwest`][reqwest] crate for this.
-As well as having nice things like connection pooling, `async`, TLS,
-and automatic cookie storage, there's this awesome feature where you can use
-anything implementing `serde::Serialize` as the form data.
+I'm going to use the HTTP client from the [`reqwest`][reqwest] crate for this. As well as having nice things like connection pooling, `async`, TLS, and automatic cookie storage, there's this awesome feature where you can use anything implementing `serde::Serialize` as the form data.
 
 First, we'll create a struct with all the data to be submitted in the form.
 
@@ -308,11 +235,7 @@ struct Data<'a> {
 ```
 
 {{% notice note %}}
-Don't worry too much about those lifetime annotations (the `'a` in `&'a
-str`). I don't feel like making a bunch of temporary strings just to create
-the form data, so we'll use references to existing strings (e.g. a dynamic
-string that was passed in by the caller, or a string literal compiled into
-the binary).
+Don't worry too much about those lifetime annotations (the `'a` in `&'a str`). I don't feel like making a bunch of temporary strings just to create the form data, so we'll use references to existing strings (e.g. a dynamic string that was passed in by the caller, or a string literal compiled into the binary).
 {{% /notice %}}
 
 Then we can write a function to send this data to the `login.php` endpoint.
@@ -351,29 +274,19 @@ pub async fn login(
 }
 ```
 
-Throughout this I'll be assuming you're either moderately familiar with Rust,
-or have played with enough programming languages that you'll understand common
-concepts like method chaining and `async-await`.
+Throughout this I'll be assuming you're either moderately familiar with Rust, or have played with enough programming languages that you'll understand common concepts like method chaining and `async-await`.
 
 {{% notice note %}}
-As a side note, I think the decision to make `await` a postfix operator works
-really well with Rust's expression-centric syntax and `?` operator.
+As a side note, I think the decision to make `await` a postfix operator works really well with Rust's expression-centric syntax and `?` operator.
 
-Having used async-await in C# and Python, I was initially quite skeptical of
-writing `some_expr.await` instead of `await some_expr`, but after having used
-it in the real world I think this syntax reduces visual noise and the
-unnecessary parentheses or temporary variables you'd normally get when
-working with the returned value.
+Having used async-await in C# and Python, I was initially quite skeptical of writing `some_expr.await` instead of `await some_expr`, but after having used it in the real world I think this syntax reduces visual noise and the unnecessary parentheses or temporary variables you'd normally get when working with the returned value.
 
-The interaction with the `?` operator also just *"rolls off the tongue"*
-(e.g. `let foo = some_expr.await?` instead of `let foo = (await
-some_expr)?`).
+The interaction with the `?` operator also just *"rolls off the tongue"* (e.g. `let foo = some_expr.await?` instead of `let foo = (await some_expr)?`).
 
 Nice work, language designers 👍
 {{% /notice %}}
 
-I've also taken the liberty of stubbing out a `Session` type based on the
-`session` struct in `session.h`.
+I've also taken the liberty of stubbing out a `Session` type based on the `session` struct in `session.h`.
 
 ```rust
 // src/session.rs
@@ -398,8 +311,7 @@ struct session {
 };
 ```
 
-I also hacked together [a quick program][main-rs-1] to send requests to
-LastPass and dump the login response.
+I also hacked together [a quick program][main-rs-1] to send requests to LastPass and dump the login response.
 
 ```rust
 // src/bin/main.rs
@@ -433,19 +345,12 @@ async fn main() -> Result<(), Error> {
 ```
 
 {{% notice tip %}}
-I don't want to worry about deriving a login key or that `iterations`
-variable for now, so I recompiled `lastpass-cli` with debug symbols and ran
-`lpass login my-test-account@example.com` under the VS Code debugger to get
-the right values.
+I don't want to worry about deriving a login key or that `iterations` variable for now, so I recompiled `lastpass-cli` with debug symbols and ran `lpass login my-test-account@example.com` under the VS Code debugger to get the right values.
 
-When you're hacking together a proof-of-concept like this it's okay to use
-hard-coded variables. Once we know that we can talk to the LastPass API we
-can take a step back, start looking for patterns, and derive nice
-abstractions.
+When you're hacking together a proof-of-concept like this it's okay to use hard-coded variables. Once we know that we can talk to the LastPass API we can take a step back, start looking for patterns, and derive nice abstractions.
 {{% /notice %}}
 
-Assuming we used the correct `login_key`, the `login.php` endpoint sends us
-back a big blob of XML.
+Assuming we used the correct `login_key`, the `login.php` endpoint sends us back a big blob of XML.
 
 {{% expand "A big blob of XML" %}}
 ```xml
@@ -491,13 +396,9 @@ back a big blob of XML.
 ```
 {{% /expand  %}}
 
-Considering the `Session` struct only has a handful of fields, it's safe to
-assume most of this is unnecessary information that's probably used by other
-LastPass products (e.g. their browser extension).
+Considering the `Session` struct only has a handful of fields, it's safe to assume most of this is unnecessary information that's probably used by other LastPass products (e.g. their browser extension).
 
-To see how the relevant information is extracted, I'm going to look at the
-`xml_ok_session()` function (which tries to parse the happy case out of the XML)
-and see if anything jumps out.
+To see how the relevant information is extracted, I'm going to look at the `xml_ok_session()` function (which tries to parse the happy case out of the XML) and see if anything jumps out.
 
 ```c
 // vendor/lastpass-cli/xml.c
@@ -553,16 +454,11 @@ out:
 }
 ```
 
-Looking at just the string literals and function names, it seems like we're
-expecting a root `<ok>` node. From there we skim through the `<ok>` node's
-attributes and copy `"uid"`, `"sessionid"`, `"token"`, and `"privatekeyenc"`
-to the relevant fields on `session`.
+Looking at just the string literals and function names, it seems like we're expecting a root `<ok>` node. From there we skim through the `<ok>` node's attributes and copy `"uid"`, `"sessionid"`, `"token"`, and `"privatekeyenc"` to the relevant fields on `session`.
 
 That seems easy enough.
 
-I'll be using the [`serde_xml_rs`][serde-xml-rs] crate to parse the response
-document. This lets us declaratively define how an "ok" document should look,
-then lean on `serde` and `serde_xml_rs` to do the heavy lifting.
+I'll be using the [`serde_xml_rs`][serde-xml-rs] crate to parse the response document. This lets us declaratively define how an "ok" document should look, then lean on `serde` and `serde_xml_rs` to do the heavy lifting.
 
 ```rust
 // src/endpoints/login.rs
@@ -595,8 +491,7 @@ enum Root {
 }
 ```
 
-Now we've got something that represents the document schema, we actually have
-everything we need to parse it into a `Session`.
+Now we've got something that represents the document schema, we actually have everything we need to parse it into a `Session`.
 
 ```rust
 // src/endpoints/login.rs
@@ -645,31 +540,17 @@ Logged in as my-test-account@example.com Session {
 
 Success!
 
-While it may seem like we've written a lot of code our quick'n'dirty login
-function, complete with error handling code (which I've skipped for simplicity),
-and a test program, only took about 100 lines of Rust.
+While it may seem like we've written a lot of code our quick'n'dirty login function, complete with error handling code (which I've skipped for simplicity), and a test program, only took about 100 lines of Rust.
 
-The vast majority of time was actually spent reading through the
-`lastpass-cli` project's source code and figuring out how all the components
-interact. This was made a lot harder because C promotes a culture of
-[*Primitive Obsession*][primitive-obsession], so everything is a `char *`
-(the login key is a `char *`, the response is a `char *`, errors are a `char *`,
-the key-value pairs for our POST form is a `char **` array where even
-items are keys and odd items are values, etc.). The lack of generics and RAII
-also makes it hard to create nice layers of abstraction in a C program because
-you are constantly interspersing business logic with memory management, or
-you need to [implement your own doubly-linked list][doubly-linked-list].
+The vast majority of time was actually spent reading through the `lastpass-cli` project's source code and figuring out how all the components interact. This was made a lot harder because C promotes a culture of [*Primitive Obsession*][primitive-obsession], so everything is a `char *` (the login key is a `char *`, the response is a `char *`, errors are a `char *`, the key-value pairs for our POST form is a `char **` array where even items are keys and odd items are values, etc.). The lack of generics and RAII also makes it hard to create nice layers of abstraction in a C program because you are constantly interspersing business logic with memory management, or you need to [implement your own doubly-linked list][doubly-linked-list].
 
 ## Creating an Abstraction for Key Management
 
-Now that we're able to log in, let's start getting rid of those hard-coded
-values.
+Now that we're able to log in, let's start getting rid of those hard-coded values.
 
 ### Login Keys
 
-The first thing I'd like to do is create a `LoginKey`. After a little digging,
-it looks like we use `kdf_login_key()` to derive the login key based on the
-user's username and master password.
+The first thing I'd like to do is create a `LoginKey`. After a little digging, it looks like we use `kdf_login_key()` to derive the login key based on the user's username and master password.
 
 ```c
 // vendor/lastpass-cli/kdf.c
@@ -699,17 +580,11 @@ void kdf_login_key(const char *username, const char *password, int iterations, c
 }
 ```
 
-Now we can see that the `iterations` parameter is used by [PBKDF2][pbkdf2] to
-increase the number of times the hash is applied, allowing the algorithm to
-scale as hardware gets faster.
+Now we can see that the `iterations` parameter is used by [PBKDF2][pbkdf2] to increase the number of times the hash is applied, allowing the algorithm to scale as hardware gets faster.
 
-As a special case, when `iterations <= 1` we do two passes through SHA-256.
-This looks like a backwards compatibility thing, where the `LoginKey` used by
-older servers or accounts was computed using SHA-256 and they later
-transitioned to PBKDF2 for increased security.
+As a special case, when `iterations <= 1` we do two passes through SHA-256. This looks like a backwards compatibility thing, where the `LoginKey` used by older servers or accounts was computed using SHA-256 and they later transitioned to PBKDF2 for increased security.
 
-Looking through the source code we can see that a login key is `KDF_HASH_LEN`
-bytes long, or about 64 bytes + 1 for a null terminator.
+Looking through the source code we can see that a login key is `KDF_HASH_LEN` bytes long, or about 64 bytes + 1 for a null terminator.
 
 ```c
 // /usr/include/openssl/sha.h
@@ -725,9 +600,7 @@ bytes long, or about 64 bytes + 1 for a null terminator.
 #define KDF_HEX_LEN (KDF_HASH_LEN * 2 + 1)
 ```
 
-This tells us enough to define a `LoginKey`. For now it's just a newtype around
-a `[u8; 64]` array, we don't need the null terminator because arrays in Rust
-always know how long they are.
+This tells us enough to define a `LoginKey`. For now it's just a newtype around a `[u8; 64]` array, we don't need the null terminator because arrays in Rust always know how long they are.
 
 ```rust
 // src/keys/login_key.rs
@@ -742,9 +615,7 @@ impl LoginKey {
 }
 ```
 
-You can create a `LoginKey` using the `LoginKey::calculate()` constructor. This
-just defers to `LoginKey::sha256()` and `LoginKey::pbkdf2()` based on the number
-of iterations.
+You can create a `LoginKey` using the `LoginKey::calculate()` constructor. This just defers to `LoginKey::sha256()` and `LoginKey::pbkdf2()` based on the number of iterations.
 
 ```rust
 // src/keys/login_key.rs
@@ -773,8 +644,7 @@ impl LoginKey {
 }
 ```
 
-I'll start with the `LoginKey::sha256()` constructor because that seems easiest,
-so let's have a look at the `sha256_hash()` function used by `lastpass-cli`.
+I'll start with the `LoginKey::sha256()` constructor because that seems easiest, so let's have a look at the `sha256_hash()` function used by `lastpass-cli`.
 
 ```rust
 // vendor/lastpass-cli/kdf.c
@@ -798,18 +668,13 @@ die:
 }
 ```
 
-Seems fair enough, it'll generate a hash of the `username + password`, then
-hash that with the password.
+Seems fair enough, it'll generate a hash of the `username + password`, then hash that with the password.
 
-I don't particularly want to implement any of this myself myself, so let's pull
-in a couple crates:
+I don't particularly want to implement any of this myself myself, so let's pull in a couple crates:
 
 - [`sha2`][sha2] - for the SHA-256 algorithm
-- [`digest`][digest] - the `digest::Digest` trait comes from the
-  [RustCrypto][rust-crypto] project and is used to implement generic
-  cryptographic hash functions
-- [`hex`][hex] - for converting bytes to their hexadecimal representation and
-  back again
+- [`digest`][digest] - the `digest::Digest` trait comes from the [RustCrypto][rust-crypto] project and is used to implement generic cryptographic hash functions
+- [`hex`][hex] - for converting bytes to their hexadecimal representation and back again
 
 And then we can implement `LoginKey::sha256()`.
 
@@ -849,9 +714,7 @@ impl LoginKey {
 }
 ```
 
-To make sure I've implemented this correctly, I gave the `lpass` program a dummy
-set of credentials and using the debugger was able to see what they should hash
-to.
+To make sure I've implemented this correctly, I gave the `lpass` program a dummy set of credentials and using the debugger was able to see what they should hash to.
 
 This lets me write a simple sanity test.
 
@@ -875,9 +738,7 @@ mod tests {
 }
 ```
 
-I can implement the `LoginKey::pbkdf2()` constructor in much the same way,
-again letting the proper crate (in this case, [`pbkdf2`][pbkdf2]) do the heavy
-lifting.
+I can implement the `LoginKey::pbkdf2()` constructor in much the same way, again letting the proper crate (in this case, [`pbkdf2`][pbkdf2]) do the heavy lifting.
 
 ```rust
 // src/keys/login_key.rs
@@ -914,9 +775,7 @@ impl LoginKey {
 }
 ```
 
-In much the same way, we can use the debugger to find a set of inputs and
-outputs to test that our `LoginKey::pbkdf2()` function was implemented
-correctly.
+In much the same way, we can use the debugger to find a set of inputs and outputs to test that our `LoginKey::pbkdf2()` function was implemented correctly.
 
 ```rust
 // src/keys/login_key.rs
@@ -942,8 +801,7 @@ mod tests {
 }
 ```
 
-Now we can construct a `LoginKey`, we can [update the test executable][main-rs-2]
-to accept credentials instead of a hard-coded login key.
+Now we can construct a `LoginKey`, we can [update the test executable][main-rs-2] to accept credentials instead of a hard-coded login key.
 
 ```rust
 // src/bin/main.rs
@@ -997,12 +855,9 @@ struct Args {
 }
 ```
 
-While you reading through the earlier section, I took the liberty of creating
-a function that asks LastPass how many iterations to use when generating a
-login key.
+While you reading through the earlier section, I took the liberty of creating a function that asks LastPass how many iterations to use when generating a login key.
 
-The `iterations.php` endpoint replies with a single integer, so it's dead
-simple.
+The `iterations.php` endpoint replies with a single integer, so it's dead simple.
 
 ```rust
 // src/endpoints/iterations.rs
@@ -1034,20 +889,13 @@ struct Data<'a> {
 
 ### Decryption Keys
 
-To accompany the `LoginKey`, which has been shared with the LastPass servers
-to prove who you are, there is also a `DecryptionKey` for decrypting your
-actual LastPass vault.
+To accompany the `LoginKey`, which has been shared with the LastPass servers to prove who you are, there is also a `DecryptionKey` for decrypting your actual LastPass vault.
 
-This second key is derived from your master password and never leaves your
-computer, hence the claim that LastPass themselves can't read your personal
-data.
+This second key is derived from your master password and never leaves your computer, hence the claim that LastPass themselves can't read your personal data.
 
-The `DecryptionKey` is also constructed using SHA-256 or PBKDF2, so I won't
-go into detail on that. Instead, I'd like to add a method for decrypting
-ciphertext using a `DecryptionKey`.
+The `DecryptionKey` is also constructed using SHA-256 or PBKDF2, so I won't go into detail on that. Instead, I'd like to add a method for decrypting ciphertext using a `DecryptionKey`.
 
-I guess the best place to start is by looking at how the `lastpass-cli` project
-decrypts things using the `DecryptionKey`.
+I guess the best place to start is by looking at how the `lastpass-cli` project decrypts things using the `DecryptionKey`.
 
 ```c
 // vendor/lastpass-cli/cipher.c
@@ -1093,18 +941,11 @@ error:
 }
 ```
 
-Although the code is a bit convoluted due to way error handling and argument
-validation are done, it looks like we switch between two input algorithms at
-the start based, then pass the ciphertext through the decryption function.
+Although the code is a bit convoluted due to way error handling and argument validation are done, it looks like we switch between two input algorithms at the start based, then pass the ciphertext through the decryption function.
 
-Similar to the `LoginKey::calculate()` function I'm guessing this is because
-the encryption algorithm has changed over time. So it was initially just
-using AES-256 with the ECB [block cipher mode][cipher-mode], then later they
-transitioned to CBC with a 16-byte [initialization vector][iv] (that's why
-there's the `ciphertext[0] == '!'` and all that pointer arithmetic).
+Similar to the `LoginKey::calculate()` function I'm guessing this is because the encryption algorithm has changed over time. So it was initially just using AES-256 with the ECB [block cipher mode][cipher-mode], then later they transitioned to CBC with a 16-byte [initialization vector][iv] (that's why there's the `ciphertext[0] == '!'` and all that pointer arithmetic).
 
-The [`aes`][aes] and [`block-modes`][block-modes] crates made this a lot easier
-than I was expecting.
+The [`aes`][aes] and [`block-modes`][block-modes] crates made this a lot easier than I was expecting.
 
 ```rust
 // src/keys/decryption_key.rs
@@ -1144,10 +985,7 @@ fn uses_cbc(ciphertext: &[u8]) -> bool {
 }
 ```
 
-The `lastpass-cli` project doesn't have any tests with examples of decrypted
-data (or any tests at all for that matter), so I'll need to resort to using
-debugger on `lpass` and seeing how real data is decrypted if I want to make
-sure my code works.
+The `lastpass-cli` project doesn't have any tests with examples of decrypted data (or any tests at all for that matter), so I'll need to resort to using debugger on `lpass` and seeing how real data is decrypted if I want to make sure my code works.
 
 ```rust
 // src/keys/decryption_key.rs
@@ -1176,24 +1014,17 @@ mod tests {
 }
 ```
 
-Well the test passes, so if everything goes to plan we should have everything
-we need to decode the vault.
+Well the test passes, so if everything goes to plan we should have everything we need to decode the vault.
 
 ## Reading the Vault
 
-Now we've implemented the fundamental things like crypto and calling a couple
-API endpoints, we're getting into the more juicy stuff. The next step is to
-download a copy of the password vault and read it into memory.
+Now we've implemented the fundamental things like crypto and calling a couple API endpoints, we're getting into the more juicy stuff. The next step is to download a copy of the password vault and read it into memory.
 
 ### Retrieving the Vault
 
-Once you've logged in, retrieving a copy of the password vault from LastPass is
-really easy. We don't need to supply any authentication information because
-LastPass already gave us a PHP session cookie and I'll be reusing the same
-`reqwest::Client` for both calls.
+Once you've logged in, retrieving a copy of the password vault from LastPass is really easy. We don't need to supply any authentication information because LastPass already gave us a PHP session cookie and I'll be reusing the same `reqwest::Client` for both calls.
 
-Just like `login.php` and `iterations.php`, we need to send a POST request
-to the `getaccts.php` endpoint and read the response body.
+Just like `login.php` and `iterations.php`, we need to send a POST request to the `getaccts.php` endpoint and read the response body.
 
 ```rust
 // src/endpoints/vault.rs
@@ -1249,14 +1080,11 @@ pub enum VaultError {
 }
 ```
 
-For now I've also stubbed out a `Vault` type and given it a `Vault::parse()`
-method that accepts a `&[u8]` and will return either a `Vault` or a
-`VaultParseError`.
+For now I've also stubbed out a `Vault` type and given it a `Vault::parse()` method that accepts a `&[u8]` and will return either a `Vault` or a `VaultParseError`.
 
 ### Decoding the Vault
 
-Running our test program again and inserting a line which will write the
-response `body` to disk shows a big hunk of binary.
+Running our test program again and inserting a line which will write the response `body` to disk shows a big hunk of binary.
 
 Let's print this data out as hex and see if we can spot any patterns...
 
@@ -1296,28 +1124,20 @@ Let's print this data out as hex and see if we can spot any patterns...
 ```
 
 {{% notice note %}}
-I set up a dummy LastPass account just for this analysis, so I'm not overly
-concerned about publishing it on the internet.
+I set up a dummy LastPass account just for this analysis, so I'm not overly concerned about publishing it on the internet.
 
-Besides, all the "interesting" bits are encrypted and you don't have access
-to the master password so the most anyone can see is a couple unencrypted
-timestamps.
+Besides, all the "interesting" bits are encrypted and you don't have access to the master password so the most anyone can see is a couple unencrypted timestamps.
 {{% /notice %}}
 
-After staring at the wall of hex for a couple seconds I noticed an interesting
-pattern. This blob contains a repeating pattern...
+After staring at the wall of hex for a couple seconds I noticed an interesting pattern. This blob contains a repeating pattern...
 
 - a 4-byte ASCII mnemonic
 - a 4-byte big-endian integer, `n`
-- `n` bytes worth of data, sometimes cleartext (e.g. base64-encoded text or a
-  long number that looks like a unix timestamp) and other times it'll look like
-  garbage (encrypted data)
+- `n` bytes worth of data, sometimes cleartext (e.g. base64-encoded text or a long number that looks like a unix timestamp) and other times it'll look like garbage (encrypted data)
 
-Now we have a rough idea of how a vault is structured, let's dive into some
-source code and see how it's turned into something more usable.
+Now we have a rough idea of how a vault is structured, let's dive into some source code and see how it's turned into something more usable.
 
-Internally, it looks like LastPass refer to this thing as a `blob`, and there
-happens to be `blob_parse()` function in `blob.h`. Let's start there.
+Internally, it looks like LastPass refer to this thing as a `blob`, and there happens to be `blob_parse()` function in `blob.h`. Let's start there.
 
 ```c
 // vendor/lastpass-cli/blob.c
@@ -1360,9 +1180,7 @@ error:
 }
 ```
 
-This seems simple enough. Those patterns we saw earlier are called `chunk`s, and
-parsing a `blob` is just a case of reading each `chunk` in the `blob`,
-invoking different routines depending on a 4-character mnemonic.
+This seems simple enough. Those patterns we saw earlier are called `chunk`s, and parsing a `blob` is just a case of reading each `chunk` in the `blob`, invoking different routines depending on a 4-character mnemonic.
 
 Let's have a look at how each chunk is parsed.
 
@@ -1406,13 +1224,9 @@ static bool read_chunk(struct blob_pos *blob, struct chunk *chunk)
 }
 ```
 
-This can be converted fairly mechanically into Rust. The only noticeable
-difference is that instead of mutating the slice every time we read some data
-off the front, I'll return a new slice.
+This can be converted fairly mechanically into Rust. The only noticeable difference is that instead of mutating the slice every time we read some data off the front, I'll return a new slice.
 
-This means when the caller removes some data from a buffer they'll be able to
-*shadow* the old variable, making sure it's not possible to accidentally
-confuse what has been already parsed and what hasn't.
+This means when the caller removes some data from a buffer they'll be able to *shadow* the old variable, making sure it's not possible to accidentally confuse what has been already parsed and what hasn't.
 
 I've found this pattern works quite well when parsing.
 
@@ -1447,11 +1261,7 @@ impl<'a> Chunk<'a> {
 }
 ```
 
-Now we can read a `Chunk` from the front of a byte buffer, we can start working
-on the `Parser`. Instead of leaving all the state and code inline like they did
-in `blob_parse()`, I've decided to pull intermediate values into their own
-`Parser` struct and give each chunk type its own `handle_XXX()` method. That
-just helps to keep functions at a manageable size and improve readability.
+Now we can read a `Chunk` from the front of a byte buffer, we can start working on the `Parser`. Instead of leaving all the state and code inline like they did in `blob_parse()`, I've decided to pull intermediate values into their own `Parser` struct and give each chunk type its own `handle_XXX()` method. That just helps to keep functions at a manageable size and improve readability.
 
 ```rust
 // src/parser.rs
@@ -1485,10 +1295,7 @@ impl Parser {
 }
 ```
 
-You can see the `Parser::parse()` method just reads chunks and passes them to
-the `Parser::handle_chunk()` method. Likewise, `Parser::handle_chunk()` just
-does a `match` on the `chunk`'s name and passes the chunk body to the
-appropriate method.
+You can see the `Parser::parse()` method just reads chunks and passes them to the `Parser::handle_chunk()` method. Likewise, `Parser::handle_chunk()` just does a `match` on the `chunk`'s name and passes the chunk body to the appropriate method.
 
 ```rust
 // src/parser.rs
@@ -1547,14 +1354,9 @@ impl Parser {
 }
 ```
 
-Let's have a think about what we'll need to write the `parse_account()`
-function.
+Let's have a think about what we'll need to write the `parse_account()` function.
 
-In LastPass parlance, an `Account` is the fundamental unit in the vault.
-These are used to represent things like account credentials (e.g. username
-and password), it lets you attach a URL so you can quickly jump to the
-website, you can have notes (a free-form string), attached files, and much
-more.
+In LastPass parlance, an `Account` is the fundamental unit in the vault. These are used to represent things like account credentials (e.g. username and password), it lets you attach a URL so you can quickly jump to the website, you can have notes (a free-form string), attached files, and much more.
 
 As I've coded it, an `Account` looks something like this:
 
@@ -1617,11 +1419,9 @@ pub struct Attachment {
 }
 ```
 
-Like a lot of core business objects tend to do, you can see the `Account` has
-grown a large number of fields over the years.
+Like a lot of core business objects tend to do, you can see the `Account` has grown a large number of fields over the years.
 
-To help handle the monotony of parsing dozens of fields, `lastpass-cli` has
-introduced a couple helper macros and functions.
+To help handle the monotony of parsing dozens of fields, `lastpass-cli` has introduced a couple helper macros and functions.
 
 ```c
 // vendor/lastpass-cli/blob.c
@@ -1672,12 +1472,9 @@ static int read_boolean(struct chunk *chunk) { ... }
 	} while (0)
 ```
 
-The only non-trivial helper is `read_crypt_string()`, the equivalent of our
-`DecodeKey::decode()`. The rest just pop the next item from a `Chunk` and
-parse it into the desired format.
+The only non-trivial helper is `read_crypt_string()`, the equivalent of our `DecodeKey::decode()`. The rest just pop the next item from a `Chunk` and parse it into the desired format.
 
-From here, we can see how the `account_parse()` function is implemented. It's
-not complicated per-se, just long.
+From here, we can see how the `account_parse()` function is implemented. It's not complicated per-se, just long.
 
 ```c
 // vendor/lastpass-cli/blob.c
@@ -1750,8 +1547,7 @@ error:
 }
 ```
 
-Our `parse_account()` function looks quite similar, although deciding to just
-use helper functions and not macros means it's more visually cluttered.
+Our `parse_account()` function looks quite similar, although deciding to just use helper functions and not macros means it's more visually cluttered.
 
 ```rust
 
@@ -1822,16 +1618,9 @@ pub(crate) fn parse_account(
 ```
 
 {{% notice note %}}
-You may have noticed that each helper function is passed a string with the
-field name. That comes about because I'm trying to give really clear error
-messages when things go wrong (that way they're easier to debug), so instead of
-saying *"unable to parse the vault"*, we'll be able to say something more useful
-like *"Unable to decrypt account.password"*).
+You may have noticed that each helper function is passed a string with the field name. That comes about because I'm trying to give really clear error messages when things go wrong (that way they're easier to debug), so instead of saying *"unable to parse the vault"*, we'll be able to say something more useful like *"Unable to decrypt account.password"*).
 
-This is the full declaration for `VaultParseError`. You'll notice we're using
-[`thiserror`][thiserror] to automatically derive `std::fmt::Display` and make
-sure things like `Error::source()` will return the underlying issue if one is
-present.
+This is the full declaration for `VaultParseError`. You'll notice we're using [`thiserror`][thiserror] to automatically derive `std::fmt::Display` and make sure things like `Error::source()` will return the underlying issue if one is present.
 
 ```rust
 // src/parser.rs
@@ -1867,10 +1656,7 @@ pub enum VaultParseError {
 [thiserror]: https://crates.io/crates/thiserror
 {{% /notice %}}
 
-I'm not going to go show too much more parsing code (because it's all kinda the
-same and you can [read it on github][parser-rs]), but I'd like to show how
-simple it is to read an encrypted field is. Most of the code is actually
-dedicated to providing detailed parse errors to the caller.
+I'm not going to go show too much more parsing code (because it's all kinda the same and you can [read it on github][parser-rs]), but I'd like to show how simple it is to read an encrypted field is. Most of the code is actually dedicated to providing detailed parse errors to the caller.
 
 ```rust
 // src/parser.rs
@@ -1896,11 +1682,9 @@ fn read_encrypted<'a>(
 }
 ```
 
-We're actually able to read the `Vault` into memory and start looking at its
-contents now!
+We're actually able to read the `Vault` into memory and start looking at its contents now!
 
-Let's update the example executable so it'll log in and print out the first
-`Account` in my test vault.
+Let's update the example executable so it'll log in and print out the first `Account` in my test vault.
 
 ```console
 $ RUST_LOG=info cargo run --username $EMAIL --password=$PASSWORD
@@ -1941,10 +1725,7 @@ Account {
 
 ## Downloading Attachments
 
-An interesting part about accounts is that each gets an
-`encrypted_attachment_key` field. This is a key that is base64-encoded and
-encrypted using your master key, and is what you use for all
-attachment-related decryption.
+An interesting part about accounts is that each gets an `encrypted_attachment_key` field. This is a key that is base64-encoded and encrypted using your master key, and is what you use for all attachment-related decryption.
 
 Let's give the `Account` a helper method for extracting the account key.
 
@@ -1965,8 +1746,7 @@ impl Account {
 }
 ```
 
-Now we've got the attachment key, we can decrypt an `Attachment`'s filename from
-the metadata stored in the vault.
+Now we've got the attachment key, we can decrypt an `Attachment`'s filename from the metadata stored in the vault.
 
 ```rust
 // src/attachment.rs
@@ -2005,26 +1785,19 @@ impl Attachment {
 
 So now we're able to read an attachment's filename.
 
-It may not sound like much, but by this point we've actually gone through
-three levels of encryption...
+It may not sound like much, but by this point we've actually gone through three levels of encryption...
 
 1. First we needed a login key to prove who we are
-2. Then we needed to use the master decryption key so we can read things like
-   an account's name, associated username and password, and extract the
-   attachment key
+2. Then we needed to use the master decryption key so we can read things like an account's name, associated username and password, and extract the attachment key
 3. Then we used the attachment key to read the attachment's filename
 
 Talk about defence in depth!
 
 ### Downloading Attachments
 
-It looks like the `Attachment`'s `storage_key` field doesn't actually have
-anything to do with encryption. When I first saw it, my thoughts were *"oh
-great, yet another layer of encryption"*, but after printing the value out
-you can see it's obviously not a key or encrypted data.
+It looks like the `Attachment`'s `storage_key` field doesn't actually have anything to do with encryption. When I first saw it, my thoughts were *"oh great, yet another layer of encryption"*, but after printing the value out you can see it's obviously not a key or encrypted data.
 
-Don't just take my word on it though, here's the `Debug` representation of
-an `Attachment`:
+Don't just take my word on it though, here's the `Debug` representation of an `Attachment`:
 
 ```rust
 Attachment {
@@ -2041,20 +1814,13 @@ Attachment {
 }
 ```
 
-The value `100000027282` seems far too regular to be anything related to
-crypto, so I'm guessing the use of the word *"key"* is intended as *"unique
-identifier"*.
+The value `100000027282` seems far too regular to be anything related to crypto, so I'm guessing the use of the word *"key"* is intended as *"unique identifier"*.
 
-I'm guessing it's an ID that LastPass use to refer to a particular resource
-stored on S3 or in a database somewhere. I doubt only 27282 attachments have
-been uploaded to LastPass, so that means they're probably randomising storage
-keys instead of using an auto-incrementing number.
+I'm guessing it's an ID that LastPass use to refer to a particular resource stored on S3 or in a database somewhere. I doubt only 27282 attachments have been uploaded to LastPass, so that means they're probably randomising storage keys instead of using an auto-incrementing number.
 
-To figure out how attachments are downloaded, let's have another look at the
-`lastpass-cli` source code.
+To figure out how attachments are downloaded, let's have another look at the `lastpass-cli` source code.
 
-At the very bottom of `endpoints.h` there's a declaration for the
-`lastpass_load_attachment()` function... That seems promising 🙂
+At the very bottom of `endpoints.h` there's a declaration for the `lastpass_load_attachment()` function... That seems promising 🙂
 
 ```c
 // vendor/lastpass-cli/endpoints.c
@@ -2119,9 +1885,7 @@ int lastpass_load_attachment(const struct session *session,
 ```
 
 {{% notice tip %}}
-For reference, the `attach` struct is almost identical to our `Attachment`,
-except it also has references to the next and previous attachments because
-it's stored in a doubly-linked list (we use a `Vec<Attachment>`).
+For reference, the `attach` struct is almost identical to our `Attachment`, except it also has references to the next and previous attachments because it's stored in a doubly-linked list (we use a `Vec<Attachment>`).
 
 ```c
 // vendor/lastpass-cli/blob.h
@@ -2141,20 +1905,12 @@ struct attach {
 
 This `lastpass_load_attachment()` function seems fairly straightforward.
 
-1. Send a request to `getattach.php` with a `token` and `getattach`, our
-   `storage_key` (I don't care about shared folders for now, so we can ignore
-   the `sharedfolderid` parameter)
-2. Parse the string that's returned as a JSON string (i.e. wrapped in quotes and
-   with escape characters)
-3. Base64-decode it to get the blob of bytes that makes up the encrypted
-   attachment
-4. Decrypt the attachment using the attachment key. This isn't strictly part of
-   `lastpass_load_attachment()`, but I'd prefer to do it all in the same
-   function so callers aren't second-guessing whether the `Vec<u8>` they've
-   got is still encrypted
+1. Send a request to `getattach.php` with a `token` and `getattach`, our `storage_key` (I don't care about shared folders for now, so we can ignore the `sharedfolderid` parameter)
+2. Parse the string that's returned as a JSON string (i.e. wrapped in quotes and with escape characters)
+3. Base64-decode it to get the blob of bytes that makes up the encrypted attachment
+4. Decrypt the attachment using the attachment key. This isn't strictly part of `lastpass_load_attachment()`, but I'd prefer to do it all in the same function so callers aren't second-guessing whether the `Vec<u8>` they've got is still encrypted
 
-By now you've already seen me write several endpoint definitions and we've
-used the `DecryptionKey` once or twice, so nothing should be overly new here.
+By now you've already seen me write several endpoint definitions and we've used the `DecryptionKey` once or twice, so nothing should be overly new here.
 
 First we define a `Data` type to hold our form data.
 
@@ -2171,8 +1927,7 @@ struct Data<'a> {
 }
 ```
 
-I'm also creating a dedicated error type, because no other endpoints deal with
-these particular base64-decoding and decryption errors.
+I'm also creating a dedicated error type, because no other endpoints deal with these particular base64-decoding and decryption errors.
 
 ```rust
 // src/endpoints/load_attachment.rs
@@ -2219,14 +1974,9 @@ pub async fn load_attachment(
 }
 ```
 
-The thing I really like about this is once you have the underlying
-abstractions (key management, an ergonomic HTTP client, async-await, the
-`base64` crate, serialization to/from arbitrary formats, etc.) everything
-sort of *falls into place*.
+The thing I really like about this is once you have the underlying abstractions (key management, an ergonomic HTTP client, async-await, the `base64` crate, serialization to/from arbitrary formats, etc.) everything sort of *falls into place*.
 
-I mean, loading an attachment only took about 30 lines of easily readable
-code and about half of that is taken up by the definitions for `Data` and
-`LoadAttachmentError`.
+I mean, loading an attachment only took about 30 lines of easily readable code and about half of that is taken up by the definitions for `Data` and `LoadAttachmentError`.
 
 And check it out...
 
@@ -2240,37 +1990,18 @@ It was able to download our `hello-world.txt` attachment! 🎉
 
 ## Conclusions
 
-Sorry if it took a while, but we got there in the end. It turns out reading
-through the source code for a 15,000-line C program and explaining how my
-2,000-line Rust implementation works takes a while...
+Sorry if it took a while, but we got there in the end. It turns out reading through the source code for a 15,000-line C program and explaining how my 2,000-line Rust implementation works takes a while...
 
-I'm no professional cartographer, but it seems like the LastPass system has
-been pretty well designed. They've deliberately separated the `LoginKey` from
-the key you use to decrypt your vault. Plus the defence-in-depth (e.g.
-attachment keys) should help protect users from attacking a vault that's been
-cached locally.
+I'm no professional cartographer, but it seems like the LastPass system has been pretty well designed. They've deliberately separated the `LoginKey` from the key you use to decrypt your vault. Plus the defence-in-depth (e.g. attachment keys) should help protect users from attacking a vault that's been cached locally.
 
-You've probably noticed already but I'm also pleasantly surprised at how easy
-this was to implement. Rust has a really nice ecosystem, and thanks to the
-work of projects like [`serde`][serde], [`reqwest`][reqwest], and
-[RustCrypto][rust-crypto], I have all the necessary pieces at my fingertips.
-You'd hardly notice that async-await is only 4 months old.
+You've probably noticed already but I'm also pleasantly surprised at how easy this was to implement. Rust has a really nice ecosystem, and thanks to the work of projects like [`serde`][serde], [`reqwest`][reqwest], and [RustCrypto][rust-crypto], I have all the necessary pieces at my fingertips. You'd hardly notice that async-await is only 4 months old.
 
-The hardest bit was actually deciphering the `blob` parsing code, and that's
-because it was written in C and the lack of existing unit tests meant I spent
-a fair amount of time running `lpass` under the debugger to see what certain
-values are meant to be. It's not a deal breaker, but you'd think a C program
-for accessing your passwords and bank account details would have some sort of
-unit testing or input fuzzing...
+The hardest bit was actually deciphering the `blob` parsing code, and that's because it was written in C and the lack of existing unit tests meant I spent a fair amount of time running `lpass` under the debugger to see what certain values are meant to be. It's not a deal breaker, but you'd think a C program for accessing your passwords and bank account details would have some sort of unit testing or input fuzzing...
 
 {{% notice note %}}
-I'd be keen to hear from you if you are a developer from LastPass! What are
-your thoughts on my efforts? Has the analysis been accurate, and can you spot
-any bugs or issues?
+I'd be keen to hear from you if you are a developer from LastPass! What are your thoughts on my efforts? Has the analysis been accurate, and can you spot any bugs or issues?
 
-I feel like having an official library that lets developers work with the
-LastPass API can enable a lot of benefits for customers, and I'd like to help
-out on that front 😁
+I feel like having an official library that lets developers work with the LastPass API can enable a lot of benefits for customers, and I'd like to help out on that front 😁
 {{% /notice %}}
 
 [dotfiles]: https://github.com/Michael-F-Bryan/dotfiles

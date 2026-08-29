@@ -1,6 +1,7 @@
 ---
 title: Wiring Up Communication
 date: '2019-10-10T22:58:00+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - TypeScript
 - Vue.js
@@ -9,44 +10,28 @@ series:
 - Adventures in Motion Control
 ---
 
-As we mentioned [in the last AiMC post][next-step], the next task is to wire up
-communications between the simulator's backend and frontend.
+As we mentioned [in the last AiMC post][next-step], the next task is to wire up communications between the simulator's backend and frontend.
 
 As a general rule, our frontend will have two communication regimes:
 
-1. When something happens (e.g. a button is pressed or a job starts sending),
-   the frontend will send a batch of messages to the backend and interpret the
-   response
-2. The frontend will continually poll the backend's state in the background
-   (e.g. at 10Hz)
+1. When something happens (e.g. a button is pressed or a job starts sending), the frontend will send a batch of messages to the backend and interpret the response
+2. The frontend will continually poll the backend's state in the background (e.g. at 10Hz)
 
-As it is, the `Browser` in our WASM code already provides a method for
-sending data to the frontend ([`Browser::send_data()`][send-data]) and
-receiving data from the frontend ([`App::on_data_received()`][recv-data]) so
-we shouldn't need to write any Rust code.
+As it is, the `Browser` in our WASM code already provides a method for sending data to the frontend ([`Browser::send_data()`][send-data]) and receiving data from the frontend ([`App::on_data_received()`][recv-data]) so we shouldn't need to write any Rust code.
 
 As far as the frontend is concerned, when a user clicks a button we should:
 
 1. Construct a message to send to the backend
 2. fire off an `async` function to queue that message
-3. on the next `animate()` tick, the message will be encoded to bytes and we'll
-   start sending those bytes to the backend (max of about 256 bytes/tick) using
-   `App::on_data_received()`
-4. After processing the message, the backend will invoke `Browser::send_data()`
-   to notify us of a response
-5. When enough bytes have been received our frontend's `Decoder` will be able to
-   decode them back into a `Packet`
-6. The frontend will need to inspect the packet to figure out which message is
-   being responded to
-7. The original `async` call will either be `resolve()`-ed with the
-   response, or `reject()`-ed with an error (e.g. `Nack`)
+3. on the next `animate()` tick, the message will be encoded to bytes and we'll start sending those bytes to the backend (max of about 256 bytes/tick) using `App::on_data_received()`
+4. After processing the message, the backend will invoke `Browser::send_data()` to notify us of a response
+5. When enough bytes have been received our frontend's `Decoder` will be able to decode them back into a `Packet`
+6. The frontend will need to inspect the packet to figure out which message is being responded to
+7. The original `async` call will either be `resolve()`-ed with the response, or `reject()`-ed with an error (e.g. `Nack`)
 
 ## Creating a Communication Bus
 
-The central entity which will coordinate communication is the `CommsBus`. It
-uses the `App::on_data_received()` and `Browser::send_data()`, as well as an
-internal list of pending requests, to coordinate messaging between the frontend
-and backend, and either `resolve()` or `reject()` pending messages.
+The central entity which will coordinate communication is the `CommsBus`. It uses the `App::on_data_received()` and `Browser::send_data()`, as well as an internal list of pending requests, to coordinate messaging between the frontend and backend, and either `resolve()` or `reject()` pending messages.
 
 The `CommsBus` starts off reasonably simple.
 
@@ -62,11 +47,7 @@ interface Pending {
  }
 ```
 
-The main way it's used by the frontend is via a `send()` method. This needs
-to use some `sendToBackend` callback (actually a reference to the
-`App::on_data_received()` method) to send the encoded message and return a
-promise. The promise's `resolve` and `reject` functions will also need to be
-stashed away for later.
+The main way it's used by the frontend is via a `send()` method. This needs to use some `sendToBackend` callback (actually a reference to the `App::on_data_received()` method) to send the encoded message and return a promise. The promise's `resolve` and `reject` functions will also need to be stashed away for later.
 
 ```ts
 // frontend/src/CommsBus.ts
@@ -97,9 +78,7 @@ interface Pending {
 }
 ```
 
-You may notice that `send()` receives a `Request` object and returns (a promise
-which will eventually resolve to) a `Response`. These are actually trivial
-data classes which are used to represent the various message types we expect.
+You may notice that `send()` receives a `Request` object and returns (a promise which will eventually resolve to) a `Response`. These are actually trivial data classes which are used to represent the various message types we expect.
 
 ```ts
 // frontend/src/messaging.ts
@@ -136,11 +115,9 @@ export class GoHome {
 }
 ```
 
-We also need a `toPacket()` function to convert between a message type and a
-`Packet` from the [`anpp` package on NPM][anpp-ts].
+We also need a `toPacket()` function to convert between a message type and a `Packet` from the [`anpp` package on NPM][anpp-ts].
 
-Given the only `Request` the frontend can send (at this stage) is a `GoHome`,
-implementing `toPacket()` is almost trivial...
+Given the only `Request` the frontend can send (at this stage) is a `GoHome`, implementing `toPacket()` is almost trivial...
 
 ```ts
 // frontend/src/CommsBus.ts
@@ -156,10 +133,7 @@ function toPacket(request: Request): Packet {
 }
 ```
 
-Next, whenever the backend wants to send us data the `Browser::send_data()` hook
-(provided by the top-level Vue component) will need to tell the `CommsBus`. From
-there, the bytes can be added to a `Decoder` (again from the `anpp` package) and
-we can check for any parsed messages.
+Next, whenever the backend wants to send us data the `Browser::send_data()` hook (provided by the top-level Vue component) will need to tell the `CommsBus`. From there, the bytes can be added to a `Decoder` (again from the `anpp` package) and we can check for any parsed messages.
 
 ```ts
 // frontend/src/CommsBus.ts
@@ -185,10 +159,7 @@ export default class CommsBus {
 }
 ```
 
-Handling a message requires us to pop the next `Pending` request from front of
-the `pending` queue and parse the `Packet` into its corresponding `Response`.
-Depending on whether this parse succeeds we can either `resolve()` or `reject()`
-the pending request.
+Handling a message requires us to pop the next `Pending` request from front of the `pending` queue and parse the `Packet` into its corresponding `Response`. Depending on whether this parse succeeds we can either `resolve()` or `reject()` the pending request.
 
 ```ts
 // frontend/src/CommsBus.ts
@@ -213,9 +184,7 @@ export default class CommsBus {
 }
 ```
 
-Thanks to the `Packet`'s `id` field, and the fact that the only responses we can
-handle are empty `Ack` and `Nack` messages, parsing a `Packet` is almost as
-trivial as encoding one.
+Thanks to the `Packet`'s `id` field, and the fact that the only responses we can handle are empty `Ack` and `Nack` messages, parsing a `Packet` is almost as trivial as encoding one.
 
 ```ts
 // frontend/src/CommsBus.ts
@@ -233,18 +202,14 @@ function parse(pkt: Packet): Response {
 ```
 
 {{% notice info %}}
-As part of using `anpp` in our frontend I actually needed to port the original
-`anpp` library from C to JavaScript and publish it to NPM. Please raise tickets
-on the issue tracker if bugs are found or you have any suggestions!
+As part of using `anpp` in our frontend I actually needed to port the original `anpp` library from C to JavaScript and publish it to NPM. Please raise tickets on the issue tracker if bugs are found or you have any suggestions!
 {{% /notice %}}
 
 ## Using the Comms Bus from the Control Panel
 
-We'll pass a `Send` function to our `Controls` component to allow it to send
-messages to the backend.
+We'll pass a `Send` function to our `Controls` component to allow it to send messages to the backend.
 
-First we'll need to give the `Controls` component a `send` property which is
-`fn(Request) -> Promise<Response>`.
+First we'll need to give the `Controls` component a `send` property which is `fn(Request) -> Promise<Response>`.
 
 ```ts
 // frontend/src/components/Controls.vue
@@ -258,8 +223,7 @@ export default class Controls extends Vue {
 }
 ```
 
-Next we'll wire up the *Home* section's submit handler and make it send a
-`GoHome` message.
+Next we'll wire up the *Home* section's submit handler and make it send a `GoHome` message.
 
 ```vue
 // frontend/src/components/Controls.vue
@@ -291,8 +255,7 @@ export default class Controls extends Vue {
 </script>
 ```
 
-We also need to make sure the frontend's top-level `App` component provides this
-`send()` prop.
+We also need to make sure the frontend's top-level `App` component provides this `send()` prop.
 
 ```vue
 // frontend/src/App.vue
@@ -323,13 +286,9 @@ export default class App extends Vue {
 </script>
 ```
 
-Back in [A Better Frontend][abf] we stubbed out the `send_data()` method (the
-callback invoked every time the backend wants to send the frontend some data)
-with a `TODO` comment and a `console.log()`. Well now we need to implement it
-for real.
+Back in [A Better Frontend][abf] we stubbed out the `send_data()` method (the callback invoked every time the backend wants to send the frontend some data) with a `TODO` comment and a `console.log()`. Well now we need to implement it for real.
 
-Due to the way we've structured the frontend, this is just a case of sending
-the data to the `CommsBus` and letting it handle things.
+Due to the way we've structured the frontend, this is just a case of sending the data to the `CommsBus` and letting it handle things.
 
 ```vue
 // frontend/src/App.vue
@@ -348,9 +307,7 @@ export default class App extends Vue {
 </script>
 ```
 
-The frontend should now be able to communicate with the backend. Let's add a
-few well-placed `console.log()` calls to `Controls.onHomePressed()` to make this
-easier to see.
+The frontend should now be able to communicate with the backend. Let's add a few well-placed `console.log()` calls to `Controls.onHomePressed()` to make this easier to see.
 
 ```vue
 // frontend/src/components/Controls.vue
@@ -370,10 +327,7 @@ export default class Controls extends Vue {
 </script>
 ```
 
-We can also hook into the send/receive process so the *Terminal* is able to
-visually display messages. This requires adding a `Messages[]` property which
-contains a message, timestamp it was sent/received, and its direction, and will
-be passed through to the `Terminal` control as a prop.
+We can also hook into the send/receive process so the *Terminal* is able to visually display messages. This requires adding a `Messages[]` property which contains a message, timestamp it was sent/received, and its direction, and will be passed through to the `Terminal` control as a prop.
 
 ```ts
 // frontend/src/CommsBus.ts
@@ -439,26 +393,18 @@ export default class App extends Vue {
 ```
 
 
-Pressing the *"Home"* button and pulling up the dev tools now shows the backend
-responded with a *NACK* (the default response when the backend doesn't know what
-to do with a message).
+Pressing the *"Home"* button and pulling up the dev tools now shows the backend responded with a *NACK* (the default response when the backend doesn't know what to do with a message).
 
 {{< figure src="console-log.png" title="Progress!" alt="Clicking Home" >}}
 
 ## The Next Step
 
-We're now at the point where the frontend can send messages to the backend, and
-the backend can send back a response. This unblocks quite a few features, so
-from here we can:
+We're now at the point where the frontend can send messages to the backend, and the backend can send back a response. This unblocks quite a few features, so from here we can:
 
-- Start periodically polling the backend to check its status (e.g. axis
-  positions, current [*control mode*][cm])
-- Read in a g-code program and send it chunk-by-chunk to the backend so it can
-  go through the pipeline of `parse -> motion planning -> execute`
-- Continue fleshing out the `Controls` with a software-defined handset (e.g.
-  axis jogging)
-- Implement more of the communications monitor so we can manually send arbitrary
-  messages
+- Start periodically polling the backend to check its status (e.g. axis positions, current [*control mode*][cm])
+- Read in a g-code program and send it chunk-by-chunk to the backend so it can go through the pipeline of `parse -> motion planning -> execute`
+- Continue fleshing out the `Controls` with a software-defined handset (e.g. axis jogging)
+- Implement more of the communications monitor so we can manually send arbitrary messages
 - Add more automation sequences
 
 Let me know which one you'd like to see tackled next.

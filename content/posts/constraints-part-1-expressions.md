@@ -1,20 +1,16 @@
 ---
 title: 'Geometric Constraint Solvers Part 1: Algebraic Expressions'
 date: '2020-07-15T00:40:00+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Rust
 - CAD
 - Parsing
 ---
 
-A really powerful tool in Computer Aided Design (CAD) is the ability to apply
-*"constraints"* to your drawing. Constraints are a really powerful tool,
-allowing the drafter to declare how parts of their drawing are related, then
-letting the CAD program figure out how parameters can be manipulated in such
-a way that
+A really powerful tool in Computer Aided Design (CAD) is the ability to apply *"constraints"* to your drawing. Constraints are a really powerful tool, allowing the drafter to declare how parts of their drawing are related, then letting the CAD program figure out how parameters can be manipulated in such a way that
 
-You can think of a constraint as some sort of mathematical relationship between
-two or more parameters.
+You can think of a constraint as some sort of mathematical relationship between two or more parameters.
 
 Some examples are:
 
@@ -31,27 +27,16 @@ Graphically they'll be displayed something like this:
     alt="A constrained triangle in SolveSpace"
 >}}
 
-These constraints are declared mathematically, so a *"This line is vertical"*
-constraint may be written as $line.start.x - line.end.x = 0$ and
-$line.start.z - line.end.z = 0$ (assuming the $x$ axis is to the right and
-the $z$ comes out of the page).
+These constraints are declared mathematically, so a *"This line is vertical"* constraint may be written as $line.start.x - line.end.x = 0$ and $line.start.z - line.end.z = 0$ (assuming the $x$ axis is to the right and the $z$ comes out of the page).
 
-In response to input from the user (e.g. they click on the line and drag it
-to the left), a constraint system will feed the perturbation into the system
-of equations (e.g. the $line.start.y$ changes by $-0.1$ units) and based on
-the available constraints and tie-breaking heuristics, it will figure out how
-much each remaining variable must change. Execute at 60 FPS and you've got an
-interactive, parametric CAD application.
+In response to input from the user (e.g. they click on the line and drag it to the left), a constraint system will feed the perturbation into the system of equations (e.g. the $line.start.y$ changes by $-0.1$ units) and based on the available constraints and tie-breaking heuristics, it will figure out how much each remaining variable must change. Execute at 60 FPS and you've got an interactive, parametric CAD application.
 
-A constraint solver is a fairly complex system, but the first step is teaching
-it how to manipulate and evaluate abstract maths.
+A constraint solver is a fairly complex system, but the first step is teaching it how to manipulate and evaluate abstract maths.
 
 {{% notice note %}}
-The code written in this article is available [on GitHub][repo]. Feel free to
-browse through and steal code or inspiration.
+The code written in this article is available [on GitHub][repo]. Feel free to browse through and steal code or inspiration.
 
-If you found this useful or spotted a bug, let me know on the blog's
-[issue tracker][issue]!
+If you found this useful or spotted a bug, let me know on the blog's [issue tracker][issue]!
 
 [repo]: https://github.com/Michael-F-Bryan/constraints
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
@@ -59,9 +44,7 @@ If you found this useful or spotted a bug, let me know on the blog's
 
 ## The Expression Tree
 
-For this constraint solver we need a way to represent algebraic expressions like
-$x - 5$ or $sin(x) + y\*y - x\*y$, and the most natural form is the [*Abstract
-Syntax Tree*][ast].
+For this constraint solver we need a way to represent algebraic expressions like $x - 5$ or $sin(x) + y\*y - x\*y$, and the most natural form is the [*Abstract Syntax Tree*][ast].
 
 In this language, an expression can be:
 
@@ -69,12 +52,9 @@ In this language, an expression can be:
 - A floating-point constant
 - A call to a function with a single argument
 - Negation, and
-- A binary operation (e.g. `x + y`, where `x` and `y` are the `left` and `right`
-  operands, and we're using the `+` operator)
+- A binary operation (e.g. `x + y`, where `x` and `y` are the `left` and `right` operands, and we're using the `+` operator)
 
-Our constraint solver is considerably less complex than a general purpose
-programming language, so most of our *Abstract Syntax Tree* can fit into a
-couple simple types.
+Our constraint solver is considerably less complex than a general purpose programming language, so most of our *Abstract Syntax Tree* can fit into a couple simple types.
 
 ```rust
 // src/expr.rs
@@ -128,46 +108,28 @@ pub enum BinaryOperation {
 }
 ```
 
-This should be fairly straightforward if you are familiar with Rust, although
-I'd like to direct your attention to two details...
+This should be fairly straightforward if you are familiar with Rust, although I'd like to direct your attention to two details...
 
-1. Text fields use a [`smol_str::SmolStr`](https://crates.io/crates/smol_str)
-   instead of a normal `String`
+1. Text fields use a [`smol_str::SmolStr`](https://crates.io/crates/smol_str) instead of a normal `String`
 2. Each child node is behind a reference-counted pointer
 
-We're using `SmolStr` for something called the [*Small String Optimisation*][sso].
-This is where small amounts of text can be stored inline on the stack (in place
-of the data pointer, length, and capacity fields in a normal `String`) to skip
-a heap allocation and a layer of indirection.
+We're using `SmolStr` for something called the [*Small String Optimisation*][sso]. This is where small amounts of text can be stored inline on the stack (in place of the data pointer, length, and capacity fields in a normal `String`) to skip a heap allocation and a layer of indirection.
 
-The small string optimisation is useful when you're dealing with a large
-number of small strings (like programming language identifiers) because it
-helps avoid heap fragmentation and locality. Cloning a `SmolStr` is also
-quite cheap because even if it isn't small, a reference-counted string
-(analogous to `Arc<str>`) is used when we need to store large strings on the
-heap.
+The small string optimisation is useful when you're dealing with a large number of small strings (like programming language identifiers) because it helps avoid heap fragmentation and locality. Cloning a `SmolStr` is also quite cheap because even if it isn't small, a reference-counted string (analogous to `Arc<str>`) is used when we need to store large strings on the heap.
 
-A conscious design decision is to *make the AST immutable*. Most operations
-applied to an `Expression` will leave part of the tree unchanged, and seeing
-as we already *need* to add a layer of indirection to [prevent infinitely
-sized types][infinite-size], we can use reference-counted pointers to share
-common sub-expressions.
+A conscious design decision is to *make the AST immutable*. Most operations applied to an `Expression` will leave part of the tree unchanged, and seeing as we already *need* to add a layer of indirection to [prevent infinitely sized types][infinite-size], we can use reference-counted pointers to share common sub-expressions.
 
-This should reduce memory usage and hopefully increase performance because
-shared nodes are more likely to be in cache.
+This should reduce memory usage and hopefully increase performance because shared nodes are more likely to be in cache.
 
 ## Pretty-Printing and Other Useful Methods
 
-To make our `Expression` type easier to work with we can implement several
-traits from the standard library.
+To make our `Expression` type easier to work with we can implement several traits from the standard library.
 
-Arguably the most useful of these is `std::fmt::Display`, a mechanism for
-getting the `Expression`'s human-readable form.
+Arguably the most useful of these is `std::fmt::Display`, a mechanism for getting the `Expression`'s human-readable form.
 
 ### Writing the Display Implementation
 
-To help make writing parentheses and spaces in `Display` a bit easier, let's
-create a temporary type for handling operator precedence.
+To help make writing parentheses and spaces in `Display` a bit easier, let's create a temporary type for handling operator precedence.
 
 
 ```rust
@@ -182,17 +144,12 @@ enum Precedence {
 ```
 
 {{% notice note %}}
-The mnemonic I learned in school was *BIMDAS*, short for *Brackets*,
-*Indices*, *Multiply and Divide*, and *Addition and Subtraction*. Hence the
-cryptic variant names.
+The mnemonic I learned in school was *BIMDAS*, short for *Brackets*, *Indices*, *Multiply and Divide*, and *Addition and Subtraction*. Hence the cryptic variant names.
 
-We don't support exponents (yet?), so it's fine for *Brackets* and *Indices* to
-be in the same precedence variant.
+We don't support exponents (yet?), so it's fine for *Brackets* and *Indices* to be in the same precedence variant.
 {{% /notice %}}
 
-We also define some helper methods for getting an `Expression`'s precedence.
-In this case parameters, constants, and function calls all have the highest
-possible precedence level.
+We also define some helper methods for getting an `Expression`'s precedence. In this case parameters, constants, and function calls all have the highest possible precedence level.
 
 ```rust
 // src/expr.rs
@@ -219,8 +176,7 @@ impl BinaryOperation {
 }
 ```
 
-Printing a `Parameter` works by either printing the name as-is, or the
-parameter number preceded by a `$` if it is anonymous (i.e. `$2`).
+Printing a `Parameter` works by either printing the name as-is, or the parameter number preceded by a `$` if it is anonymous (i.e. `$2`).
 
 ```rust
 // src/expr.rs
@@ -237,8 +193,7 @@ impl Display for Parameter {
 }
 ```
 
-In `Expression`'s `Display` implementation we just need to do a `match` and
-use the `write!()` macro to generate the desired string for each variant.
+In `Expression`'s `Display` implementation we just need to do a `match` and use the `write!()` macro to generate the desired string for each variant.
 
 ```rust
 // src/expr.rs
@@ -294,17 +249,11 @@ fn write_with_precedence(
 }
 ```
 
-The `write_with_precedence()` helper is used to make sure our pretty-printer
-respects the precedence of its operands by adding parentheses when necessary.
-This prevents awkward bugs like `-(x + 3)` being printed as `-x + 3`.
+The `write_with_precedence()` helper is used to make sure our pretty-printer respects the precedence of its operands by adding parentheses when necessary. This prevents awkward bugs like `-(x + 3)` being printed as `-x + 3`.
 
-We also deliberately add space before and after operators with the
-`Precedence::As` precedence to help visually separate the different terms in an
-expression.
+We also deliberately add space before and after operators with the `Precedence::As` precedence to help visually separate the different terms in an expression.
 
-The `Display` implementation is really easy to test. Just create a list of
-tuples containing an `Expression` and its expected string representation,
-then loop over asserting each gets formatted as desired.
+The `Display` implementation is really easy to test. Just create a list of tuples containing an `Expression` and its expected string representation, then loop over asserting each gets formatted as desired.
 
 {{% expand "Long table-based pretty-printer test" %}}
 
@@ -417,12 +366,9 @@ fn pretty_printing_works_similarly_to_a_human() {
 
 ### Operator Overloads
 
-The use of operator overloads can often be quite controversial, but in this
-case I think it could help add some level of [*syntactic sugar*][sugar] to
-make constructing `Expression`s more readable.
+The use of operator overloads can often be quite controversial, but in this case I think it could help add some level of [*syntactic sugar*][sugar] to make constructing `Expression`s more readable.
 
-In this case, we'll overload the normal binary operators so they wrap the left
-and right operands with an `Expression::Binary`.
+In this case, we'll overload the normal binary operators so they wrap the left and right operands with an `Expression::Binary`.
 
 ```rust
 // src/expr.rs
@@ -494,18 +440,13 @@ impl Neg for Expression {
 }
 ```
 
-You can see none of these operator overloads are particularly interesting, they
-just let us avoid a bunch of typing.
+You can see none of these operator overloads are particularly interesting, they just let us avoid a bunch of typing.
 
 ### Iterators
 
-A useful building block for working with the `Expression` tree is being able
-to iterate over every node in the tree. Imagine scanning through a big
-expression to figure out which parameters it references or the functions that
-it calls.
+A useful building block for working with the `Expression` tree is being able to iterate over every node in the tree. Imagine scanning through a big expression to figure out which parameters it references or the functions that it calls.
 
-To do this, we'll create an `iter()` method which returns something
-implementing `Iterator<Item = &Expression>`.
+To do this, we'll create an `iter()` method which returns something implementing `Iterator<Item = &Expression>`.
 
 ```rust
 // src/expr.rs
@@ -526,10 +467,7 @@ struct Iter<'expr> {
 }
 ```
 
-The `Iter` type works by maintaining a list of `&Expression` references for the
-nodes it still needs to visit. Getting the `next_item` is then just a case of
-popping a reference from the list, queueing any sub-expressions under
-`next_item` itself before returning it.
+The `Iter` type works by maintaining a list of `&Expression` references for the nodes it still needs to visit. Getting the `next_item` is then just a case of popping a reference from the list, queueing any sub-expressions under `next_item` itself before returning it.
 
 ```rust
 // src/expr.rs
@@ -557,8 +495,7 @@ impl<'expr> Iterator for Iter<'expr> {
 }
 ```
 
-This enables nice things like an iterator over all referenced parameters or
-functions, and checking whether an expression depends on a parameter.
+This enables nice things like an iterator over all referenced parameters or functions, and checking whether an expression depends on a parameter.
 
 ```rust
 // src/expr.rs
@@ -589,30 +526,13 @@ impl Expression {
 
 ## Parsing
 
-Now you may be wondering why we'd mention parsing in an article about
-creating a geometric constraints system, and the answer is quite simple...
-Constructing a full `Expression` tree using object literals is really verbose
-and annoying. In turn, this increases the effort required to write and maintain
-tests,
+Now you may be wondering why we'd mention parsing in an article about creating a geometric constraints system, and the answer is quite simple... Constructing a full `Expression` tree using object literals is really verbose and annoying. In turn, this increases the effort required to write and maintain tests,
 
-It's also useful if we want to provide users with a text box so they can
-enter their own custom constraints. *SolidWorks* uses this to let an engineer
-specify entire families of designs who's final dimensions are driven by one
-or two parameters (this is often referred to as [a
-*"Configuration"*][configuration]). For example, imagine having a proprietary
-*bolt design and being able to say *"I want this as an `M6x1.0`"* (initial
-parameters are `outside_diameter = 6.0` millimetres, `thread_pitch = 1.0`
-threads per millimetre) and the constraints system figuring out all the other
-dimensions.
+It's also useful if we want to provide users with a text box so they can enter their own custom constraints. *SolidWorks* uses this to let an engineer specify entire families of designs who's final dimensions are driven by one or two parameters (this is often referred to as [a *"Configuration"*][configuration]). For example, imagine having a proprietary *bolt design and being able to say *"I want this as an `M6x1.0`"* (initial parameters are `outside_diameter = 6.0` millimetres, `thread_pitch = 1.0` threads per millimetre) and the constraints system figuring out all the other dimensions.
 
-Besides letting the end user or developer input enter an expression into the
-computer in textual form, it can also be a powerful tool during development.
-In combination with our earlier pretty-printer, you can use strings to
-concisely say what an `Expression` should look like before and after a
-particular operation.
+Besides letting the end user or developer input enter an expression into the computer in textual form, it can also be a powerful tool during development. In combination with our earlier pretty-printer, you can use strings to concisely say what an `Expression` should look like before and after a particular operation.
 
-Throw in a macro or two and a suite of unit tests for testing various
-expression operations could look like this:
+Throw in a macro or two and a suite of unit tests for testing various expression operations could look like this:
 
 ```rust
 expr_test!(simplify_multiplication, "2*2 + x" => fold_constants => "4 + x");
@@ -621,25 +541,14 @@ expr_test!(differentiate_cos, "cos(t)" => partial_derivative(t) => "-sin(t)");
 expr_test!(evaluate_tricky_expression, "10 - 2*x + x*x" => evaluate(x: 5.0) => "25");
 ```
 
-The process of turning unstructured text into a more structured form, an
-`Expression` tree in our case, is commonly referred to as *"parsing"*.
+The process of turning unstructured text into a more structured form, an `Expression` tree in our case, is commonly referred to as *"parsing"*.
 
-While you *could* hack something together using string operations or even a
-regular expression or two, this approach will often fall over the moment you
-give it more complex expressions (e.g. using parentheses to nest expressions
-inside expressions) or if different levels of precedence are involved.
+While you *could* hack something together using string operations or even a regular expression or two, this approach will often fall over the moment you give it more complex expressions (e.g. using parentheses to nest expressions inside expressions) or if different levels of precedence are involved.
 
 {{% notice tip %}}
-If you are initially tempted to parse a non-trivial expression using regular
-expressions, I would invite you to first read [this famous StackOverflow
-answer][re].
+If you are initially tempted to parse a non-trivial expression using regular expressions, I would invite you to first read [this famous StackOverflow answer][re].
 
-The underlying problem is that an expression is something called a [*Context
-Free Language*][ctx-free], while a regular expression is based on a [*Regular
-Language*][regular]. To parse a *Regular Language* you (in theory) just need
-to keep track of the current state (a state machine), however *Context Free
-Languages* require you to track not just the current state, but also support
-nesting and keep track of each nested state (a pushdown automata).
+The underlying problem is that an expression is something called a [*Context Free Language*][ctx-free], while a regular expression is based on a [*Regular Language*][regular]. To parse a *Regular Language* you (in theory) just need to keep track of the current state (a state machine), however *Context Free Languages* require you to track not just the current state, but also support nesting and keep track of each nested state (a pushdown automata).
 
 Google the [*Chomsky Hierarchy*][chomsky] for more.
 
@@ -651,19 +560,11 @@ Google the [*Chomsky Hierarchy*][chomsky] for more.
 
 ### Tokenising
 
-Often the first step in turning an unstructured string of characters into a
-structured `Expression` tree is [*Tokenisation*][tokenise]. This is where the
-string is broken up into the "atoms" of our language (aka `Token`s), so
-things like identifiers (`"foo"`), numbers (`"3.14"`), punctuation (`"("`),
-and operators (`"+"`).
+Often the first step in turning an unstructured string of characters into a structured `Expression` tree is [*Tokenisation*][tokenise]. This is where the string is broken up into the "atoms" of our language (aka `Token`s), so things like identifiers (`"foo"`), numbers (`"3.14"`), punctuation (`"("`), and operators (`"+"`).
 
-We also keep track of where each `Token` occurred in the source text. That
-way we've got somewhere to point to when reporting errors to the user.
+We also keep track of where each `Token` occurred in the source text. That way we've got somewhere to point to when reporting errors to the user.
 
-By pre-processing a stream of text into a slightly more high-level
-representation your parser can operate at the granularity of tokens (e.g. a
-number, plus symbol, or an identifier) instead of needing to process
-individual characters.
+By pre-processing a stream of text into a slightly more high-level representation your parser can operate at the granularity of tokens (e.g. a number, plus symbol, or an identifier) instead of needing to process individual characters.
 
 ```rust
 // src/parse.rs
@@ -691,10 +592,7 @@ pub enum TokenKind {
 }
 ```
 
-We use the `Iterator` trait to represent a stream of tokens. For our
-purposes, a `Tokens` stream wraps a `&str` and uses a `cursor` variable to
-keep track of where it has read up to. I've attached a couple helper methods
-for seeing what text is remaining.
+We use the `Iterator` trait to represent a stream of tokens. For our purposes, a `Tokens` stream wraps a `&str` and uses a `cursor` variable to keep track of where it has read up to. I've attached a couple helper methods for seeing what text is remaining.
 
 ```rust
 // src/parse.rs
@@ -714,8 +612,7 @@ impl<'a> Tokens<'a> {
 }
 ```
 
-While it's nice to see what text is remaining, we also need a way to advance
-the `cursor` along the string.
+While it's nice to see what text is remaining, we also need a way to advance the `cursor` along the string.
 
 ```rust
 // src/parse.rs
@@ -729,13 +626,9 @@ impl<'a> Tokens<'a> {
 }
 ```
 
-If you wanted to, you could implement the rest of the `Tokens` type purely using
-calls to `peek()` and `advance()`, but sometimes it's easier to have a more
-high-level primitive.
+If you wanted to, you could implement the rest of the `Tokens` type purely using calls to `peek()` and `advance()`, but sometimes it's easier to have a more high-level primitive.
 
-For this sort of thing I'll typically use some sort of `take_while()` method
-which accepts a predicate and will keep advancing the `cursor` until the
-predicate doesn't like the next character in line.
+For this sort of thing I'll typically use some sort of `take_while()` method which accepts a predicate and will keep advancing the `cursor` until the predicate doesn't like the next character in line.
 
 ```rust
 // src/parse.rs
@@ -769,16 +662,10 @@ impl<'a> Tokens<'a> {
 ```
 
 {{% notice note %}}
-By stashing away the `cursor`'s value before and after looping we can
-calculate the range of characters that have been consumed, and whether
-anything was consumed at all.
+By stashing away the `cursor`'s value before and after looping we can calculate the range of characters that have been consumed, and whether anything was consumed at all.
 {{% /notice %}}
 
-Reading a token from the stream is just a case of peeking at the next
-character, and executing a `match` statement based on what we find. Something
-to keep in mind is we don't care about whitespace, so the entire thing is
-executed in a loop which will keep skipping whitespace until we encounter
-something else.
+Reading a token from the stream is just a case of peeking at the next character, and executing a `match` statement based on what we find. Something to keep in mind is we don't care about whitespace, so the entire thing is executed in a loop which will keep skipping whitespace until we encounter something else.
 
 ```rust
 // src/parse.rs
@@ -813,9 +700,7 @@ impl<'a> Iterator for Tokens<'a> {
 }
 ```
 
-The `next()` method makes use of several helper methods, the simplest of
-which is `chomp()` for reading a single character as a `Token` with the
-specified `TokenKind`.
+The `next()` method makes use of several helper methods, the simplest of which is `chomp()` for reading a single character as a `Token` with the specified `TokenKind`.
 
 ```rust
 // src/parse.rs
@@ -839,16 +724,9 @@ impl<'a> Tokens<'a> {
     }
 ```
 
-We're also introducing `chomp_identifier()` for consuming an entire
-identifier (i.e. anything that would match the regex, `[\w_][\w\d_]*`), and
-`chomp_number()` for extracting a floating-point number (which I'm just
-defining as the regex `\d+(\.\d*)?`, because I'm too lazy to worry about the
-`1e-5` notation for now).
+We're also introducing `chomp_identifier()` for consuming an entire identifier (i.e. anything that would match the regex, `[\w_][\w\d_]*`), and `chomp_number()` for extracting a floating-point number (which I'm just defining as the regex `\d+(\.\d*)?`, because I'm too lazy to worry about the `1e-5` notation for now).
 
-It's overkill to actually pull in the `regex` crate for simple patterns like
-these though, so we leverage our existing `take_while()` function and the
-fact that closures can use variables from an outside scope to change their
-behaviour.
+It's overkill to actually pull in the `regex` crate for simple patterns like these though, so we leverage our existing `take_while()` function and the fact that closures can use variables from an outside scope to change their behaviour.
 
 First, let's look at how `chomp_number()` is implemented.
 
@@ -879,14 +757,9 @@ impl<'a> Tokens<'a> {
 }
 ```
 
-The idea is we want to keep consuming digits, but only accept the first `.`
-character we see (hence the `seen_decimal_point` flag). That allows us to
-recognise input like `1234`, `12.34`, and `.1234` as numbers, but reject
-things like `1.2.3.4` or `1..23`.
+The idea is we want to keep consuming digits, but only accept the first `.` character we see (hence the `seen_decimal_point` flag). That allows us to recognise input like `1234`, `12.34`, and `.1234` as numbers, but reject things like `1.2.3.4` or `1..23`.
 
-We do something very similar in `chomp_identifier()`, where we want to make
-sure the first character is either a letter or `_`, but all characters after
-that can be also contain digits.
+We do something very similar in `chomp_identifier()`, where we want to make sure the first character is either a letter or `_`, but all characters after that can be also contain digits.
 
 ```rust
 // src/parse.rs
@@ -917,21 +790,11 @@ impl<'a> Tokens<'a> {
 
 ### Parsing Using Recursive Descent
 
-Arguably one of the most intuitive ways to parse text is a technique called
-[*Recursive Descent*][recursive-descent]. This is a top-down method that uses
-recursive functions to turn a stream of tokens into a tree.
+Arguably one of the most intuitive ways to parse text is a technique called [*Recursive Descent*][recursive-descent]. This is a top-down method that uses recursive functions to turn a stream of tokens into a tree.
 
-I like using recursive descent because once you've figured out your grammar
-(a *file* is zero or more *statements*, a *statement* maybe an *assignment*
-or *if-statement*, etc.) turning that into code just becomes a case of
-writing one function per rule and matching different things depending on what
-the rule asks for.
+I like using recursive descent because once you've figured out your grammar (a *file* is zero or more *statements*, a *statement* maybe an *assignment* or *if-statement*, etc.) turning that into code just becomes a case of writing one function per rule and matching different things depending on what the rule asks for.
 
-I'll often create a `Parser` type which wraps a `Tokens` stream. You don't
-*need* to do it this way, but I like how I can put the grammar in the
-*`Parser`'s doc-comment so if I need to revisit the code 6 months for now I
-can pull up the API docs and immediately get a feel for how an `Expression`
-is parsed.
+I'll often create a `Parser` type which wraps a `Tokens` stream. You don't *need* to do it this way, but I like how I can put the grammar in the *`Parser`'s doc-comment so if I need to revisit the code 6 months for now I can pull up the API docs and immediately get a feel for how an `Expression` is parsed.
 
 ```rust
 // src/parse.rs
@@ -965,34 +828,19 @@ pub(crate) struct Parser<'a> {
 ```
 
 {{% notice note %}}
-You may notice that we've wrapped our `Tokens` in a `std::iter::Peekable`.
-This lets us peek at the next token when we need more information about how
-to proceed. For example, when processing the `expression` rule from above, we
-after parse one `term` we can peek at the next token to see if it is a `+` or
-`-`.
+You may notice that we've wrapped our `Tokens` in a `std::iter::Peekable`. This lets us peek at the next token when we need more information about how to proceed. For example, when processing the `expression` rule from above, we after parse one `term` we can peek at the next token to see if it is a `+` or `-`.
 
-An alternative to looking ahead is to try something anyway and [backtrack][bt]
-if it doesn't work. This might let us simplify the code a bit, but comes with
-the disadvantage that parsing time can become exponential in the face of poor
-(or maliciously crafted) input.
+An alternative to looking ahead is to try something anyway and [backtrack][bt] if it doesn't work. This might let us simplify the code a bit, but comes with the disadvantage that parsing time can become exponential in the face of poor (or maliciously crafted) input.
 
-Using a lookahead of one token lets us make performance much more consistent.
-Rust's `regex` crate avoids arbitrary lookahead and back-references [for similar
-reasons][untrusted-input].
+Using a lookahead of one token lets us make performance much more consistent. Rust's `regex` crate avoids arbitrary lookahead and back-references [for similar reasons][untrusted-input].
 
 [bt]: https://en.wikipedia.org/wiki/Backtracking
 [untrusted-input]: https://docs.rs/regex/1.3.9/regex/#untrusted-input
 {{% /notice %}}
 
-To help provide better error messages than just *"this expression is invalid"*,
-we've defined a `ParseError` type representing the various errors that may
-occur.
+To help provide better error messages than just *"this expression is invalid"*, we've defined a `ParseError` type representing the various errors that may occur.
 
-For example, we could encounter an `InvalidCharacter` while tokenising or run
-out of tokens when we are expecting more (e.g. `42 +` would result in a
-`ParseError::UnexpectedEndOfInput`), or we could run into a token that isn't
-valid in that context (imagine seeing a `+` when we're expecting a number or
-identifier).
+For example, we could encounter an `InvalidCharacter` while tokenising or run out of tokens when we are expecting more (e.g. `42 +` would result in a `ParseError::UnexpectedEndOfInput`), or we could run into a token that isn't valid in that context (imagine seeing a `+` when we're expecting a number or identifier).
 
 ```rust
 // src/parse.rs
@@ -1013,9 +861,7 @@ pub enum ParseError {
 }
 ```
 
-The key to writing a *Recursive Descent* parser is to write down the rules so
-you know what to expect. For example, lets look at the top-level `expression`
-rule.
+The key to writing a *Recursive Descent* parser is to write down the rules so you know what to expect. For example, lets look at the top-level `expression` rule.
 
 ```
 expression := term "+" expression
@@ -1026,17 +872,12 @@ expression := term "+" expression
 {{% notice note %}}
 Order is important here.
 
-When specifying the `expression` rule, I've taken care to put the more
-specific term, `term`, towards the left and then recurse on the right.
+When specifying the `expression` rule, I've taken care to put the more specific term, `term`, towards the left and then recurse on the right.
 
-Matching on the more specific thing first takes you closer to the base case
-and prevents infinite recursion (I need to parse an `expression` in order to
-parse an `expression` in order to parse an `expression` ...).
+Matching on the more specific thing first takes you closer to the base case and prevents infinite recursion (I need to parse an `expression` in order to parse an `expression` in order to parse an `expression` ...).
 {{% /notice %}}
 
-Now, to parse an `expression` we need to first parse a `term` (which we'll
-define shortly) then look ahead to check whether it is followed by a `+` or
-`-` so we know whether we need to parse the right side.
+Now, to parse an `expression` we need to first parse a `term` (which we'll define shortly) then look ahead to check whether it is followed by a `+` or `-` so we know whether we need to parse the right side.
 
 ```rust
 // src/parse.rs
@@ -1078,12 +919,9 @@ impl<'a> Parser<'a> {
 }
 ```
 
-You can see how this code almost exactly reflects the `expression`. You'll
-see that there's a lot you can do to remove code duplication, but for our
-purposes it's not necessary.
+You can see how this code almost exactly reflects the `expression`. You'll see that there's a lot you can do to remove code duplication, but for our purposes it's not necessary.
 
-I chose to reuse our operator overloads, though. They make constructing binary
-expressions slightly less verbose.
+I chose to reuse our operator overloads, though. They make constructing binary expressions slightly less verbose.
 
 Next comes the `term` rule.
 
@@ -1093,11 +931,9 @@ term := factor "*" term
       | factor
 ```
 
-You can see that the `term` rule is almost identical, except it looks for `*`
-and `/`.
+You can see that the `term` rule is almost identical, except it looks for `*` and `/`.
 
-There's no point copy-pasting the `expression()` method here, so let's jump
-straight into `factor`.
+There's no point copy-pasting the `expression()` method here, so let's jump straight into `factor`.
 
 ```
 factor := "-" factor
@@ -1117,8 +953,7 @@ This rule matches a bunch of things which all have the same precedence level:
 - Nested `expression`s inside parentheses, or
 - Number
 
-The code is fairly similar to before, except we've got a larger `match`
-statement.
+The code is fairly similar to before, except we've got a larger `match` statement.
 
 ```rust
 // src/parse.rs
@@ -1185,33 +1020,21 @@ impl<'a> Parser<'a> {
 }
 ```
 
-We are also in a better position to report parse errors here because we've
-reached several terminals (branches/rules which don't recurse). If possible,
-we try to let the user know what type of token we were expecting to see.
+We are also in a better position to report parse errors here because we've reached several terminals (branches/rules which don't recurse). If possible, we try to let the user know what type of token we were expecting to see.
 
-To keep the `match` statement from growing out of control I've pulled
-matching either a variable or function call (both of which start with an
-identifier) out into its own function. However if you look at the rule for
-parenthesised expressions you can probably figure out how it goes.
+To keep the `match` statement from growing out of control I've pulled matching either a variable or function call (both of which start with an identifier) out into its own function. However if you look at the rule for parenthesised expressions you can probably figure out how it goes.
 
-Sorry if it feels like I've rushed this section. I've written enough recursive
-descent parsers that it tends to be a mechanical process and once you've seen
-how to write one or two rules, you can write pretty much anything.
+Sorry if it feels like I've rushed this section. I've written enough recursive descent parsers that it tends to be a mechanical process and once you've seen how to write one or two rules, you can write pretty much anything.
 
 ### Testing
 
-Something I can't overstate enough when writing a parser by hand is to have a
-reasonably large test suite with lots of edge cases.
+Something I can't overstate enough when writing a parser by hand is to have a reasonably large test suite with lots of edge cases.
 
-To make the process easier I'll often create my own `macro_rules` macro to
-make writing tests easier.
+To make the process easier I'll often create my own `macro_rules` macro to make writing tests easier.
 
-For example, to test that we parse something correctly I'll generate a test
-that parses a string into an `Expression` then immediately use the
-pretty-printer created earlier to turn it back into a string.
+For example, to test that we parse something correctly I'll generate a test that parses a string into an `Expression` then immediately use the pretty-printer created earlier to turn it back into a string.
 
-If the round-tripped version matches the original you can be fairly confident
-your parser is correct without having to write out verbose parse trees by hand.
+If the round-tripped version matches the original you can be fairly confident your parser is correct without having to write out verbose parse trees by hand.
 
 ```rust
 // src/parse.rs
@@ -1265,8 +1088,7 @@ mod parser_tests {
 }
 ```
 
-The tokeniser tests are quite similar, except we also need to make sure spans
-are correct otherwise the user will get dodgy error messages.
+The tokeniser tests are quite similar, except we also need to make sure spans are correct otherwise the user will get dodgy error messages.
 
 ```rust
 // src/parse.rs
@@ -1339,19 +1161,11 @@ impl tokenizer_tests {
 
 ## Conclusions
 
-While our main focus is implementing a geometric constraints solver, this
-article mainly focused on defining our `Expression` tree's structure and
-converting to/from its string representation.
+While our main focus is implementing a geometric constraints solver, this article mainly focused on defining our `Expression` tree's structure and converting to/from its string representation.
 
-Now we've got a way to represent `Expression`s, enter them into a program, and
-print them out for debugging, we've created a solid foundation that the rest of
-the solver can be built on.
+Now we've got a way to represent `Expression`s, enter them into a program, and print them out for debugging, we've created a solid foundation that the rest of the solver can be built on.
 
-As an aside, the code and techniques used here are almost identical to those
-used when implementing a programming language. Indeed, that's where I
-initially learned things like [Backus–Naur form][bnf] (the syntax used to
-represent rules), [Recursive Descent][recursive-descent] parsers, and
-[`LL(1)` grammars][ll-1].
+As an aside, the code and techniques used here are almost identical to those used when implementing a programming language. Indeed, that's where I initially learned things like [Backus–Naur form][bnf] (the syntax used to represent rules), [Recursive Descent][recursive-descent] parsers, and [`LL(1)` grammars][ll-1].
 
 [ast]: https://en.wikipedia.org/wiki/Abstract_syntax_tree
 [sso]: https://stackoverflow.com/questions/10315041/meaning-of-acronym-sso-in-the-context-of-stdstring/10319672#10319672

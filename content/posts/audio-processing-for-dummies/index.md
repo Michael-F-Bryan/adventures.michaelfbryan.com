@@ -1,29 +1,21 @@
 ---
 title: Audio Processing for Dummies
 date: '2019-10-27T23:34:00+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Rust
 ---
 
-In my spare time I'm an emergency services volunteer, and one of the tasks our
-unit has is to run the radio network and keep track of what's happening. This
-can be a pretty stressful job, especially when there's lots of radio traffic,
-and it's not unusual to miss words or entire transmissions.
+In my spare time I'm an emergency services volunteer, and one of the tasks our unit has is to run the radio network and keep track of what's happening. This can be a pretty stressful job, especially when there's lots of radio traffic, and it's not unusual to miss words or entire transmissions.
 
-To help with a personal project that could make the job easier I'd like to
-implement a basic component of audio processing, the [Noise Gate][wiki].
+To help with a personal project that could make the job easier I'd like to implement a basic component of audio processing, the [Noise Gate][wiki].
 
-The basic idea is to scan through an audio stream and split it into individual
-clips based on volume, similar to the algorithm mentioned [on this Rust Audio
-discourse thread][thread].
+The basic idea is to scan through an audio stream and split it into individual clips based on volume, similar to the algorithm mentioned [on this Rust Audio discourse thread][thread].
 
 {{% notice note %}}
-The code written in this article is available [on GitHub][repo]. Feel free to
-browse through and steal code or inspiration. It's also been published as a
-crate [on crates.io][crate].
+The code written in this article is available [on GitHub][repo]. Feel free to browse through and steal code or inspiration. It's also been published as a crate [on crates.io][crate].
 
-If you found this useful or spotted a bug, let me know on the blog's
-[issue tracker][issue]!
+If you found this useful or spotted a bug, let me know on the blog's [issue tracker][issue]!
 
 [repo]: https://github.com/Michael-F-Bryan/noise-gate
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
@@ -32,32 +24,19 @@ If you found this useful or spotted a bug, let me know on the blog's
 
 ## What Even Is Audio?
 
-We've all consumed audio media at some point, but have you ever stopped and
-wondered how it works under the hood?
+We've all consumed audio media at some point, but have you ever stopped and wondered how it works under the hood?
 
-At its core, audio works by rapidly reading the volume level (a "sample"),
-typically 44,100 times per second (44.1 kHz is called the [*Sample
-Rate*][sr]). These samples are then encoded using [*Pulse Code
-Modulation*][pcm].
+At its core, audio works by rapidly reading the volume level (a "sample"), typically 44,100 times per second (44.1 kHz is called the [*Sample Rate*][sr]). These samples are then encoded using [*Pulse Code Modulation*][pcm].
 
 According to Wikipedia:
 
-> Pulse-code modulation (PCM) is a method used to digitally represent sampled
-> analog signals. It is the standard form of digital audio in computers,
-> compact discs, digital telephony and other digital audio applications. In a
-> PCM stream, the amplitude of the analog signal is sampled regularly at
-> uniform intervals, and each sample is quantized to the nearest value within a
-> range of digital steps.
+> Pulse-code modulation (PCM) is a method used to digitally represent sampled analog signals. It is the standard form of digital audio in computers, compact discs, digital telephony and other digital audio applications. In a PCM stream, the amplitude of the analog signal is sampled regularly at uniform intervals, and each sample is quantized to the nearest value within a range of digital steps.
 
 {{% notice tip %}}
-If it helps, a sample can be thought of as how far a speaker/microphone's
-membrane is deflected at a particular point in time.
+If it helps, a sample can be thought of as how far a speaker/microphone's membrane is deflected at a particular point in time.
 {{% /notice %}}
 
-It's not uncommon to record multiple audio tracks at a time, for example
-imagine multiple microphones were used to provide a sense of
-direction/perspective (see [Sound Localisation][sl] for more). These multiple
-tracks are usually referred to as *Channels*.
+It's not uncommon to record multiple audio tracks at a time, for example imagine multiple microphones were used to provide a sense of direction/perspective (see [Sound Localisation][sl] for more). These multiple tracks are usually referred to as *Channels*.
 
 **TL;DR:** In Rust lingo, you can think of an audio stream as:
 
@@ -67,13 +46,9 @@ type Frame = [Sample; N]; // where `N` is the number of channels in the stream
 type Sample = i16 | f32;
 ```
 
-The audio formats you are used to (MP3, WAV, OGG) are just different ways to
-store an `AudioStream` on disk, along with some metadata describing the audio
-(artist, year, etc.), typically using tricks like compression or [Delta
-Encoding][de] to make the resulting file as small as possible.
+The audio formats you are used to (MP3, WAV, OGG) are just different ways to store an `AudioStream` on disk, along with some metadata describing the audio (artist, year, etc.), typically using tricks like compression or [Delta Encoding][de] to make the resulting file as small as possible.
 
-If you're wondering why compression is important, these are the numbers for a
-simple uncompressed audio stream with:
+If you're wondering why compression is important, these are the numbers for a simple uncompressed audio stream with:
 
 - 30 seconds of audio
 - 44.1 kHz sample rate
@@ -91,12 +66,9 @@ full clip = 30 * sizeof(1 second) = 5292000 bytes = 5.3 MB
 
 ## Finding Sample Data
 
-If we want to implement a noise gate we're going to need some sample clips to
-test it on.
+If we want to implement a noise gate we're going to need some sample clips to test it on.
 
-I've found the Air Traffic Controller recordings from [LiveATC.net][lan] are
-reasonably similar to my target, with the added bonus that they're publicly
-available.
+I've found the Air Traffic Controller recordings from [LiveATC.net][lan] are reasonably similar to my target, with the added bonus that they're publicly available.
 
 One example:
 
@@ -105,11 +77,7 @@ One example:
   Your browser does not support the audio tag.
 </audio>
 
-Our end goal is to create a library that can break audio streams up into
-chunks based on volume without caring where the audio originally came from
-(MP3 file, microphone, another function, etc.). We'll start by using [the WAV
-format][wav] because it's simple and a really good crate ([hound][hound])
-already exists for working with WAV files.
+Our end goal is to create a library that can break audio streams up into chunks based on volume without caring where the audio originally came from (MP3 file, microphone, another function, etc.). We'll start by using [the WAV format][wav] because it's simple and a really good crate ([hound][hound]) already exists for working with WAV files.
 
 You can download the sample clip and convert it to WAV using `ffmpeg`:
 
@@ -124,13 +92,9 @@ $ ffmpeg -i a-turtle-of-an-issue.mp3 -ac 1 a-turtle-of-an-issue.wav
 For now, our *Noise Gate* will have two knobs for tweaking its behaviour:
 
 - `open_threshold` - the (absolute) noise value above which the gate should open
-- `release_time` - how long to hold the gate open after dropping below the
-  `open_threshold`. This will manifest itself as the gate being in a sort of
-  half-open state for the next `release_time` samples, where new samples
-  above the `open_threshold` will re-open the gate.
+- `release_time` - how long to hold the gate open after dropping below the `open_threshold`. This will manifest itself as the gate being in a sort of half-open state for the next `release_time` samples, where new samples above the `open_threshold` will re-open the gate.
 
-The awesome thing about this algorithm is that it can be represented using a
-simple state machine.
+The awesome thing about this algorithm is that it can be represented using a simple state machine.
 
 ```rust
 // src/lib.rs
@@ -161,12 +125,9 @@ graph TD;
   Closed-- below threshold -->Closed;
 ```
 
-We'll be using some abstractions, namely [`Frame`][frame] and
-[`Sample`][sample] from the [`sample` crate][sample-crate], to make the
-*Noise Gate* work with multiple channels and any type of audio input.
+We'll be using some abstractions, namely [`Frame`][frame] and [`Sample`][sample] from the [`sample` crate][sample-crate], to make the *Noise Gate* work with multiple channels and any type of audio input.
 
-Let's define a helper which will take a `Frame` of audio input and tell us
-whether all audio channels are below a certain threshold.
+Let's define a helper which will take a `Frame` of audio input and tell us whether all audio channels are below a certain threshold.
 
 ```rust
 // src/lib.rs
@@ -196,8 +157,7 @@ fn abs<S: SignedSample>(sample: S) -> S {
 }
 ```
 
-The `State` transitions are done using one big `match` statement and are almost
-a direct translation of the previous state machine diagram.
+The `State` transitions are done using one big `match` statement and are almost a direct translation of the previous state machine diagram.
 
 ```rust
 // src/lib.rs
@@ -244,11 +204,9 @@ fn next_state<F: Frame>(
 }
 ```
 
-There's a bit more rightward drift here than I'd like, but the function itself
-is quite self-contained and readable enough.
+There's a bit more rightward drift here than I'd like, but the function itself is quite self-contained and readable enough.
 
-That said, as a sanity check it's a good idea to write some tests exercising
-each state machine transition.
+That said, as a sanity check it's a good idea to write some tests exercising each state machine transition.
 
 ```rust
 // src/lib.rs
@@ -271,10 +229,7 @@ mod tests {
 ```
 
 {{% notice tip %}}
-When writing these sorts of tests you'll probably want to minimise boilerplate
-by pulling the testing code out into a macro. That way you just need to write
-to case being tested, inputs, and expected outputs, and the macro will do the
-rest.
+When writing these sorts of tests you'll probably want to minimise boilerplate by pulling the testing code out into a macro. That way you just need to write to case being tested, inputs, and expected outputs, and the macro will do the rest.
 
 This is the definition for `test_state_transition!()`:
 
@@ -296,8 +251,7 @@ macro_rules! test_state_transition {
 ```
 {{% /notice %}}
 
-To implement the *Noise Gate*, we'll wrap our state and configuration into a
-single `NoiseGate` struct.
+To implement the *Noise Gate*, we'll wrap our state and configuration into a single `NoiseGate` struct.
 
 ```rust
 // src/lib.rs
@@ -336,8 +290,7 @@ impl<S> NoiseGate<S> {
 }
 ```
 
-We'll need to declare a `Sink` trait that can be implemented by consumers of
-our *Noise Gate* in the next step.
+We'll need to declare a `Sink` trait that can be implemented by consumers of our *Noise Gate* in the next step.
 
 ```rust
 // src/lib.rs
@@ -351,9 +304,7 @@ pub trait Sink<F> {
 }
 ```
 
-Processing frames is just a case of iterating over each frame, updating the
-state, and checking whether we need to pass the frame through to the `Sink` or
-detect an `end_of_transmission`.
+Processing frames is just a case of iterating over each frame, updating the state, and checking whether we need to pass the frame through to the `Sink` or detect an `end_of_transmission`.
 
 ```rust
 // src/lib.rs
@@ -382,14 +333,11 @@ impl<S: Sample> NoiseGate<S> {
 
 ## Measuring Performance
 
-If we want to use the `NoiseGate` in realtime applications we'll need to make
-sure it can handle typical sample rates.
+If we want to use the `NoiseGate` in realtime applications we'll need to make sure it can handle typical sample rates.
 
-I don't expect our algorithm to add much in terms of a performance overhead, but
-it's always a good idea to check.
+I don't expect our algorithm to add much in terms of a performance overhead, but it's always a good idea to check.
 
-The gold standard for benchmarking in Rust is [criterion][criterion], so let's
-add that as a dev dependency.
+The gold standard for benchmarking in Rust is [criterion][criterion], so let's add that as a dev dependency.
 
 ```toml
 # Cargo.toml
@@ -402,8 +350,7 @@ name = "throughput"
 harness = false
 ```
 
-We'll need a `Sink` implementation which will add as little overhead as
-possible without being completely optimised out by the compiler.
+We'll need a `Sink` implementation which will add as little overhead as possible without being completely optimised out by the compiler.
 
 ```rust
 // benches/throughput.rs
@@ -424,10 +371,7 @@ impl<F> Sink<F> for Counter {
 }
 ```
 
-We've already downloaded a handful of example WAV files to the `data/`
-directory, so we can register a new benchmark group (a group of related
-benchmarks which should be graphed together) and register a benchmark for every
-WAV file in the `data/` directory.
+We've already downloaded a handful of example WAV files to the `data/` directory, so we can register a new benchmark group (a group of related benchmarks which should be graphed together) and register a benchmark for every WAV file in the `data/` directory.
 
 ```rust
 // benches/throughput.rs
@@ -449,13 +393,9 @@ fn bench_throughput(c: &mut Criterion) {
 }
 ```
 
-The setup work for each WAV file benchmark is non-trivial, so we've pulled it
-out into its own function. To set things up we'll use [`hound`][hound] to read
-the entire audio clip into a `Vec<[i16; 1]>` in memory and guess a reasonable
-`release_time` and `noise_threshold`.
+The setup work for each WAV file benchmark is non-trivial, so we've pulled it out into its own function. To set things up we'll use [`hound`][hound] to read the entire audio clip into a `Vec<[i16; 1]>` in memory and guess a reasonable `release_time` and `noise_threshold`.
 
-Then it's just a case of telling the `BenchmarkGroup` how many samples we're
-working with (throughput) and processing the frames.
+Then it's just a case of telling the `BenchmarkGroup` how many samples we're working with (throughput) and processing the frames.
 
 ```rust
 // benches/throughput.rs
@@ -504,10 +444,7 @@ where
 }
 ```
 
-Finally, we need to invoke a couple macros to register the `"throughput"`
-benchmark group and create a `main` function (remember when declaring the
-`[[bench]]` table we told `rustc` not to write `main()` for us with `harness
-= false`).
+Finally, we need to invoke a couple macros to register the `"throughput"` benchmark group and create a `main` function (remember when declaring the `[[bench]]` table we told `rustc` not to write `main()` for us with `harness = false`).
 
 ```rust
 // benches/throughput.rs
@@ -552,24 +489,15 @@ Found 9 outliers among 100 measurements (9.00%)
 ...
 ```
 
-If you've got `gnuplot` installed, this also generates [a report][bench-report]
-under `target/criterion`.
+If you've got `gnuplot` installed, this also generates [a report][bench-report] under `target/criterion`.
 
-On my machine the report says our `NoiseFilter` can process 103.47 million
-samples per second. This is about 2000 times faster than we need, so it gives us
-hope that the *algorithm* won't add any unnecessary overhead... Of course
-that just moves the bottleneck from `NoiseFilter` to the caller's `Sink`
-implementation.
+On my machine the report says our `NoiseFilter` can process 103.47 million samples per second. This is about 2000 times faster than we need, so it gives us hope that the *algorithm* won't add any unnecessary overhead... Of course that just moves the bottleneck from `NoiseFilter` to the caller's `Sink` implementation.
 
 ## Experimenting With Our Sample Data
 
-We're now at the point where we have a fully implemented *Noise Gate*. Let's
-create an example program for splitting WAV files and see what happens when
-we point it at our sample data!
+We're now at the point where we have a fully implemented *Noise Gate*. Let's create an example program for splitting WAV files and see what happens when we point it at our sample data!
 
-Even though it's an example, we should probably implement proper command-line
-argument handling to make experimentation easier. By far the easiest way to
-do this is with [the structopt crate][structopt].
+Even though it's an example, we should probably implement proper command-line argument handling to make experimentation easier. By far the easiest way to do this is with [the structopt crate][structopt].
 
 ```rust
 // examples/wav-splitter.rs
@@ -604,11 +532,7 @@ pub struct Args {
 }
 ```
 
-Now we'll need a `Sink` type. The general idea is every time the `record()`
-method is called we'll write another frame to a cached `hound::WavWriter`. If
-the `WavWriter` doesn't exist we'll need to create a new one which writes to
-a file named like `output_dir/clip_1.wav`. An `end_of_transmission()` tells
-us to `finalize()` the `WavWriter` and remove it from our cache.
+Now we'll need a `Sink` type. The general idea is every time the `record()` method is called we'll write another frame to a cached `hound::WavWriter`. If the `WavWriter` doesn't exist we'll need to create a new one which writes to a file named like `output_dir/clip_1.wav`. An `end_of_transmission()` tells us to `finalize()` the `WavWriter` and remove it from our cache.
 
 ```rust
 // examples/wav-splitter.rs
@@ -666,9 +590,7 @@ where
 }
 ```
 
-From there the `main` function is quite simple. It parses some arguments, reads
-the WAV file into memory, then throws it at our `NoiseGate` so the `Sink` can
-write the clips to the `output/` directory.
+From there the `main` function is quite simple. It parses some arguments, reads the WAV file into memory, then throws it at our `NoiseGate` so the `Sink` can write the clips to the `output/` directory.
 
 ```rust
 // examples/wav-splitter.rs
@@ -704,9 +626,7 @@ The original clip:
   Your browser does not support the audio tag.
 </audio>
 
-Now let's split it into pieces with our `wav-splitter` program. At this point
-I don't really know what values of `noise_threshold` or `release_time` are
-acceptable for this audio, but I figure `50` and `0.3s` should be usable?
+Now let's split it into pieces with our `wav-splitter` program. At this point I don't really know what values of `noise_threshold` or `release_time` are acceptable for this audio, but I figure `50` and `0.3s` should be usable?
 
 ```console
 $ ./target/release/examples/wav-splitter -o output --threshold 50 --release-time 0.3 data/N11379_KSCK.wav
@@ -821,8 +741,7 @@ clip_8.wav clip_11.wav clip_14.wav clip_17.wav clip_20.wav
   <source src="split/clip_25.wav" type="audio/wav">
 </audio>
 
-Wow it actually worked on the first try. Now that's something you don't see
-every day.
+Wow it actually worked on the first try. Now that's something you don't see every day.
 
 [wiki]: https://en.wikipedia.org/wiki/Noise_gate
 [thread]: https://rust-audio.discourse.group/t/splitting-an-audio-stream-based-on-volume-silence/171?u=michael-f-bryan

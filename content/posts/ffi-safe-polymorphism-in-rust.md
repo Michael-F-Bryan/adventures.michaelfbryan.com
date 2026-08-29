@@ -1,49 +1,32 @@
 ---
 title: 'FFI-Safe Polymorphism: Thin Trait Objects'
 date: '2020-12-16T02:00:00+08:00'
+lastmod: '2026-03-21T20:30:29+08:00'
 tags:
 - Rust
 - FFI
 - Unsafe Rust
 ---
 
-A while ago someone [posted a question][forum-post] on the Rust User Forums
-asking how to achieve polymorphism in a C API and while lots of good
-suggestions were made, I'd like to explore my take on things.
+A while ago someone [posted a question][forum-post] on the Rust User Forums asking how to achieve polymorphism in a C API and while lots of good suggestions were made, I'd like to explore my take on things.
 
-As a recap, Rust provides two mechanisms for letting you write code which will
-work with multiple types. These are
+As a recap, Rust provides two mechanisms for letting you write code which will work with multiple types. These are
 
-- **Static Dispatch**, where the compiler will generate multiple copies of the
-  function, tailor-made for each type and resolved at compile time, and
-- **Dynamic Dispatch**, where we use an extra level of indirection to only
-  resolve the actual implementation at runtime
+- **Static Dispatch**, where the compiler will generate multiple copies of the function, tailor-made for each type and resolved at compile time, and
+- **Dynamic Dispatch**, where we use an extra level of indirection to only resolve the actual implementation at runtime
 
-While both mechanisms are extremely powerful and can cover almost all of your
-needs in normal Rust code, they both have one drawback... The actual
-mechanisms used are (deliberately) unspecified and not safe for FFI.
+While both mechanisms are extremely powerful and can cover almost all of your needs in normal Rust code, they both have one drawback... The actual mechanisms used are (deliberately) unspecified and not safe for FFI.
 
-The concrete use case is looking for a FFI-safe equivalent of C's `FILE*`;
-some writeable thing which doesn't care if it is backed by a real file on
-disk, a network socket, an OS pipe, or an arbitrary piece of code that
-consumes bytes. This `FILE*`-like type could then be instantiated by C and
-used to initialise the logger in a Rust library.
+The concrete use case is looking for a FFI-safe equivalent of C's `FILE*`; some writeable thing which doesn't care if it is backed by a real file on disk, a network socket, an OS pipe, or an arbitrary piece of code that consumes bytes. This `FILE*`-like type could then be instantiated by C and used to initialise the logger in a Rust library.
 
-Normally you'd just reach for a `Box<dyn std::io::Write>` here, but as we've
-already mentioned Rust's trait objects aren't FFI-safe, meaning we need to be
-a little more creative.
+Normally you'd just reach for a `Box<dyn std::io::Write>` here, but as we've already mentioned Rust's trait objects aren't FFI-safe, meaning we need to be a little more creative.
 
-My solution takes inspiration from something I first discovered while
-browsing the source code for [`anyhow::Error`][anyhow]. I wasn't able to find
-a proper name for it, so I'm referring to this technique as *Thin Trait
-Objects*.
+My solution takes inspiration from something I first discovered while browsing the source code for [`anyhow::Error`][anyhow]. I wasn't able to find a proper name for it, so I'm referring to this technique as *Thin Trait Objects*.
 
 {{% notice note %}}
-The code written in this article is available [on GitHub][repo]. Feel free to
-browse through and steal code or inspiration.
+The code written in this article is available [on GitHub][repo]. Feel free to browse through and steal code or inspiration.
 
-If you found this useful or spotted a bug, let me know on the blog's
-[issue tracker][issue]!
+If you found this useful or spotted a bug, let me know on the blog's [issue tracker][issue]!
 
 [repo]: https://github.com/Michael-F-Bryan/thin-trait-objects
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues
@@ -51,75 +34,49 @@ If you found this useful or spotted a bug, let me know on the blog's
 
 ## Alternate Solutions
 
-Now before we go any further it is important to ask the question, *"do we
-actually **need** to come up with a fancy solution here?"* This is especially
-important if your solution will require writing `unsafe` code.
+Now before we go any further it is important to ask the question, *"do we actually **need** to come up with a fancy solution here?"* This is especially important if your solution will require writing `unsafe` code.
 
-9 times out of 10 taking the more complicated option will require you to do
-extra work that wasn't needed in the first place.
+9 times out of 10 taking the more complicated option will require you to do extra work that wasn't needed in the first place.
 
 ### Don't Allow Polymorphism
 
-This is probably the simplest option. If you want to avoid complexity,
-especially when already writing a Foreign Function Interface, don't do
-polymorphism.
+This is probably the simplest option. If you want to avoid complexity, especially when already writing a Foreign Function Interface, don't do polymorphism.
 
-This could be as simple as hard-coding a simple implementation (i.e. if on
-Linux, accept a file descriptor and write to that).
+This could be as simple as hard-coding a simple implementation (i.e. if on Linux, accept a file descriptor and write to that).
 
-Another option would be to design your API to be more data-oriented. That way
-the caller can write the custom logic in their own code instead of trying to
-inject it into someone else's.
+Another option would be to design your API to be more data-oriented. That way the caller can write the custom logic in their own code instead of trying to inject it into someone else's.
 
 After all, the simplest code is no code.
 
 ### Pointer to Enum
 
-If you have a finite set of possible implementations you can pass around a
-pointer to an enum.
+If you have a finite set of possible implementations you can pass around a pointer to an enum.
 
-While more complex than the previous option, we're all familiar with the Rust
-enum and how it enables a limited form of polymorphism.
+While more complex than the previous option, we're all familiar with the Rust enum and how it enables a limited form of polymorphism.
 
 ### Double Indirection
 
-The problem with passing around a normal trait object (e.g. `Box<dyn Trait>`
-or `*mut dyn Trait`) is that you need space for two pointers, one for the
-data and one for a vtable that operates on the data.
+The problem with passing around a normal trait object (e.g. `Box<dyn Trait>` or `*mut dyn Trait`) is that you need space for two pointers, one for the data and one for a vtable that operates on the data.
 
-The problem is that Rust trait objects don't have a stable ABI so we can't pass
-`Box<dyn Trait>` by value across the FFI boundary.
+The problem is that Rust trait objects don't have a stable ABI so we can't pass `Box<dyn Trait>` by value across the FFI boundary.
 
-However, what about a pointer to a `Box<dyn Trait>`? A `Box<Box<dyn Trait>>` is
-the size of a single pointer and can be passed around just fine using
-`Box::into_raw()` and `Box::from_raw()`.
+However, what about a pointer to a `Box<dyn Trait>`? A `Box<Box<dyn Trait>>` is the size of a single pointer and can be passed around just fine using `Box::into_raw()` and `Box::from_raw()`.
 
-The only drawback for this method is that you need to pass through two levels
-of indirection every time you want to use the object. Even though it probably
-doesn't matter in the grand scheme of things (your performance bottlenecks will
-almost certainly be elsewhere), using double indirection feels like a pretty
-weak solution.
+The only drawback for this method is that you need to pass through two levels of indirection every time you want to use the object. Even though it probably doesn't matter in the grand scheme of things (your performance bottlenecks will almost certainly be elsewhere), using double indirection feels like a pretty weak solution.
 
 ### Pointer to VTable + Object
 
-Believe it or not, but you can implement inheritance-based polymorphism in
-plain C with just a couple function pointers and some casting.
+Believe it or not, but you can implement inheritance-based polymorphism in plain C with just a couple function pointers and some casting.
 
-The idea is you create a struct which will act as an *"abstract base class"*,
-a type which declares an interface which other types inherit from and implement
-methods for.
+The idea is you create a struct which will act as an *"abstract base class"*, a type which declares an interface which other types inherit from and implement methods for.
 
 The trick is works because of this particular clause in the C standard:
 
-> A pointer to a structure object,suitably converted, points to its initial
-> member (or if that member is a bit-field, then to the unit in which it
-> resides), and vice versa. There may be unnamed padding within a structure
-> object, but not at its beginning.
+> A pointer to a structure object,suitably converted, points to its initial member (or if that member is a bit-field, then to the unit in which it resides), and vice versa. There may be unnamed padding within a structure object, but not at its beginning.
 >
 > <cite><a href="http://www.open-std.org/jtc1/sc22/wg14/www/docs/n2310.pdf">C17 Standard, §6.7.2.1</a></cite>
 
-In layman's terms, it means I can declare a `Child` type who's first element
-is a `Base`.
+In layman's terms, it means I can declare a `Child` type who's first element is a `Base`.
 
 ```c
 struct Base
@@ -136,9 +93,7 @@ typedef struct Child
 } Child;
 ```
 
-We can then pass the `Child *` pointer around as a `Base *` and, assuming
-`get_name` and `set_name` were implemented correctly, we can get and set the
-`Child.name` field.
+We can then pass the `Child *` pointer around as a `Base *` and, assuming `get_name` and `set_name` were implemented correctly, we can get and set the `Child.name` field.
 
 ```c
 void main()
@@ -157,24 +112,16 @@ void main()
 }
 ```
 
-The `set_name` and `get_name` members are called *virtual methods* in
-traditional Object-Oriented parlance.
+The `set_name` and `get_name` members are called *virtual methods* in traditional Object-Oriented parlance.
 
-**This technique is equally valid in Rust when each struct is marked as
-`#[repr(C)]`.**
+**This technique is equally valid in Rust when each struct is marked as `#[repr(C)]`.**
 
-The benefit of using C-style inheritance is that a `Base *` pointer is *just*
-a pointer, with the vtable being kept alongside the data being pointed to.
+The benefit of using C-style inheritance is that a `Base *` pointer is *just* a pointer, with the vtable being kept alongside the data being pointed to.
 
 {{% notice note %}}
-This isn't a novel technique. It's actually already used by frameworks like
-Microsoft's [*COM*][c].
+This isn't a novel technique. It's actually already used by frameworks like Microsoft's [*COM*][c].
 
-Gnome's [*GObject][g] and most C++ implementations use [a slight
-variation][c++] where the virtual methods are stored behind another level of
-indirection. This extra level of indirection makes different trade-offs with
-respect to memory use, cache, and performance, but it's much the same idea
-(see [this Reddit comment][r] from [`u/matthieum`][m]).
+Gnome's [*GObject][g] and most C++ implementations use [a slight variation][c++] where the virtual methods are stored behind another level of indirection. This extra level of indirection makes different trade-offs with respect to memory use, cache, and performance, but it's much the same idea (see [this Reddit comment][r] from [`u/matthieum`][m]).
 
 In code, the extra level of indirection might look something like this:
 
@@ -195,8 +142,7 @@ struct CppChild {
 }
 ```
 
-The C++ implementation gets a bit more interesting when multiple inheritance
-is involved.
+The C++ implementation gets a bit more interesting when multiple inheritance is involved.
 
 [g]: https://en.wikipedia.org/wiki/GObject
 [c]: https://en.wikipedia.org/wiki/Component_Object_Model
@@ -207,11 +153,9 @@ is involved.
 
 ## Creating the FileHandle
 
-Returning to our original goal of creating a FFI-safe version of
-`Box<dyn std::io::Write>`, let's create a struct representing our base "class".
+Returning to our original goal of creating a FFI-safe version of `Box<dyn std::io::Write>`, let's create a struct representing our base "class".
 
-I'm going to call this a `FileHandle` because that's how it was being used in
-the [user forum thread][forum-post] that inspired this article.
+I'm going to call this a `FileHandle` because that's how it was being used in the [user forum thread][forum-post] that inspired this article.
 
 ```rust
 // src/file_handle.rs
@@ -227,18 +171,14 @@ pub struct FileHandle {
 }
 ```
 
-I've added a couple extra fields alongside the `write()` and `flush()`
-methods from [`std::io::Write`][write],
+I've added a couple extra fields alongside the `write()` and `flush()` methods from [`std::io::Write`][write],
 
 - `type_id` to allow downcasting (more on that later)
 - `destroy()`, our object's destructor
 
-I don't particularly want have to create a new type which inherits from
-`FileHandle` for every possible `std::io::Write` implementation I need.
+I don't particularly want have to create a new type which inherits from `FileHandle` for every possible `std::io::Write` implementation I need.
 
-Instead it'd be nice to have some generic function like
-`FileHandle::for_writer()` which accepts *any* writer and returns a pointer
-to an appropriate child class.
+Instead it'd be nice to have some generic function like `FileHandle::for_writer()` which accepts *any* writer and returns a pointer to an appropriate child class.
 
 ```rust
 impl FileHandle {
@@ -265,8 +205,7 @@ pub(crate) struct Repr<W> {
 }
 ```
 
-Our `FileHandle::for_writer()` function can then be implemented by creating a
-`Repr<W>` on the heap and returning a pointer to it, cast to `*mut FileHandle`.
+Our `FileHandle::for_writer()` function can then be implemented by creating a `Repr<W>` on the heap and returning a pointer to it, cast to `*mut FileHandle`.
 
 ```rust
 // src/file_handle.rs
@@ -302,22 +241,14 @@ impl FileHandle {
 ```
 
 {{% notice note %}}
-I've also added the requirement that the `W` type is `Send + Sync`. That
-means it should be possible to move the object between threads and refer to
-it (immutably) concurrently.
+I've also added the requirement that the `W` type is `Send + Sync`. That means it should be possible to move the object between threads and refer to it (immutably) concurrently.
 
-We need to be conservative here because when working with FFI there's no way
-of knowing what the code on the other end will do.
+We need to be conservative here because when working with FFI there's no way of knowing what the code on the other end will do.
 {{% /notice %}}
 
-For the `destroy`, `write`, and `flush` fields we can use a trick taken from
-[*Rust Closures in FFI*][callbacks], using [*turbofish*][fish] to get a
-concrete function pointer to a generic function.
+For the `destroy`, `write`, and `flush` fields we can use a trick taken from [*Rust Closures in FFI*][callbacks], using [*turbofish*][fish] to get a concrete function pointer to a generic function.
 
-The functions themselves are almost trivial, they just cast a `*mut FileHandle`
-to `*mut Repr<W>` then invoke the corresponding method. The destructor uses
-`Box::from_raw()` to turn the `*mut Repr<W>` back into a `Box<Repr<W>>` so it
-can be destroyed properly.
+The functions themselves are almost trivial, they just cast a `*mut FileHandle` to `*mut Repr<W>` then invoke the corresponding method. The destructor uses `Box::from_raw()` to turn the `*mut Repr<W>` back into a `Box<Repr<W>>` so it can be destroyed properly.
 
 ```rust
 // src/file_handle.rs
@@ -345,13 +276,11 @@ It only took about 50 lines, but we've
 
 1. Created an abstract base class
 2. Created a child class inheriting from the base class
-3. Made a `FileHandle::for_writer()` constructor which will create a new child
-   and populate the vtable in the base class with child-specific methods
+3. Made a `FileHandle::for_writer()` constructor which will create a new child and populate the vtable in the base class with child-specific methods
 
 ## Using the FileHandle from C
 
-Now, to actually be usable from C code we'll need to define `extern "C"`
-functions for interacting with our `*mut FileHandle`.
+Now, to actually be usable from C code we'll need to define `extern "C"` functions for interacting with our `*mut FileHandle`.
 
 Let's start with a couple common constructors.
 
@@ -373,14 +302,9 @@ pub unsafe extern "C" fn new_stdout_file_handle() -> *mut FileHandle {
 }
 ```
 
-It'd be nice to construct a `FileHandle` which actually writes to a file, so
-let's create a `new_file_handle_from_path()` constructor which takes a
-`*const c_char` containing the path.
+It'd be nice to construct a `FileHandle` which actually writes to a file, so let's create a `new_file_handle_from_path()` constructor which takes a `*const c_char` containing the path.
 
-This constructor is a bit more complex than the previous two in that we need
-to use `CStr` to turn the `*const c_char` into a Rust `&str` that can be
-passed to `File::create()`. Both `CStr::to_str()` and `File::create()` can
-fail, in which case we'll let the caller know by returning a null pointer.
+This constructor is a bit more complex than the previous two in that we need to use `CStr` to turn the `*const c_char` into a Rust `&str` that can be passed to `File::create()`. Both `CStr::to_str()` and `File::create()` can fail, in which case we'll let the caller know by returning a null pointer.
 
 ```rust
 // src/ffi.rs
@@ -406,8 +330,7 @@ pub unsafe extern "C" fn new_file_handle_from_path(path: *const c_char) -> *mut 
 
 Now callers can create a `*mut FileHandle`, let's give them a way to destroy it.
 
-The implementation is pretty simple in this case, load the destructor from our
-vtable then call it with the `*mut FileHandle`.
+The implementation is pretty simple in this case, load the destructor from our vtable then call it with the `*mut FileHandle`.
 
 ```rust
 // src/ffi.rs
@@ -419,12 +342,9 @@ pub unsafe extern "C" fn file_handle_destroy(handle: *mut FileHandle) {
 }
 ```
 
-Next we need a way to call the `write()` and `flush()` methods. This gets a bit
-trickier because we need to translate arguments from C types to Rust types and
-follow C conventions for notifying the caller of failure.
+Next we need a way to call the `write()` and `flush()` methods. This gets a bit trickier because we need to translate arguments from C types to Rust types and follow C conventions for notifying the caller of failure.
 
-In this case the convention we use is to return a negative error code on
-failure, which aligns with `errno` on most *nix platforms.
+In this case the convention we use is to return a negative error code on failure, which aligns with `errno` on most *nix platforms.
 
 ```rust
 // src/ffi.rs
@@ -464,14 +384,11 @@ pub unsafe extern "C" fn file_handle_flush(handle: *mut FileHandle) -> c_int {
 
 ### Tests
 
-Now we have some code for interacting with `FileHandle`, let's make sure it
-actually works and is sound.
+Now we have some code for interacting with `FileHandle`, let's make sure it actually works and is sound.
 
-The first thing I want to test is that destructors are called by
-`file_handle_destroy()`.
+The first thing I want to test is that destructors are called by `file_handle_destroy()`.
 
-To do this let's create a dummy type which implements `Write` and will set a
-flag when it gets destroyed.
+To do this let's create a dummy type which implements `Write` and will set a flag when it gets destroyed.
 
 ```rust
 // src/ffi.rs
@@ -501,8 +418,7 @@ mod tests {
 }
 ```
 
-Now we can use `FileHandle::for_writer()` to create a new `*mut FileHandle`,
-then immediately call `file_handle_destroy()` to destroy it.
+Now we can use `FileHandle::for_writer()` to create a new `*mut FileHandle`, then immediately call `file_handle_destroy()` to destroy it.
 
 ```rust
 // src/ffi.rs
@@ -525,10 +441,7 @@ mod tests {
 }
 ```
 
-Normally you can run this test with `cargo test` but when working with
-`unsafe` code it's a good idea to run tests with [Miri][miri], a Rust
-interpreter which executes code and will detect instances of *Undefined
-Behaviour* and memory leaks.
+Normally you can run this test with `cargo test` but when working with `unsafe` code it's a good idea to run tests with [Miri][miri], a Rust interpreter which executes code and will detect instances of *Undefined Behaviour* and memory leaks.
 
 ```console
 $ cargo miri test
@@ -541,12 +454,10 @@ test ffi::tests::writer_destructor_is_always_called ... ok
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-The test passed and Miri seems happy with our code so that gives me a lot of
-confidence 🙂
+The test passed and Miri seems happy with our code so that gives me a lot of confidence 🙂
 
 {{% notice tip %}}
-If our test did something wrong like forgetting to call `file_handle_destroy()`
-we'd be greeted with a message like this:
+If our test did something wrong like forgetting to call `file_handle_destroy()` we'd be greeted with a message like this:
 
 ```console
 $ cargo miri test
@@ -572,31 +483,18 @@ alloc77897 (fn: file_handle::write::<ffi::tests::NotifyOnDrop>)
 alloc77898 (fn: file_handle::flush::<ffi::tests::NotifyOnDrop>)
 ```
 
-In this case you can see two items were leaked, the first is a block of 24
-bytes for the `Arc<AtomicBool>`. If you look carefully, you'll see the
-allocation contains 2x `1_usize` values followed by a single `0` and a bunch
-of padding (the underscores). They are the strong count, the weak count, and
-the `false`, respectively.
+In this case you can see two items were leaked, the first is a block of 24 bytes for the `Arc<AtomicBool>`. If you look carefully, you'll see the allocation contains 2x `1_usize` values followed by a single `0` and a bunch of padding (the underscores). They are the strong count, the weak count, and the `false`, respectively.
 
-In the second allocation you can see 8 bytes followed by a bunch of items
-like `alloc77896`, which we see further down is actually a pointer to the
-`file_handle::destroy::<ffi::tests::NotifyOnDrop>` function.
+In the second allocation you can see 8 bytes followed by a bunch of items like `alloc77896`, which we see further down is actually a pointer to the `file_handle::destroy::<ffi::tests::NotifyOnDrop>` function.
 
-That indicates we've leaked the `Repr<NotifyOnDrop>` behind our `*mut
-FileHandle`, which would hopefully be enough information to start tracking down
-a memory leak.
+That indicates we've leaked the `Repr<NotifyOnDrop>` behind our `*mut FileHandle`, which would hopefully be enough information to start tracking down a memory leak.
 {{% /notice %}}
 
-Most of the other `ffi` module tests look the same, create a dummy type which
-will behave in a particular way (e.g. by returning an error from `write()` or
-writing to a buffer that can be inspected later) then exercise the code,
-running tests with `cargo miri test`.
+Most of the other `ffi` module tests look the same, create a dummy type which will behave in a particular way (e.g. by returning an error from `write()` or writing to a buffer that can be inspected later) then exercise the code, running tests with `cargo miri test`.
 
 ## An Owned Wrapper
 
-Now our hypothetical C caller has the ability to create a `*mut FileHandle`,
-but we don't want to be using `unsafe` and raw pointers when the file handle
-gets passed to normal Rust code.
+Now our hypothetical C caller has the ability to create a `*mut FileHandle`, but we don't want to be using `unsafe` and raw pointers when the file handle gets passed to normal Rust code.
 
 We need a safe smart pointer.
 
@@ -610,21 +508,14 @@ pub struct OwnedFileHandle(NonNull<FileHandle>);
 ```
 
 {{% notice note %}}
-We use a `std::ptr::NonNull` instead of a normal raw pointer (`*mut FileHandle`)
-because it guarantees the pointer can never be `null`.
+We use a `std::ptr::NonNull` instead of a normal raw pointer (`*mut FileHandle`) because it guarantees the pointer can never be `null`.
 
-A nice side-effect is that the Rust compiler knows `NonNull` can never be
-`null`. This means if it ever needs to store a `OwnedFileHandle` alongside a
-single bit of information (e.g. an enum's tag), `null` can be used to
-represent this information.
+A nice side-effect is that the Rust compiler knows `NonNull` can never be `null`. This means if it ever needs to store a `OwnedFileHandle` alongside a single bit of information (e.g. an enum's tag), `null` can be used to represent this information.
 
-This *Null Pointer Optimisation* means types like `Option<OwnedFileHandle>`
-are guaranteed to be the same size as `OwnedFileHandle`, which in turn is
-guaranteed to be the same size as a pointer.
+This *Null Pointer Optimisation* means types like `Option<OwnedFileHandle>` are guaranteed to be the same size as `OwnedFileHandle`, which in turn is guaranteed to be the same size as a pointer.
 {{% /notice %}}
 
-As you would have guessed by the name, our `OwnedFileHandle` needs to run the
-destructor from its `Drop` impl.
+As you would have guessed by the name, our `OwnedFileHandle` needs to run the destructor from its `Drop` impl.
 
 ```rust
 // src/owned.rs
@@ -641,8 +532,7 @@ impl Drop for OwnedFileHandle {
 ```
 
 
-This smart pointer also needs functions for converting to/from its raw pointer
-form or constructing it with `FileHandle::for_writer()` directly.
+This smart pointer also needs functions for converting to/from its raw pointer form or constructing it with `FileHandle::for_writer()` directly.
 
 ```rust
 // src/owned.rs
@@ -709,9 +599,7 @@ impl Write for OwnedFileHandle {
 }
 ```
 
-Thanks to our `Send + Sync` requirements on `FileHandle::for_writer()` we can
-guarantee `*mut FileHandle` is also `Send + Sync` and can implement the two
-traits on our `OwnedFileHandle`.
+Thanks to our `Send + Sync` requirements on `FileHandle::for_writer()` we can guarantee `*mut FileHandle` is also `Send + Sync` and can implement the two traits on our `OwnedFileHandle`.
 
 ```rust
 // SAFETY: The FileHandle::for_writer() method ensure by construction that our
@@ -722,16 +610,11 @@ unsafe impl Sync for OwnedFileHandle {}
 
 ### Downcasting
 
-A useful feature of Object Oriented languages is *downcasting*, the ability
-to convert from a parent class back to a child class; in this case we want a
-way to access the `W` from our `Repr<W>` when we know what type it is.
+A useful feature of Object Oriented languages is *downcasting*, the ability to convert from a parent class back to a child class; in this case we want a way to access the `W` from our `Repr<W>` when we know what type it is.
 
-Rust provides a mechanism called [`std::any::TypeId`][type-id] for uniquely
-identifying different types. It's deliberately basic, providing nothing more
-than equality, but that's perfectly fine for our cases.
+Rust provides a mechanism called [`std::any::TypeId`][type-id] for uniquely identifying different types. It's deliberately basic, providing nothing more than equality, but that's perfectly fine for our cases.
 
-First we need a way to check if the item inside an `OwnedFileHandle` has a
-particular type. We'll use the `TypeId` added to the `FileHandle` vtable earlier.
+First we need a way to check if the item inside an `OwnedFileHandle` has a particular type. We'll use the `TypeId` added to the `FileHandle` vtable earlier.
 
 ```rust
 // src/owned.rs
@@ -747,8 +630,7 @@ impl OwnedFileHandle {
 }
 ```
 
-Using this new `is()` method we can now provide access to the `W` by doing a
-type check followed by an `unsafe` pointer cast.
+Using this new `is()` method we can now provide access to the `W` by doing a type check followed by an `unsafe` pointer cast.
 
 ```rust
 // src/owned.rs
@@ -784,14 +666,9 @@ impl OwnedFileHandle {
 }
 ```
 
-We also need a method which consumes `self`, unboxes the `Repr<W>`, and gives
-the original `W` back to the caller.
+We also need a method which consumes `self`, unboxes the `Repr<W>`, and gives the original `W` back to the caller.
 
-However, what happens if the type check fails? If we follow `downcast_ref()`
-and return an `Option<W>` we'd be throwing the `OwnedFileHandle` away with no
-way to try again or fall back to something else. Most APIs in the standard
-library will return a `Result<W, OwnedFileHandle>` here, returning ownership
-of the file handle in the error case.
+However, what happens if the type check fails? If we follow `downcast_ref()` and return an `Option<W>` we'd be throwing the `OwnedFileHandle` away with no way to try again or fall back to something else. Most APIs in the standard library will return a `Result<W, OwnedFileHandle>` here, returning ownership of the file handle in the error case.
 
 ```rust
 // src/owned.rs
@@ -816,26 +693,16 @@ impl OwnedFileHandle {
 }
 ```
 
-With the addition of downcasting our `OwnedFileHandle` has pretty much reached
-feature parity with most `Box<dyn Write>` solutions.
+With the addition of downcasting our `OwnedFileHandle` has pretty much reached feature parity with most `Box<dyn Write>` solutions.
 
 {{% notice warning %}}
-You may have noticed that throughout the implementation of `OwnedFileHandle`
-I was very careful to *only* do operations using raw pointers. While a
-`*mut FileHandle` can be freely interchanged with a `*mut Repr<W>`, **it
-absolutely cannot be turned into a `&mut FileHandle`** (i.e. a normal Rust
-reference).
+You may have noticed that throughout the implementation of `OwnedFileHandle` I was very careful to *only* do operations using raw pointers. While a `*mut FileHandle` can be freely interchanged with a `*mut Repr<W>`, **it absolutely cannot be turned into a `&mut FileHandle`** (i.e. a normal Rust reference).
 
-This is to do with a concept called *Provenance*. The idea is that a pointer
-can "remember" what allocation it came from (e.g. if we created it from a
-`Box<Repr<std::fs::File>`) and it's not okay to cast Rust references into
-something   they aren't.
+This is to do with a concept called *Provenance*. The idea is that a pointer can "remember" what allocation it came from (e.g. if we created it from a `Box<Repr<std::fs::File>`) and it's not okay to cast Rust references into something   they aren't.
 
-Ralf Jung does a much better job of explaining the subtleties of provenance so
-I'll just defer to his articles on the topic,
+Ralf Jung does a much better job of explaining the subtleties of provenance so I'll just defer to his articles on the topic,
 
-- [*Pointers Are Complicated II, or: We need better language
-  specs*][pointers-2], and
+- [*Pointers Are Complicated II, or: We need better language specs*][pointers-2], and
 - [*Pointers Are Complicated, or: What's in a Byte?*][pointers-1]
 
 [pointers-1]: https://www.ralfj.de/blog/2018/07/24/pointers-and-bytes.html
@@ -844,26 +711,13 @@ I'll just defer to his articles on the topic,
 
 ## Conclusions
 
-While it's not something you'll be using every day, *Thin Trait Objects* are
-a technique that you may find a use for some day. If nothing else,
-understanding them should give you a better appreciation for how much work
-our compilers do to implement nice things like Polymorphism and inheritance.
+While it's not something you'll be using every day, *Thin Trait Objects* are a technique that you may find a use for some day. If nothing else, understanding them should give you a better appreciation for how much work our compilers do to implement nice things like Polymorphism and inheritance.
 
-It also reinforces the idea that all Turing-complete languages are
-equivalent. Just because you start with a non-OO language doesn't mean you
-can't have inheritance, it just requires a bit more work.
+It also reinforces the idea that all Turing-complete languages are equivalent. Just because you start with a non-OO language doesn't mean you can't have inheritance, it just requires a bit more work.
 
-Another nice thing is that, apart from the `ffi` module, this code is just a
-mechanical transformation based on a trait definition. I'm sure a suitably
-motivated person could create a procedural macro which lets you add a
-`#[thin_trait_object]` attribute on top of a trait definition and
-automatically generate the corresponding `FileHandle`, `OwnedFileHandle`, and
-`Repr<W>` types.
+Another nice thing is that, apart from the `ffi` module, this code is just a mechanical transformation based on a trait definition. I'm sure a suitably motivated person could create a procedural macro which lets you add a `#[thin_trait_object]` attribute on top of a trait definition and automatically generate the corresponding `FileHandle`, `OwnedFileHandle`, and `Repr<W>` types.
 
-If you noticed anything unsound (or just plain incorrect) in my code, please
-[get in contact][email] because I want to hear from you! I'm also curious to
-hear if from people who create Rust products which use FFI, and if you've had
-to do something similar in production.
+If you noticed anything unsound (or just plain incorrect) in my code, please [get in contact][email] because I want to hear from you! I'm also curious to hear if from people who create Rust products which use FFI, and if you've had to do something similar in production.
 
 [forum-post]: https://users.rust-lang.org/t/ffi-c-file-and-good-rust-wrapper-equivalent-type/52050
 [poly]: https://blog.rcook.org/blog/2020/traits-and-polymorphism-rust/

@@ -95,3 +95,16 @@ weight = 3
 
 [pagination]
 pageSize = 20
+
+# Let front matter pin a post's Updated date. enableGitInfo means .Lastmod
+# normally comes from the last commit that touched a file, which is fine until
+# a whitespace-only change sweeps the whole archive -- reflowing every post's
+# markdown would otherwise make all of them claim they were updated that day.
+# Hugo's default order puts :git first, so a lastmod in front matter is
+# silently ignored; listing lastmod ahead of it makes the pinned value win.
+# Each post now carries the real date it was last revised, and :git stays as
+# the fallback for anything unpinned. The cost is that a pinned post no longer
+# picks its Updated date up from git automatically, so bump lastmod by hand
+# when revising one.
+[frontmatter]
+lastmod = ['lastmod', ':git', 'date']

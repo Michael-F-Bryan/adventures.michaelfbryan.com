@@ -1,6 +1,7 @@
 ---
 title: 'gcode 0.7: one parser core for streaming visitors and a thin AST'
 date: '2026-03-21T21:00:00+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Rust
 - G-Code
@@ -47,11 +48,9 @@ fn main() -> Result<(), gcode::Diagnostics> {
 ```
 
 {{% notice note %}}
-The `gcode` crate lives [on GitHub][repo]. Feel free to browse through and
-steal code or inspiration.
+The `gcode` crate lives [on GitHub][repo]. Feel free to browse through and steal code or inspiration.
 
-If you found this useful or spotted a bug in the article, let me know on the
-blog's [issue tracker][issue]!
+If you found this useful or spotted a bug in the article, let me know on the blog's [issue tracker][issue]!
 
 [repo]: https://github.com/Michael-F-Bryan/gcode-rs
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues

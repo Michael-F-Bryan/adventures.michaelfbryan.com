@@ -2,6 +2,7 @@
 title: Reboot Friendly Projects - Building Systems That Let You Disappear (and Come
   Back)
 date: '2025-03-29T12:59:58+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Productivity
 - Documentation

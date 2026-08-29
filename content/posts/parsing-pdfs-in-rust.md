@@ -1,18 +1,15 @@
 ---
 title: Parsing PDF Documents in Rust
 date: '2021-01-31T21:00:00+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Rust
 - Parsing
 ---
 
-In my spare time I'm a volunteer with my state's emergency services and we
-have our own web app for managing unit-specific things like attendance, vehicle
-checks, newsletters, on-call rosters, and so on.
+In my spare time I'm a volunteer with my state's emergency services and we have our own web app for managing unit-specific things like attendance, vehicle checks, newsletters, on-call rosters, and so on.
 
-It's actually a really useful tool, but there is one feature that really
-annoys me... The list of member contact details is only available as a PDF
-and not a format that can be imported into your phone's contacts.
+It's actually a really useful tool, but there is one feature that really annoys me... The list of member contact details is only available as a PDF and not a format that can be imported into your phone's contacts.
 
 This means if you need to contact someone you first need to:
 
@@ -22,21 +19,14 @@ This means if you need to contact someone you first need to:
 4. pan over to their phone number
 5. Copy the number and paste it into your messaging app
 
-I need to do this infrequently enough that it's not worth manually creating a
-new contact, yet just often enough to be annoying. It'd be *really* nice if I
-just needed to download the contact list once and have all the information
-available on my phone... There must be a better way!
+I need to do this infrequently enough that it's not worth manually creating a new contact, yet just often enough to be annoying. It'd be *really* nice if I just needed to download the contact list once and have all the information available on my phone... There must be a better way!
 
-I've contacted one of the developers to see if we can get a better solution
-but in the meantime figured that, as a programmer, I should be able to
-[bodge][bodge] something together.
+I've contacted one of the developers to see if we can get a better solution but in the meantime figured that, as a programmer, I should be able to [bodge][bodge] something together.
 
 {{% notice note %}}
-Unfortunately the code written in this article isn't publicly available
-because it contains personally identifiable information.
+Unfortunately the code written in this article isn't publicly available because it contains personally identifiable information.
 
-If you found this useful or spotted a bug, let me know on the blog's [issue
-tracker][issue]!
+If you found this useful or spotted a bug, let me know on the blog's [issue tracker][issue]!
 
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues
 {{% /notice %}}
@@ -50,34 +40,17 @@ So our first job is to take a PDF document like this...
 
 ... and extract the data in the table.
 
-That's easy enough, there is already a Rust crate (unsurprisingly called
-[`pdf`][crate]) for parsing PDF documents so we can reuse that.
+That's easy enough, there is already a Rust crate (unsurprisingly called [`pdf`][crate]) for parsing PDF documents so we can reuse that.
 
-For these sorts of jobs I won't do much planning up-front, instead I'll click
-around [the crate's API docs][online-docs] and figure out how to use the
-provided functionality to do what I want.
+For these sorts of jobs I won't do much planning up-front, instead I'll click around [the crate's API docs][online-docs] and figure out how to use the provided functionality to do what I want.
 
-After a bit of clicking through I figured out that [`pdf::file::File`][file]
-represented the overall document and was just a fancy list of
-[`pdf::object::Page`s][page], where a `Page`'s [content][content] is just a
-list of [`Operation`s][operation]... And that's where my understanding of PDF
-documents was completely turned on its head.
+After a bit of clicking through I figured out that [`pdf::file::File`][file] represented the overall document and was just a fancy list of [`pdf::object::Page`s][page], where a `Page`'s [content][content] is just a list of [`Operation`s][operation]... And that's where my understanding of PDF documents was completely turned on its head.
 
-You see, I used to believe that a PDF was a declarative format containing a
-bunch of high-level objects like `Table` and `Heading` and so on (almost like
-HTML)... However, after skimming through [the PDF format spec][reference]
-from Adobe (which is itself a PDF - how meta!) it was evident that PDF is
-more like an interpreted programming language where you'll go through each
-`Operation` in a page executing draw calls and updating the renderer's state
-as you go.
+You see, I used to believe that a PDF was a declarative format containing a bunch of high-level objects like `Table` and `Heading` and so on (almost like HTML)... However, after skimming through [the PDF format spec][reference] from Adobe (which is itself a PDF - how meta!) it was evident that PDF is more like an interpreted programming language where you'll go through each `Operation` in a page executing draw calls and updating the renderer's state as you go.
 
-That makes things interesting. It means I can't just look for a
-(hypothetical) `Table` object in the DOM and iterate over its `cells` field.
-Instead I'll need to iterate over every instruction and keep track of the
-current state.
+That makes things interesting. It means I can't just look for a (hypothetical) `Table` object in the DOM and iterate over its `cells` field. Instead I'll need to iterate over every instruction and keep track of the current state.
 
-These instructions are pretty low-level, too. Here are (as best I can tell) the
-instructions for drawing the *"Surname"* and *"First Name"* cells.
+These instructions are pretty low-level, too. Here are (as best I can tell) the instructions for drawing the *"Surname"* and *"First Name"* cells.
 
 ```postscript
 BT :
@@ -104,8 +77,7 @@ Tj : "First Name"
 ET :
 ```
 
-Luckily the PDF reference from earlier included a table explaining the different
-op-codes.
+Luckily the PDF reference from earlier included a table explaining the different op-codes.
 
 | Op-code | Description              |
 | ------- | ------------------------ |
@@ -123,13 +95,9 @@ op-codes.
 
 So PDF documents don't even contain tables, it's all just a lie!
 
-To identify the rows and cells in a document I'll need to find each of the
-text objects (everything between `BT` and `ET` operations) and do probably
-something funky with their coordinates.
+To identify the rows and cells in a document I'll need to find each of the text objects (everything between `BT` and `ET` operations) and do probably something funky with their coordinates.
 
-First, I'll create something to represent text objects and stub out a type
-which we can take a stream of `Operation`s and turn them into a stream of
-`TextObject`s.
+First, I'll create something to represent text objects and stub out a type which we can take a stream of `Operation`s and turn them into a stream of `TextObject`s.
 
 ```rust
 // src/lib.rs
@@ -153,17 +121,9 @@ struct TextObjectParser<'src> {
 }
 ```
 
-Turning `TextObjectParser` into an `Iterator` turned out to be pretty easy
-thanks to pattern matching. I know ahead of time *exactly* which operations
-I'm looking for and what their operands will be so each pattern can be its
-own branch in a big `match` statement. Then the language will automatically
-make sure I've got the correct number of operands with the correct types, and
-bind the information I want to extract to local variables.
+Turning `TextObjectParser` into an `Iterator` turned out to be pretty easy thanks to pattern matching. I know ahead of time *exactly* which operations I'm looking for and what their operands will be so each pattern can be its own branch in a big `match` statement. Then the language will automatically make sure I've got the correct number of operands with the correct types, and bind the information I want to extract to local variables.
 
-The idea is that every time someone calls `TextObjectParser`'s `next()`
-method we'll keep consuming `Operation`s, matching on their operator and
-operands while updating some temporary state, then when we see an `"ET"`
-operation we yield what we've seen to the caller.
+The idea is that every time someone calls `TextObjectParser`'s `next()` method we'll keep consuming `Operation`s, matching on their operator and operands while updating some temporary state, then when we see an `"ET"` operation we yield what we've seen to the caller.
 
 ```rust
 // src/lib.rs
@@ -211,20 +171,13 @@ impl<'src> Iterator for TextObjectParser<'src> {
 }
 ```
 
-This isn't a serious program, so it means we can tailor it to work *just* for
-the contact list PDF and not worry about recognising arbitrary tables (which
-would easily require an order of magnitude more effort).
+This isn't a serious program, so it means we can tailor it to work *just* for the contact list PDF and not worry about recognising arbitrary tables (which would easily require an order of magnitude more effort).
 
-To identify "rows" I'm just going to group items by their vertical location.
-That means we'll be including all bits of text in the document and treating them
-as rows with one column, but they can be filtered out later.
+To identify "rows" I'm just going to group items by their vertical location. That means we'll be including all bits of text in the document and treating them as rows with one column, but they can be filtered out later.
 
-There is a `group_by()` method in [the `itertools` crate][itertools], but I
-figured I may as well roll my own because this is just a simple project and
-`group_by()` is only 50 lines or so.
+There is a `group_by()` method in [the `itertools` crate][itertools], but I figured I may as well roll my own because this is just a simple project and `group_by()` is only 50 lines or so.
 
-Don't be intimidated by the number of generics and the complicated `where`-clause,
-all will be explained in a sec.
+Don't be intimidated by the number of generics and the complicated `where`-clause, all will be explained in a sec.
 
 ```rust
 // src/lib.rs
@@ -251,12 +204,9 @@ struct GroupBy<I: Iterator, F, K> {
 }
 ```
 
-The idea is we'll take something which can be turned into an iterator and
-invoke the specified function to get some sort of "key".
+The idea is we'll take something which can be turned into an iterator and invoke the specified function to get some sort of "key".
 
-From there we can just keep popping items off the iterator until we find an
-item with a different key (or run out of items). That tells us we've found
-all items in the group and can yield the group to the caller.
+From there we can just keep popping items off the iterator until we find an item with a different key (or run out of items). That tells us we've found all items in the group and can yield the group to the caller.
 
 ```rust
 // src/lib.rs
@@ -293,22 +243,16 @@ where
 ```
 
 {{% notice note %}}
-Something I like about this implementation is that we can use the `?` operator
-at the very top to return early when the underlying stream of items is empty.
+Something I like about this implementation is that we can use the `?` operator at the very top to return early when the underlying stream of items is empty.
 
-That reduces a lot of the complexity, whereas your typical for-loop
-implementation would constantly need to handle the case where there may or
-may not be a `key` yet.
+That reduces a lot of the complexity, whereas your typical for-loop implementation would constantly need to handle the case where there may or may not be a `key` yet.
 {{% /notice %}}
 
 ## Parsing the Contact List
 
-Now we've got some primitives for extracting text from a page and grouping it
-into rows, let's make some functions for parsing member information from a
-`Page`.
+Now we've got some primitives for extracting text from a page and grouping it into rows, let's make some functions for parsing member information from a `Page`.
 
-I've decided to represent the parsed data as a `ContactList` which contains a
-list of `MemberInfo`s.
+I've decided to represent the parsed data as a `ContactList` which contains a list of `MemberInfo`s.
 
 ```rust
 // src/lib.rs
@@ -325,8 +269,7 @@ pub struct MemberInfo {
 }
 ```
 
-Using the `text_objects()` and `group_by()` helpers from before, we get a
-`parse_members_on_page()` function which looks something like this.
+Using the `text_objects()` and `group_by()` helpers from before, we get a `parse_members_on_page()` function which looks something like this.
 
 ```rust
 // src/lib.rs
@@ -357,15 +300,11 @@ fn parse_members_on_page(page: &Page) -> Result<Vec<MemberInfo>, Error> {
 }
 ```
 
-Again, we only ever want things to work with this PDF so identifying the
-table's header is just a case of finding the first "row" where the first cell
-contains `"Surname"`.
+Again, we only ever want things to work with this PDF so identifying the table's header is just a case of finding the first "row" where the first cell contains `"Surname"`.
 
-We also know that our table has 6 columns and that every cell will have
-something in it, so that gives us a nice condition to pass to `take_while()`.
+We also know that our table has 6 columns and that every cell will have something in it, so that gives us a nice condition to pass to `take_while()`.
 
-Parsing a single row and copying the individual cell text into the
-`MemberInfo` is pretty easy to do with slice patterns.
+Parsing a single row and copying the individual cell text into the `MemberInfo` is pretty easy to do with slice patterns.
 
 ```rust
 // src/lib.rs
@@ -396,17 +335,12 @@ fn parse_row(row: Vec<TextObject<'_>>) -> Result<MemberInfo, Error> {
 ```
 
 {{% notice note %}}
-In the original document, surnames are in UPPERCASE (e.g. `BRYAN`) so we
-use [the `heck` crate](https://crates.io/crates/heck) to convert them to the
-more useful TitleCase.
+In the original document, surnames are in UPPERCASE (e.g. `BRYAN`) so we use [the `heck` crate](https://crates.io/crates/heck) to convert them to the more useful TitleCase.
 
-I don't particularly want my phone to scream a person's name whenever I get a
-message from them.
+I don't particularly want my phone to scream a person's name whenever I get a message from them.
 {{% /notice %}}
 
-We can wrap everything up into a single `parse()` function by iterating over
-each page in a `pdf::file::File` and appending the parsed `MemberInfo` to a
-list.
+We can wrap everything up into a single `parse()` function by iterating over each page in a `pdf::file::File` and appending the parsed `MemberInfo` to a list.
 
 ```rust
 // src/lib.rs
@@ -432,10 +366,7 @@ pub fn parse(pdf_blob: &[u8]) -> Result<ContactList, Error> {
 }
 ```
 
-The code itself isn't overly interesting, although I've chosen to use the
-`anyhow` crate for managing my errors. That way I can use the `Context`
-extension trait to attach useful context to errors so when my code (inevitably)
-fails I'll be greeted with something like this...
+The code itself isn't overly interesting, although I've chosen to use the `anyhow` crate for managing my errors. That way I can use the `Context` extension trait to attach useful context to errors so when my code (inevitably) fails I'll be greeted with something like this...
 
 ```text
 Error: Unable to parse the contacts list
@@ -449,12 +380,9 @@ Caused by:
 
 ## Exporting to Google Contacts
 
-The final part of our task is exporting the parsed data in a form that *Google
-Contacts* can handle.
+The final part of our task is exporting the parsed data in a form that *Google Contacts* can handle.
 
-Rust has a lot of useful libraries for writing command-line utilities, but for
-this application we'll only need [the `structopt` crate][structopt] for
-declaring something our command-line arguments can be parsed into.
+Rust has a lot of useful libraries for writing command-line utilities, but for this application we'll only need [the `structopt` crate][structopt] for declaring something our command-line arguments can be parsed into.
 
 ```rust
 // src/bin/export-to-google-contacts.rs
@@ -473,9 +401,7 @@ pub struct Args {
 }
 ```
 
-We'll also give it a utility method for parsing the input, correctly switching
-between a file or `stdin` depending on whether a `--input` argument was
-provided.
+We'll also give it a utility method for parsing the input, correctly switching between a file or `stdin` depending on whether a `--input` argument was provided.
 
 ```rust
 // src/bin/export-to-google-contacts.rs
@@ -500,12 +426,9 @@ impl Args {
 }
 ```
 
-According to their docs, *Google Contacts* can import contacts from
-[vCards][vcard] or a CSV file. They've provided [a CSV template][csv-template]
-so that's what I've decided to export my data as.
+According to their docs, *Google Contacts* can import contacts from [vCards][vcard] or a CSV file. They've provided [a CSV template][csv-template] so that's what I've decided to export my data as.
 
-Inspecting the `contacts.csv` file shows we've got quite a lot of fields to
-choose from.
+Inspecting the `contacts.csv` file shows we've got quite a lot of fields to choose from.
 
 ```console
 $ cat ~/Downloads/contacts.csv | sed -e 's/,/\n/g'
@@ -547,8 +470,7 @@ Website 1 - Type
 Website 1 - Value
 ```
 
-In this case we only have data for a couple fields so all the others can be
-skipped.
+In this case we only have data for a couple fields so all the others can be skipped.
 
 - `Given Name`
 - `Family Name`
@@ -556,9 +478,7 @@ skipped.
 - `Phone 1 - Type` (will always be `"Mobile"`)
 - `Phone 1 - Value`
 
-Because the `export-to-google-contacts` executable is so simple, we can throw
-the argument parsing, contact list parsing, and CSV generation all into a single
-`main()` function and call it a day.
+Because the `export-to-google-contacts` executable is so simple, we can throw the argument parsing, contact list parsing, and CSV generation all into a single `main()` function and call it a day.
 
 ```rust
 // src/bin/export-to-google-contacts.rs
@@ -603,8 +523,7 @@ fn main() -> Result<(), Error> {
 }
 ```
 
-Once that is done, we can use `cargo run` to run the program and convert the
-contact list PDF to a CSV.
+Once that is done, we can use `cargo run` to run the program and convert the contact list PDF to a CSV.
 
 ```console
 $ cargo run -- -i ~/Downloads/contact-list.pdf
@@ -618,25 +537,17 @@ $ wc contacts.csv
   57   70 3196 contacts.csv
 ```
 
-Now it's just a case of [importing the `contacts.csv`][importing] on a computer
-and letting your phone pick it up next time it does a sync.
+Now it's just a case of [importing the `contacts.csv`][importing] on a computer and letting your phone pick it up next time it does a sync.
 
 ## Conclusions
 
 This was a fun little experiment!
 
-Honestly, I was expecting it to be a massive pain and that I'd need to
-traverse some sort of DOM to extract data, something that tends to be a quite
-verbose in statically typed languages.
+Honestly, I was expecting it to be a massive pain and that I'd need to traverse some sort of DOM to extract data, something that tends to be a quite verbose in statically typed languages.
 
-Taking the time to understand the PDF spec and writing that `text_objects()`
-helper really simplified things, though. Instead of needing half a weekend I
-was able to hack my way from nothing to 50+ new contacts in under 90 minutes
-and 400 lines of code.
+Taking the time to understand the PDF spec and writing that `text_objects()` helper really simplified things, though. Instead of needing half a weekend I was able to hack my way from nothing to 50+ new contacts in under 90 minutes and 400 lines of code.
 
-Let me know if you find these sorts of [*"programming Rust in the real
-world"*][youtube] articles interesting. I always enjoy hearing war stories from
-fellow programmers!
+Let me know if you find these sorts of [*"programming Rust in the real world"*][youtube] articles interesting. I always enjoy hearing war stories from fellow programmers!
 
 [bodge]: https://www.youtube.com/watch?v=lIFE7h3m40U
 [crate]: https://crates.io/crates/pdf

@@ -1,20 +1,15 @@
 ---
 title: Writing Non-Trivial Macros in Rust
 date: '2020-06-21T01:15:00+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Rust
 - Metaprogramming
 ---
 
-Macros in Rust tend to have a reputation for being complex and magical, the
-likes which only seasoned wizards like [`@dtolnay`][dt] can hope to
-understand, let alone master.
+Macros in Rust tend to have a reputation for being complex and magical, the likes which only seasoned wizards like [`@dtolnay`][dt] can hope to understand, let alone master.
 
-Rust's declarative macros provide a mechanism for pattern matching on
-arbitrary syntax to generate valid Rust code at compile time. I use them all
-the time for simple search/replace style operations like generating tests
-that have a lot of boilerplate, or straightforward trait implementations for
-a large number of types.
+Rust's declarative macros provide a mechanism for pattern matching on arbitrary syntax to generate valid Rust code at compile time. I use them all the time for simple search/replace style operations like generating tests that have a lot of boilerplate, or straightforward trait implementations for a large number of types.
 
 This is copied directly from a DSL parser I wrote many moons ago.
 
@@ -46,21 +41,14 @@ impl_ast_node!(
 );
 ```
 
-Unfortunately once you need to do more than these trivial macros, the
-difficulty tends to go through the roof...
+Unfortunately once you need to do more than these trivial macros, the difficulty tends to go through the roof...
 
-I recently encountered a situation at work where a non-trivial technical
-problem could be solved by writing an equally non-trivial macro. There are a
-number of tricks and techniques I employed along the way that helped keep the
-code manageable and easy to implement, so I thought I'd help the next adventurer
-by writing them down.
+I recently encountered a situation at work where a non-trivial technical problem could be solved by writing an equally non-trivial macro. There are a number of tricks and techniques I employed along the way that helped keep the code manageable and easy to implement, so I thought I'd help the next adventurer by writing them down.
 
 {{% notice note %}}
-The code written in this article is available [on GitHub][repo]. Feel free to
-browse through and steal code or inspiration.
+The code written in this article is available [on GitHub][repo]. Feel free to browse through and steal code or inspiration.
 
-If you found this useful or spotted a bug, let me know on the blog's
-[issue tracker][issue]!
+If you found this useful or spotted a bug, let me know on the blog's [issue tracker][issue]!
 
 [repo]: https://github.com/Michael-F-Bryan/non-trivial-macros
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
@@ -68,47 +56,27 @@ If you found this useful or spotted a bug, let me know on the blog's
 
 ## The Back-Story
 
-In one of the big projects I work on, we made a design decisions you won't
-see in most typical Rust codebases:
+In one of the big projects I work on, we made a design decisions you won't see in most typical Rust codebases:
 
-> Major systems must be isolated in their own crate with all requirements
-> declared via traits, and **where possible these traits should be
-> [object-safe][object-safety]**.
+> Major systems must be isolated in their own crate with all requirements declared via traits, and **where possible these traits should be [object-safe][object-safety]**.
 
-The reasoning for this is quite straightforward, the application may need to
-reconfigure both its behaviour and hardware bindings at runtime, and allowing
-the possibility of dynamic dispatch makes this a lot easier.
+The reasoning for this is quite straightforward, the application may need to reconfigure both its behaviour and hardware bindings at runtime, and allowing the possibility of dynamic dispatch makes this a lot easier.
 
-This is a soft-realtime motion controller which can control several related
-families of machine using the same electronics and electrical components, but
-with different mechanical configurations.
+This is a soft-realtime motion controller which can control several related families of machine using the same electronics and electrical components, but with different mechanical configurations.
 
-Now, imagine the controller is initially configured to run machine A with
-particular assumptions about the world (which inputs things are attached to,
-available optional components, etc.) and the user changes some settings to
-make it behave like machine B with its own assumptions about the world.
+Now, imagine the controller is initially configured to run machine A with particular assumptions about the world (which inputs things are attached to, available optional components, etc.) and the user changes some settings to make it behave like machine B with its own assumptions about the world.
 
 You have a couple options for how to implement this:
 
-1. Load the machine configuration on startup and jump to the corresponding
-   code... This requires a restart for any settings changes to take effect
-2. Use enums to encapsulate the different IO layouts or business logic...
-   Congratulations, your code now has 10x more `match` statements
-3. Take an object-oriented approach, replacing the conditionals from option 2
-   [with polymorphism][replace-conditional] (i.e. dynamic dispatch)... Adds
-   constraints on the behaviour you can expect from dependencies, but reduces
-   cognitive load and lets you switch between things at runtime by pointing at
-   a different object
+1. Load the machine configuration on startup and jump to the corresponding code... This requires a restart for any settings changes to take effect
+2. Use enums to encapsulate the different IO layouts or business logic... Congratulations, your code now has 10x more `match` statements
+3. Take an object-oriented approach, replacing the conditionals from option 2 [with polymorphism][replace-conditional] (i.e. dynamic dispatch)... Adds constraints on the behaviour you can expect from dependencies, but reduces cognitive load and lets you switch between things at runtime by pointing at a different object
 
-The last option looked like the least-bad of the 3, but no doubt you'll find
-out if it doesn't work for us... Just look out for the blog post exploring
-different architectures for complicated systems 😛
+The last option looked like the least-bad of the 3, but no doubt you'll find out if it doesn't work for us... Just look out for the blog post exploring different architectures for complicated systems 😛
 
-Making allowances for dynamic dispatch where possible adds its own set of
-interesting challenge, though.
+Making allowances for dynamic dispatch where possible adds its own set of interesting challenge, though.
 
-Imagine you're programming the flashing lights on an operator console and come
-up with something like this:
+Imagine you're programming the flashing lights on an operator console and come up with something like this:
 
 ```rust
 /// Port A of the on-board General Purpose IOs.
@@ -125,8 +93,7 @@ fn flash_periodically(gpio: &mut GPIOA, pin: usize, interval: Duration) {
 }
 ```
 
-Now, being a good developer you pull the hardware-specific logic out into its
-own trait.
+Now, being a good developer you pull the hardware-specific logic out into its own trait.
 
 ```rust
 trait DigitalInput {
@@ -146,8 +113,7 @@ fn flash_periodically<D>(lamp: &mut D, interval: Duration)
 }
 ```
 
-On the surface this looks quite good, we are only coupling to the functionality
-declared by the trait.
+On the surface this looks quite good, we are only coupling to the functionality declared by the trait.
 
 We can even make our own `DigitalInput` and verify it compiles as expected.
 
@@ -164,9 +130,7 @@ fn main() {
 }
 ```
 
-However, the `DigitalInput` trait has a couple quirks that prevent it from doing
-dynamic dispatch. The easiest way to see this is by creating an
-`assert_is_digital_input()` function.
+However, the `DigitalInput` trait has a couple quirks that prevent it from doing dynamic dispatch. The easiest way to see this is by creating an `assert_is_digital_input()` function.
 
 ```rust
 fn assert_is_digital_input<D>() where D: DigitalInput + ?Sized {}
@@ -205,10 +169,7 @@ error: aborting due to 2 previous errors
 [(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=d9293c605ba8fd1fc6c656b5155410b0)
 
 {{% notice tip %}}
-This `assert_is_digital_input()` function is a nice little trick you can use
-to make sure something implements a particular trait. By using
-[turbofish][fish] we can specify *exactly* which type we're trying to check,
-avoiding things like auto-defer and coercion.
+This `assert_is_digital_input()` function is a nice little trick you can use to make sure something implements a particular trait. By using [turbofish][fish] we can specify *exactly* which type we're trying to check, avoiding things like auto-defer and coercion.
 
 You can find more gems like this in [the `static_assertions` crate][s],
 
@@ -224,8 +185,7 @@ The key bits to look out for in thiserror message:
 
 Trait objects don't natively implement their own traits!
 
-The workaround is to manually implement `DigitalInput` for the types you need
-(i.e. `Box<dyn DigitalInput>` and `&mut dyn DigitalInput`).
+The workaround is to manually implement `DigitalInput` for the types you need (i.e. `Box<dyn DigitalInput>` and `&mut dyn DigitalInput`).
 
 ```rust
 impl<D: DigitalInput + ?Sized> DigitalInput for Box<D>
@@ -239,23 +199,15 @@ impl<'d, D: DigitalInput + ?Sized> DigitalInput for &'d mut D
 }
 ```
 
-This works, but it leads to *loads* of copy/paste code. For example, adding a
-new method to a trait means you need to fix the trait object impls as well as
-any other real downstream implementations. Multiply by half a dozen systems
-with 2 or 3 traits each (each with their own set of methods) and this
-copy-pasta gets annoying pretty quickly.
+This works, but it leads to *loads* of copy/paste code. For example, adding a new method to a trait means you need to fix the trait object impls as well as any other real downstream implementations. Multiply by half a dozen systems with 2 or 3 traits each (each with their own set of methods) and this copy-pasta gets annoying pretty quickly.
 
-My solution is to use a macro (i.e. compile-time codegen) to automatically
-generate the necessary impl blocks.
+My solution is to use a macro (i.e. compile-time codegen) to automatically generate the necessary impl blocks.
 
-This *could* be implemented using procedural macros, but they can have a
-negative impact on compile times and I'd like an excuse to play around with
-Rust's declarative macros.
+This *could* be implemented using procedural macros, but they can have a negative impact on compile times and I'd like an excuse to play around with Rust's declarative macros.
 
 ## Getting Started
 
-Now you have a better understanding of the problem we're trying to solve, the
-end goal I have in mind is being able to write something like this...
+Now you have a better understanding of the problem we're trying to solve, the end goal I have in mind is being able to write something like this...
 
 ```rust
 trait_with_dyn_impls! {
@@ -269,20 +221,13 @@ trait_with_dyn_impls! {
 }
 ```
 
-... And have it automatically implement the trait for `&mut dyn InterestingTrait`
-and `Box<dyn InterestingTrait>`.
+... And have it automatically implement the trait for `&mut dyn InterestingTrait` and `Box<dyn InterestingTrait>`.
 
-You can think of Rust's declarative (`macro_rules`) macros as a form of
-pattern matching which, instead of relying on the type system, uses parsing
-machinery from the compiler itself. For example, when you write `$value:expr`
-in a macro, that asks the compiler to try and parse some tokens as an
-expression, and assign the AST node to `$value` on success.
+You can think of Rust's declarative (`macro_rules`) macros as a form of pattern matching which, instead of relying on the type system, uses parsing machinery from the compiler itself. For example, when you write `$value:expr` in a macro, that asks the compiler to try and parse some tokens as an expression, and assign the AST node to `$value` on success.
 
 Our first step is to write a macro that can match a method signature.
 
-Matching something like `fn get_x(&self) -> u32;` isn't too difficult. The only
-bits that will change are `get_x` and `u32`, where `get_x` is some identifier
-for the item name and `u32` is our return type.
+Matching something like `fn get_x(&self) -> u32;` isn't too difficult. The only bits that will change are `get_x` and `u32`, where `get_x` is some identifier for the item name and `u32` is our return type.
 
 ```rust
 // src/lib.rs
@@ -326,9 +271,7 @@ fn visit_method_with_multiple_parameters() {
 }
 ```
 
-In the same way you can use `$( ... )*` for zero or more repeats, you can use
-`$( ... )?` to match exactly zero or one items. This gives us a nice way to handle
-functions which don't return anything (i.e. the implicit `-> ()`).
+In the same way you can use `$( ... )*` for zero or more repeats, you can use `$( ... )?` to match exactly zero or one items. This gives us a nice way to handle functions which don't return anything (i.e. the implicit `-> ()`).
 
 ```rust
 // src/lib.rs
@@ -343,8 +286,7 @@ fn visit_method_without_return_type() {
 }
 ```
 
-We can also use the `meta` specifier to handle an arbitrary number of
-attributes or docs-comment attached to a function.
+We can also use the `meta` specifier to handle an arbitrary number of attributes or docs-comment attached to a function.
 
 ```rust
 // src/lib.rs
@@ -367,49 +309,30 @@ fn visit_method_with_attributes() {
 ```
 
 {{% notice note %}}
-You'll notice that I introduced a couple line breaks to help make the pattern
-expression look similar to the code we're trying to match. Something you'll
-learn in this article is that readability is super important.
+You'll notice that I introduced a couple line breaks to help make the pattern expression look similar to the code we're trying to match. Something you'll learn in this article is that readability is super important.
 
-Rust's declarative macros are similar to [APL][apl] in that they're really
-powerful and let you accomplish a lot with not much code... but it's also the
-kind of code that will only be written once. Then when a bug shows up you
-throw it away and start again instead of trying to understand the mess of
-punctuation, words, and symbols.
+Rust's declarative macros are similar to [APL][apl] in that they're really powerful and let you accomplish a lot with not much code... but it's also the kind of code that will only be written once. Then when a bug shows up you throw it away and start again instead of trying to understand the mess of punctuation, words, and symbols.
 
 [apl]: https://en.wikipedia.org/wiki/APL_(programming_language)
 {{% /notice %}}
 
 {{% notice info %}}
-I'm going to skip the problem of handling `&self` versus `&mut self` for the
-time being. The macro system has a couple... quirks... which make dealing
-with `self` kinda awkward.
+I'm going to skip the problem of handling `&self` versus `&mut self` for the time being. The macro system has a couple... quirks... which make dealing with `self` kinda awkward.
 {{% /notice %}}
 
-This `visit_members!()` forms the core part of our `trait_with_dyn_impls!()`
-macro. Now we're able to match the method signatures you're likely to see in
-object-safe traits we can start building on this foundation.
+This `visit_members!()` forms the core part of our `trait_with_dyn_impls!()` macro. Now we're able to match the method signatures you're likely to see in object-safe traits we can start building on this foundation.
 
 ## Incremental TT Munching
 
-One of the most powerful tools in your Rust macro arsenal is the
-[Incremental TT Muncher][tt]. This is perfect for when you have a stream of
-input and want to apply different logic based on what each item looks like.
+One of the most powerful tools in your Rust macro arsenal is the [Incremental TT Muncher][tt]. This is perfect for when you have a stream of input and want to apply different logic based on what each item looks like.
 
-*The Little Book of Rust Macros* does a pretty good job of explaining how it
-works:
+*The Little Book of Rust Macros* does a pretty good job of explaining how it works:
 
-> A "TT muncher" is a recursive macro that works by incrementally processing
-> its input one step at a time. At each step, it matches and removes (munches)
-> some sequence of tokens from the start of its input, generates some
-> intermediate output, then recurses on the input tail.
+> A "TT muncher" is a recursive macro that works by incrementally processing its input one step at a time. At each step, it matches and removes (munches) some sequence of tokens from the start of its input, generates some intermediate output, then recurses on the input tail.
 
-We're going to use a TT muncher to match multiple function signatures. The idea
-is that we'll adapt our existing `visit_members!()` macro to match the function
-signature at the start of our input stream, then recurse on the rest.
+We're going to use a TT muncher to match multiple function signatures. The idea is that we'll adapt our existing `visit_members!()` macro to match the function signature at the start of our input stream, then recurse on the rest.
 
-The first step is to add something which will match any tokens after our
-signature.
+The first step is to add something which will match any tokens after our signature.
 
 ```rust
 // src/lib.rs
@@ -426,12 +349,9 @@ macro_rules! visit_members {
 
 (note the `\$( $rest:tt )*`)
 
-At this point all our existing tests still pass because they don't have any
-trailing tokens.
+At this point all our existing tests still pass because they don't have any trailing tokens.
 
-While we're at it let's actually add in the recursion call, otherwise we'd be
-matching everything after our first method signature and silently throwing it
-away.
+While we're at it let's actually add in the recursion call, otherwise we'd be matching everything after our first method signature and silently throwing it away.
 
 ```rust
 // src/lib.rs
@@ -450,9 +370,7 @@ macro_rules! visit_members {
 }
 ```
 
-I have [`cargo watch`][cargo-watch] running on a background terminal to
-automatically recompile whenever something changes, and immediately after
-hitting save I started seeing lots of red...
+I have [`cargo watch`][cargo-watch] running on a background terminal to automatically recompile whenever something changes, and immediately after hitting save I started seeing lots of red...
 
 ```
     Finished dev [unoptimized + debuginfo] target(s) in 0.00s
@@ -474,13 +392,9 @@ error: unexpected end of macro invocation
 ...
 ```
 
-The important bit is that *"unexpected end of macro invocation"* message. It's
-saying the macro ran out of tokens when it was expecting to match something.
+The important bit is that *"unexpected end of macro invocation"* message. It's saying the macro ran out of tokens when it was expecting to match something.
 
-Just like with normal programming, when you do recursion you need to add a
-base case so you can stop recursing. The error message is telling us that it
-matched the function signature, then when trying to match the rest of the
-input (of which there is none) it didn't have enough tokens.
+Just like with normal programming, when you do recursion you need to add a base case so you can stop recursing. The error message is telling us that it matched the function signature, then when trying to match the rest of the input (of which there is none) it didn't have enough tokens.
 
 The solution is easy enough, just add a base case which matches exactly nothing.
 
@@ -514,24 +428,17 @@ fn match_two_getters() {
 }
 ```
 
-Looking back at the output from my terminal, it seems like it all just
-works
+Looking back at the output from my terminal, it seems like it all just works
 
-Don't you love it when you write something based on theory and it all works
-perfectly first time? It doesn't happen often, so I like to cherish these
-moments 🎉
+Don't you love it when you write something based on theory and it all works perfectly first time? It doesn't happen often, so I like to cherish these moments 🎉
 
 ## Callbacks
 
-*The Little Book of Rust Macros* also includes a couple techniques for
-generating code. Most notable among them for our purposes is the
-[Callback][callback].
+*The Little Book of Rust Macros* also includes a couple techniques for generating code. Most notable among them for our purposes is the [Callback][callback].
 
-This lets us pass the name of a macro into a macro so it can be invoked later
-with the results of our pattern matching.
+This lets us pass the name of a macro into a macro so it can be invoked later with the results of our pattern matching.
 
-Passing in the callback's name is easy enough. Just add it to the start of the
-macro input.
+Passing in the callback's name is easy enough. Just add it to the start of the macro input.
 
 ```rust
 // src/lib.rs
@@ -552,13 +459,10 @@ macro_rules! visit_members {
 ```
 
 {{% notice note %}}
-Make sure you update the base case now we're always passing a `$callback;` at
-the start of recursive call.
+Make sure you update the base case now we're always passing a `$callback;` at the start of recursive call.
 {{% /notice %}}
 
-At this point we'll need to update all our tests to start with the callback
-name. I'm using the name `print`, but the callback doesn't matter for now
-because it's not used.
+At this point we'll need to update all our tests to start with the callback name. I'm using the name `print`, but the callback doesn't matter for now because it's not used.
 
 ```rust
 // src/lib.rs
@@ -581,8 +485,7 @@ fn match_two_getters() {
 
 Now we can make the macro invoke our callback with the matched signature.
 
-To begin with, I just want to swallow the tokens and do nothing. If the code
-compiles, we can be pretty sure we're invoking the callback correctly.
+To begin with, I just want to swallow the tokens and do nothing. If the code compiles, we can be pretty sure we're invoking the callback correctly.
 
 ```rust
 // src/lib.rs
@@ -612,12 +515,9 @@ macro_rules! my_callback {
 ```
 
 {{% notice tip %}}
-If you ever get stuck and are wanting some sort of "print statement" to see what
-a macro is doing, have a look at the `compile_error!()` macro.
+If you ever get stuck and are wanting some sort of "print statement" to see what a macro is doing, have a look at the `compile_error!()` macro.
 
-By combining `compile_error!()` with `stringify!()` and `concat!()` you can
-concatenate the stringified form of arbitrary tokens to create an error message
-containing the tokens you've matched.
+By combining `compile_error!()` with `stringify!()` and `concat!()` you can concatenate the stringified form of arbitrary tokens to create an error message containing the tokens you've matched.
 
 ```rust
 macro_rules! my_callback {
@@ -633,8 +533,7 @@ macro_rules! my_callback {
 }
 ```
 
-When passing `my_callback` to the `match_two_getters` test, we get a compile
-error like this:
+When passing `my_callback` to the `match_two_getters` test, we get a compile error like this:
 
 ```
 error: fn get_x (& self) -> u32
@@ -656,25 +555,20 @@ error: fn get_x (& self) -> u32
 
 ```
 
-It's not particularly elegant, but this (ab)use of the `compile_error!()`
-macro lets us see that `fn get_x (& self) -> u32` was passed to the callback.
+It's not particularly elegant, but this (ab)use of the `compile_error!()` macro lets us see that `fn get_x (& self) -> u32` was passed to the callback.
 {{% /notice %}}
 
 ## Generating Our Impl Blocks
 
-Now we've got a way to invoke a macro on each method we can actually start
-generating some code!
+Now we've got a way to invoke a macro on each method we can actually start generating some code!
 
-If you look back towards the beginning, we're trying to take something like
-this...
+If you look back towards the beginning, we're trying to take something like this...
 
 ```rust
 fn get_x(&self) -> u32;
 ```
 
-... and expand it to some code that dereferences `&self` twice (once to get
-past `&self` and a second time to dereference the pointer that is `self`) then
-invokes the method.
+... and expand it to some code that dereferences `&self` twice (once to get past `&self` and a second time to dereference the pointer that is `self`) then invokes the method.
 
 ```rust
 fn get_x(&self) -> u32 {
@@ -682,9 +576,7 @@ fn get_x(&self) -> u32 {
 }
 ```
 
-First off, I'm going to create a new macro to use as our callback. We know
-ahead of time that we'll be passed a valid method signature, so we can steal the
-matching code from `visit_members!()`.
+First off, I'm going to create a new macro to use as our callback. We know ahead of time that we'll be passed a valid method signature, so we can steal the matching code from `visit_members!()`.
 
 ```rust
 // src/lib.rs
@@ -742,12 +634,9 @@ fn defer_impl_to_item_behind_pointer() {
 }
 ```
 
-We're on the home stretch now. We just need to tie together our callback and
-TT muncher to generate `GetX` impls for `Box<dyn GetX>`.
+We're on the home stretch now. We just need to tie together our callback and TT muncher to generate `GetX` impls for `Box<dyn GetX>`.
 
-Here's the macro for working with boxed trait objects. All it really does is
-wrap everything in an `impl Trait for Box<dyn Trait>` block then defer to
-`visit_members!()` and `call_via_deref!()` for the hard work.
+Here's the macro for working with boxed trait objects. All it really does is wrap everything in an `impl Trait for Box<dyn Trait>` block then defer to `visit_members!()` and `call_via_deref!()` for the hard work.
 
 ```rust
 // src/lib.rs
@@ -766,9 +655,7 @@ macro_rules! impl_trait_for_boxed {
 }
 ```
 
-We can also test this by creating a trait, implementing it for one type, then
-copy/pasting the trait definition into an `impl_trait_for_boxed!()` call and
-making sure it generates the desired impls.
+We can also test this by creating a trait, implementing it for one type, then copy/pasting the trait definition into an `impl_trait_for_boxed!()` call and making sure it generates the desired impls.
 
 ```rust
 // src/lib.rs
@@ -801,8 +688,7 @@ fn impl_trait_for_boxed() {
 }
 ```
 
-Once you've got your head around the `Box` version, you'll notice it's almost
-identical to the macro for references.
+Once you've got your head around the `Box` version, you'll notice it's almost identical to the macro for references.
 
 ```rust
 // src/lib.rs
@@ -836,9 +722,7 @@ macro_rules! impl_trait_for_mut_ref {
 }
 ```
 
-From here the full `trait_with_dyn_impls!()` macro just falls out. We make sure
-the trait gets declared, then pass it to `impl_trait_for_boxed!()` and friends
-to generate the appropriate impls.
+From here the full `trait_with_dyn_impls!()` macro just falls out. We make sure the trait gets declared, then pass it to `impl_trait_for_boxed!()` and friends to generate the appropriate impls.
 
 ```rust
 // src/lib.rs
@@ -871,18 +755,13 @@ macro_rules! trait_with_dyn_impls {
 
 ## Non-Identifier Identifiers
 
-Do you remember how we deferred dealing with traits that have `&mut self`
-methods, claiming there are a couple quirks that make handling `&self` or
-`&mut self` awkward?
+Do you remember how we deferred dealing with traits that have `&mut self` methods, claiming there are a couple quirks that make handling `&self` or `&mut self` awkward?
 
-Now that you've got a couple more tools in your `macro_rules` toolbox, we're
-better positioned to talk about these quirks.
+Now that you've got a couple more tools in your `macro_rules` toolbox, we're better positioned to talk about these quirks.
 
-So, how do you write a macro that matches both `&self` and `&mut self` and pass
-that to a callback?
+So, how do you write a macro that matches both `&self` and `&mut self` and pass that to a callback?
 
-`&self` looks like a valid expression as far as the language grammar is
-concerned, so we could define a macro like this:
+`&self` looks like a valid expression as far as the language grammar is concerned, so we could define a macro like this:
 
 ```rust
 macro_rules! match_self {
@@ -912,8 +791,7 @@ And in theory we should be able to use it like this, right?
 match_self!(callback, fn foo(&self));
 ```
 
-However `rustc` doesn't agree. Instead, we get the following... less than
-optimal... compile error.
+However `rustc` doesn't agree. Instead, we get the following... less than optimal... compile error.
 
 ```rust
 error: expected one of `...`, `..=`, `..`, `:`, or `|`, found `)`
@@ -941,8 +819,7 @@ error: expected one of `...`, `..=`, `..`, `:`, or `|`, found `)`
     |           ------------------------------------- in this macro invocation
 ```
 
-It looks like the callback is expecting some sort of pattern (e.g.
-`self ..= other`) when it tries to use `$self` as the method's `self` parameter.
+It looks like the callback is expecting some sort of pattern (e.g. `self ..= other`) when it tries to use `$self` as the method's `self` parameter.
 
 So what if we try matching on `$self:pat` instead of `$self:expr`?
 
@@ -992,8 +869,7 @@ error: expected one of `:` or `|`, found `)`
     |           ------------------------------------- in this macro invocation
 ```
 
-Another option is to combine the `$(...)?` syntax for matching something zero or
-one times with the fact that `self` is a valid Rust identifier.
+Another option is to combine the `$(...)?` syntax for matching something zero or one times with the fact that `self` is a valid Rust identifier.
 
 ```diff
  macro_rules! match_self {
@@ -1013,13 +889,9 @@ one times with the fact that `self` is a valid Rust identifier.
  }
 ```
 
-Our `match_self!(callback, fn foo(&self))` example even compiles and will
-define a `foo` method on `Foo`. However, if you look carefully you'll see the
-new `foo()` method silently drops the leading `&` or `&mut` and takes `self`
-by value.
+Our `match_self!(callback, fn foo(&self))` example even compiles and will define a `foo` method on `Foo`. However, if you look carefully you'll see the new `foo()` method silently drops the leading `&` or `&mut` and takes `self` by value.
 
-You can verify this by trying to store `Foo::foo` in a variable expecting
-`fn(&Foo)`.
+You can verify this by trying to store `Foo::foo` in a variable expecting `fn(&Foo)`.
 
 ```rust
 let _: fn(&Foo) = Foo::foo;
@@ -1042,35 +914,19 @@ error[E0308]: mismatched types
 error: aborting due to previous error
 ```
 
-Even if we *did* write our callback to not drop the leading `&`, we'd run
-into issues trying to pass the optional `mut` through to the callback.
-Because we can't store `mut` in a macro variable (you can't bind to literal
-tokens and using something like `$mut:ident` would match the `self` token
-when `mut` isn't present) we don't really have a way to refer to it or pass
-the token around any more.
+Even if we *did* write our callback to not drop the leading `&`, we'd run into issues trying to pass the optional `mut` through to the callback. Because we can't store `mut` in a macro variable (you can't bind to literal tokens and using something like `$mut:ident` would match the `self` token when `mut` isn't present) we don't really have a way to refer to it or pass the token around any more.
 
 {{% notice tip %}}
-[Non-Identifier Identifiers][id] from *The Little Book of Rust Macros*
-explains in a lot more detail what we're seeing here, so I'd recommend
-checking out that page if you want to know more.
+[Non-Identifier Identifiers][id] from *The Little Book of Rust Macros* explains in a lot more detail what we're seeing here, so I'd recommend checking out that page if you want to know more.
 
 [id]: https://danielkeep.github.io/tlborm/book/mbe-min-non-identifier-identifiers.html
 {{% /notice %}}
 
-After banging my head against a wall for half an hour or so I gave up on
-trying to match both `&self` and `&mut self` methods in a single pattern and
-decided to take advantage of another tool that I have at my disposal... My
-editor's ability to copy and paste 🙃
+After banging my head against a wall for half an hour or so I gave up on trying to match both `&self` and `&mut self` methods in a single pattern and decided to take advantage of another tool that I have at my disposal... My editor's ability to copy and paste 🙃
 
-My solution to making `visit_members` and its `callback` handle both `&self`
-and `&mut self` is to just copy the entire pattern and make the second version
-handle the `mut` token.
+My solution to making `visit_members` and its `callback` handle both `&self` and `&mut self` is to just copy the entire pattern and make the second version handle the `mut` token.
 
-That way, when the TT muncher tries to match the next function signature
-it'll be able to take one branch for `&self` methods and another for `&mut
-self`. The callback will also need to use the same trick because it needs to
-somehow emit `&self` or `&mut self` as the receiver for each generated
-method.
+That way, when the TT muncher tries to match the next function signature it'll be able to take one branch for `&self` methods and another for `&mut self`. The callback will also need to use the same trick because it needs to somehow emit `&self` or `&mut self` as the receiver for each generated method.
 
 ```diff
  // src/lib.rs
@@ -1129,16 +985,12 @@ method.
  }
 ```
 
-Amongst all that copy-pasta, you *might* even be able to spot the three
-letter change that was made to the second copy (`mut`).
+Amongst all that copy-pasta, you *might* even be able to spot the three letter change that was made to the second copy (`mut`).
 
 {{% notice info %}}
-If you know of an easy way to match both `&self` and `&mut self` methods,
-*please* let me know!
+If you know of an easy way to match both `&self` and `&mut self` methods, *please* let me know!
 
-The solution I've proposed here (i.e. copy/paste) far from elegant and you
-can already tell that someone will be cursing your name 6 months from now
-when they need to come in and make a minor change.
+The solution I've proposed here (i.e. copy/paste) far from elegant and you can already tell that someone will be cursing your name 6 months from now when they need to come in and make a minor change.
 {{% /notice %}}
 
 As ugly as it is... our tests show that it works.
@@ -1162,11 +1014,9 @@ fn handle_mutable_and_immutable_self() {
 
 ## Deciding Which Impl Blocks to Generate
 
-Now we're able to handle both mutable and immutable methods we run into an
-interesting problem.
+Now we're able to handle both mutable and immutable methods we run into an interesting problem.
 
-Let's create a variant of the `full_implementation` test which has a `&mut self`
-method.
+Let's create a variant of the `full_implementation` test which has a `&mut self` method.
 
 ```rust
 #[test]
@@ -1185,8 +1035,7 @@ fn full_implementation_with_mut_methods() {
 }
 ```
 
-It's identical to `full_implementation`, except `execute()` takes `&mut self`...
-and it fails to compile:
+It's identical to `full_implementation`, except `execute()` takes `&mut self`... and it fails to compile:
 
 ```text
 error[E0596]: cannot borrow `**self` as mutable, as it is behind a `&` reference
@@ -1226,21 +1075,13 @@ error[E0596]: cannot borrow `**self` as mutable, as it is behind a `&` reference
     | |__- in this expansion of `call_via_deref!` (#5)
 ```
 
-It's a little hard to see, but if you look at the error text we get a
-familiar message: *"cannot borrow `**self` as mutable, as it is behind a `&`
-reference"*.
+It's a little hard to see, but if you look at the error text we get a familiar message: *"cannot borrow `**self` as mutable, as it is behind a `&` reference"*.
 
-This isn't a macro problem, the borrow checker is complaining about one of our
-generated methods!
+This isn't a macro problem, the borrow checker is complaining about one of our generated methods!
 
-Other than the error text, the rest of this compile error is kinda useless.
-There's a problem with our generated code, and because generated code doesn't
-actually exist in the source file (i.e. `src/lib.rs`), `rustc` can't point at
-a specific line to tell the programmer where the problem is.
+Other than the error text, the rest of this compile error is kinda useless. There's a problem with our generated code, and because generated code doesn't actually exist in the source file (i.e. `src/lib.rs`), `rustc` can't point at a specific line to tell the programmer where the problem is.
 
-The [`cargo expand`][cargo-expand] tool is designed for just these occasions.
-Its entire purpose is to ask the compiler to expand all macros and display the
-expanded source code to the user.
+The [`cargo expand`][cargo-expand] tool is designed for just these occasions. Its entire purpose is to ask the compiler to expand all macros and display the expanded source code to the user.
 
 Here's what `full_implementation_with_mut_methods` expands to:
 
@@ -1280,22 +1121,13 @@ fn full_implementation_with_mut_methods() {
 }
 ```
 
-The output is a little dense, but look at the `&'f F` impl. We've got an
-immutable reference to some `F: Foo` and are invoking a method which takes
-`&mut self`.
+The output is a little dense, but look at the `&'f F` impl. We've got an immutable reference to some `F: Foo` and are invoking a method which takes `&mut self`.
 
-This is a pretty trivial borrowing error and indicates there's a bug in our
-`trait_with_dyn_impls!()` macro. We shouldn't be emitting the `&'f F` impl if
-*any* trait method takes `&mut self`... but how do you make these sorts of
-decisions, its not like `macro_rules` macros let you use `if`-statements!
+This is a pretty trivial borrowing error and indicates there's a bug in our `trait_with_dyn_impls!()` macro. We shouldn't be emitting the `&'f F` impl if *any* trait method takes `&mut self`... but how do you make these sorts of decisions, its not like `macro_rules` macros let you use `if`-statements!
 
-The answer has been under our noses this entire time. Pattern matching is just
-a fancy chain of `if-else` statements, and we can use callbacks to invoke
-caller-defined behaviour depending on which branch matches, and a TT muncher to
-scan through the input tokens one at a time until we find `&mut self`.
+The answer has been under our noses this entire time. Pattern matching is just a fancy chain of `if-else` statements, and we can use callbacks to invoke caller-defined behaviour depending on which branch matches, and a TT muncher to scan through the input tokens one at a time until we find `&mut self`.
 
-If you are familiar with functional programming, this is sometimes called
-[*Continuation Passing Style*][cps] (CPS).
+If you are familiar with functional programming, this is sometimes called [*Continuation Passing Style*][cps] (CPS).
 
 Here's my attempt.
 
@@ -1363,9 +1195,7 @@ fn invoke_the_callback_if_search_for_mut_self_found() {
 }
 ```
 
-This gives us what we need to conditionally call `impl_trait_for_ref!()`. By
-letting the caller provide arguments for the callback, we can copy the old
-`impl_trait_for_ref!()` invocation across verbatim.
+This gives us what we need to conditionally call `impl_trait_for_ref!()`. By letting the caller provide arguments for the callback, we can copy the old `impl_trait_for_ref!()` invocation across verbatim.
 
 ```diff
  macro_rules! trait_with_dyn_impls {
@@ -1403,22 +1233,16 @@ letting the caller provide arguments for the callback, we can copy the old
 
 ## Conclusions
 
-It's been a long journey but this crate now lets us do everything I wanted so
-I think we can finally call it done 🙂
+It's been a long journey but this crate now lets us do everything I wanted so I think we can finally call it done 🙂
 
 Some tips:
 
 - Tests are great for iterating and providing examples later on
 - Start as simple as possible and take tiny steps
-- Make an effort to keep things simple and not fit all the logic into a single
-  macro
-- Sometimes you'll need to think outside the box or use concepts from different
-  paradigms/languages (e.g. CPS)
+- Make an effort to keep things simple and not fit all the logic into a single macro
+- Sometimes you'll need to think outside the box or use concepts from different paradigms/languages (e.g. CPS)
 
-As a bonus, unlike a lot of complex macros I've written in the past, I have a
-fairly high degree of confidence in its implementation because of the
-comprehensive test suite we built along the way. It really makes a difference
-in demystifying how the macro works.
+As a bonus, unlike a lot of complex macros I've written in the past, I have a fairly high degree of confidence in its implementation because of the comprehensive test suite we built along the way. It really makes a difference in demystifying how the macro works.
 
 [object-safety]: https://doc.rust-lang.org/book/ch17-02-trait-objects.html#object-safety-is-required-for-trait-objects
 [replace-conditional]: https://refactoring.guru/replace-conditional-with-polymorphism

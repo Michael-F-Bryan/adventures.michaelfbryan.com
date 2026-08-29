@@ -1,6 +1,7 @@
 ---
 title: 'Common Newbie Mistakes and Bad Practices in Rust: Bad Habits'
 publishDate: '2021-09-27T18:30:00+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Rust
 - Beginners
@@ -9,20 +10,14 @@ series:
 - Rust Best Practices
 ---
 
-When you are coming to Rust from another language you bring all your previous
-experiences with you.
+When you are coming to Rust from another language you bring all your previous experiences with you.
 
-Often this is awesome because it means you aren't learning programming from
-scratch! However, you can also bring along bad habits which can lead you down
-the wrong rabbit hole or make you write bad code.
+Often this is awesome because it means you aren't learning programming from scratch! However, you can also bring along bad habits which can lead you down the wrong rabbit hole or make you write bad code.
 
 {{% notice note %}}
-The code written in this article is available on the Rust Playground using the
-various [(playground)][playground] links dotted throughout. Feel free to browse
-through and steal code or inspiration.
+The code written in this article is available on the Rust Playground using the various [(playground)][playground] links dotted throughout. Feel free to browse through and steal code or inspiration.
 
-If you found this useful or spotted a bug in the article, let me know on the
-blog's [issue tracker][issue]!
+If you found this useful or spotted a bug in the article, let me know on the blog's [issue tracker][issue]!
 
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues
 [playground]: https://play.rust-lang.org/
@@ -32,10 +27,7 @@ blog's [issue tracker][issue]!
 
 This one is a pet peeve of mine.
 
-In most C-based languages (C, C#, Java, etc.), the way you indicate whether
-something failed or couldn't be found is by returning a "special" value.  For
-example, C#'s [`String.IndexOf()`][index-of] method will scan an array for a
-particular element and return its index. Returning `-1` if nothing is found.
+In most C-based languages (C, C#, Java, etc.), the way you indicate whether something failed or couldn't be found is by returning a "special" value.  For example, C#'s [`String.IndexOf()`][index-of] method will scan an array for a particular element and return its index. Returning `-1` if nothing is found.
 
 That leads to code like this:
 
@@ -51,21 +43,13 @@ if (index != -1)
 }
 ```
 
-You see this sort of *"use a sentinel value to indicate something special"*
-practice all the time. Other sentinel values you might find in the wild are
-`""`, or `null` (someone once referred to this as their
-*["billion-dollar mistake"][billion-dollar-mistake]*).
+You see this sort of *"use a sentinel value to indicate something special"* practice all the time. Other sentinel values you might find in the wild are `""`, or `null` (someone once referred to this as their *["billion-dollar mistake"][billion-dollar-mistake]*).
 
-The general reason why this is a bad idea is that there is absolutely nothing to
-stop you from forgetting that check. That means you can accidentally crash your
-application with one misplaced assumption or when the code generating the
-sentinel is far away from the code using it.
+The general reason why this is a bad idea is that there is absolutely nothing to stop you from forgetting that check. That means you can accidentally crash your application with one misplaced assumption or when the code generating the sentinel is far away from the code using it.
 
 We can do a lot better in Rust, though. Just use `Option`!
 
-By design, there is no way to get the underlying value without dealing with
-the possibility that your `Option` may be `None`. This is enforced by the
-compiler at compile time, meaning code that forgets to check won't even compile.
+By design, there is no way to get the underlying value without dealing with the possibility that your `Option` may be `None`. This is enforced by the compiler at compile time, meaning code that forgets to check won't even compile.
 
 ```rs
 let sentence = "The fox jumps over the dog";
@@ -83,15 +67,9 @@ if let Some(fox) = index {
 
 ## Hungarian Notation
 
-Back in the 70's, a naming convention called [*Hungarian Notation*][hungarian]
-was developed by programmers writing in languages where variables are untyped or
-dynamically typed. It works by adding a mnemonic to the start of a name to
-indicate what it represents, for example the boolean `visited` variable might be
-called `bVisited` or the string `name` might be called `strName`.
+Back in the 70's, a naming convention called [*Hungarian Notation*][hungarian] was developed by programmers writing in languages where variables are untyped or dynamically typed. It works by adding a mnemonic to the start of a name to indicate what it represents, for example the boolean `visited` variable might be called `bVisited` or the string `name` might be called `strName`.
 
-You can still see this naming convention in languages Delphi where classes
-(types) start with `T`, fields start with `F`, arguments start with `A`, and
-so on.
+You can still see this naming convention in languages Delphi where classes (types) start with `T`, fields start with `F`, arguments start with `A`, and so on.
 
 ```delphi
 type
@@ -106,9 +84,7 @@ type
   end;
 ```
 
-C# also has a convention that all interfaces should start with `I`, meaning
-programmers coming to Rust from C# will sometimes prefix their traits with `I`
-as well.
+C# also has a convention that all interfaces should start with `I`, meaning programmers coming to Rust from C# will sometimes prefix their traits with `I` as well.
 
 ```rs
 trait IClone {
@@ -116,14 +92,9 @@ trait IClone {
 }
 ```
 
-In this case, just drop the leading `I`. Rust's syntax guarantees that it just
-isn't possible to confuse a trait for a normal type, so it isn't helping anyone.
-This is in contrast with C# where interfaces and classes are largely
-interchangeable.
+In this case, just drop the leading `I`. Rust's syntax guarantees that it just isn't possible to confuse a trait for a normal type, so it isn't helping anyone. This is in contrast with C# where interfaces and classes are largely interchangeable.
 
-This is also seen inside functions where people will conjure up new names for
-something as they convert it from one form to another. Often these names are
-silly or contrived, providing negligible additional information to the reader.
+This is also seen inside functions where people will conjure up new names for something as they convert it from one form to another. Often these names are silly or contrived, providing negligible additional information to the reader.
 
 ```rs
 let account_bytes: Vec<u8> = read_some_input();
@@ -131,12 +102,9 @@ let account_str = String::from_utf8(account_bytes)?;
 let account: Account = account_str.parse()?;
 ```
 
-I mean, if we're calling `String::from_utf8()` we already know `account_str`
-will be a `String` so why add the `_str` suffix?
+I mean, if we're calling `String::from_utf8()` we already know `account_str` will be a `String` so why add the `_str` suffix?
 
-Unlike a lot of other languages, Rust encourages shadowing variables when you
-are transforming them from one form to another, especially when the previous
-variable is no longer accessible (e.g. because it's been moved).
+Unlike a lot of other languages, Rust encourages shadowing variables when you are transforming them from one form to another, especially when the previous variable is no longer accessible (e.g. because it's been moved).
 
 ```rs
 let account: Vec<u8> = read_some_input();
@@ -146,33 +114,21 @@ let account: Account = account.parse()?;
 
 This is arguably superior because we can use the same name for the same concept.
 
-Other languages [frown on shadowing][shadowing] because it can be easy to lose
-track of what type a variable contains (e.g. in a dynamically typed language
-like JavaScript) or you can introduce bugs where the programmer thinks a
-variable has one type but it actually contains something separate.
+Other languages [frown on shadowing][shadowing] because it can be easy to lose track of what type a variable contains (e.g. in a dynamically typed language like JavaScript) or you can introduce bugs where the programmer thinks a variable has one type but it actually contains something separate.
 
-Neither of these is particularly relevant to a strongly typed language with
-move semantics like Rust, so you can use shadowing freely without worrying
-about shooting yourself in the foot.
+Neither of these is particularly relevant to a strongly typed language with move semantics like Rust, so you can use shadowing freely without worrying about shooting yourself in the foot.
 
 ## An Abundance of `Rc<RefCell<T>>`
 
-A common pattern in Object Oriented languages is to accept a reference to some
-object so you can call its methods later on.
+A common pattern in Object Oriented languages is to accept a reference to some object so you can call its methods later on.
 
-On its own there is nothing wrong with this, *Dependency Injection* is a very
-good thing to do, but unlike most OO languages Rust doesn't have a garbage
-collector and has strong feelings on shared mutability.
+On its own there is nothing wrong with this, *Dependency Injection* is a very good thing to do, but unlike most OO languages Rust doesn't have a garbage collector and has strong feelings on shared mutability.
 
 Perhaps this will be easier to understand with an example.
 
-Say we are implementing a game where the player needs to beat up a bunch of
-monsters until they have inflicted a certain amount of damage (I dunno, maybe
-it's for a quest or something).
+Say we are implementing a game where the player needs to beat up a bunch of monsters until they have inflicted a certain amount of damage (I dunno, maybe it's for a quest or something).
 
-We create a `Monster` class which has a `health` property and a `takeDamage()`
-method, and so we can keep track of how much damage has been inflicted we'll let
-people provide callbacks that get called whenever the monster receives damage.
+We create a `Monster` class which has a `health` property and a `takeDamage()` method, and so we can keep track of how much damage has been inflicted we'll let people provide callbacks that get called whenever the monster receives damage.
 
 ```ts
 type OnReceivedDamage = (damageReceived: number) => void;
@@ -193,8 +149,7 @@ class Monster {
 }
 ```
 
-Let's also create a `DamageCounter` class which tracks how much damage we've
-inflicted and lets us know when that goal is reached.
+Let's also create a `DamageCounter` class which tracks how much damage we've inflicted and lets us know when that goal is reached.
 
 ```ts
 class DamageCounter {
@@ -210,8 +165,7 @@ class DamageCounter {
 }
 ```
 
-Now we'll create some monsters and keep inflicting a random amount of damage
-until the `DamageCounter` is happy.
+Now we'll create some monsters and keep inflicting a random amount of damage until the `DamageCounter` is happy.
 
 ```ts
 const counter = new DamageCounter();
@@ -233,9 +187,7 @@ while (!counter.reachedTargetDamage()) {
 
 [(TypeScript Playground)](https://www.typescriptlang.org/play?#code/C4TwDgpgBA8gdgJQgYwgSwG4QCYBECGAtvgObQC8UAFIQFxQCyA9nAM7AQBOANFNkaQhJUmHPTgBXQgCMuASijkAfFAxM02ANwAobcgA2+Vq0Yt2XKAG9tUW1AAWEfPuD3xU2Z0VQArAAYdOyhOFHQsPAEyenhhMJwCYjIAbQBdb1SdGztgfABrCATBKiImCThgdxl5Kyyg2xKy4G8GfFcAOkI0OCpXNFY2x2dXXgbyuUC6217+wZd7KABaSlHgTTrauum2kJFwwrI2gDMmTgBRfGR7KmRpRRUbnvs+kcJSsfGNgF9dIJYqCCw5XoACJ+IkcMDeMhnPppBdctFEKFRBFwXJ6GoNDVJlMnv0dnFUYI2mAJKwrtD9LD4R8gt9vnpDMYoPsIABhN4cLzWIJgwQASTgh30aGQHGwlU83gCPzsIQujmwABV8JwyMBWVR0VBpEwmPonHBsTiQsAJJwjVs+WRBcLReKoCoAIx+GV02W2Fis20isU4YqvRqS6o8nFWyIQH32nBQADUy0D5QmtnpumQZia6caFkocAgAHcWRGOdnOFrMum2E1XlWuCZKEk84XmLWy3JeE3TK2tR2C13zG3e82M1we1BOy2B1qUjoawP+sczgqaHcoIQ2n9QRHsJDqAB9F6chTKKBZ8pcDdwb1C33igNHuQfbT5p4G6gAQjPXO2TkuOBVaoQBqEZagooa2AA9BBUBgKKuRQPgwT4HA2BMIQa4jpwGyVuwUBdNgEAAB7NK09hHPoepli07ScMhqGEFqABUc5cv0BpwCQri0nYOFNDkgFNJQLF1kk+FETOGxQVArgQEa1rQGgTSIdIinYRmfARiRNFvNgVDUWRtEoWhWpQIxvh+NxUyquqbQ5PkmryU+QQ4fqEBtBRJBUAABpOXJQAAJJYYmEZ8wTIuEAWWPJoXydQwBMDk+gaeCeE3tGEqRV+F7yVGfrYJ8XkfJ8QA)
 
-Now let's port this code to Rust. Our `Monster` struct is fairly similar,
-although we need to use `Box<dyn Fn(u32)>` for a closure which accepts a single
-`u32` argument (all closures in JavaScript are heap allocated by default).
+Now let's port this code to Rust. Our `Monster` struct is fairly similar, although we need to use `Box<dyn Fn(u32)>` for a closure which accepts a single `u32` argument (all closures in JavaScript are heap allocated by default).
 
 ```rs
 type OnReceivedDamage = Box<dyn Fn(u32)>;
@@ -311,8 +263,7 @@ fn main() {
 
 [(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=a8cc547728ef102bbd5dc6b9cafb0ff6)
 
-But herein lies our first problem, when we try to compile the code `rustc` gives
-us not one, but **four** compile errors for the `monster.add_listener()` line 🤣
+But herein lies our first problem, when we try to compile the code `rustc` gives us not one, but **four** compile errors for the `monster.add_listener()` line 🤣
 
 ```rs
 error[E0596]: cannot borrow `counter` as mutable, as it is a captured variable in a `Fn` closure
@@ -361,22 +312,13 @@ error[E0502]: cannot borrow `counter` as immutable because it is also borrowed a
 There are a number of things wrong with this line, but it can be boiled down to:
 
 - The closure captures a reference to `counter`
-- The `counter.on_damage_received()` method takes `&mut self` so our closure
-  needs a `&mut` reference. We add the closures in a loop so we end up taking
-  multiple `&mut` references to the same object at the same time
-- Our listener is a boxed closure without any lifetime annotations, meaning it
-  needs to own any variables it closes over. We would need to `move` the
-  `counter` into the closure, but because we do this in a loop we'll have a
-  *"use of moved value"* error
-- After passing the `counter` to `add_listener()` we try to use it in our
-  loop condition
+- The `counter.on_damage_received()` method takes `&mut self` so our closure needs a `&mut` reference. We add the closures in a loop so we end up taking multiple `&mut` references to the same object at the same time
+- Our listener is a boxed closure without any lifetime annotations, meaning it needs to own any variables it closes over. We would need to `move` the `counter` into the closure, but because we do this in a loop we'll have a *"use of moved value"* error
+- After passing the `counter` to `add_listener()` we try to use it in our loop condition
 
 Overall it's just a bad situation.
 
-The canonical answer to this is to wrap the `DamageCounter` in a
-reference-counted pointer so we can have multiple handles to it at the same
-time, then because we need to call a `&mut self` method we also need a `RefCell`
-to "move" the borrow checking from compile time to run time.
+The canonical answer to this is to wrap the `DamageCounter` in a reference-counted pointer so we can have multiple handles to it at the same time, then because we need to call a `&mut self` method we also need a `RefCell` to "move" the borrow checking from compile time to run time.
 
 ```diff
  fn main() {
@@ -404,19 +346,11 @@ to "move" the borrow checking from compile time to run time.
 
 [(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=7aca92432f337fa29de62999ea5709b8)
 
-Well... it works.  But this approach tends to get messy, especially when you are
-storing non-trivial things like a `Rc<RefCell<Vec<Foo>>>>` (or its
-multi-threaded cousin `Arc<Mutex<Vec<Foo>>>>`) inside structs [^angle-brackets].
+Well... it works.  But this approach tends to get messy, especially when you are storing non-trivial things like a `Rc<RefCell<Vec<Foo>>>>` (or its multi-threaded cousin `Arc<Mutex<Vec<Foo>>>>`) inside structs [^angle-brackets].
 
-It also opens you up to situations where the `RefCell` might be borrowed mutably
-multiple times because your code is complex and something higher up in the call
-stack is already using the `RefCell`. With a `Mutex` this will cause a deadlock
-while the `RefCell` will panic, neither of which is conducive to a reliable
-program.
+It also opens you up to situations where the `RefCell` might be borrowed mutably multiple times because your code is complex and something higher up in the call stack is already using the `RefCell`. With a `Mutex` this will cause a deadlock while the `RefCell` will panic, neither of which is conducive to a reliable program.
 
-A much better approach is to change your API to not hold long-lived references
-to other objects. Depending on the situation, it might make sense to take a
-callback argument in the `Monster::take_damage()` method.
+A much better approach is to change your API to not hold long-lived references to other objects. Depending on the situation, it might make sense to take a callback argument in the `Monster::take_damage()` method.
 
 ```rs
 struct Monster {
@@ -456,13 +390,9 @@ fn main() {
 
 [(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=52b789a7616efe6c2e24b7e1949f7c03)
 
-A nice side-effect of this is that we get rid of all the callback management
-boilerplate, meaning this version is only 47 lines long instead of the
-`Rc<RefCell<_>>` version's 62.
+A nice side-effect of this is that we get rid of all the callback management boilerplate, meaning this version is only 47 lines long instead of the `Rc<RefCell<_>>` version's 62.
 
-Other times it may not be acceptable to give `take_damage()` a callback
-parameter, in which case you could return a "summary" of what happened so the
-caller can decide what to do next.
+Other times it may not be acceptable to give `take_damage()` a callback parameter, in which case you could return a "summary" of what happened so the caller can decide what to do next.
 
 ```rs
 impl Monster {
@@ -499,38 +429,23 @@ fn main() {
 
 [(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=dbd28e96a25f76eb88069c8ee6215a92)
 
-This is my preferred solution; from experience, it tends to work well for
-larger codebases or when the code is more complex.
+This is my preferred solution; from experience, it tends to work well for larger codebases or when the code is more complex.
 
 ## Using the Wrong Integer Type
 
-Another hang-over from writing a lot of C is using the wrong integer type and
-getting frustrated because you need to cast to/from `usize` all the time.
+Another hang-over from writing a lot of C is using the wrong integer type and getting frustrated because you need to cast to/from `usize` all the time.
 
-I've seen people run into this [so][array-index-1] [many][array-index-2]
-[times][array-index-3] in the wild, especially when indexing.
+I've seen people run into this [so][array-index-1] [many][array-index-2] [times][array-index-3] in the wild, especially when indexing.
 
-The underlying problem is that C programmers are all taught to use `int` for
-indexing and for-loops, so when they come to Rust and they need to store a list
-of indices, the programmer will immediately reach for a `Vec<i32>`. They then
-get frustrated because Rust is quite strict when it comes to indexing and
-standard types like arrays, slices, and `Vec` can only be indexed using `usize`
-(the equivalent of `size_t`), meaning their code is cluttered with casts from
-`i32` to `usize` and back again.
+The underlying problem is that C programmers are all taught to use `int` for indexing and for-loops, so when they come to Rust and they need to store a list of indices, the programmer will immediately reach for a `Vec<i32>`. They then get frustrated because Rust is quite strict when it comes to indexing and standard types like arrays, slices, and `Vec` can only be indexed using `usize` (the equivalent of `size_t`), meaning their code is cluttered with casts from `i32` to `usize` and back again.
 
-There are a number of perfectly legitimate reasons for why Rust only allows
-indexing by `usize`:
+There are a number of perfectly legitimate reasons for why Rust only allows indexing by `usize`:
 
-- It doesn't make sense to have a negative index (accessing items before the
-  start of a slice is UB), so we can avoid an entire class of bugs by indexing
-  with an unsigned integer
-- A `usize` is defined to be an integer with the same size as a normal pointer,
-  meaning the pointer arithmetic won't have any hidden casts
+- It doesn't make sense to have a negative index (accessing items before the start of a slice is UB), so we can avoid an entire class of bugs by indexing with an unsigned integer
+- A `usize` is defined to be an integer with the same size as a normal pointer, meaning the pointer arithmetic won't have any hidden casts
 - The `std::mem::size_of()` and `std::mem::align_of()` functions return `usize`
 
-Of course, when stated this way the solution is clear. Choose the right integer
-type for your application but when you are doing things that eventually be used
-for indexing, that "right integer type" is probably `usize`.
+Of course, when stated this way the solution is clear. Choose the right integer type for your application but when you are doing things that eventually be used for indexing, that "right integer type" is probably `usize`.
 
 [array-index-1]: https://users.rust-lang.org/t/type-of-array-index/53632
 [array-index-2]: https://users.rust-lang.org/t/is-there-a-way-to-allow-indexing-vec-by-i32-in-my-program/15755/
@@ -540,41 +455,23 @@ for indexing, that "right integer type" is probably `usize`.
 
 &lt;rant&gt;
 
-There's an old Rust koan on the *User Forums* by Daniel Keep that comes to mind
-every time I see a grizzled C programmer reach for raw pointers or
-`std::mem::transmute()` because the borrow checker keeps rejecting their code:
-[*Obstacles*](https://users.rust-lang.org/t/rust-koans/2408?u=michael-f-bryan).
+There's an old Rust koan on the *User Forums* by Daniel Keep that comes to mind every time I see a grizzled C programmer reach for raw pointers or `std::mem::transmute()` because the borrow checker keeps rejecting their code: [*Obstacles*](https://users.rust-lang.org/t/rust-koans/2408?u=michael-f-bryan).
 
 You should go read it. It's okay, I'll wait.
 
-Too often you see people wanting to hack around privacy, create
-self-referencing structs, or create global mutable variables using `unsafe`.
-Frequently this will be accompanied by comments like *"but I know this program
-will only use a single thread so accessing the `static mut` is fine"* or *"but
-this works perfectly fine in C"*.
+Too often you see people wanting to hack around privacy, create self-referencing structs, or create global mutable variables using `unsafe`. Frequently this will be accompanied by comments like *"but I know this program will only use a single thread so accessing the `static mut` is fine"* or *"but this works perfectly fine in C"*.
 
-The reality is that `unsafe` code is nuanced and you need to have a good
-intuition for Rust's borrow checking rules and memory model. I hate to be a gate
-keeper and say *"you must be this tall to write ~~multi-threaded~~ `unsafe`
-code"* [^must-be-this-tall], but there's a good chance that if you are new to
-the language you won't have this intuition and are opening yourself and your
-colleagues up to a lot of pain.
+The reality is that `unsafe` code is nuanced and you need to have a good intuition for Rust's borrow checking rules and memory model. I hate to be a gate keeper and say *"you must be this tall to write ~~multi-threaded~~ `unsafe` code"* [^must-be-this-tall], but there's a good chance that if you are new to the language you won't have this intuition and are opening yourself and your colleagues up to a lot of pain.
 
-It's fine to play around with `unsafe` if you are trying to learn more about
-Rust or you know what you are doing and are using it legitimately, but `unsafe`
-is **not** a magical escape hatch which will make the compiler stop complaining
-and let you write C with Rust syntax.
+It's fine to play around with `unsafe` if you are trying to learn more about Rust or you know what you are doing and are using it legitimately, but `unsafe` is **not** a magical escape hatch which will make the compiler stop complaining and let you write C with Rust syntax.
 
 &lt;/rant&gt;
 
 ## Not Using Namespaces
 
-A common practice in C is to prefix functions with the name of the library or
-module to help readers understand where it comes from and avoid duplicate
-symbol errors (e.g. `rune_wasmer_runtime_load()`).
+A common practice in C is to prefix functions with the name of the library or module to help readers understand where it comes from and avoid duplicate symbol errors (e.g. `rune_wasmer_runtime_load()`).
 
-However, Rust has real namespaces and lets you attach methods to types (e.g.
-`rune::wasmer::Runtime::load()`). Just use them - it's what they are there for.
+However, Rust has real namespaces and lets you attach methods to types (e.g. `rune::wasmer::Runtime::load()`). Just use them - it's what they are there for.
 
 ## Overusing Slice Indexing
 
@@ -593,14 +490,9 @@ for i in 1..points.len() [
 
 [(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=62d33c91cf741e9f89b84054cf6a827d)
 
-However, it's easy to accidentally introduce an off-by-one error when using
-indexing (e.g. I needed to remember to start looping from `1` and subtract `1`
-to get the `previous` point) and even seasoned programmers aren't immune from
-crashing due to an index-out-of-bounds error.
+However, it's easy to accidentally introduce an off-by-one error when using indexing (e.g. I needed to remember to start looping from `1` and subtract `1` to get the `previous` point) and even seasoned programmers aren't immune from crashing due to an index-out-of-bounds error.
 
-In situations like these, Rust encourages you to reach for iterators instead.
-The slice type even comes with high-level tools like the `windows()` and
-`array_windows()` methods to let you iterate over adjacent pairs of elements.
+In situations like these, Rust encourages you to reach for iterators instead. The slice type even comes with high-level tools like the `windows()` and `array_windows()` methods to let you iterate over adjacent pairs of elements.
 
 ```rs
 let points: Vec<Coordinate> = ...;
@@ -625,27 +517,19 @@ let differences: Vec<_> = points
 
 [(playground)](https://play.rust-lang.org/?version=nightly&mode=debug&edition=2018&gist=030d0b491a2bc8204499f65b38f2aefd)
 
-Some would argue the version with `map()` and `collect()` is cleaner or more
-"functional", but I'll let you be the judge there.
+Some would argue the version with `map()` and `collect()` is cleaner or more "functional", but I'll let you be the judge there.
 
-As a bonus, iterators can often allow better performance because checks can be
-done as part of the looping condition instead of being separate[^benchmark-it]
-(Alice has a good explanation [here][iter-is-faster]).
+As a bonus, iterators can often allow better performance because checks can be done as part of the looping condition instead of being separate[^benchmark-it] (Alice has a good explanation [here][iter-is-faster]).
 
 ## Overusing Iterators
 
-Once you start drinking the Kool-Aid that is Rust's iterators you can run into
-the opposite problem - *when all you have is a hammer everything looks like a
-nail*.
+Once you start drinking the Kool-Aid that is Rust's iterators you can run into the opposite problem - *when all you have is a hammer everything looks like a nail*.
 
-Long chains of `map()`, `filter()`, and `and_then()` calls can get quite hard to
-read and keep track of what is actually going on, especially when type inference
-lets you omit a closure argument's type.
+Long chains of `map()`, `filter()`, and `and_then()` calls can get quite hard to read and keep track of what is actually going on, especially when type inference lets you omit a closure argument's type.
 
 Other times your iterator-based solution is just unnecessarily complicated.
 
-As an example, have a look at this snippet of code and see if you can figure
-out what it is trying to do.
+As an example, have a look at this snippet of code and see if you can figure out what it is trying to do.
 
 ```rs
 pub fn functional_blur(input: &Matrix) -> Matrix {
@@ -707,8 +591,7 @@ fn blur_rows<'a>(
 
 [(playground)](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=da8fa6e55ca5a0de6005b13672688c14)
 
-Believe it or not, but that's one of the more readable versions I've seen...
-Now let's look at the imperative implementation.
+Believe it or not, but that's one of the more readable versions I've seen... Now let's look at the imperative implementation.
 
 ```rs
 pub fn imperative_blur(input: &Matrix) -> Matrix {
@@ -749,9 +632,7 @@ I know which version I prefer.
 
 ## Not Leveraging Pattern Matching
 
-In most other mainstream languages it is quite common to see the programmer
-write a check before they do an operation which may throw an exception. Our
-C# `IndexOf()` snippet from earlier is a good example of this:
+In most other mainstream languages it is quite common to see the programmer write a check before they do an operation which may throw an exception. Our C# `IndexOf()` snippet from earlier is a good example of this:
 
 ```cs
 int index = sentence.IndexOf("fox");
@@ -785,12 +666,9 @@ if !list.is_empty() {
 }
 ```
 
-Now both snippets are perfectly valid pieces of code and will never fail, but
-similar to [sentinel values](#using-sentinel-values) you are making it easy
-for future refactoring to introduce a bug.
+Now both snippets are perfectly valid pieces of code and will never fail, but similar to [sentinel values](#using-sentinel-values) you are making it easy for future refactoring to introduce a bug.
 
-Using things like pattern matching and `Option` help you avoid this situation
-by making sure the *only* way you can access a value is if it is valid.
+Using things like pattern matching and `Option` help you avoid this situation by making sure the *only* way you can access a value is if it is valid.
 
 ```rs
 if let Some(value) = opt {
@@ -803,25 +681,16 @@ if let [first, ..] = list {
 ```
 
 {{% notice tip %}}
-I'm sure most of you have seen `if let Some(...)` before, but if
-`if let [first, ..]` is unfamiliar you may find my article on
-[*Slice Patterns*]({{<ref "/posts/daily/slice-patterns">}}) interesting.
+I'm sure most of you have seen `if let Some(...)` before, but if `if let [first, ..]` is unfamiliar you may find my article on [*Slice Patterns*]({{<ref "/posts/daily/slice-patterns">}}) interesting.
 {{% /notice %}}
 
-Depending on where it is used and how smart LLVM or your CPU's branch predictor
-are, this may also generate slower code because the fallible operation
-(`opt.unwrap()` or `list[index]` in that example) needs to do unnecessary checks
-[^benchmark-it].
+Depending on where it is used and how smart LLVM or your CPU's branch predictor are, this may also generate slower code because the fallible operation (`opt.unwrap()` or `list[index]` in that example) needs to do unnecessary checks [^benchmark-it].
 
 ## Initialize After Construction
 
-In many languages, it is normal to call an object's constructor and initialize
-its fields afterward (either manually or by calling some `init()` method).
-However, this goes against Rust's general convention of *"make invalid states
-unrepresentable"*.
+In many languages, it is normal to call an object's constructor and initialize its fields afterward (either manually or by calling some `init()` method). However, this goes against Rust's general convention of *"make invalid states unrepresentable"*.
 
-Say you are writing an NLP application and have a dictionary containing all the
-possible words you can handle.
+Say you are writing an NLP application and have a dictionary containing all the possible words you can handle.
 
 This is one way you could create the dictionary:
 
@@ -831,20 +700,15 @@ let mut dict = Dictionary::new();
 dict.load_from_file("./words.txt")?;
 ```
 
-However, writing `Dictionary` this way means it now has two (hidden) states -
-empty and populated.
+However, writing `Dictionary` this way means it now has two (hidden) states - empty and populated.
 
-All downstream code that uses the `Dictionary` will assume it's been populated
-already and write code accordingly. This may include doing things like indexing
-into the dictionary with `dict["word"]` which may panic if `"word"` isn't there.
+All downstream code that uses the `Dictionary` will assume it's been populated already and write code accordingly. This may include doing things like indexing into the dictionary with `dict["word"]` which may panic if `"word"` isn't there.
 
-Now you've opened yourself up to a situation where passing an empty dictionary
-to code that expects a populated dictionary may trigger a panic.
+Now you've opened yourself up to a situation where passing an empty dictionary to code that expects a populated dictionary may trigger a panic.
 
 But that's completely unnecessary.
 
-Just make sure the `Dictionary` is usable immediately after constructing it
-instead of populating it after the fact.
+Just make sure the `Dictionary` is usable immediately after constructing it instead of populating it after the fact.
 
 ```rust
 let dict = Dictionary::from_file("./words.txt")?;
@@ -861,30 +725,17 @@ impl Dictionary {
 }
 ```
 
-Internally the `Dictionary::from_file()` might create an empty `Vec` and
-populate it incrementally, but it won't be stored in the `Dictionary`'s `words`
-field yet so there is no assumption that it is populated and useful.
+Internally the `Dictionary::from_file()` might create an empty `Vec` and populate it incrementally, but it won't be stored in the `Dictionary`'s `words` field yet so there is no assumption that it is populated and useful.
 
-How frequently you fall into this anti-pattern depends a lot on your
-background and coding style.
+How frequently you fall into this anti-pattern depends a lot on your background and coding style.
 
-Functional languages are often completely immutable so you'll fall into the
-idiomatic pattern naturally. After all, it's kinda hard to create a
-half-initialized thing and populate it later when you aren't allowed to mutate
-anything.
+Functional languages are often completely immutable so you'll fall into the idiomatic pattern naturally. After all, it's kinda hard to create a half-initialized thing and populate it later when you aren't allowed to mutate anything.
 
-On the other hand, OO languages are much happier to let you initialize an object
-after it has been constructed, especially because object references can be null
-by default and they have no qualms about mutability... You could argue this
-contributes to why OO languages have a propensity for crashing due to an
-unexpected `NullPointerException`.
+On the other hand, OO languages are much happier to let you initialize an object after it has been constructed, especially because object references can be null by default and they have no qualms about mutability... You could argue this contributes to why OO languages have a propensity for crashing due to an unexpected `NullPointerException`.
 
 ## Defensive Copies
 
-To point out the obvious, a really nice property of immutable objects is that
-you can rely on them to never change. However, in languages like Python and
-Java, immutability isn't transitive - i.e. if `x` is an immutable object, `x.y`
-isn't guaranteed to be immutable unless it was explicitly defined that way.
+To point out the obvious, a really nice property of immutable objects is that you can rely on them to never change. However, in languages like Python and Java, immutability isn't transitive - i.e. if `x` is an immutable object, `x.y` isn't guaranteed to be immutable unless it was explicitly defined that way.
 
 This means it's possible to write code like this...
 
@@ -904,8 +755,7 @@ class ImmutablePerson:
   def addresses(self): return self._addresses
 ```
 
-Then someone else comes along and accidentally messes up the address list as
-part of their normal code.
+Then someone else comes along and accidentally messes up the address list as part of their normal code.
 
 ```py
 def send_letters(message: str, addresses: List[str]):
@@ -928,15 +778,9 @@ send_letters(
 print(person.addresses) # ["123 FAKE STREET"]
 ```
 
-While I admit the example is a bit contrived, it's not uncommon for functions to
-modify the arguments they are given. Normally this is fine, but when your
-`ImmutablePerson` assumes its `addresses` field will never change, it's annoying
-for some random piece of code on the other side of the project to modify it
-without you knowing.
+While I admit the example is a bit contrived, it's not uncommon for functions to modify the arguments they are given. Normally this is fine, but when your `ImmutablePerson` assumes its `addresses` field will never change, it's annoying for some random piece of code on the other side of the project to modify it without you knowing.
 
-The typical solution to this is to preemptively copy the list so even if the
-caller tries to mutate its contents, they'll be mutating a copy and not the
-original `addresses` field.
+The typical solution to this is to preemptively copy the list so even if the caller tries to mutate its contents, they'll be mutating a copy and not the original `addresses` field.
 
 ```py
 class ImmutablePerson:
@@ -946,37 +790,23 @@ class ImmutablePerson:
   def addresses(self): return self._addresses.copy()
 ```
 
-In general, you'll see defensive copies being used anywhere code wants to be
-sure that another piece of code won't modify some shared object at an
-inopportune time.
+In general, you'll see defensive copies being used anywhere code wants to be sure that another piece of code won't modify some shared object at an inopportune time.
 
-Considering this is an article about Rust, you've probably guessed what the
-root cause of this is - a combination of aliasing and mutation.
+Considering this is an article about Rust, you've probably guessed what the root cause of this is - a combination of aliasing and mutation.
 
-You've also probably guessed why defensive copies aren't really necessary when
-writing Rust code - lifetimes and the "shared immutable XOR single mutable" rule
-for references means it just isn't possible for code to modify something without
-first asking its original owner for mutable access or explicitly opting into
-shared mutation by using a type like `std::sync::Mutex<T>`.
+You've also probably guessed why defensive copies aren't really necessary when writing Rust code - lifetimes and the "shared immutable XOR single mutable" rule for references means it just isn't possible for code to modify something without first asking its original owner for mutable access or explicitly opting into shared mutation by using a type like `std::sync::Mutex<T>`.
 
 {{% notice note %}}
-You *may* sometimes see people using `clone()` to get around borrow checker
-errors, and exclaim *"Ha! See, Rust forces you to make defensive copies too!"*
+You *may* sometimes see people using `clone()` to get around borrow checker errors, and exclaim *"Ha! See, Rust forces you to make defensive copies too!"*
 
-To which I would argue that these copies are mostly caused by a lack of
-familiarity with lifetimes, or an architecture issue which forces the programmer
-to make more copies than they need to.
+To which I would argue that these copies are mostly caused by a lack of familiarity with lifetimes, or an architecture issue which forces the programmer to make more copies than they need to.
 {{% /notice %}}
 
 ## Conclusions
 
-There are a bunch of other bad habits that I haven't had a chance to touch on
-or which weren't included because I couldn't come up with a concise example.
+There are a bunch of other bad habits that I haven't had a chance to touch on or which weren't included because I couldn't come up with a concise example.
 
-Thanks to everyone that replied to [my post][post] on the Rust User Forums with
-suggestions for bad habits. Even though I kinda derailed the thread towards the
-end with talk about DI frameworks, it was really interesting to hear war stories
-from other veteran Rustaceans 🙂
+Thanks to everyone that replied to [my post][post] on the Rust User Forums with suggestions for bad habits. Even though I kinda derailed the thread towards the end with talk about DI frameworks, it was really interesting to hear war stories from other veteran Rustaceans 🙂
 
 [^must-be-this-tall]: [*Must be This Tall to Write Multi-Threaded Code* - Bobby Holley](https://bholley.net/blog/2015/must-be-this-tall-to-write-multi-threaded-code.html)
 

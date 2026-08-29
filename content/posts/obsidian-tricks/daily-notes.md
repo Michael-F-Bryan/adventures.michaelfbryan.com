@@ -1,6 +1,7 @@
 ---
 title: 'Obsidian Tricks: Daily Notes'
 date: '2025-07-28T12:00:00+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Obsidian
 - Knowledge Management
@@ -198,20 +199,16 @@ If I ever need to investigate something or synthesize my knowledge, I can open t
 ## Common Beginner Mistakes (And How to Avoid Them)
 
 ### 1. **Over-Structuring Daily Notes**
-**Don't do this**: Create elaborate daily note templates with dozens of sections
-**Do this**: Keep it simple—random notes, log section, and the "See Also" dataview query
+**Don't do this**: Create elaborate daily note templates with dozens of sections **Do this**: Keep it simple—random notes, log section, and the "See Also" dataview query
 
 ### 2. **Inconsistent Date Formats**
-**Don't do this**: Mix formats like `[[2025-07-15]]` and `[[July 15, 2025]]`
-**Do this**: Always use `[[Month D, YYYY]]` format for consistency
+**Don't do this**: Mix formats like `[[2025-07-15]]` and `[[July 15, 2025]]` **Do this**: Always use `[[Month D, YYYY]]` format for consistency
 
 ### 3. **Trying to Capture Everything**
-**Don't do this**: Write detailed journal entries in daily notes
-**Do this**: Use daily notes as connection points, not comprehensive records
+**Don't do this**: Write detailed journal entries in daily notes **Do this**: Use daily notes as connection points, not comprehensive records
 
 ### 4. **Ignoring the Temporal Hierarchy**
-**Don't do this**: Focus only on individual daily notes
-**Do this**: Use monthly/quarterly notes to see bigger patterns
+**Don't do this**: Focus only on individual daily notes **Do this**: Use monthly/quarterly notes to see bigger patterns
 
 ## The Long-Term Payoff
 

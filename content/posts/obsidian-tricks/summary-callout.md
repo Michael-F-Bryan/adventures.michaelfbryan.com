@@ -1,6 +1,7 @@
 ---
 title: 'Obsidian Tricks: The Summary Callout'
 date: '2025-07-19T22:36:07+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Obsidian
 - Knowledge Management

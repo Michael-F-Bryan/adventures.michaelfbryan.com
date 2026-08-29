@@ -1,6 +1,7 @@
 ---
 title: Simple Automation Sequences
 date: '2019-09-14T23:55:00+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Rust
 - Embedded Systems
@@ -9,31 +10,18 @@ series:
 - Adventures in Motion Control
 ---
 
-Now we can communicate with the outside world, let's start interacting with the
-"hardware" attached to our motion controller. This will be the beginning of our
-*Motion* system.
+Now we can communicate with the outside world, let's start interacting with the "hardware" attached to our motion controller. This will be the beginning of our *Motion* system.
 
-The simplest way to interact with the world is by executing a pre-defined
-routine, and one of the simplest useful routines is to move all axes to the
-home position.
+The simplest way to interact with the world is by executing a pre-defined routine, and one of the simplest useful routines is to move all axes to the home position.
 
 ## System Inputs and Outputs
 
-From our [initial requirements gathering][requirements] we know that our 3D
-printer will have three linear axes (X, Y, and Z), with limit switches at the
-ends of each axis. This gives our new *Motion* system six inputs to deal with.
+From our [initial requirements gathering][requirements] we know that our 3D printer will have three linear axes (X, Y, and Z), with limit switches at the ends of each axis. This gives our new *Motion* system six inputs to deal with.
 
-Stepper motors don't usually come with an [encoder][encoder] (a device for
-tracking position), meaning we don't really have any way of determining where
-an axis is other than by counting the number of stepper pulses sent. Let's
-assume that the actual sending of pulses is done by a stepper motor driver
-component, and it tells us how many pulses it has sent since the last `poll()`
-of the application.
+Stepper motors don't usually come with an [encoder][encoder] (a device for tracking position), meaning we don't really have any way of determining where an axis is other than by counting the number of stepper pulses sent. Let's assume that the actual sending of pulses is done by a stepper motor driver component, and it tells us how many pulses it has sent since the last `poll()` of the application.
 
 {{% notice note %}}
-For technical reasons (the browser won't trigger our `App::poll()` more
-frequently than 60Hz) we won't be implementing a "true" stepper motor driver
-component. Instead, we can emulate its behaviour from JavaScript.
+For technical reasons (the browser won't trigger our `App::poll()` more frequently than 60Hz) we won't be implementing a "true" stepper motor driver component. Instead, we can emulate its behaviour from JavaScript.
 {{% /notice %}}
 
 ```rust
@@ -56,20 +44,12 @@ trait Inputs {
 }
 ```
 
-Stepper are controlled by sending pulses to the motor, and the frequency these
-pulses are sent out (e.g. 42 pulses/second) is the parameter usually used to
-control this motion. This will typically be done on a motion controller using
-timers, setting the timer period to trigger an interrupt *exactly* when the
-next pulse needs to be sent.
+Stepper are controlled by sending pulses to the motor, and the frequency these pulses are sent out (e.g. 42 pulses/second) is the parameter usually used to control this motion. This will typically be done on a motion controller using timers, setting the timer period to trigger an interrupt *exactly* when the next pulse needs to be sent.
 
-This means we'll be using a control regime called *Velocity Control*. This is
-essentially where you control the system purely via velocity, as opposed to
-controlling the position or acceleration (or rather motor torque/force).
+This means we'll be using a control regime called *Velocity Control*. This is essentially where you control the system purely via velocity, as opposed to controlling the position or acceleration (or rather motor torque/force).
 
 {{% notice tip %}}
-You may want to read [Position Control vs Velocity Control vs Torque Control][1]
-on the *Robotics* section of *StackExchange* to find out about the other
-control regimes, and where one particular regime might be chosen over another.
+You may want to read [Position Control vs Velocity Control vs Torque Control][1] on the *Robotics* section of *StackExchange* to find out about the other control regimes, and where one particular regime might be chosen over another.
 
 [1]: https://robotics.stackexchange.com/questions/10052/position-control-vs-velocity-control-vs-torque-control
 {{% /notice %}}
@@ -84,33 +64,20 @@ trait Outputs {
 }
 ```
 
-One downside of *Velocity Control* is that you have less control over position
-and unless you have specific hardware which provides feedback (e.g. an
-[encoder][encoder]), the only way to know an axis' position is by counting it
-yourself based on time between ticks and the current speed (i.e.
-`position += velocity*dt`).
+One downside of *Velocity Control* is that you have less control over position and unless you have specific hardware which provides feedback (e.g. an [encoder][encoder]), the only way to know an axis' position is by counting it yourself based on time between ticks and the current speed (i.e. `position += velocity*dt`).
 
-Keep in mind that positional accuracy will depend directly on the `poll()`
-frequency. This is one of the big differentiators between realtime systems
-and "normal" systems, `poll()` frequency (and by extension performance in
-general) is a determining factor in whether something will fulfill its
-requirements.
+Keep in mind that positional accuracy will depend directly on the `poll()` frequency. This is one of the big differentiators between realtime systems and "normal" systems, `poll()` frequency (and by extension performance in general) is a determining factor in whether something will fulfill its requirements.
 
 ## Planning
 
-Now we've got a better idea of the inputs and outputs available to our
-system, we need to figure out how to implement *"Go To Home"*. We'll want to
-choose a consistent well-known spot for our home position, and based on the
-inputs available moving all axes to the end of travel seems logical.
+Now we've got a better idea of the inputs and outputs available to our system, we need to figure out how to implement *"Go To Home"*. We'll want to choose a consistent well-known spot for our home position, and based on the inputs available moving all axes to the end of travel seems logical.
 
 There are a couple ways we could implement this:
 
 1. Move one axis to its home position at a time
-2. Move all axes simultaneously, stopping each axis when it reaches its
-   corresponding limit in turn
+2. Move all axes simultaneously, stopping each axis when it reaches its corresponding limit in turn
 
-The former would be simpler to implement, but for a small increase in complexity
-the latter could potentially take 1/3 the time.
+The former would be simpler to implement, but for a small increase in complexity the latter could potentially take 1/3 the time.
 
 In pseudo-code, this would look something like:
 
@@ -123,23 +90,12 @@ while not (at_x_lower_limit and at_y_lower_limit and at_z_lower_limit):
 
 ## Implementing a *Go To Home* Sequence
 
-There are a couple tricks we'll use to make the implementation if this homing
-sequence easier.
+There are a couple tricks we'll use to make the implementation if this homing sequence easier.
 
-First we'll abstract over the exact type of axis this sequence works on. That
-means it doesn't matter whether we're controlling a stepper motor attached to
-a gearbox or a simple servo. We should be able to tell the axis to move home
-at a particular velocity in human-friendly units like mm/sec, and leave the
-calculation of stepper frequency and trauma speeds to some *Stepper Motor
-Driver* component.
+First we'll abstract over the exact type of axis this sequence works on. That means it doesn't matter whether we're controlling a stepper motor attached to a gearbox or a simple servo. We should be able to tell the axis to move home at a particular velocity in human-friendly units like mm/sec, and leave the calculation of stepper frequency and trauma speeds to some *Stepper Motor Driver* component.
 
 {{% notice note %}}
-From here on we'll also be using the [uom][uom] crate for all dimensions and
-motion parameters. It helps to document what a particular variable
-corresponds to (i.e. the `speed = distance/time` calculation would be done
-with `Velocity`, `Length`, and `Time`, instead of `f32`, `f32`, and `f32`)
-and makes it almost impossible to mess up units (e.g. `mm` vs `in`, or `mm/s`
-vs `m/s`).
+From here on we'll also be using the [uom][uom] crate for all dimensions and motion parameters. It helps to document what a particular variable corresponds to (i.e. the `speed = distance/time` calculation would be done with `Velocity`, `Length`, and `Time`, instead of `f32`, `f32`, and `f32`) and makes it almost impossible to mess up units (e.g. `mm` vs `in`, or `mm/s` vs `m/s`).
 
 [uom]: https://docs.rs/uom/
 {{% /notice %}}
@@ -173,12 +129,9 @@ pub struct LimitSwitchState {
 }
 ```
 
-We'll also create a generic automation sequence which moves just one axis
-to its home position.
+We'll also create a generic automation sequence which moves just one axis to its home position.
 
-Automation sequences work by being polled frequently in order to make
-progress, eventually reaching a *Success* state or stopping early with some
-sort of *Fault*.
+Automation sequences work by being polled frequently in order to make progress, eventually reaching a *Success* state or stopping early with some sort of *Fault*.
 
 ```rust
 // hal/src/automation.rs
@@ -202,9 +155,7 @@ pub enum Transition<F> {
     Incomplete,
 }
 ```
-Next we'll create a `MoveAxisHome` automation sequence which will try to move
-the `axis_number`'th axis to its lower limit (in the negative direction) at
-a specific `homing_speed`.
+Next we'll create a `MoveAxisHome` automation sequence which will try to move the `axis_number`'th axis to its lower limit (in the negative direction) at a specific `homing_speed`.
 
 ```rust
 // motion/src/lib.rs
@@ -216,8 +167,7 @@ pub struct MoveAxisHome {
 }
 ```
 
-When neither limit switch is actuated our `MoveAxisHome` automation sequence
-should tell the corresponding axis to move backwards.
+When neither limit switch is actuated our `MoveAxisHome` automation sequence should tell the corresponding axis to move backwards.
 
 ```rust
 // motion/src/lib.rs
@@ -237,9 +187,7 @@ fn polling_without_hitting_limits_makes_an_axis_move_backwards() {
 }
 ```
 
-Additionally, we want to be moving towards the lower limit so hitting the upper
-limit means something has gone wrong. Typically this means the limits are wired
-backwards.
+Additionally, we want to be moving towards the lower limit so hitting the upper limit means something has gone wrong. Typically this means the limits are wired backwards.
 
 ```rust
 // motion/src/lib.rs
@@ -283,9 +231,7 @@ fn actuating_the_lower_limit_completes_the_sequence() {
 }
 ```
 
-We've now got enough tests to implement a basic `MoveAxisHome` sequence. There
-are still a couple edge cases to cover (e.g. what happens if we start the
-sequence on the upper limit?) but they can be an exercise for the reader.
+We've now got enough tests to implement a basic `MoveAxisHome` sequence. There are still a couple edge cases to cover (e.g. what happens if we start the sequence on the upper limit?) but they can be an exercise for the reader.
 
 A quick'n'dirty implementation that makes all the tests pass:
 
@@ -319,27 +265,17 @@ impl<L: Limits, A: Axes> AutomationSequence<L, A> for MoveAxisHome {
 
 ## Combining Automation Sequences
 
-Because we're moving multiple axes at a time, it'd be nice to have a helper
-that lets us execute several `AutomationSequence`s simultaneously. A good
-analogy would be the `and_then()` and `join()` combinators commonly used with
-`futures`.
+Because we're moving multiple axes at a time, it'd be nice to have a helper that lets us execute several `AutomationSequence`s simultaneously. A good analogy would be the `and_then()` and `join()` combinators commonly used with `futures`.
 
 The general idea is:
 
 - Create an array of `Option<AutomationSequence>`s
-- to implement `AutomationSequence::poll()`, iterate over the sequences, polling
-  each sequence that is present
-- If any sequence returns a `Transition::Fault`, halt immediately with that
-  fault
-- If a sequence returns `Transition::Complete`, "remove" it from the array using
-  `Option::take()`
+- to implement `AutomationSequence::poll()`, iterate over the sequences, polling each sequence that is present
+- If any sequence returns a `Transition::Fault`, halt immediately with that fault
+- If a sequence returns `Transition::Complete`, "remove" it from the array using `Option::take()`
 - Repeat until all sequences are completed
 
-The actual declaration for this `All` combinator gets a little messy because
-we need to use `AsMut` and some other trait-level trickery to work around the
-lack of proper const generics. It also leaks some implementation details like
-needing to provide the `[Option<A>; N]` storage buffer in the constructor
-instead of just taking a list of `AutomationSequence`s.
+The actual declaration for this `All` combinator gets a little messy because we need to use `AsMut` and some other trait-level trickery to work around the lack of proper const generics. It also leaks some implementation details like needing to provide the `[Option<A>; N]` storage buffer in the constructor instead of just taking a list of `AutomationSequence`s.
 
 ```rust
 // hal/src/automation.rs
@@ -421,8 +357,7 @@ where
 }
 ```
 
-Now we've got a useable `All` combinator, it's almost trivial to make a wrapper
-that runs our *Go To Home* sequence on each axis concurrently.
+Now we've got a useable `All` combinator, it's almost trivial to make a wrapper that runs our *Go To Home* sequence on each axis concurrently.
 
 ```rust
 // motion/src/lib.rs
@@ -463,9 +398,7 @@ impl<L: Limits, A: Axes> AutomationSequence<L, A> for Home<L, A> {
 
 ## The Next Step
 
-Now we're able to work with automation sequences we should create a *Motion*
-system which can invoke those sequences in response to requests from the
-frontend.
+Now we're able to work with automation sequences we should create a *Motion* system which can invoke those sequences in response to requests from the frontend.
 
 [requirements]: {{< ref "announcing-adventures-in-motion-control.md#identifying-requirements-and-subsystems" >}}
 [encoder]: https://en.wikipedia.org/wiki/Encoder

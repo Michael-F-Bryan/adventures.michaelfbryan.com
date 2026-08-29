@@ -1,37 +1,25 @@
 ---
 title: How to RiiR
 date: '2019-12-02T01:00:00+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Rust
 - FFI
 - Software Design
 ---
 
-In [a previous article][previous-riir] we've talked about how you can avoid
-rewriting a library in Rust when you don't need to. But what about the times
-when you really *do* need to?
+In [a previous article][previous-riir] we've talked about how you can avoid rewriting a library in Rust when you don't need to. But what about the times when you really *do* need to?
 
-In most languages you'd need to rewrite the entire library from the ground
-up, waiting until the port is almost finished before you can start seeing
-results. These sorts of ports tend to be quite expensive and error-prone, and
-often they'll fail midway and you'll have nothing to show for your effort.
-*Joel Spolsky* does a much better job of explaining this than I ever could, see
-[his article on why full rewrites are a bad idea][rewrites] for more.
+In most languages you'd need to rewrite the entire library from the ground up, waiting until the port is almost finished before you can start seeing results. These sorts of ports tend to be quite expensive and error-prone, and often they'll fail midway and you'll have nothing to show for your effort. *Joel Spolsky* does a much better job of explaining this than I ever could, see [his article on why full rewrites are a bad idea][rewrites] for more.
 
-However, Rust has a killer feature when it comes to this sort of thing. It
-can call into C code with no overhead (i.e. the runtime doesn't need to
-inject automatic marshalling like [C#'s P/Invoke][p-invoke]) and it can
-expose functions which can be consumed by C just like any other C function.
-This opens the door for an alternative approach:
+However, Rust has a killer feature when it comes to this sort of thing. It can call into C code with no overhead (i.e. the runtime doesn't need to inject automatic marshalling like [C#'s P/Invoke][p-invoke]) and it can expose functions which can be consumed by C just like any other C function. This opens the door for an alternative approach:
 
 Port the library to Rust one function at a time.
 
 {{% notice note %}}
-The code written in this article is available [on GitHub][repo]. Feel free to
-browse through and steal code or inspiration.
+The code written in this article is available [on GitHub][repo]. Feel free to browse through and steal code or inspiration.
 
-If you found this useful or spotted a bug, let me know on the blog's
-[issue tracker][issue]!
+If you found this useful or spotted a bug, let me know on the blog's [issue tracker][issue]!
 
 [repo]: https://github.com/Michael-F-Bryan/tinyvm-rs
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
@@ -39,9 +27,7 @@ If you found this useful or spotted a bug, let me know on the blog's
 
 ## Getting Started
 
-Before we do anything else, we're going to need to make a new project. I've got
-[a template][template] project that sets up some nice things like CI and
-licenses that I'll use with [`cargo-generate`][cg].
+Before we do anything else, we're going to need to make a new project. I've got [a template][template] project that sets up some nice things like CI and licenses that I'll use with [`cargo-generate`][cg].
 
 ```console
 $ cargo generate --git https://github.com/Michael-F-Bryan/github-template --name tinyvm-rs
@@ -59,25 +45,21 @@ tree -I 'vendor|target'
 1 directory, 6 files
 ```
 
-Now that's out of the way our first real task will be to build the library we
-want to port, and get to know it a bit better.
+Now that's out of the way our first real task will be to build the library we want to port, and get to know it a bit better.
 
 In this case we're porting [jakogut/tinyvm][tinyvm],
 
 > TinyVM is a small, fast, lightweight virtual machine written in pure ANSI C.
 
-To make referencing it easier in the future we'll add the repository as a
-submodule to our project.
+To make referencing it easier in the future we'll add the repository as a submodule to our project.
 
 ```console
 $ git submodule add https://github.com/jakogut/tinyvm vendor/tinyvm
 ```
 
-Now we've got a copy of the source code, let's have a look at the `README.md`
-for build instructions.
+Now we've got a copy of the source code, let's have a look at the `README.md` for build instructions.
 
-> TinyVM is a virtual machine with the goal of having a small footprint.
-> Low memory usage, a small amount of code, and a small binary.
+> TinyVM is a virtual machine with the goal of having a small footprint. Low memory usage, a small amount of code, and a small binary.
 >
 > Building can be accomplished on UNIX-like systems with make and GCC.
 >
@@ -85,15 +67,13 @@ for build instructions.
 >
 > **Building can be accomplished using "make," or "make rebuild".**
 >
-> To build a debug version, add "DEBUG=yes" after "make". To build a binary with
-> profiling enabled, add "PROFILE=yes" after "make".
+> To build a debug version, add "DEBUG=yes" after "make". To build a binary with profiling enabled, add "PROFILE=yes" after "make".
 >
 > I can be reached at "joseph.kogut(at)gmail.com"
 
 (emphasis added)
 
-Okay, let's `cd` into the `tinyvm` directory and see if the build will *Just
-Work*.
+Okay, let's `cd` into the `tinyvm` directory and see if the build will *Just Work*.
 
 ```console
 $ cd vendor/tinyvm
@@ -113,21 +93,13 @@ clang -Wall -pipe -Iinclude/ -std=gnu11 -Werror -pedantic -pedantic-errors -O3 -
 clang tdb/main.o tdb/tdb.o -ltvm -Wall -pipe -Iinclude/ -std=gnu11 -Werror -pedantic -pedantic-errors -O3 -Llib/ -o bin/tdb
 ```
 
-I really like it when C libraries will compile straight out of the box without
-needing to install random `*-dev` packages or mess with the build system 🎉
+I really like it when C libraries will compile straight out of the box without needing to install random `*-dev` packages or mess with the build system 🎉
 
-Unfortunately the library doesn't contain any tests so we won't be able to
-(initially) make sure individual functions have been translated correctly,
-but it *does* contain an example interpreter that we can use to explore the
-high-level functionality.
+Unfortunately the library doesn't contain any tests so we won't be able to (initially) make sure individual functions have been translated correctly, but it *does* contain an example interpreter that we can use to explore the high-level functionality.
 
-So we know we can build it from the command-line without much hassle, now
-we need to make sure our `tinyvm` crate can build everything programmatically.
+So we know we can build it from the command-line without much hassle, now we need to make sure our `tinyvm` crate can build everything programmatically.
 
-This is where build scripts come in. Our strategy will be for the Rust crate to
-use a `build.rs` build script and the [`cc`][cc] crate to invoke the equivalent
-commands to our `make` invocation. From there we can link to `libtvm` from Rust
-just like any other native library.
+This is where build scripts come in. Our strategy will be for the Rust crate to use a `build.rs` build script and the [`cc`][cc] crate to invoke the equivalent commands to our `make` invocation. From there we can link to `libtvm` from Rust just like any other native library.
 
 We'll need to add the `cc` crate as a dependency.
 
@@ -166,19 +138,12 @@ fn main() {
 ```
 
 {{% notice note %}}
-If you've looked at the `cc` crate's documentation you may have noticed there's
-a [`Build::files()`][files] method which accepts an iterator of paths. We
-*could* have programmatically detected all the `*.c` files inside
-`vendor/tinyvm/libtvm`, but because we're porting code one function at a time
-it'll be much easier to delete individual `.file()` calls as bits are ported.
+If you've looked at the `cc` crate's documentation you may have noticed there's a [`Build::files()`][files] method which accepts an iterator of paths. We *could* have programmatically detected all the `*.c` files inside `vendor/tinyvm/libtvm`, but because we're porting code one function at a time it'll be much easier to delete individual `.file()` calls as bits are ported.
 
 [files]: https://docs.rs/cc/1.0.47/cc/struct.Build.html#method.files
 {{% /notice %}}
 
-We also need a way to let Rust know which functions it can call from `libtvm`.
-This is typically done by writing definitions for each function in an
-[`extern` block][extern], but luckily a tool called [`bindgen`][bg] exists which
-can read in a C-style header file and generate the definitions for us.
+We also need a way to let Rust know which functions it can call from `libtvm`. This is typically done by writing definitions for each function in an [`extern` block][extern], but luckily a tool called [`bindgen`][bg] exists which can read in a C-style header file and generate the definitions for us.
 
 Let's generate bindings from `vendor/tinyvm/include/tvm/tvm.h`.
 
@@ -198,8 +163,7 @@ We'll need to add the `ffi` module to our crate.
 pub mod ffi;
 ```
 
-Looking at `tinyvm`'s `src/` directory, we find the source code for a `tinyvm`
-interpreter.
+Looking at `tinyvm`'s `src/` directory, we find the source code for a `tinyvm` interpreter.
 
 ```c
 // vendor/tinyvm/src/tvmi.c
@@ -222,11 +186,9 @@ int main(int argc, char **argv)
 }
 ```
 
-It's incredibly simple. Which is nice considering we'll be using this
-interpreter as one of our examples.
+It's incredibly simple. Which is nice considering we'll be using this interpreter as one of our examples.
 
-For now, let's translate it directly to Rust and stick it in the `examples/`
-directory.
+For now, let's translate it directly to Rust and stick it in the `examples/` directory.
 
 ```rust
 // examples/tvmi.rs
@@ -251,8 +213,7 @@ fn main() {
 }
 ```
 
-As a sanity check, we can also run the virtual machine and make sure it all
-works.
+As a sanity check, we can also run the virtual machine and make sure it all works.
 
 ```console
 $ cargo run --example tvmi -- vendor/tinyvm/programs/tinyvm/fact.vm
@@ -274,10 +235,7 @@ LGTM 👍
 
 ## Low Hanging Fruit
 
-When you start out with something like this it's tempting to dive into the most
-important functions and port those first. Try to resist this urge. It can be
-easy to bite off more than you can chew and end up either wasting time or
-becoming demoralized and give up.
+When you start out with something like this it's tempting to dive into the most important functions and port those first. Try to resist this urge. It can be easy to bite off more than you can chew and end up either wasting time or becoming demoralized and give up.
 
 Instead, let's look for the easiest item.
 
@@ -287,9 +245,7 @@ tvm.c  tvm_file.c  tvm_htab.c  tvm_lexer.c  tvm_memory.c  tvm_parser.c
 tvm_preprocessor.c  tvm_program.c
 ```
 
-That `tvm_htab.c` file looks promising. I'm pretty sure `htab` stands for
-*"Hash Table"*, and Rust's standard library already contains a high-quality
-implementation. We should be able to swap that in easily enough.
+That `tvm_htab.c` file looks promising. I'm pretty sure `htab` stands for *"Hash Table"*, and Rust's standard library already contains a high-quality implementation. We should be able to swap that in easily enough.
 
 Let's look at the `tvm_htab.h` header file and see what we're dealing with.
 
@@ -327,14 +283,9 @@ char *tvm_htab_find_ref(struct tvm_htab_ctx *htab, const char *key);
 #endif
 ```
 
-Looks easy enough to implement. Our only problem is the definition for
-`tvm_htab_ctx` and `tvm_htab_node` are included in the header file, meaning it's
-possible that some code accesses the hash table's internals directly instead of
-going through the published interface.
+Looks easy enough to implement. Our only problem is the definition for `tvm_htab_ctx` and `tvm_htab_node` are included in the header file, meaning it's possible that some code accesses the hash table's internals directly instead of going through the published interface.
 
-We can check whether anything accesses hash table internals by temporarily
-moving the struct definitions into `tvm_htab.c` and see if everything still
-compiles.
+We can check whether anything accesses hash table internals by temporarily moving the struct definitions into `tvm_htab.c` and see if everything still compiles.
 
 ```diff
 diff --git a/include/tvm/tvm_htab.h b/include/tvm/tvm_htab.h
@@ -375,8 +326,7 @@ clang src/tvmi.c -ltvm -Wall -pipe -Iinclude/ -std=gnu11 -Werror -pedantic -peda
 clang tdb/main.o tdb/tdb.o -ltvm -Wall -pipe -Iinclude/ -std=gnu11 -Werror -pedantic -pedantic-errors -O3 -Llib/ -o bin/tdb
 ```
 
-Looks like it all still works, now onto phase B; Create an identical set of
-functions which use a `HashMap<K, V>` under the hood.
+Looks like it all still works, now onto phase B; Create an identical set of functions which use a `HashMap<K, V>` under the hood.
 
 Stubbing out the bare minimum, we get:
 
@@ -443,8 +393,7 @@ pub unsafe extern "C" fn tvm_htab_find_ref(
 }
 ```
 
-We also need to declare the `htab` module and re-export its functions from
-`lib.rs`.
+We also need to declare the `htab` module and re-export its functions from `lib.rs`.
 
 ```rust
 // src/lib.rs
@@ -453,9 +402,7 @@ mod htab;
 pub use htab::*;
 ```
 
-Now we need to make sure the original `tvm_htab.c` doesn't get compiled and
-linked into the final library, otherwise we'll be greeted with a wall of
-duplicate symbol errors by the linker.
+Now we need to make sure the original `tvm_htab.c` doesn't get compiled and linked into the final library, otherwise we'll be greeted with a wall of duplicate symbol errors by the linker.
 
 {{% expand "A wall of duplicate symbol errors" %}}
 ```
@@ -523,8 +470,7 @@ index 6f274c8..af9d467 100644
          .file(src.join("tvm_parser.c"))
 ```
 
-And trying to run the `tvmi` example again crashes, just as you'd expect a
-program full of `unimplemented!()` to.
+And trying to run the `tvmi` example again crashes, just as you'd expect a program full of `unimplemented!()` to.
 
 ```console
 $ cargo run --example tvmi -- vendor/tinyvm/programs/tinyvm/fact.vm
@@ -534,13 +480,10 @@ thread 'main' panicked at 'not yet implemented', src/htab.rs:14:57
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace.
 ```
 
-When adding FFI support for a new type, the easiest place to start is often
-with the constructor and destructor.
+When adding FFI support for a new type, the easiest place to start is often with the constructor and destructor.
 
 {{% notice info %}}
-The C code can only ever access our `HashTable` via a pointer, so we need to
-allocate one on the heap and then pass ownership of that heap-allocated object
-to the caller.
+The C code can only ever access our `HashTable` via a pointer, so we need to allocate one on the heap and then pass ownership of that heap-allocated object to the caller.
 {{% /notice %}}
 
 ```rust
@@ -567,14 +510,9 @@ pub unsafe extern "C" fn tvm_htab_destroy(htab: *mut HashTable) {
 
 
 {{% notice warning %}}
-It is important that callers only ever destroy the `HashTable` by using the
-`tvm_htab_destroy()` function!
+It is important that callers only ever destroy the `HashTable` by using the `tvm_htab_destroy()` function!
 
-If they don't do that and instead try to call `free()` directly, we'll
-almost certainly have a bad time. At best, it'll leak a bunch of memory, but
-it's also quite possible that our Rust `Box` doesn't use the same heap as
-`malloc()` and `free()`, meaning freeing a Rust object from C could corrupt
-the heap and leave the world in a broken state.
+If they don't do that and instead try to call `free()` directly, we'll almost certainly have a bad time. At best, it'll leak a bunch of memory, but it's also quite possible that our Rust `Box` doesn't use the same heap as `malloc()` and `free()`, meaning freeing a Rust object from C could corrupt the heap and leave the world in a broken state.
 {{% /notice %}}
 
 Adding items to our hashmap is almost as easy to implement.
@@ -663,23 +601,14 @@ pub unsafe extern "C" fn tvm_htab_add_ref(
 ```
 
 {{% notice note %}}
-It's important to make sure we're using a `CString` as the hashtable key here
-instead of a normal `String`. A `*const c_char` can contain *any* non-null
-bytes, whereas a Rust `String` requires the string to be valid UTF-8.
+It's important to make sure we're using a `CString` as the hashtable key here instead of a normal `String`. A `*const c_char` can contain *any* non-null bytes, whereas a Rust `String` requires the string to be valid UTF-8.
 
-We could probably get away with converting the `CStr` to a `&str` and then an
-owned `String` because most input will be ASCII, but considering we'd need one
-or two `unwrap()`s, it's easier to just do things correctly and store a
-`CString`.
+We could probably get away with converting the `CStr` to a `&str` and then an owned `String` because most input will be ASCII, but considering we'd need one or two `unwrap()`s, it's easier to just do things correctly and store a `CString`.
 {{% /notice %}}
 
-The two `*_find()` functions can be delegated straight to the inner
-`HashMap<CString, Item>`.
+The two `*_find()` functions can be delegated straight to the inner `HashMap<CString, Item>`.
 
-The only thing we need to be careful about is making sure the right value is
-returned when an item can't be found. In this case, by looking at
-`tvm_htab.c` we can see that `tvm_htab_find()` returns `-1` and
-`tvm_htab_find_ref()` returns `NULL`.
+The only thing we need to be careful about is making sure the right value is returned when an item can't be found. In this case, by looking at `tvm_htab.c` we can see that `tvm_htab_find()` returns `-1` and `tvm_htab_find_ref()` returns `NULL`.
 
 ```rust
 // src/hmap.rs
@@ -713,8 +642,7 @@ pub unsafe extern "C" fn tvm_htab_find_ref(
 }
 ```
 
-Now we've actually implemented the stubbed out functions, everything should work
-again.
+Now we've actually implemented the stubbed out functions, everything should work again.
 
 The easiest way to check is by running our example.
 
@@ -734,8 +662,7 @@ cargo run --example tvmi -- vendor/tinyvm/programs/tinyvm/fact.vm
 3628800
 ```
 
-And to double-check we can run it through `valgrind` to make sure we aren't
-leaking memory or doing anything dodgy with pointers.
+And to double-check we can run it through `valgrind` to make sure we aren't leaking memory or doing anything dodgy with pointers.
 
 ```console
 $ valgrind target/debug/examples/tvmi vendor/tinyvm/programs/tinyvm/fact.vm
@@ -769,14 +696,9 @@ Success!
 
 ## Implementing Preprocessing
 
-The `tinyvm` virtual machine consumes [a simplified form of assembly][grammar]
-similar to traditional Intel x86 assembly. The first step in parsing `tinyvm`
-assembly is to run a preprocessor which interprets `%include filename` and
-`%define identifier value` statements.
+The `tinyvm` virtual machine consumes [a simplified form of assembly][grammar] similar to traditional Intel x86 assembly. The first step in parsing `tinyvm` assembly is to run a preprocessor which interprets `%include filename` and `%define identifier value` statements.
 
-This sort of text manipulation should be a lot easier to accomplish using
-Rust's `&str` types, so let's have a look at the interface our crate needs to
-implement.
+This sort of text manipulation should be a lot easier to accomplish using Rust's `&str` types, so let's have a look at the interface our crate needs to implement.
 
 ```c
 // vendor/tinyvm/include/tvm/tvm_preprocessor.h
@@ -791,9 +713,7 @@ int tvm_preprocess(char **src, int *src_len, struct tvm_htab_ctx *defines);
 #endif
 ```
 
-Using `char **` and `int *` for the `src` and `src_len` variables may seem a
-bit odd at first, but if you were to write the equivalent in Rust you'd get
-something like this:
+Using `char **` and `int *` for the `src` and `src_len` variables may seem a bit odd at first, but if you were to write the equivalent in Rust you'd get something like this:
 
 ```rust
 fn tvm_preprocess(
@@ -804,14 +724,11 @@ fn tvm_preprocess(
 }
 ```
 
-The C code is just using output parameters to swap the `src` string in-place
-because it can't return both a new string and an error code.
+The C code is just using output parameters to swap the `src` string in-place because it can't return both a new string and an error code.
 
-Before we do anything else, we should write a test for `tvm_preprocess()`. That
-way we can ensure our Rust function is functionally equivalent to the original.
+Before we do anything else, we should write a test for `tvm_preprocess()`. That way we can ensure our Rust function is functionally equivalent to the original.
 
-We're interacting with the filesystem so we'll want to pull in
-[the `tempfile` crate][tempfile].
+We're interacting with the filesystem so we'll want to pull in [the `tempfile` crate][tempfile].
 
 ```console
 $ cargo add --dev tempfile
@@ -819,8 +736,7 @@ $ cargo add --dev tempfile
       Adding tempfile v3.1.0 to dev-dependencies
 ```
 
-We'll also need the `libc` crate because we're going to be passing `libtvm`
-strings which it may need to free.
+We'll also need the `libc` crate because we're going to be passing `libtvm` strings which it may need to free.
 
 ```console
 cargo add libc
@@ -828,12 +744,9 @@ cargo add libc
       Adding libc v0.2.66 to dev-dependencies
 ```
 
-Looking at the source code, we can see that the `tvm_preprocess()` function
-will keep resolving `%include`s and `%define`s until there are none left.
+Looking at the source code, we can see that the `tvm_preprocess()` function will keep resolving `%include`s and `%define`s until there are none left.
 
-First let's create a test to make sure the preprocessor handles `%define`s. We
-know this code already works (it's the code from `tinyvm` after all), so there
-shouldn't be any surprises.
+First let's create a test to make sure the preprocessor handles `%define`s. We know this code already works (it's the code from `tinyvm` after all), so there shouldn't be any surprises.
 
 
 ```rust
@@ -889,9 +802,7 @@ mod tests {
 }
 ```
 
-Weighing in at 45 lines that's a lot more than I usually like when writing
-tests, but there's a fair amount of extra code required to convert back and
-forth between C strings.
+Weighing in at 45 lines that's a lot more than I usually like when writing tests, but there's a fair amount of extra code required to convert back and forth between C strings.
 
 We also need to test including another file.
 
@@ -945,10 +856,7 @@ mod tests {
 ```
 
 {{% notice note %}}
-As an aside, this test was originally written to nest things three layers
-deep (e.g. `top_level.vm` includes `nested.vm` which includes `really_nested.vm`)
-to make sure it handles more than one level of `%include`, but no matter how
-it was written the test kept segfaulting.
+As an aside, this test was originally written to nest things three layers deep (e.g. `top_level.vm` includes `nested.vm` which includes `really_nested.vm`) to make sure it handles more than one level of `%include`, but no matter how it was written the test kept segfaulting.
 
 Then I tried running the original C `tvmi` binary...
 
@@ -964,12 +872,10 @@ $ ./bin/tvmi top_level.vm
   [1]    10607 segmentation fault (core dumped)  ./bin/tvmi top_level.vm
 ```
 
-Turns out the original `tinyvm` will crash for some reason when you have
-multiple layers of includes 😕
+Turns out the original `tinyvm` will crash for some reason when you have multiple layers of includes 😕
 {{% /notice %}}
 
-Okay, so now we've got some tests we can start to implement
-`tvm_preprocess()`.
+Okay, so now we've got some tests we can start to implement `tvm_preprocess()`.
 
 
 First off we should define an error type.
@@ -993,13 +899,9 @@ pub enum PreprocessingError {
 }
 ```
 
-Looking at the [`process_includes()` and `process_derives()`
-functions][preprocessor.c], both seem to scan through a string looking for a
-particular directive, then replace that line with something else (either the
-contents of a file or nothing if the line should be removed).
+Looking at the [`process_includes()` and `process_derives()` functions][preprocessor.c], both seem to scan through a string looking for a particular directive, then replace that line with something else (either the contents of a file or nothing if the line should be removed).
 
-We should be able to extract that logic into a helper and avoid unnecessary
-duplication.
+We should be able to extract that logic into a helper and avoid unnecessary duplication.
 
 ```rust
 // src/preprocessing.rs
@@ -1043,8 +945,7 @@ where
 }
 ```
 
-Now we've got our `process_line_starting_with_directive()` helper we can
-implement include parsing.
+Now we've got our `process_line_starting_with_directive()` helper we can implement include parsing.
 
 ```rust
 // src/preprocessing.rs
@@ -1126,8 +1027,7 @@ fn parse_define(
 }
 ```
 
-To access the text stored in our hashtable, we'll need to give `Item` a
-couple helper methods:
+To access the text stored in our hashtable, we'll need to give `Item` a couple helper methods:
 
 ```rust
 // src/htab.rs
@@ -1222,9 +1122,7 @@ mod tests {
 }
 ```
 
-At this point we've reproduced most of the preprocessing logic, so now we just
-need a function which will keep expanding `%include` statements and handling
-`%define`s until there's nothing more to do.
+At this point we've reproduced most of the preprocessing logic, so now we just need a function which will keep expanding `%include` statements and handling `%define`s until there's nothing more to do.
 
 ```rust
 // src/preprocessing.rs
@@ -1248,9 +1146,7 @@ pub fn preprocess(
 }
 ```
 
-Of course, this `preprocess()` function is only accessible to Rust. We need to
-create an `extern "C" fn` which translates arguments from C types to something
-Rust can handle, then translate back to C land at the end.
+Of course, this `preprocess()` function is only accessible to Rust. We need to create an `extern "C" fn` which translates arguments from C types to something Rust can handle, then translate back to C land at the end.
 
 ```rust
 // src/preprocessing.rs
@@ -1296,19 +1192,13 @@ pub unsafe extern "C" fn tvm_preprocess(
 ```
 
 {{% notice tip %}}
-You may have noticed that our `tvm_preprocess()` doesn't have any preprocessing
-logic, and is more like an adapter to translate arguments and return values, and
-make sure errors are propagated correctly.
+You may have noticed that our `tvm_preprocess()` doesn't have any preprocessing logic, and is more like an adapter to translate arguments and return values, and make sure errors are propagated correctly.
 
 This is no accident.
 
-The secret to FFI code is to write as little as possible, and avoid *"clever"*
-tricks. Unlike most Rust code, making mistakes in these sorts of interop
-functions can lead to unsound logic and memory bugs.
+The secret to FFI code is to write as little as possible, and avoid *"clever"* tricks. Unlike most Rust code, making mistakes in these sorts of interop functions can lead to unsound logic and memory bugs.
 
-Creating a thin wrapper around our `preprocess()` function also makes things
-easier later on, because when more of the codebase is written in Rust we can
-delete the wrapper and call `preprocess()` directly.
+Creating a thin wrapper around our `preprocess()` function also makes things easier later on, because when more of the codebase is written in Rust we can delete the wrapper and call `preprocess()` directly.
 {{% /notice %}}
 
 Now the `tvm_preprocess()` function is defined we should be good to go.
@@ -1333,9 +1223,7 @@ error: could not compile `tinyvm`.
 To learn more, run the command again with --verbose.
 ```
 
-Oh, the linker is complaining because both `preprocessing.rs` and
-`tvm_preprocessor.c` define a `tvm_preprocess()` function. Looks like we forgot
-to remove `tvm_preprocessor.c` from the build...
+Oh, the linker is complaining because both `preprocessing.rs` and `tvm_preprocessor.c` define a `tvm_preprocess()` function. Looks like we forgot to remove `tvm_preprocessor.c` from the build...
 
 ```diff
 diff --git a/build.rs b/build.rs
@@ -1373,40 +1261,27 @@ cargo run --example tvmi -- vendor/tinyvm/programs/tinyvm/fact.vm
 
 Much better!
 
-Remember that example from before where `tvmi` would crash when encountering
-includes three levels deep? As a happy side-effect, porting to Rust means nested
-includes *Just Work*.
+Remember that example from before where `tvmi` would crash when encountering includes three levels deep? As a happy side-effect, porting to Rust means nested includes *Just Work*.
 
 {{% notice note %}}
-You may have also noticed that our `preprocess()` function doesn't use any of
-the hashtable functions from `tvm_htab.h`. Instead we take advantage of the fact
-that the module has already been ported to Rust and just use the Rust types
-directly.
+You may have also noticed that our `preprocess()` function doesn't use any of the hashtable functions from `tvm_htab.h`. Instead we take advantage of the fact that the module has already been ported to Rust and just use the Rust types directly.
 
-That's the beauty of this process. Once you've moved something to Rust you can
-leverage that to use the types/functions directly to get some easy wins in
-error handling and ergonomics.
+That's the beauty of this process. Once you've moved something to Rust you can leverage that to use the types/functions directly to get some easy wins in error handling and ergonomics.
 {{% /notice %}}
 
 ## Conclusion
 
-If you're still reading by this point, congratulations, we've just ported two
-modules from `tinyvm` to Rust.
+If you're still reading by this point, congratulations, we've just ported two modules from `tinyvm` to Rust.
 
-Unfortunately this article is already long enough, but hopefully by now you
-can see the general pattern,
+Unfortunately this article is already long enough, but hopefully by now you can see the general pattern,
 
 1. Look through the application's header files and find an easy function/module
 2. Write some tests so you understand how the existing function should work
 3. Write equivalent functions in Rust and make sure they pass the same tests
-4. Create a thin shim which exports the Rust function with the same C interface,
-   making sure to remove the original function/module from the build so the
-   linker uses the Rust code instead of C
+4. Create a thin shim which exports the Rust function with the same C interface, making sure to remove the original function/module from the build so the linker uses the Rust code instead of C
 5. Go to step 1
 
-The best thing about this method is you are incrementally improving a
-codebase while while ensuring the application still works and avoiding a
-ground-up rewrite.
+The best thing about this method is you are incrementally improving a codebase while while ensuring the application still works and avoiding a ground-up rewrite.
 
 Kinda like changing your tyre while driving down the highway.
 

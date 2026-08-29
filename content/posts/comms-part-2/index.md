@@ -1,6 +1,7 @@
 ---
 title: 'The Communications System: Part 2'
 date: '2019-09-08T01:20:00+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Rust
 - Protocol Design
@@ -9,10 +10,7 @@ series:
 - Adventures in Motion Control
 ---
 
-Now we have a mechanism for transferring bytes from the frontend to the
-simulator and back again, we need to translate those bytes into higher-level
-messages. Luckily each [`anpp::Packet`] contains an [`ID` field][packet-id] that
-is designed specifically for this purpose.
+Now we have a mechanism for transferring bytes from the frontend to the simulator and back again, we need to translate those bytes into higher-level messages. Luckily each [`anpp::Packet`] contains an [`ID` field][packet-id] that is designed specifically for this purpose.
 
 That lets us do something like this:
 
@@ -41,18 +39,13 @@ fn parse_packet<'a>(pkt: &'a Packet) -> Result<Message<'a>, UnknownMessageError>
 }
 ```
 
-The top-level `App` can handle messages by routing them to the appropriate
-system and invoking a message handler.
+The top-level `App` can handle messages by routing them to the appropriate system and invoking a message handler.
 
 ## Message Routing
 
-A `Router` contains references to the various other systems, implementing
-`MessageHandler` and delegating the handling of a message to the corresponding
-system.
+A `Router` contains references to the various other systems, implementing `MessageHandler` and delegating the handling of a message to the corresponding system.
 
-This design makes use of references to avoid the need for `Rc` and friends,
-while taking advantage of lifetimes and the ability to pass out `&mut`
-references to different fields of a struct at the same time.
+This design makes use of references to avoid the need for `Rc` and friends, while taking advantage of lifetimes and the ability to pass out `&mut` references to different fields of a struct at the same time.
 
 ```rust
 // sim/src/router.rs
@@ -74,8 +67,7 @@ impl<'a> MessageHandler for Router<'a> {
 }
 ```
 
-To start using the `Router` we need to add the `Communications` system to our
-`App`.
+To start using the `Router` we need to add the `Communications` system to our `App`.
 
 ```rust
 // sim/src/app.rs
@@ -109,9 +101,7 @@ impl App {
 }
 ```
 
-At this point the compiler is complaining that `Browser` doesn't implement the
-`comms::Tx` trait (for sending bytes to the UI). We'll come back to this later,
-so for now just leave it `unimplemented!()`.
+At this point the compiler is complaining that `Browser` doesn't implement the `comms::Tx` trait (for sending bytes to the UI). We'll come back to this later, so for now just leave it `unimplemented!()`.
 
 <a name="earlier-unimplemented"></a>
 
@@ -125,14 +115,9 @@ impl Tx for Browser {
 
 ## Making Sense of Messages
 
-At the moment the only other system is the `FpsCounter`, so lets create a
-request for clearing the counter.
+At the moment the only other system is the `FpsCounter`, so lets create a request for clearing the counter.
 
-In the long term we'd like to make adding a new message type and handling it as
-simple as possible. Ideally just a case of adding the message and response types
-(with derives for serializing/deserializing), implementing `Handle` so the
-system can handle the message, then adding a new arm to `Router`'s match
-statement.
+In the long term we'd like to make adding a new message type and handling it as simple as possible. Ideally just a case of adding the message and response types (with derives for serializing/deserializing), implementing `Handle` so the system can handle the message, then adding a new arm to `Router`'s match statement.
 
 ```rust
 // in the my_system module
@@ -166,17 +151,10 @@ impl<'a> MessageHandler for Router<'a> {
 }
 ```
 
-For serializing and deserializing we can use the [scroll][scroll] crate. This
-gives us a nice `#[derive]` for copying the contents of a struct directly to
-a byte buffer. Something that's very common in C programming, and boils down to
-a couple calls to `memcpy()`.
+For serializing and deserializing we can use the [scroll][scroll] crate. This gives us a nice `#[derive]` for copying the contents of a struct directly to a byte buffer. Something that's very common in C programming, and boils down to a couple calls to `memcpy()`.
 
 {{% notice tip %}}
-As a bonus, this sort of encoding makes troubleshooting communications
-problems with real hardware really easy. Because we're not playing around
-with things like compression or variable-length integers, you can watch the
-bytes go back and forth using [Wireshark][ws], mentally translating from
-binary to the integers and strings that make up a message.
+As a bonus, this sort of encoding makes troubleshooting communications problems with real hardware really easy. Because we're not playing around with things like compression or variable-length integers, you can watch the bytes go back and forth using [Wireshark][ws], mentally translating from binary to the integers and strings that make up a message.
 
 [ws]: https://www.wireshark.org/
 {{% /notice %}}
@@ -251,9 +229,7 @@ impl<'a> MessageHandler for Router<'a> {
 }
 ```
 
-The only thing missing is that `dispatch()` function. That's where the magic
-really happens. Unfortunately due to the highly generic nature of what we're
-trying to do the signature is a bit gnarly...
+The only thing missing is that `dispatch()` function. That's where the magic really happens. Unfortunately due to the highly generic nature of what we're trying to do the signature is a bit gnarly...
 
 ```rust
 // sim/src/router.rs
@@ -287,22 +263,15 @@ where
 }
 ```
 
-That little incantation completes the guts of the `Router` type. This
-infrastructure gives our application a well-defined mechanism for transferring
-data between the frontend and the motion controller.
+That little incantation completes the guts of the `Router` type. This infrastructure gives our application a well-defined mechanism for transferring data between the frontend and the motion controller.
 
-It also simplifies the process of adding new requests and responses as the
-application evolves.
+It also simplifies the process of adding new requests and responses as the application evolves.
 
 ## Actually Sending Some Data
 
-You may have noticed that [earlier](#earlier-unimplemented) we "implemented"
-the `Tx` trait for `Browser` with `unimplemented!()`, leaving the process of
-sending data to the frontend for later. Well now is later.
+You may have noticed that [earlier](#earlier-unimplemented) we "implemented" the `Tx` trait for `Browser` with `unimplemented!()`, leaving the process of sending data to the frontend for later. Well now is later.
 
-Transferring data to the frontend is done by registering a JavaScript callback
-with the `Browser` (via a `#[wasm_bindgen]` method on `App`) and calling it
-with a [`Uint8Array`][uint8-array] as the only argument.
+Transferring data to the frontend is done by registering a JavaScript callback with the `Browser` (via a `#[wasm_bindgen]` method on `App`) and calling it with a [`Uint8Array`][uint8-array] as the only argument.
 
 ```rust
 // sim/src/browser.rs
@@ -345,8 +314,7 @@ impl Tx for Browser {
 }
 ```
 
-We also need to provide a couple setters so JavaScript can register this
-callback.
+We also need to provide a couple setters so JavaScript can register this callback.
 
 ```rust
 // sim/src/browser.rs
@@ -375,9 +343,7 @@ impl App {
 }
 ```
 
-Next we need to register our callback from the `init()` function in `index.js`.
-Later on we'll add a more realistic handler, but we'll use `console.log()`
-temporarily to see what's going on.
+Next we need to register our callback from the `init()` function in `index.js`. Later on we'll add a more realistic handler, but we'll use `console.log()` temporarily to see what's going on.
 
 ```js
 // frontend/index.js
@@ -394,13 +360,10 @@ function init() {
 ```
 
 {{% notice note %}}
-Remember that the first 5 bytes of an ANPP message are the header. We use
-`data.slice(5)` to skip the first 5 bytes and then interpret the rest as a UTF-8
-string using a `TextDecoder`.
+Remember that the first 5 bytes of an ANPP message are the header. We use `data.slice(5)` to skip the first 5 bytes and then interpret the rest as a UTF-8 string using a `TextDecoder`.
 {{% /notice %}}
 
-Lets tell the router to handle a message with ID 42 by returning the original
-message unchanged (i.e. its an `echo` command).
+Lets tell the router to handle a message with ID 42 by returning the original message unchanged (i.e. its an `echo` command).
 
 ```rust
 // sim/src/router.rs
@@ -417,10 +380,7 @@ impl<'a> MessageHandler for Router<'a> {
 }
 ```
 
-We should also expose a helper method on `App` for generating an `echo` message
-and sending it to the backend. Remember that sending a message is asynchronous
-(it *won't* block) and the callback registered with `on_data_sent()` will only
-be invoked the next time `requestAnimationFrame()` runs.
+We should also expose a helper method on `App` for generating an `echo` message and sending it to the backend. Remember that sending a message is asynchronous (it *won't* block) and the callback registered with `on_data_sent()` will only be invoked the next time `requestAnimationFrame()` runs.
 
 ```rust
 // sim/src/app.rs
@@ -447,8 +407,7 @@ impl App {
 }
 ```
 
-Finally, we'll register an `echo` to be sent about 500ms after initializing the
-world.
+Finally, we'll register an `echo` to be sent about 500ms after initializing the world.
 
 ```js
 // frontend/index.js
@@ -460,13 +419,11 @@ function init() {
 }
 ```
 
-Surprisingly, reloading the *Adventures in Motion Control* tab and opening the
-dev console shows everything worked first time!
+Surprisingly, reloading the *Adventures in Motion Control* tab and opening the dev console shows everything worked first time!
 
 ![Don't you love it when things work first time?](echo.png)
 
-While we're at it, let's make sure throwing an exception in the callback doesn't
-break the world.
+While we're at it, let's make sure throwing an exception in the callback doesn't break the world.
 
 ```js
 // frontend/index.js
@@ -481,17 +438,13 @@ function init() {
 }
 ```
 
-The `<Browser as Tx>::send()` method will invoke `console.error()` whenever the
-callback returns an `Err` (`wasm_bindgen` generates shims to turn exceptions
-into a `Result<T, JsValue>`), so in theory it should show in the dev tools
-window with a backtrace.
+The `<Browser as Tx>::send()` method will invoke `console.error()` whenever the callback returns an `Err` (`wasm_bindgen` generates shims to turn exceptions into a `Result<T, JsValue>`), so in theory it should show in the dev tools window with a backtrace.
 
 ![Error log with backtrace](console_error.png)
 
 The backtrace isn't stellar, but it's definitely usable.
 
-If you know how to set up source maps or some other tool for translating those
-opaque WASM offsets into file names and line numbers, let me know!
+If you know how to set up source maps or some other tool for translating those opaque WASM offsets into file names and line numbers, let me know!
 
 ## The Next Step
 
@@ -507,8 +460,7 @@ We're now able to:
 
 Talk about a convoluted way to print "`Hello, World"` to the dev tools console!
 
-Now we've established a rudimentary communications system it's time to start
-implementing the next part of a motion controller. The *motion* bit.
+Now we've established a rudimentary communications system it's time to start implementing the next part of a motion controller. The *motion* bit.
 
 [packet-id]: https://docs.rs/anpp/1.0.1/anpp/struct.Packet.html#method.id
 [scroll]: https://crates.io/crates/scroll

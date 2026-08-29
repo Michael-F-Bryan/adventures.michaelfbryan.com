@@ -1,6 +1,7 @@
 ---
 title: Top-Level Infrastructure
 date: '2019-09-02T21:22:30+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Rust
 - WebAssembly
@@ -9,14 +10,11 @@ series:
 - Adventures in Motion Control
 ---
 
-As mentioned in [the intro article][next-step], the first task will be to set
-up the application's structure and define how the various components will
-communicate.
+As mentioned in [the intro article][next-step], the first task will be to set up the application's structure and define how the various components will communicate.
 
 ## Multitasking
 
-Most embedded systems will implement multi-tasking by rapidly polling each
-system within an infinite loop.
+Most embedded systems will implement multi-tasking by rapidly polling each system within an infinite loop.
 
 ```rust
 loop {
@@ -27,35 +25,19 @@ loop {
 }
 ```
 
-A motion controller will normally spend most of its time polling, but there are
-places where polling isn't appropriate. For example, accurate movement of a
-stepper motor relies on sending pulses at very precise times. Another scenario
-is in the handling of communication, where waiting for the next poll to read a
-byte may result in missing part of a message.
+A motion controller will normally spend most of its time polling, but there are places where polling isn't appropriate. For example, accurate movement of a stepper motor relies on sending pulses at very precise times. Another scenario is in the handling of communication, where waiting for the next poll to read a byte may result in missing part of a message.
 
-To deal with this embedded systems use [interrupts][interrupt], callbacks which
-will preempt the normal flow of execution to handle an event. These callbacks,
-referred to as *Interrupt Service Routines*, will then do the bare minimum
-required to handle the event so execution can be resumed as quickly as
-possible.
+To deal with this embedded systems use [interrupts][interrupt], callbacks which will preempt the normal flow of execution to handle an event. These callbacks, referred to as *Interrupt Service Routines*, will then do the bare minimum required to handle the event so execution can be resumed as quickly as possible.
 
-For example, this may happen by saving the event to memory (e.g.
-*"received `0x0A` over serial"*) so it can be handled by the appropriate
-system when it is polled next.
+For example, this may happen by saving the event to memory (e.g. *"received `0x0A` over serial"*) so it can be handled by the appropriate system when it is polled next.
 
 ## Inter-System Communication
 
-Now we know that systems will do work by being polled frequently, lets think
-about how they'll interact with the rest of the application.
+Now we know that systems will do work by being polled frequently, lets think about how they'll interact with the rest of the application.
 
-In general a system works by reading state, evaluating some logic using that
-state, then propagate the results of that logic by sending messages to the
-rest of the system (or even to the real world via IOs).
+In general a system works by reading state, evaluating some logic using that state, then propagate the results of that logic by sending messages to the rest of the system (or even to the real world via IOs).
 
-Systems will be polled infinitely and are the top-most level of logic so they
-must handle every possible error, even if that is just done by entering a fault
-state. It doesn't make sense for `poll()` to return an error (who would
-handle the error?)... Or anything, for that matter.
+Systems will be polled infinitely and are the top-most level of logic so they must handle every possible error, even if that is just done by entering a fault state. It doesn't make sense for `poll()` to return an error (who would handle the error?)... Or anything, for that matter.
 
 From that, we've got a rough image of what a system may look like:
 
@@ -67,12 +49,7 @@ trait System<In, Out> {
 
 ## Keeping Track of Time
 
-An important responsibility for a motion controller is being able to change
-the value of something over time (hence the *motion* in *motion controller*).
-Timing is used all over the place and each motion controller will have its
-own way of tracking the time (remember that there may not necessarily be an
-OS meaning we can't depend on `std::time::SystemTime`), so lets pull this
-out into its own trait.
+An important responsibility for a motion controller is being able to change the value of something over time (hence the *motion* in *motion controller*). Timing is used all over the place and each motion controller will have its own way of tracking the time (remember that there may not necessarily be an OS meaning we can't depend on `std::time::SystemTime`), so lets pull this out into its own trait.
 
 ```rust
 use core::time::Duration;
@@ -85,31 +62,22 @@ trait Clock: Sync {
 ```
 
 {{% notice note %}}
-A `Clock` will be shared by almost every system and a reference may be passed
-across threads. Hence the `&self` in `elapsed()` and the `Sync` bound.
+A `Clock` will be shared by almost every system and a reference may be passed across threads. Hence the `&self` in `elapsed()` and the `Sync` bound.
 {{% /notice %}}
 
 {{% notice tip %}}
-Extracting the concept of time into its own trait is especially handy during
-testing. It can also be used to make time run faster than the usual 1 second
-per second (e.g. fast-forward).
+Extracting the concept of time into its own trait is especially handy during testing. It can also be used to make time run faster than the usual 1 second per second (e.g. fast-forward).
 {{% /notice %}}
 
 ## Layers
 
-To reduce coupling and make things more manageable, we'll take advantage of
-[Cargo Workspaces][workspaces] to break the project into layers.
+To reduce coupling and make things more manageable, we'll take advantage of [Cargo Workspaces][workspaces] to break the project into layers.
 
-At the very bottom is our *Hardware Abstraction Layer* (HAL). This defines
-the various platform-agnostic interfaces used by the application.
+At the very bottom is our *Hardware Abstraction Layer* (HAL). This defines the various platform-agnostic interfaces used by the application.
 
-Next we have the various drivers (e.g. stepper motor control) and systems (e.g.
-communication and motion planning). These are built on top of the HAL and
-are where most of the application is implemented.
+Next we have the various drivers (e.g. stepper motor control) and systems (e.g. communication and motion planning). These are built on top of the HAL and are where most of the application is implemented.
 
-At the very top is the application itself, an in-browser simulator in our case.
-Its role is to glue the various components together, performing the necessary
-setup before polling the various systems ad infinitum.
+At the very top is the application itself, an in-browser simulator in our case. Its role is to glue the various components together, performing the necessary setup before polling the various systems ad infinitum.
 
 Our app's dependency graph may look something like this:
 
@@ -135,12 +103,9 @@ graph BT;
 
 ## Hello, World!
 
-Now we've got a better idea of how the application might be structured it's
-time to stub out enough of the frontend to see things run.
+Now we've got a better idea of how the application might be structured it's time to stub out enough of the frontend to see things run.
 
-I won't explain each step in setting up a Rust WASM project (the
-[Rust and WebAssembly][wasm-book] book already does a great job at that!), but
-here's the gist of it:
+I won't explain each step in setting up a Rust WASM project (the [Rust and WebAssembly][wasm-book] book already does a great job at that!), but here's the gist of it:
 
 ```console
 $ cargo generate --git https://github.com/rustwasm/wasm-pack-template --name sim
@@ -193,10 +158,7 @@ The project now looks something like this ([commit `69e68832`][69e68832]):
     - index.js
     - index.html
 
-I normally use [`cargo-watch`][cargo-watch] to recompile and run my project's
-test suite whenever a change is made, but doing the same with `wasm-pack` and
-`yarn` takes a little extra effort. Instead, we'll need to work with
-[`watchexec`][watchexec] directly.
+I normally use [`cargo-watch`][cargo-watch] to recompile and run my project's test suite whenever a change is made, but doing the same with `wasm-pack` and `yarn` takes a little extra effort. Instead, we'll need to work with [`watchexec`][watchexec] directly.
 
 ```console
 $ watchexec \
@@ -214,15 +176,10 @@ $ watchexec \
 ```
 
 {{% notice note %}}
-Webpack won't automatically detect the `sim/pkg/` directory's contents have
-changed (I'm guessing the folder's contents are copied to `node_modules/`?).
-That means we need to manually run `yarn add ../sim/pkg` every time the WASM
-code changes.
+Webpack won't automatically detect the `sim/pkg/` directory's contents have changed (I'm guessing the folder's contents are copied to `node_modules/`?). That means we need to manually run `yarn add ../sim/pkg` every time the WASM code changes.
 {{% /notice %}}
 
-Lets stub out an `App` type. This will contain the world's state, with a
-reference being passed to the JavaScript frontend so it can be periodically
-polled.
+Lets stub out an `App` type. This will contain the world's state, with a reference being passed to the JavaScript frontend so it can be periodically polled.
 
 ```rust
 // sim/src/app.rs
@@ -245,12 +202,10 @@ impl App {
 ```
 
 {{% notice note %}}
-The `Input` and `Browser` types are what hooks our `App` up to the rest of the
-world. They'll implement the various HAL traits so our systems are able run.
+The `Input` and `Browser` types are what hooks our `App` up to the rest of the world. They'll implement the various HAL traits so our systems are able run.
 {{% /notice %}}
 
-For now, the `Input` just contains a `Clock` based on JavaScript's
-`performance.now()` function.
+For now, the `Input` just contains a `Clock` based on JavaScript's `performance.now()` function.
 
 ```rust
 // sim/src/inputs.rs
@@ -269,9 +224,7 @@ impl HasClock for Inputs {
 }
 ```
 
-The `PerformanceClock` itself isn't overly interesting. It just uses `web-sys`
-to call the native JavaScript function and converts the the result to a
-`Duration`.
+The `PerformanceClock` itself isn't overly interesting. It just uses `web-sys` to call the native JavaScript function and converts the the result to a `Duration`.
 
 ```rust
 // sim/src/clock.rs
@@ -321,8 +274,7 @@ impl Browser {
 }
 ```
 
-We also need to expose functions which will let JavaScript create the world
-and poll it.
+We also need to expose functions which will let JavaScript create the world and poll it.
 
 ```rust
 // sim/src/lib.rs
@@ -364,17 +316,11 @@ pub fn setup_world(fps_div: &str) -> App {
 pub fn poll(app: &mut App) { app.poll(); }
 ```
 
-Now the `sim` crate is exposing `setup_world()` and `poll()`, we can wire it
-up to the browser.
+Now the `sim` crate is exposing `setup_world()` and `poll()`, we can wire it up to the browser.
 
-Something to note about JavaScript running in a browser is that an infinite loop
-will prevent anything else from executing, locking the entire window up. This
-isn't great.
+Something to note about JavaScript running in a browser is that an infinite loop will prevent anything else from executing, locking the entire window up. This isn't great.
 
-The trick to implementing an infinite "loop" in JavaScript is to use
-[`window.requestAnimationFrame()`][raf] to schedule some `animate()` function
-to be called, then make sure `animate()` calls `requestAnimationFrame(animate)`
-so it'll be called again.
+The trick to implementing an infinite "loop" in JavaScript is to use [`window.requestAnimationFrame()`][raf] to schedule some `animate()` function to be called, then make sure `animate()` calls `requestAnimationFrame(animate)` so it'll be called again.
 
 ```js
 // frontend/index.js
@@ -397,35 +343,26 @@ function animate() {
 init();
 ```
 
-Going to the dev server (http://localhost:8080/) should show an empty page,
-however if you open up the developer console you should see something like this:
+Going to the dev server (http://localhost:8080/) should show an empty page, however if you open up the developer console you should see something like this:
 
 ![It Works!!1!](it-works.png)
 
-It may not look impressive, but to just get that *"Polling..."* message we
-needed to:
+It may not look impressive, but to just get that *"Polling..."* message we needed to:
 
 1. Compile the `sim` crate to WebAssembly
-2. Import that WebAssembly from a JavaScript application and make sure JS can
-   call our WASM functions
+2. Import that WebAssembly from a JavaScript application and make sure JS can call our WASM functions
 3. Bundle the JavaScript and WebAssembly together and send it to a browser
 4. Initialize the world when the window is first loaded
-5. Call `wasm.poll()` from an JavaScript function that is called whenever the
-   browser paints
-6. Poll the underlying `App`, using in a set of dummy `Inputs` and a `Browser`
-   object
+5. Call `wasm.poll()` from an JavaScript function that is called whenever the browser paints
+6. Poll the underlying `App`, using in a set of dummy `Inputs` and a `Browser` object
 7. Invoke that browser's `log()` method
 8. Call back into JavaScript's `console.log()` function
 
 ## The Next Step
 
-Now the main application is wired up and we can run code in the browser the next
-step is to add some systems to our application.
+Now the main application is wired up and we can run code in the browser the next step is to add some systems to our application.
 
-A relatively easy, yet important, component is some sort of FPS counter. Ideally
-there'll be a bit of text in the corner showing the number of `poll()`s per
-second and the average duration. That way we can get a better feel for our
-simulator's performance characteristics.
+A relatively easy, yet important, component is some sort of FPS counter. Ideally there'll be a bit of text in the corner showing the number of `poll()`s per second and the average duration. That way we can get a better feel for our simulator's performance characteristics.
 
 [next-step]: {{< ref "/posts/announcing-adventures-in-motion-control.md#the-next-step" >}}
 [interrupt]: https://en.wikipedia.org/wiki/Interrupt

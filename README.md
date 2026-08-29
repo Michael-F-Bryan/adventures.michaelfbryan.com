@@ -6,27 +6,21 @@ A simple blog for documenting my thoughts and experiments.
 
 ## Getting Started
 
-This blog uses the [Hugo][hugo] static site generator. You'll need to
-[install it][install-hugo] before anything else.
+This blog uses the [Hugo][hugo] static site generator. You'll need to [install it][install-hugo] before anything else.
 
-During development you'll want to use the dev server to see changes the
-moment they're made.
+During development you'll want to use the dev server to see changes the moment they're made.
 
 ```console
 hugo server --buildDrafts --buildExpired --buildFuture
 ```
 
-This should start a HTTP server on http://localhost:1313/ that serves the site,
-recompiling on every change.
+This should start a HTTP server on http://localhost:1313/ that serves the site, recompiling on every change.
 
 ## Custom Short-Codes and Templates
 
-Every post gets responsive table-of-contents navigation. On desktop, it stays in
-a sticky sidebar. On mobile, it appears in a collapsed disclosure immediately
-before the first second-level heading.
+Every post gets responsive table-of-contents navigation. On desktop, it stays in a sticky sidebar. On mobile, it appears in a collapsed disclosure immediately before the first second-level heading.
 
-An author can hide the table of contents for a particular page in its
-frontmatter:
+An author can hide the table of contents for a particular page in its frontmatter:
 
 ```yaml
 hide-toc: true
@@ -34,8 +28,7 @@ hide-toc: true
 
 ### Deployment
 
-The real site is published to GitHub Pages on every commit to the `master`
-branch.
+The real site is published to GitHub Pages on every commit to the `master` branch.
 
 This should all be handled by GitHub Actions automatically.
 

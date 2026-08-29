@@ -1,33 +1,21 @@
 ---
 title: WebAssembly as a Platform for Abstraction
 date: '2019-12-15T11:55:00+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - WebAssembly
 - Sandboxing
 - Testing
 ---
 
-In a project I've been playing around with recently, we've encountered the
-dilemma where you want to make it easy for users to write their own
-application logic using the system but at the same time want to keep that logic
-decoupled from the implementation details of whatever platform the
-application is running on.
+In a project I've been playing around with recently, we've encountered the dilemma where you want to make it easy for users to write their own application logic using the system but at the same time want to keep that logic decoupled from the implementation details of whatever platform the application is running on.
 
-If you've been programming for any amount of time your immediate reaction is
-probably *"why bother mentioning this, doesn't it just fall out of good
-library design?"*, and normally I would totally agree with you, except I
-forgot to mention a couple of important details...
+If you've been programming for any amount of time your immediate reaction is probably *"why bother mentioning this, doesn't it just fall out of good library design?"*, and normally I would totally agree with you, except I forgot to mention a couple of important details...
 
 1. People need to be able to upload new code while the system is still running
-2. This application will be interacting with the real world (think robots and
-   automation), and we *really* don't want a crash in user-provided code to
-   make the entire system stop responding
+2. This application will be interacting with the real world (think robots and automation), and we *really* don't want a crash in user-provided code to make the entire system stop responding
 
-The normal solution for the first point is to use some sort of [plugin
-architecture][plugins], however using something like *Dynamic Loading*
-doesn't solve the second point and the large amounts of `unsafe` code needed
-can arguably make the situation worse. For that we'll need some sort of
-sandboxing mechanism.
+The normal solution for the first point is to use some sort of [plugin architecture][plugins], however using something like *Dynamic Loading* doesn't solve the second point and the large amounts of `unsafe` code needed can arguably make the situation worse. For that we'll need some sort of sandboxing mechanism.
 
 Introducing...
 
@@ -38,32 +26,21 @@ Introducing...
     width="50%"
 >}}
 
-Web Assembly has gained a lot of traction over the last couple of years as a way
-to write code in any language and run it in the browser, but it can be used for
-so much more.
+Web Assembly has gained a lot of traction over the last couple of years as a way to write code in any language and run it in the browser, but it can be used for so much more.
 
-There are already [several][wasmer] [general-purpose][lucet]
-[runtimes][wasmtime] available for running Wasm in a Rust program. These
-runtimes give you a virtual machine which can run arbitrary code, and the
-only way this code can interact with the outside world is via the functions you
-explicitly give it access to.
+There are already [several][wasmer] [general-purpose][lucet] [runtimes][wasmtime] available for running Wasm in a Rust program. These runtimes give you a virtual machine which can run arbitrary code, and the only way this code can interact with the outside world is via the functions you explicitly give it access to.
 
 {{% notice note %}}
-Unfortunately, the code behind this post isn't publicly available (yet!). It's
-actually part of a larger project I've been experimenting with and the final
-version will probably end up quite different to what you see here.
+Unfortunately, the code behind this post isn't publicly available (yet!). It's actually part of a larger project I've been experimenting with and the final version will probably end up quite different to what you see here.
 
-That said, feel free to copy code or use it as inspiration for your own
-projects. If you found this useful or spotted a bug, let me know on the
-blog's [issue tracker][issue]!
+That said, feel free to copy code or use it as inspiration for your own projects. If you found this useful or spotted a bug, let me know on the blog's [issue tracker][issue]!
 
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
 {{% /notice %}}
 
 ## Getting Started
 
-I've chosen to use the [`wasmer`][wasmer] crate because its interface seems to
-be the most amenable to embedding.
+I've chosen to use the [`wasmer`][wasmer] crate because its interface seems to be the most amenable to embedding.
 
 Let's start things off by creating a new crate for the project.
 
@@ -81,9 +58,7 @@ $ cd wasm && cargo add wasmer-runtime
 ```
 
 {{% notice tip %}}
-You may have noticed I'm using `cargo add` here instead of manually editing
-the `Cargo.toml` file. You can get this nifty little subcommand from the
-[cargo-edit][ce] crate (`cargo install cargo-edit`).
+You may have noticed I'm using `cargo add` here instead of manually editing the `Cargo.toml` file. You can get this nifty little subcommand from the [cargo-edit][ce] crate (`cargo install cargo-edit`).
 
 [ce]: https://crates.io/crates/cargo-edit
 {{% /notice %}}
@@ -110,12 +85,9 @@ impl Program {
 }
 ```
 
-We just want to get things running, so for now we won't bother exposing any
-host functions to the user-provided program. Hence the empty `imports!()` call.
+We just want to get things running, so for now we won't bother exposing any host functions to the user-provided program. Hence the empty `imports!()` call.
 
-Motion control systems typically work by rapidly polling each task in turn,
-so let's give `Program` a `poll()` method which will call the Wasm module's
-`poll()` function.
+Motion control systems typically work by rapidly polling each task in turn, so let's give `Program` a `poll()` method which will call the Wasm module's `poll()` function.
 
 
 ```rust
@@ -132,10 +104,7 @@ impl Program {
 }
 ```
 
-Technically we now have everything necessary to load and poll a program, so
-let's give it a shot. We'll need to create an executable and our project
-could do with an example showing how to run a program, so we should be able to
-kill two birds with one stone.
+Technically we now have everything necessary to load and poll a program, so let's give it a shot. We'll need to create an executable and our project could do with an example showing how to run a program, so we should be able to kill two birds with one stone.
 
 ```rust
 // examples/basic-runtime.rs
@@ -158,8 +127,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 ```
 
-We'll also need a dummy program that can be compiled to Wasm and fed to our
-`basic-runtime` example.
+We'll also need a dummy program that can be compiled to Wasm and fed to our `basic-runtime` example.
 
 ```rust
 // example-program.rs
@@ -180,21 +148,13 @@ $ cargo run --example basic-runtime -- example_program.wasm
 ^C
 ```
 
-Well that was... anticlimatic. The `poll()` function in `example-program.rs`
-doesn't actually do anything, so we just created an expensive busy loop.
+Well that was... anticlimatic. The `poll()` function in `example-program.rs` doesn't actually do anything, so we just created an expensive busy loop.
 
 Let's give the Wasm code a way to print messages to the screen.
 
-The way this is done is via that `imports!()` macro from earlier, basically
-any function defined inside `imports!()` is accessible to the Wasm code.
-`wasmer` imposes some strict constraints on the functions which may be exposed
-to Wasm, restricting arguments and return values to `i32`, `i64`, `f32`, `f64`,
-and pointers.
+The way this is done is via that `imports!()` macro from earlier, basically any function defined inside `imports!()` is accessible to the Wasm code. `wasmer` imposes some strict constraints on the functions which may be exposed to Wasm, restricting arguments and return values to `i32`, `i64`, `f32`, `f64`, and pointers.
 
-Functions may optionally accept a `&mut wasmer_runtime::Ctx` as the first
-argument, this is useful for interacting with the runtime (e.g. to access
-Wasm memory or call a function) or accessing contextual information attached
-to the `Instance`.
+Functions may optionally accept a `&mut wasmer_runtime::Ctx` as the first argument, this is useful for interacting with the runtime (e.g. to access Wasm memory or call a function) or accessing contextual information attached to the `Instance`.
 
 The code itself is rather straightforward:
 
@@ -234,8 +194,7 @@ fn print(ctx: &mut Ctx, msg: WasmPtr<u8, Array>, length: u32) -> i32 {
 }
 ```
 
-Now we can update the `example-program.rs` file to print `"Polling"` every time
-it gets called.
+Now we can update the `example-program.rs` file to print `"Polling"` every time it gets called.
 
 ```rust
 // example-program.rs
@@ -270,8 +229,7 @@ Polling
 ^C
 ```
 
-Just for fun, let's compile this in release mode and see how much overhead going
-through `wasmer` adds.
+Just for fun, let's compile this in release mode and see how much overhead going through `wasmer` adds.
 
 ```console
 $ cargo build --release --example basic-runtime
@@ -282,25 +240,17 @@ $ wc out.txt
  180668  180668 1445344 out.txt
 ```
 
-It looks like we wrote 1,445,344 bytes in 3.879 seconds for a throughput of
-approximately 372.6 KB/sec. For comparison, the equivalent pure Rust program
-(`fn main() { loop { println!("Polling"); } }`) printed 2,240,816 bytes in
-4.225 for a throughput of 530.4 KB/sec.
+It looks like we wrote 1,445,344 bytes in 3.879 seconds for a throughput of approximately 372.6 KB/sec. For comparison, the equivalent pure Rust program (`fn main() { loop { println!("Polling"); } }`) printed 2,240,816 bytes in 4.225 for a throughput of 530.4 KB/sec.
 
 That's pretty good!
 
 ## Declaring the Rest of the Platform Interface
 
-Okay, so we know how to expose functions to the Wasm code to let it interact
-with the rest of the environment. Now the next task is look at the problem
-we're trying to solve, and provide functions which will help solve it.
+Okay, so we know how to expose functions to the Wasm code to let it interact with the rest of the environment. Now the next task is look at the problem we're trying to solve, and provide functions which will help solve it.
 
-While this section will be fairly specific to my use case (creating some sort
-of programmable logic controller that people can upload code to), it should
-be fairly easy to adapt to suit your application.
+While this section will be fairly specific to my use case (creating some sort of programmable logic controller that people can upload code to), it should be fairly easy to adapt to suit your application.
 
-In our system, there are a handful of ways a program can interact with the
-outside world:
+In our system, there are a handful of ways a program can interact with the outside world:
 
 - Log a message so it can be printed to some sort of debug window
 - Read an input from some memory-mapped IO
@@ -308,19 +258,13 @@ outside world:
 - Get the current time
 - Read and write named global variables
 
-The easiest way to declare which functions will be exposed by the runtime
-("intrinsics") is with a normal C header file. This may seem a bit strange
-for a Rust project, but just hear me out...
+The easiest way to declare which functions will be exposed by the runtime ("intrinsics") is with a normal C header file. This may seem a bit strange for a Rust project, but just hear me out...
 
-1. A header file decouples the declaration of a function from its
-   implementation.
+1. A header file decouples the declaration of a function from its implementation.
 2. You can use `bindgen` to generate the corresponding Rust declarations
-3. Using C header files enables people to write code for our application in
-   other languages (mainly C and C++)
+3. Using C header files enables people to write code for our application in other languages (mainly C and C++)
 
-First off, it's a good idea to explain how we'll be handling fallible
-operations. We'll be returning error codes, where anything other than
-`WASM_SUCCESS` indicates an error.
+First off, it's a good idea to explain how we'll be handling fallible operations. We'll be returning error codes, where anything other than `WASM_SUCCESS` indicates an error.
 
 ```c
 // src/intrinsics.h
@@ -370,8 +314,7 @@ int wasm_log(int level, const char *file, int file_len, int line,
              const char *message, int message_len);
 ```
 
-We should also make a helper macro so people don't constantly need to enter in
-the filename and line number.
+We should also make a helper macro so people don't constantly need to enter in the filename and line number.
 
 ```c
 // src/intrinsics.h
@@ -384,15 +327,9 @@ the filename and line number.
 
 Next we'll give users a way to read input and write output.
 
-The runtime will make sure inputs are copied to a section of memory before
-calling `poll()` and outputs will sit in another section of memory and be
-synchronised with the real world after `poll()` completes. This is somewhat
-similar to how [Memory-mapped IO][mmio] works in embedded systems, or the
-[Process Image][img] on a PLC.
+The runtime will make sure inputs are copied to a section of memory before calling `poll()` and outputs will sit in another section of memory and be synchronised with the real world after `poll()` completes. This is somewhat similar to how [Memory-mapped IO][mmio] works in embedded systems, or the [Process Image][img] on a PLC.
 
-It's not uncommon to have batches of 16 digital outputs or read from a 24-bit
-analogue sensor, so let's allow users to read/write in batches instead of one
-bit/byte at a time.
+It's not uncommon to have batches of 16 digital outputs or read from a 24-bit analogue sensor, so let's allow users to read/write in batches instead of one bit/byte at a time.
 
 ```c
 // src/intrinsics.h
@@ -408,11 +345,7 @@ int wasm_read_input(uint32_t address, char *buffer, int buffer_len);
 int wasm_write_output(uint32_t address, const char *data, int data_len);
 ```
 
-Measuring the time should be fairly straightforward. The user doesn't
-necessarily care about the actual time (plus [timezones are complicated!][tz])
-so the we'll provide a way to get the number of seconds and nanoseconds since an
-arbitrary point in time (probably when the runtime started) and they can use
-that to see how much time has passed.
+Measuring the time should be fairly straightforward. The user doesn't necessarily care about the actual time (plus [timezones are complicated!][tz]) so the we'll provide a way to get the number of seconds and nanoseconds since an arbitrary point in time (probably when the runtime started) and they can use that to see how much time has passed.
 
 ```c
 // src/intrinsics.h
@@ -426,10 +359,7 @@ that to see how much time has passed.
 int wasm_current_time(uint64_t *secs, uint32_t *nanos);
 ```
 
-Next we need a way for different programs to communicate. For this, the
-runtime will maintain a table of *"global variables"* which can either be
-booleans, integers, or floating-point numbers (`bool`, `i32`, and `f64`
-respectively).
+Next we need a way for different programs to communicate. For this, the runtime will maintain a table of *"global variables"* which can either be booleans, integers, or floating-point numbers (`bool`, `i32`, and `f64` respectively).
 
 ```c
 // src/intrinsics.h
@@ -454,22 +384,15 @@ int wasm_variable_write_double(const char *name, int name_len, double value);
 int wasm_variable_write_int(const char *name, int name_len, int32_t value);
 ```
 
-Add in a couple `#include`s and a header guard, and we should now have a proper
-definition of the functionality exposed by the runtime.
+Add in a couple `#include`s and a header guard, and we should now have a proper definition of the functionality exposed by the runtime.
 
 ## Dependency Injection
 
-We now have a fairly solid interface that can be used by Wasm code, but it'd
-be really nice if we didn't hard-code the implementation for each function.
-Luckily the `Ctx` passed to our functions by wasmer allows you to attach a
-pointer to arbitrary data (`*mut c_void`) via [`Ctx::data`][ctx-data].
+We now have a fairly solid interface that can be used by Wasm code, but it'd be really nice if we didn't hard-code the implementation for each function. Luckily the `Ctx` passed to our functions by wasmer allows you to attach a pointer to arbitrary data (`*mut c_void`) via [`Ctx::data`][ctx-data].
 
-The normal way this is done is using *Dependency Injection*. Accept a generic
-`Environment` object in the `poll()` method then set `Ctx::data` to point to
-this `Environment` object while `poll()` is running.
+The normal way this is done is using *Dependency Injection*. Accept a generic `Environment` object in the `poll()` method then set `Ctx::data` to point to this `Environment` object while `poll()` is running.
 
-First we're going to need an error type and a way to work with global variables
-that may have different types.
+First we're going to need an error type and a way to work with global variables that may have different types.
 
 ```rust
 // src/lib.rs
@@ -490,8 +413,7 @@ pub enum Value {
 }
 ```
 
-Now we can define the `Environment` trait. It's essentially the Rust version of
-our `intrinsics.h`, so its definition shouldn't be too surprising.
+Now we can define the `Environment` trait. It's essentially the Rust version of our `intrinsics.h`, so its definition shouldn't be too surprising.
 
 ```rust
 // src/lib.rs
@@ -519,27 +441,16 @@ pub trait Environment {
 }
 ```
 
-The next thing we need to do is use the `data: *mut c_void` field on `Ctx` to
-make sure each host function gets a reference to the current `Environment`.
+The next thing we need to do is use the `data: *mut c_void` field on `Ctx` to make sure each host function gets a reference to the current `Environment`.
 
-This can be tricky because we're interacting with a lot of `unsafe`
-code, in particular:
+This can be tricky because we're interacting with a lot of `unsafe` code, in particular:
 
-- We can't make the `poll()` function generic over any type `E: Environment`
-  because then when `Ctx::data` is read by our functions, they won't know
-  which type of `*mut E` to cast it to. The easiest way around this is to use
-  dynamic dispatch (i.e. `&mut dyn Environment`)
-- You can't cast a fat pointer (`&mut dyn Environment`) to a thin pointer
-  (`*mut c_void`) so we need a second level of indirection
-- The item pointed to by `Ctx::data` (our `Environment` object) is only
-  guaranteed to stay valid for the duration of `poll()` so we need to make sure
-  it gets cleared before returning
-- Code that we call may `panic!()` and we need to make sure `Ctx::data` is
-  cleared *no matter what*, otherwise we'll be leaving a dangling pointer behind
-  and future calls may try to use it
+- We can't make the `poll()` function generic over any type `E: Environment` because then when `Ctx::data` is read by our functions, they won't know which type of `*mut E` to cast it to. The easiest way around this is to use dynamic dispatch (i.e. `&mut dyn Environment`)
+- You can't cast a fat pointer (`&mut dyn Environment`) to a thin pointer (`*mut c_void`) so we need a second level of indirection
+- The item pointed to by `Ctx::data` (our `Environment` object) is only guaranteed to stay valid for the duration of `poll()` so we need to make sure it gets cleared before returning
+- Code that we call may `panic!()` and we need to make sure `Ctx::data` is cleared *no matter what*, otherwise we'll be leaving a dangling pointer behind and future calls may try to use it
 
-To solve the first two problems we'll introduce an intermediate `State` object
-which can be placed on the stack.
+To solve the first two problems we'll introduce an intermediate `State` object which can be placed on the stack.
 
 ```rust
 // src/lib.rs
@@ -569,13 +480,9 @@ impl Program {
 }
 ```
 
-And yes, while it *does* correctly thread our `&mut dyn Environment` through to
-the instance-global context data, we've completely ignored the last two points;
-preventing our temporary `state` pointer from dangling, even if `wasmer`
-panics.
+And yes, while it *does* correctly thread our `&mut dyn Environment` through to the instance-global context data, we've completely ignored the last two points; preventing our temporary `state` pointer from dangling, even if `wasmer` panics.
 
-The normal way to implement this is by putting `self.instance.call("poll", &[])`
-inside a closure, then using a helper function to
+The normal way to implement this is by putting `self.instance.call("poll", &[])` inside a closure, then using a helper function to
 
 1. Do some setup
 2. Call the closure from `std::panic::catch_unwind()`
@@ -632,9 +539,7 @@ impl Program {
 ```
 
 {{% notice info %}}
-If you spot something here that looks odd, or you feel like my logic may be
-unsound, I really want to hear about it! If you're not sure how to contact
-me, you can create an issue against this blog's [issue tracker][issue].
+If you spot something here that looks odd, or you feel like my logic may be unsound, I really want to hear about it! If you're not sure how to contact me, you can create an issue against this blog's [issue tracker][issue].
 
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues
 {{% /notice %}}
@@ -693,11 +598,9 @@ fn wasm_current_time(
 }
 ```
 
-This part is up to you, but you *can* reduce a lot of the boilerplate around
-this with a couple simple macros.
+This part is up to you, but you *can* reduce a lot of the boilerplate around this with a couple simple macros.
 
-For example, instead of manually calling `deref()` on a `WasmPtr<T>` and
-setting the `&Cell<T>` we could define a `wasm_deref!()` macro like so:
+For example, instead of manually calling `deref()` on a `WasmPtr<T>` and setting the `&Cell<T>` we could define a `wasm_deref!()` macro like so:
 
 ```rust
 // src/lib.rs
@@ -731,9 +634,7 @@ fn wasm_current_time(
 }
 ```
 
-We can replace the error handling around calling `env.elapsed()` with another
-macro. While we're at it, we should also iterate over each `cause` in an error
-and print a "backtrace".
+We can replace the error handling around calling `env.elapsed()` with another macro. While we're at it, we should also iterate over each `cause` in an error and print a "backtrace".
 
 ```rust
 // src/lib.rs
@@ -788,8 +689,7 @@ macro_rules! try_with_env {
 }
 ```
 
-With those two changes, our `wasm_current_time()` function now spends a lot more
-time doing "interesting" things and isn't as cluttered by error-handling.
+With those two changes, our `wasm_current_time()` function now spends a lot more time doing "interesting" things and isn't as cluttered by error-handling.
 
 ```rust
 // src/lib.rs
@@ -811,20 +711,14 @@ fn wasm_current_time(
 ```
 
 {{% notice warning %}}
-It may not necessarily be a good thing to introduce macros which try to
-handle error cases and `unsafe` code automatically.
+It may not necessarily be a good thing to introduce macros which try to handle error cases and `unsafe` code automatically.
 
-The best `unsafe` code is boring because another programmer can easily skim
-through the function and check it for correctness because everything does
-what it says on the tin. Burying error cases and `unsafe` by using macros or
-helper functions may just make it easy to obfuscate otherwise obvious bugs.
+The best `unsafe` code is boring because another programmer can easily skim through the function and check it for correctness because everything does what it says on the tin. Burying error cases and `unsafe` by using macros or helper functions may just make it easy to obfuscate otherwise obvious bugs.
 
 The decision is very much up to the author's discretion.
 {{% /notice %}}
 
-Next we'll wire up the `wasm_log` function. The plan is to massage the provided
-information into a form Rust's [`log`][log] crate can handle, then let the
-`Environment` pass the resulting `LogRecord` through to its logger.
+Next we'll wire up the `wasm_log` function. The plan is to massage the provided information into a form Rust's [`log`][log] crate can handle, then let the `Environment` pass the resulting `LogRecord` through to its logger.
 
 ```rust
 // src/lib.rs
@@ -873,9 +767,7 @@ gt
 }
 ```
 
-Implementing the other host functions follows the same steps. After writing a
-couple of these function "trampolines", it goes from being a scary `unsafe`
-task to a mechanical job of translating arguments and error values.
+Implementing the other host functions follows the same steps. After writing a couple of these function "trampolines", it goes from being a scary `unsafe` task to a mechanical job of translating arguments and error values.
 
 {{% expand "A big wall of code that translates arguments and error values." %}}
 ```rust
@@ -1105,16 +997,11 @@ fn wasm_variable_write_double(
 
 ## Creating Our *"Standard Library"*
 
-Technically we now have everything we need so users can write programs that run
-on our motion controller, but manually writing `extern` blocks at the top of
-every program is pretty clunky.
+Technically we now have everything we need so users can write programs that run on our motion controller, but manually writing `extern` blocks at the top of every program is pretty clunky.
 
-In most systems you'll have a *"Standard Library"* which provides bindings to
-the host environment (typically the OS) and higher-level abstractions. Why
-should our system be any different?
+In most systems you'll have a *"Standard Library"* which provides bindings to the host environment (typically the OS) and higher-level abstractions. Why should our system be any different?
 
-We'll start by creating a new crate for our standard library, imaginatively
-called `wasm_std`, and add it to the current workspace.
+We'll start by creating a new crate for our standard library, imaginatively called `wasm_std`, and add it to the current workspace.
 
 ```console
 $ cd ..
@@ -1123,16 +1010,10 @@ $ cargo new --lib --name wasm_std std
 ```
 
 {{% notice info %}}
-I've also moved `intrinsics.h` (declaring the host interface) to this
-`std` crate because it's a more appropriate place.
+I've also moved `intrinsics.h` (declaring the host interface) to this `std` crate because it's a more appropriate place.
 {{% /notice %}}
 
-Before we can throw `intrinsics.h` at `bindgen` we need to create type
-definitions for the various integer types in `stdint.h`. Normally `bindgen`
-would be able to use types from `std::os::raw`, but because we aren't using the
-standard library we don't have access to them. Likewise we can't use the types
-from `libc` because that would mean linking to `libc`, which isn't an option
-either. See the [issue on GitHub][bg-issue] if you're interested.
+Before we can throw `intrinsics.h` at `bindgen` we need to create type definitions for the various integer types in `stdint.h`. Normally `bindgen` would be able to use types from `std::os::raw`, but because we aren't using the standard library we don't have access to them. Likewise we can't use the types from `libc` because that would mean linking to `libc`, which isn't an option either. See the [issue on GitHub][bg-issue] if you're interested.
 
 ```rust
 // std/src/ctypes.rs
@@ -1172,11 +1053,9 @@ pub type uintptr_t = usize;
 pub type ssize_t = isize;
 ```
 
-We can now generate declarations for `intrinsics.h`. This will
-be analogous to [`std::intrinsics`][std-intrinsics] in Rust's standard library.
+We can now generate declarations for `intrinsics.h`. This will be analogous to [`std::intrinsics`][std-intrinsics] in Rust's standard library.
 
-After a bit of trial and error, this incantation seemed to generate the output
-we want without trying to add declarations for half of `libc`.
+After a bit of trial and error, this incantation seemed to generate the output we want without trying to add declarations for half of `libc`.
 
 ```console
 $ cp ../intrinsics.h .
@@ -1213,14 +1092,10 @@ Our `lib.rs` needs to be updated to use `intrinsics`.
 pub mod intrinsics;
 ```
 
-While it's still quite small at the moment, as we gain more experience using
-this system we'll be able to move commonly-used elements into the standard
-library to provide a more *batteries included* feel.
+While it's still quite small at the moment, as we gain more experience using this system we'll be able to move commonly-used elements into the standard library to provide a more *batteries included* feel.
 
 {{% notice tip %}}
-Seeing as the end goal is for users to write programs for our controller in
-any language, not just Rust, this may eventually require tools like
-[*Interface Types*][interface-types].
+Seeing as the end goal is for users to write programs for our controller in any language, not just Rust, this may eventually require tools like [*Interface Types*][interface-types].
 {{% /notice %}}
 
 Now we have a standard library we can rewrite our previous `example-program.rs`.
@@ -1240,8 +1115,7 @@ $ cargo add ../../../std
       Adding wasm-std (unknown version) to dependencies
 ```
 
-Because this crate is being compiled to Wasm we'll need to make sure it is
-compiled using the `cdylib` crate type.
+Because this crate is being compiled to Wasm we'll need to make sure it is compiled using the `cdylib` crate type.
 
 ```toml
 # examples/wasm-programs/example-program/Cargo.toml
@@ -1259,9 +1133,7 @@ crate-type = ["cdylib"]
 wasm-std = { path = "../../../../std/" }
 ```
 
-At some point we'll want to create a nice `println!()` macro instead of
-invoking the `wasm_log()` intrinsic directly, but for now here's the
-equivalent of our original program.
+At some point we'll want to create a nice `println!()` macro instead of invoking the `wasm_log()` intrinsic directly, but for now here's the equivalent of our original program.
 
 ```rust
 // examples/wasm-programs/example-program/src/lib.rs
@@ -1310,10 +1182,7 @@ To learn more, run the command again with --verbose.
 
 Oops! Looks like using `assert_eq!()` requires code for handling panics.
 
-To make sure normal users don't need to define a `#[panic_handler]` for every
-program, we'll implement it in our standard library. We can just use Wasm's
-`unreachable` command for now. This will trigger the corresponding "trap" on the
-Wasm virtual machine and immediately stop execution.
+To make sure normal users don't need to define a `#[panic_handler]` for every program, we'll implement it in our standard library. We can just use Wasm's `unreachable` command for now. This will trigger the corresponding "trap" on the Wasm virtual machine and immediately stop execution.
 
 ```rust
 // std/src/sys.rs
@@ -1381,23 +1250,13 @@ Huzzah!
 
 ## Testing Everything
 
-So now we can run an example program, but needing to manually set up a crate
-and compile it every time isn't the best method of testing. It'd be better if
-our test suite could automatically compile and run a collection of programs,
-feeding it pre-defined inputs, and making sure it behaved as expected.
+So now we can run an example program, but needing to manually set up a crate and compile it every time isn't the best method of testing. It'd be better if our test suite could automatically compile and run a collection of programs, feeding it pre-defined inputs, and making sure it behaved as expected.
 
-Rust's [compiletest][ct] is a really good example of this in action. At this
-point it's worth taking a peek at `rustc`'s test suite to see how similar
-projects are tested. Hopefully we can use it as inspiration.
+Rust's [compiletest][ct] is a really good example of this in action. At this point it's worth taking a peek at `rustc`'s test suite to see how similar projects are tested. Hopefully we can use it as inspiration.
 
-When testing the compiler's error message the compiler's test suite will contain
-a `*.rs` file containing code which annotates offending lines (e.g. using a
-comment like `//~ ERROR: ...`) and a `*.stderr` file containing the exact output
-from STDOUT.
+When testing the compiler's error message the compiler's test suite will contain a `*.rs` file containing code which annotates offending lines (e.g. using a comment like `//~ ERROR: ...`) and a `*.stderr` file containing the exact output from STDOUT.
 
-A simple example of this is
-[rust/src/test/ui/empty/empty-linkname.rs][empty-linkname.rs] for detecting
-when the `name` parameter passed to `#[link]` is empty.
+A simple example of this is [rust/src/test/ui/empty/empty-linkname.rs][empty-linkname.rs] for detecting when the `name` parameter passed to `#[link]` is empty.
 
 ```rust
 #[link(name = "")] //~ ERROR: given with empty name
@@ -1421,24 +1280,13 @@ error: aborting due to previous error
 For more information about this error, try `rustc --explain E0454`.
 ```
 
-We can take a fairly similar approach when designing a test suite for the
-runtime. Tests will consist of two files, some source code (written in Rust) and
-a file containing some representation of the expected output.
+We can take a fairly similar approach when designing a test suite for the runtime. Tests will consist of two files, some source code (written in Rust) and a file containing some representation of the expected output.
 
-The main difference between our runtime's tests and `rustc`'s UI tests is
-that we'll need to incorporate a time element into the expected output. The
-output is also less tangible, `rustc`'s error messages are just text written to
-STDERR compared to the array of binary that our runtime uses for outputs.
+The main difference between our runtime's tests and `rustc`'s UI tests is that we'll need to incorporate a time element into the expected output. The output is also less tangible, `rustc`'s error messages are just text written to STDERR compared to the array of binary that our runtime uses for outputs.
 
-It's also easy for `rustc`'s test suite to compile a single `*.rs` file and
-inspect the output, it's something you could concievably implement using a
-bash script. On the other hand, our compilation process is non-trivial, and
-the requirement for inspecting changing inputs over time requires us to
-instrument the runtime to insert checks for expected behaviour after every
-call to `Program::poll()`.
+It's also easy for `rustc`'s test suite to compile a single `*.rs` file and inspect the output, it's something you could concievably implement using a bash script. On the other hand, our compilation process is non-trivial, and the requirement for inspecting changing inputs over time requires us to instrument the runtime to insert checks for expected behaviour after every call to `Program::poll()`.
 
-Based on our previous experimentation, let's write down a simple testing
-procedure:
+Based on our previous experimentation, let's write down a simple testing procedure:
 
 1. Write a file containing some program that uses our standard library and
   does something interesting
@@ -1446,14 +1294,11 @@ procedure:
 3. Make sure that crate depends on our standard library
 4. Copy the file from step 1 to `lib.rs` in the temporary crate
 5. Compile it
-6. Find the `*.wasm` file under
-   `/tmp.123/target/wasm32-unknown-unknown/debug/` and read it into memory
+6. Find the `*.wasm` file under `/tmp.123/target/wasm32-unknown-unknown/debug/` and read it into memory
 7. Use `Program::load()` to instantiate that Wasm module
-8. Continually `poll()` the program setting up inputs according to some
-   pre-defined *Recipe* and make sure outputs change as expected
+8. Continually `poll()` the program setting up inputs according to some pre-defined *Recipe* and make sure outputs change as expected
 
-This may end up being a little complex so let's create a `wasm-test` helper
-crate and add it to our workspace.
+This may end up being a little complex so let's create a `wasm-test` helper crate and add it to our workspace.
 
 ```console
 $ cargo new --lib wasm-test
@@ -1473,10 +1318,7 @@ $ cargo add log tempfile serde serde_derive serde_json anyhow ../wasm
       Adding wasm (unknown version) to dependencies
 ```
 
-Looking back at steps 2 and 3, when creating our temporary crate we'll need to
-make sure the `Cargo.toml` is set up correctly. There are a lot of advanced
-templating libraries out there, but for our purposes `string.replace()`-style
-"templates" should be more than sufficient.
+Looking back at steps 2 and 3, when creating our temporary crate we'll need to make sure the `Cargo.toml` is set up correctly. There are a lot of advanced templating libraries out there, but for our purposes `string.replace()`-style "templates" should be more than sufficient.
 
 ```rust
 // wasm-test/src/compile.rs
@@ -1497,9 +1339,7 @@ crate-type = ["cdylib"]
 "#;
 ```
 
-The other compilation-related tasks are fairly straightforward to automate
-using by just shelling out to `std::process::Command`. We can develop better
-tooling in time, but this crude implementation should suffice for now.
+The other compilation-related tasks are fairly straightforward to automate using by just shelling out to `std::process::Command`. We can develop better tooling in time, but this crude implementation should suffice for now.
 
 ```rust
 // wasm-test/src/compile.rs
@@ -1557,8 +1397,7 @@ fn compile_to_wasm(
 }
 ```
 
-To avoid having to always provide the `target_dir` and `std_manifest_dir`
-parameters every time we can wrap them up inside some sort of `Compiler` struct.
+To avoid having to always provide the `target_dir` and `std_manifest_dir` parameters every time we can wrap them up inside some sort of `Compiler` struct.
 
 ```rust
 // wasm-test/src/compile.rs
@@ -1570,8 +1409,7 @@ pub struct Compiler {
 }
 ```
 
-From here, instantiating a Wasm program can be implemented as a method on
-`Compiler` which just calls `compile_to_wasm()` and `Program::load()`.
+From here, instantiating a Wasm program can be implemented as a method on `Compiler` which just calls `compile_to_wasm()` and `Program::load()`.
 
 ```rust
 // wasm-test/src/compile.rs
@@ -1594,12 +1432,9 @@ impl Compiler {
 }
 ```
 
-Next, we need some sort of `TestCase` which can be loaded from disk. In this
-case `some-program.rs` will be the code being tested and `some-program.json`
-will contain a `Recipe` dictating the expected behaviour.
+Next, we need some sort of `TestCase` which can be loaded from disk. In this case `some-program.rs` will be the code being tested and `some-program.json` will contain a `Recipe` dictating the expected behaviour.
 
-We'll need to derive `Serialize` and `Deserialize` so the `Recipe` can be loaded
-from JSON.
+We'll need to derive `Serialize` and `Deserialize` so the `Recipe` can be loaded from JSON.
 
 ```rust
 // wasm-test/src/test_case.rs
@@ -1634,8 +1469,7 @@ pub struct Pass {
 }
 ```
 
-We'll also need constructors which can load a `TestCase` from a `*.rs` and
-`*.json` file on disk.
+We'll also need constructors which can load a `TestCase` from a `*.rs` and `*.json` file on disk.
 
 ```rust
 // wasm-test/src/test_case.rs
@@ -1681,8 +1515,7 @@ impl TestCase {
 }
 ```
 
-We also need an implementation of `Environment` for testing purposes. This is
-the *"instrumenting"* part mentioned earlier.
+We also need an implementation of `Environment` for testing purposes. This is the *"instrumenting"* part mentioned earlier.
 
 ```rust
 // wasm-test/src/environment.rs
@@ -1776,8 +1609,7 @@ impl wasm::Environment for TestEnvironment {
 }
 ```
 
-We should also add some code for doing the setup and comparison steps when
-polling.
+We should also add some code for doing the setup and comparison steps when polling.
 
 ```rust
 // wasm-test/src/environment.rs
@@ -1836,12 +1668,9 @@ impl TestEnvironment {
 }
 ```
 
-Our `wasm-test` crate can now compile a Rust program to Wasm and link it to our
-standard library, instantiate the Wasm module, load a pre-defined test recipe,
-and create a test `Environment`.
+Our `wasm-test` crate can now compile a Rust program to Wasm and link it to our standard library, instantiate the Wasm module, load a pre-defined test recipe, and create a test `Environment`.
 
-Now we just need a way to execute a particular test case and the `wasm-test`
-crate will be complete.
+Now we just need a way to execute a particular test case and the `wasm-test` crate will be complete.
 
 ```rust
 // wasm-test/src/lib.rs
@@ -1879,12 +1708,9 @@ pub fn run_test_case(
 }
 ```
 
-Now the `wasm-test` crate is up and running we can go back to the `wasm` crate's
-integration tests.
+Now the `wasm-test` crate is up and running we can go back to the `wasm` crate's integration tests.
 
-I've copied the `example-program.rs` from the last section into the
-`tests/data/` directory and written up a simple `example_program.json` file
-which will make sure it prints `"Polling"`.
+I've copied the `example-program.rs` from the last section into the `tests/data/` directory and written up a simple `example_program.json` file which will make sure it prints `"Polling"`.
 
 ```json
 // tests/data/example_program.json
@@ -1903,8 +1729,7 @@ which will make sure it prints `"Polling"`.
 }
 ```
 
-To make sure we've wired up the `wasm_write_output()` function correctly,
-there's also a `set_outputs.rs` test program.
+To make sure we've wired up the `wasm_write_output()` function correctly, there's also a `set_outputs.rs` test program.
 
 ```rust
 // tests/data/set_outputs.rs
@@ -1950,11 +1775,9 @@ And its accompanying `*.json` file:
 
 Now we just need to make sure the test programs get run and behave as expected.
 
-For this we'll create the aptly-named `behaviour_tests.rs` integration test
-under `tests/`.
+For this we'll create the aptly-named `behaviour_tests.rs` integration test under `tests/`.
 
-Thanks to the work we did earlier, loading and running an integration test
-becomes really easy.
+Thanks to the work we did earlier, loading and running an integration test becomes really easy.
 
 ```rust
 // tests/behaviour_tests.rs
@@ -1977,15 +1800,11 @@ fn set_outputs() {
 }
 ```
 
-If we want to make more tests, one way would be to copy the `set_outputs`
-function and replace every instance of `"set_outputs"` with the name of the
-tests.
+If we want to make more tests, one way would be to copy the `set_outputs` function and replace every instance of `"set_outputs"` with the name of the tests.
 
 That sounds kinda annoying.
 
-Normally you would try to extract the testing logic out into another function,
-but that wouldn't let us run each test program as its own test. Luckily, macros
-exist for exactly this sort of thing!
+Normally you would try to extract the testing logic out into another function, but that wouldn't let us run each test program as its own test. Luckily, macros exist for exactly this sort of thing!
 
 ```rust
 // tests/behaviour_tests.rs
@@ -2018,8 +1837,7 @@ macro_rules! wasm_test {
 wasm_test!(example_program, set_outputs);
 ```
 
-We can check that these tests are actually working by inserting some deliberate
-bugs.
+We can check that these tests are actually working by inserting some deliberate bugs.
 
 ```diff
 diff --git a/tests/data/example_program.json b/tests/data/example_program.json
@@ -2098,12 +1916,9 @@ error: test failed, to rerun pass '--test behaviour_tests'
 
 ## Conclusion
 
-It's been a long road, but now we have a really good foundation for working with
-Wasm programs!
+It's been a long road, but now we have a really good foundation for working with Wasm programs!
 
-There's still a lot of room for improvement, and the host environment still looks
-quite bare, but this implementation does everything I need to unblock other
-parts of my project.
+There's still a lot of room for improvement, and the host environment still looks quite bare, but this implementation does everything I need to unblock other parts of my project.
 
 ## Useful Links
 

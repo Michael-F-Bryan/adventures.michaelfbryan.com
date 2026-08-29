@@ -1,32 +1,23 @@
 ---
 title: Plugins in Rust
 date: '2019-09-30T22:04:58+08:00'
+lastmod: '2026-08-19T14:02:14+08:00'
 tags:
 - Rust
 - FFI
 - Dynamic Loading
 ---
 
-Imagine you are implementing a calculator application and want users to be able
-to extend the application with their own functionality. For example, imagine a
-user wants to provide a `random()` function that generates *true* random numbers
-using [random.org][r-o] instead of the pseudo-random numbers that a crate like
-[rand][rand] would provide.
+Imagine you are implementing a calculator application and want users to be able to extend the application with their own functionality. For example, imagine a user wants to provide a `random()` function that generates *true* random numbers using [random.org][r-o] instead of the pseudo-random numbers that a crate like [rand][rand] would provide.
 
-The Rust language gives you a lot of really powerful tools for adding
-flexibility and extensibility to your applications (e.g. traits, enums,
-macros), but all of these happen at compile time. Unfortunately, to get the
-flexibility that we're looking we'll need to be able to add new functionality at
-runtime.
+The Rust language gives you a lot of really powerful tools for adding flexibility and extensibility to your applications (e.g. traits, enums, macros), but all of these happen at compile time. Unfortunately, to get the flexibility that we're looking we'll need to be able to add new functionality at runtime.
 
 This can be achieved using a technique called [Dynamic Loading][wiki].
 
 {{% notice note %}}
-The code written in this article is available [on GitHub][repo]. Feel free to
-browse through and steal code or inspiration.
+The code written in this article is available [on GitHub][repo]. Feel free to browse through and steal code or inspiration.
 
-If you found this useful or spotted a bug, let me know on the blog's
-[issue tracker][issue]!
+If you found this useful or spotted a bug, let me know on the blog's [issue tracker][issue]!
 
 [repo]: https://github.com/Michael-F-Bryan/plugins_in_rust
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com
@@ -34,19 +25,11 @@ If you found this useful or spotted a bug, let me know on the blog's
 
 ## What Is Dynamic Loading?
 
-Dynamic loading is a mechanism provided by all mainstream Operating Systems
-where a library can be loaded at runtime so the user can retrieve addresses of
-functions or variables. The address of these functions and variables can then
-be used just like any other pointer.
+Dynamic loading is a mechanism provided by all mainstream Operating Systems where a library can be loaded at runtime so the user can retrieve addresses of functions or variables. The address of these functions and variables can then be used just like any other pointer.
 
-On *nix platforms, the `dlopen()` function is used to load a library into memory
-and `dlsym()` lets you get a pointer to something via its symbol name. Something
-to remember is that symbols don't contain any type information so the caller
-has to (`unsafe`-ly) cast the pointer to the right type.
+On *nix platforms, the `dlopen()` function is used to load a library into memory and `dlsym()` lets you get a pointer to something via its symbol name. Something to remember is that symbols don't contain any type information so the caller has to (`unsafe`-ly) cast the pointer to the right type.
 
-This is normally done by having some sort of contract with the library being
-loaded ahead of time (e.g. a header file declares the `"cos"` function is
-`fn(f64) -> f64`).
+This is normally done by having some sort of contract with the library being loaded ahead of time (e.g. a header file declares the `"cos"` function is `fn(f64) -> f64`).
 
 Example usage from `man dlopen`:
 
@@ -94,18 +77,13 @@ int main() {
 }
 ```
 
-The story is almost identical for Windows, except [`LoadLibraryA()`][loadlibrary],
-[`GetProcAddress()`][gpa], and [`FreeLibrary()`][freelibrary] are used instead
-of `dlopen()`, `dlsym()`, and `dlclose()`, respectively.
+The story is almost identical for Windows, except [`LoadLibraryA()`][loadlibrary], [`GetProcAddress()`][gpa], and [`FreeLibrary()`][freelibrary] are used instead of `dlopen()`, `dlsym()`, and `dlclose()`, respectively.
 
-The [libloading][libloading] crate provides a high quality Rust interface to
-the underlying platform's dynamic loading mechanism.
+The [libloading][libloading] crate provides a high quality Rust interface to the underlying platform's dynamic loading mechanism.
 
 ## Determining the Plugin Interface
 
-The first step is to define a common interface that all plugins should satisfy.
-This should be placed in some sort of "core" crate that both plugins and the
-main application depend on.
+The first step is to define a common interface that all plugins should satisfy. This should be placed in some sort of "core" crate that both plugins and the main application depend on.
 
 This will usually take the form of a trait.
 
@@ -127,29 +105,16 @@ pub enum InvocationError {
 }
 ```
 
-Now we've defined the application-level API, we also need a way to declare
-plugins so they're accessible when dynamically loading. This isn't difficult,
-but there are a couple gotchas to keep in mind to prevent undesired behaviour
-(UB, crashes, etc.).
+Now we've defined the application-level API, we also need a way to declare plugins so they're accessible when dynamically loading. This isn't difficult, but there are a couple gotchas to keep in mind to prevent undesired behaviour (UB, crashes, etc.).
 
 Some things to keep in mind:
 
-- Rust doesn't have a stable ABI, meaning different compiler versions can
-  generate incompatible code, and
-- Different versions of the `core` crate may have different definitions of the
-  `Function` trait
-- Each plugin will need to have some sort of `register()` function so it can
-  construct a `Function` instance and give the application a `Box<dyn Function>`
-  (we need dynamic dispatch because plugin registration happens at runtime
-  and static dispatch requires knowing types at compile time)
-- To avoid freeing memory allocated by a different allocator, each plugin
-  will need to provide an explicit `free_plugin()` function, or the plugin and
-  application both need to be using the same allocator
+- Rust doesn't have a stable ABI, meaning different compiler versions can generate incompatible code, and
+- Different versions of the `core` crate may have different definitions of the `Function` trait
+- Each plugin will need to have some sort of `register()` function so it can construct a `Function` instance and give the application a `Box<dyn Function>` (we need dynamic dispatch because plugin registration happens at runtime and static dispatch requires knowing types at compile time)
+- To avoid freeing memory allocated by a different allocator, each plugin will need to provide an explicit `free_plugin()` function, or the plugin and application both need to be using the same allocator
 
-To prevent plugin authors from needing to deal with this themselves, we'll
-provide a `export_plugin!()` macro that populates some `PluginDeclaration`
-struct with version numbers and a pointer to the `register()` function provided
-by a user.
+To prevent plugin authors from needing to deal with this themselves, we'll provide a `export_plugin!()` macro that populates some `PluginDeclaration` struct with version numbers and a pointer to the `register()` function provided by a user.
 
 The `PluginDeclaration` struct itself is quite simple:
 
@@ -173,8 +138,7 @@ pub trait PluginRegistrar {
 }
 ```
 
-To get the version of `rustc`, we'll add a `build.rs` script to the `core` crate
-and pass the version number through as an environment variable.
+To get the version of `rustc`, we'll add a `build.rs` script to the `core` crate and pass the version number through as an environment variable.
 
 ```rust
 // core/build.rs
@@ -185,9 +149,7 @@ fn main() {
 }
 ```
 
-We're using the [`rustc_version`][rustc_version] crate to fetch `rustc`'s
-version number. Don't forget to add it to `core/Cargo.toml` as a build
-dependency:
+We're using the [`rustc_version`][rustc_version] crate to fetch `rustc`'s version number. Don't forget to add it to `core/Cargo.toml` as a build dependency:
 
 ```console
 $ cd core
@@ -226,8 +188,7 @@ macro_rules! export_plugin {
 
 ## Creating a Plugin
 
-Now we have a public plugin interface and a mechanism for registering new
-plugins, lets actually create one.
+Now we have a public plugin interface and a mechanism for registering new plugins, lets actually create one.
 
 First we'll need to create a `plugins_random` crate and add it to the workspace.
 
@@ -248,8 +209,7 @@ $ cargo add ../core
       Adding plugins_core (unknown version) to dependencies
 ```
 
-This crate will need to be compiled as a dynamic library (`*.so` in *nix,
-`*.dll` on Windows) so it can be loaded at runtime.
+This crate will need to be compiled as a dynamic library (`*.so` in *nix, `*.dll` on Windows) so it can be loaded at runtime.
 
 ```toml
 # random/Cargo.toml
@@ -284,9 +244,7 @@ libplugins_random.d libplugins_random.so
 
 Now things are set up, we can start implementing our `random()` plugin.
 
-Looking at the [Random Integer Generator][rand-int] page, retrieving a set of
-random integers is just a case of sending a GET request to
-`https://www.random.org/integers/`.
+Looking at the [Random Integer Generator][rand-int] page, retrieving a set of random integers is just a case of sending a GET request to `https://www.random.org/integers/`.
 
 For example, to get 10 numbers from 1 to 6 in base 10 and one number per line:
 
@@ -304,8 +262,7 @@ $ curl 'https://www.random.org/integers/?num=10&min=1&max=6&col=1&base=10&format
 3
 ```
 
-This turns out to be almost trivial to implement thanks to the
-[`reqwest`][reqwest] crate.
+This turns out to be almost trivial to implement thanks to the [`reqwest`][reqwest] crate.
 
 First we'll create a helper struct for the arguments to pass to *random.org*.
 
@@ -327,8 +284,7 @@ impl RequestInfo {
 }
 ```
 
-Then write a function that calls `reqwest::get()` using the formatted URL and
-parses the response body.
+Then write a function that calls `reqwest::get()` using the formatted URL and parses the response body.
 
 ```rust
 // random/src/lib.rs
@@ -340,9 +296,7 @@ fn fetch(request: RequestInfo) -> Result<f64, InvocationError> {
 }
 ```
 
-To make `?` work nicely, I've also added a `From` impl which lets us create an
-`InvocationError` from anything that is `ToString` (which all
-`std::error::Error` types implement).
+To make `?` work nicely, I've also added a `From` impl which lets us create an `InvocationError` from anything that is `ToString` (which all `std::error::Error` types implement).
 
 ```rust
 // core/src/lib.rs
@@ -356,8 +310,7 @@ impl<S: ToString> From<S> for InvocationError {
 }
 ```
 
-Finally, we just need to create a `Random` struct which will implement our
-`Function` interface.
+Finally, we just need to create a `Random` struct which will implement our `Function` interface.
 
 ```rust
 // random/src/lib.rs
@@ -371,8 +324,7 @@ impl Function for Random {
 }
 ```
 
-Ideally our `random()` function should have a couple overloads so users can
-tweak the random number's properties.
+Ideally our `random()` function should have a couple overloads so users can tweak the random number's properties.
 
 ```rust
 // get a random number between 0 and 100
@@ -383,8 +335,7 @@ fn random(max: f64) -> f64;
 fn random(min: f64, max: f64) -> f64;
 ```
 
-The logic for turning the `&[f64]` args into a `RequestInfo` can be neatly
-extracted into its own function.
+The logic for turning the `&[f64]` args into a `RequestInfo` can be neatly extracted into its own function.
 
 ```rust
 // random/src/lib.rs
@@ -417,8 +368,7 @@ impl Function for Random {
 }
 ```
 
-Now our `random()` function is fully implemented, we just need to make a
-`register()` function and call `plugins_core::export_plugin!()`.
+Now our `random()` function is fully implemented, we just need to make a `register()` function and call `plugins_core::export_plugin!()`.
 
 ```rust
 // random/src/lib.rs
@@ -432,8 +382,7 @@ extern "C" fn register(registrar: &mut dyn PluginRegistrar) {
 
 ## Loading Plugins
 
-Now we've defined a plugin we need a way to load it into memory and use it as
-part of our application.
+Now we've defined a plugin we need a way to load it into memory and use it as part of our application.
 
 The first step is to create a new crate and add some dependencies.
 
@@ -449,14 +398,9 @@ $ cargo add libloading ../core
       Adding plugins_core (unknown version) to dependencies
 ```
 
-When a library is loaded into memory, we need to make sure that it outlives
-anything created from it. For example, a trait object's vtable (and all the
-functions it points to) is embedded in the library's code. If we tried to invoke
-a plugin object's methods after its parent library was unloaded from memory,
-we'd try to execute garbage and crash the entire application.
+When a library is loaded into memory, we need to make sure that it outlives anything created from it. For example, a trait object's vtable (and all the functions it points to) is embedded in the library's code. If we tried to invoke a plugin object's methods after its parent library was unloaded from memory, we'd try to execute garbage and crash the entire application.
 
-This means we need a way to make sure plugins can't outlive the library they
-were loaded from.
+This means we need a way to make sure plugins can't outlive the library they were loaded from.
 
 We'll do this using the [*Proxy Pattern*][proxy].
 
@@ -502,14 +446,12 @@ impl ExternalFunctions {
 }
 ```
 
-The `ExternalFunctions::load()` method is the real meat and potatoes of our
-plugin system. It's where we:
+The `ExternalFunctions::load()` method is the real meat and potatoes of our plugin system. It's where we:
 
 1. Load the library into memory
 2. Get a reference to the static `PluginDeclaration`
 3. Check the `rustc` and `plugins_core` versions match
-4. Create a `PluginRegistrar` which will create `FunctionProxy`s associated with
-   the library
+4. Create a `PluginRegistrar` which will create `FunctionProxy`s associated with the library
 5. Pass the `PluginRegistrar` to the plugin's `register()` function
 6. Add any loaded plugins to the internal functions map
 
@@ -543,8 +485,7 @@ impl plugins_core::PluginRegistrar for PluginRegistrar {
 }
 ```
 
-And now our `PluginRegistrar` helper is implemented, we have everything required
-to complete `ExternalFunctions::load()`.
+And now our `PluginRegistrar` helper is implemented, we have everything required to complete `ExternalFunctions::load()`.
 
 ```rust
 // app/src/main.rs
@@ -598,27 +539,20 @@ impl ExternalFunctions {
 ```
 
 {{% notice note %}}
-Note the *Safety* section in the function's doc-comments. The process of
-loading a plugin is inherently `unsafe` (the compiler can't guarantee
-whatever is behind the `plugin_declaration` symbol is a `PluginDeclaration`)
-and this section documents the contract that must be upheld.
+Note the *Safety* section in the function's doc-comments. The process of loading a plugin is inherently `unsafe` (the compiler can't guarantee whatever is behind the `plugin_declaration` symbol is a `PluginDeclaration`) and this section documents the contract that must be upheld.
 {{% /notice %}}
 
 ## Using the Plugin
 
-At this point we've actually completed the plugin system. The only thing left is
-to demonstrate it works and start using the thing.
+At this point we've actually completed the plugin system. The only thing left is to demonstrate it works and start using the thing.
 
-For our purposes, it should be good enough to create a command-line app that
-loads a library then invokes a function by name, passing in any specified
-arguments.
+For our purposes, it should be good enough to create a command-line app that loads a library then invokes a function by name, passing in any specified arguments.
 
 ```
 Usage: app <plugin-path> <function> <args>...
 ```
 
-First we'll create a quick `Args` struct to parse our command-line arguments
-into.
+First we'll create a quick `Args` struct to parse our command-line arguments into.
 
 ```rust
 // app/src/main.rs
@@ -630,8 +564,7 @@ struct Args {
 }
 ```
 
-Then hack together a quick'n'dirty command-line parser. Real applications should
-prefer to use something like `clap` or `structopt` instead.
+Then hack together a quick'n'dirty command-line parser. Real applications should prefer to use something like `clap` or `structopt` instead.
 
 ```rust
 // app/src/main.rs
@@ -672,17 +605,13 @@ impl ExternalFunctions {
 }
 ```
 
-By default a `cdylib` will use the system allocator, but executables aren't guaranteed
-to use
+By default a `cdylib` will use the system allocator, but executables aren't guaranteed to use
 
 According to the docs from `std::alloc`,
 
-> Currently the default global allocator is unspecified. Libraries, however,
-> like `cdylib`s and `staticlib`s are guaranteed to use the `System` by default.
+> Currently the default global allocator is unspecified. Libraries, however, like `cdylib`s and `staticlib`s are guaranteed to use the `System` by default.
 
-To make sure there's no chance of allocator mismatch (i.e. a plugin allocates
-a `String` using the `System` allocator and we try to free it using Jemalloc) we
-need to explicitly declare that the app uses the `System` allocator.
+To make sure there's no chance of allocator mismatch (i.e. a plugin allocates a `String` using the `System` allocator and we try to free it using Jemalloc) we need to explicitly declare that the app uses the `System` allocator.
 
 ```rust
 // app/src/main.rs
@@ -748,8 +677,7 @@ thread 'main' panicked at 'Invocation failed: Other { msg: "0, 1, or 2 arguments
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace.
 ```
 
-If a plugin author forgot to invoke the `export_plugin!()` macro, they may see
-an error like this:
+If a plugin author forgot to invoke the `export_plugin!()` macro, they may see an error like this:
 
 ```console
 $ cargo run -- ../target/debug/libplugins_random.so random
@@ -759,9 +687,7 @@ thread 'main' panicked at 'Function loading failed: Custom { kind: Other, error:
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace.
 ```
 
-This is saying we couldn't find the `plugin_declaration` symbol. You can
-use the `nm` tool to help with troubleshooting, it shows all symbols exported by
-a library.
+This is saying we couldn't find the `plugin_declaration` symbol. You can use the `nm` tool to help with troubleshooting, it shows all symbols exported by a library.
 
 ```console
 nm ../target/release/libplugins_random.so  | grep plugin
@@ -772,8 +698,7 @@ nm ../target/release/libplugins_random.so  | grep plugin
 00000000000590f0 t _ZN78_$LT$plugins_core..InvocationError$u20$as$u20$core..convert..From$LT$S$GT$$GT$4from17h3a759bcd267b48a1E
 ```
 
-And there you have it, a relatively simple, yet safe and robust, plugin
-system which you can use in your own projects.
+And there you have it, a relatively simple, yet safe and robust, plugin system which you can use in your own projects.
 
 ## See Also
 

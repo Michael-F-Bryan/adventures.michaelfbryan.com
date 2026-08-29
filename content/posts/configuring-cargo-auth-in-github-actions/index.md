@@ -1,17 +1,15 @@
 ---
 title: GitHub Actions can't access private repos? Here's how to fix it
 date: '2022-09-13T12:01:45+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Rust
 - Developer Tools
 ---
 
-When developing locally, you can add a private GitHub repository to your Rust
-crate as a [`git` dependency][git-dep] and `cargo` should be able to retrieve it
-just fine.
+When developing locally, you can add a private GitHub repository to your Rust crate as a [`git` dependency][git-dep] and `cargo` should be able to retrieve it just fine.
 
-However, when you push your changes to GitHub and run CI, GitHub Actions can
-run into authentication issues when trying to build your crate.
+However, when you push your changes to GitHub and run CI, GitHub Actions can run into authentication issues when trying to build your crate.
 
 This is the error message I was fighting for a good part of today:
 
@@ -38,21 +36,14 @@ Error: The process '/home/runner/.cargo/bin/cargo' failed with exit code 101
 
 Cargo can't check out my private repository!
 
-This happens because the user on your dev machine is usually associated with a
-particular GitHub account and that account has access to the private repository,
-whereas the GitHub Actions user can only see the repository it's attached to.
+This happens because the user on your dev machine is usually associated with a particular GitHub account and that account has access to the private repository, whereas the GitHub Actions user can only see the repository it's attached to.
 
-The *Cargo Book* has a chapter on [*Git Authentication*][git-auth], but the
-*HTTPS Authentication* method they suggest (using credential stores) stopped
-working in August 2021 when [GitHub shut down password authentication][password-auth-announcement].
+The *Cargo Book* has a chapter on [*Git Authentication*][git-auth], but the *HTTPS Authentication* method they suggest (using credential stores) stopped working in August 2021 when [GitHub shut down password authentication][password-auth-announcement].
 
-Nowadays, the best way to authenticate with GitHub is via
-[*Deploy Keys*][deploy-keys]. This is a set of SSH keys that will give users
-read-only access (by default) to a particular repository.
+Nowadays, the best way to authenticate with GitHub is via [*Deploy Keys*][deploy-keys]. This is a set of SSH keys that will give users read-only access (by default) to a particular repository.
 
 {{% notice note %}}
-If you found this useful or spotted a bug in the article, let me know on the
-blog's [issue tracker][issue]!
+If you found this useful or spotted a bug in the article, let me know on the blog's [issue tracker][issue]!
 
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues
 {{% /notice %}}
@@ -75,16 +66,13 @@ Your public key has been saved in /tmp/secret-repo-deploy-key.pub
 This process should be familiar to anyone that's worked with Git or SSH before.
 
 {{% notice tip %}}
-If you are using 1Password to share secrets with co-workers, you can use its
-[builtin support](https://developer.1password.com/docs/ssh/manage-keys/#generate-an-ssh-key)
-for SSH keys to generate the key and save it with one click.
+If you are using 1Password to share secrets with co-workers, you can use its [builtin support](https://developer.1password.com/docs/ssh/manage-keys/#generate-an-ssh-key) for SSH keys to generate the key and save it with one click.
 {{% /notice %}}
 
 {{% notice warning %}}
 Make sure you generate an RSA key.
 
-When I generated an `ed25519` key, the `ssh-add` on GitHub Actions rejected it
-with this error message:
+When I generated an `ed25519` key, the `ssh-add` on GitHub Actions rejected it with this error message:
 
 ```
 Adding GitHub.com keys to /home/runner/.ssh/known_hosts
@@ -97,15 +85,12 @@ Error: Command failed: ssh-add -
 Error loading key "(stdin)": invalid format
 ```
 
-[According to Stack Overflow](https://serverfault.com/a/1027037), this appears
-to be an issue with OpenSSH 8.3.
+[According to Stack Overflow](https://serverfault.com/a/1027037), this appears to be an issue with OpenSSH 8.3.
 {{% /notice %}}
 
 ## Uploading the Deploy Key
 
-Now we need to add the **public** key as a deploy key to the repository we want
-access to (`Michael-F-Bryan/my-secret-repo` in this case). GitHub's website has
-[some docs][deploy-keys] for this, but the process is pretty simple.
+Now we need to add the **public** key as a deploy key to the repository we want access to (`Michael-F-Bryan/my-secret-repo` in this case). GitHub's website has [some docs][deploy-keys] for this, but the process is pretty simple.
 
 Here, have some screenshots.
 
@@ -115,18 +100,14 @@ Here, have some screenshots.
 
 ## Adding it to GitHub Secrets
 
-If our project wants access to this private repository, we'll need to give it
-the private half of our deploy key to use.
+If our project wants access to this private repository, we'll need to give it the private half of our deploy key to use.
 
-We do this by adding the **private** key to our repository as a secret called
-`SECRET_REPO_DEPLOY_KEY`.
+We do this by adding the **private** key to our repository as a secret called `SECRET_REPO_DEPLOY_KEY`.
 
 ![Screenshot showing the "New Secret" button in GitHub repository settings](new-secret.png)
 
 {{% notice tip %}}
-If multiple projects will need access to this private repository, you might
-want to add it as a secret on the *Organisation* level. That should make it a
-lot easier to manage.
+If multiple projects will need access to this private repository, you might want to add it as a secret on the *Organisation* level. That should make it a lot easier to manage.
 {{% /notice %}}
 
 ## Updating the Source Code
@@ -141,11 +122,7 @@ First, add the dependency using its `ssh` URL.
 internal-crate = { git = "ssh://git@github.com/Michael-F-Bryan/my-secret-repo.git", ... }
 ```
 
-We need to make sure each job in GitHub Actions uses the deploy key that we're
-setting up. You can [do this manually][ssh-agent], but I find it easier to load
-it into `ssh-agent` with the
-[`webfactory/ssh-agent`](https://github.com/marketplace/actions/webfactory-ssh-agent)
-action.
+We need to make sure each job in GitHub Actions uses the deploy key that we're setting up. You can [do this manually][ssh-agent], but I find it easier to load it into `ssh-agent` with the [`webfactory/ssh-agent`](https://github.com/marketplace/actions/webfactory-ssh-agent) action.
 
 ```yml
 # .github/workflows/ci.yml
@@ -161,12 +138,9 @@ jobs:
 ```
 
 {{% notice tip %}}
-The `webfactory/ssh-agent` action lets you supply multiple private keys if you
-are trying to access several private repositories. When you are first generating
-the keys, just make sure to attach each repo's URL as a "comment".
+The `webfactory/ssh-agent` action lets you supply multiple private keys if you are trying to access several private repositories. When you are first generating the keys, just make sure to attach each repo's URL as a "comment".
 
-That means the `Michael-F-Bryan/my-secret-repo` deploy key would be generated
-using a command like this:
+That means the `Michael-F-Bryan/my-secret-repo` deploy key would be generated using a command like this:
 
 ```console
 $ ssh-keygen -t rsa -b 4096 -C https://github.com/Michael-F-Bryan/my-secret-repo
@@ -174,8 +148,7 @@ $ ssh-keygen -t rsa -b 4096 -C https://github.com/Michael-F-Bryan/my-secret-repo
 {{% /notice %}}
 
 
-That's all you should need. Now when you commit and push the changes to GitHub,
-your crate should build again.
+That's all you should need. Now when you commit and push the changes to GitHub, your crate should build again.
 
 Good Luck 🙂
 

@@ -1,33 +1,23 @@
 ---
 title: Rust Closures in FFI
 date: '2020-05-12T22:00:00+08:00'
+lastmod: '2026-03-21T20:30:29+08:00'
 tags:
 - Rust
 - FFI
 - Unsafe Rust
 ---
 
-Every now and then when using native libraries from Rust you'll be asked to
-pass a callback across the FFI boundary. The reasons are varied, but often
-this might be done to notify the caller when "interesting" things happen, for
-injecting logic (see the [Strategy Pattern][strategy]), or to handle the
-result of an asynchronous operation.
+Every now and then when using native libraries from Rust you'll be asked to pass a callback across the FFI boundary. The reasons are varied, but often this might be done to notify the caller when "interesting" things happen, for injecting logic (see the [Strategy Pattern][strategy]), or to handle the result of an asynchronous operation.
 
-If this were normal Rust, we'd just accept a closure (e.g. a
-`Box<dyn Fn(...)>` or by being generic over any function-like type) and be
-done with it. However, when working with other languages you are reduced to
-the lowest common denominator, a the C language (or more specifically, the
-ABI and machine code in general) doesn't understand generics or Rust's "fat"
-pointers.
+If this were normal Rust, we'd just accept a closure (e.g. a `Box<dyn Fn(...)>` or by being generic over any function-like type) and be done with it. However, when working with other languages you are reduced to the lowest common denominator, a the C language (or more specifically, the ABI and machine code in general) doesn't understand generics or Rust's "fat" pointers.
 
 This means we need to be a little... creative.
 
 {{% notice note %}}
-The code written in this article is available [on GitHub][repo]. Feel free to
-browse through and steal code or inspiration.
+The code written in this article is available [on GitHub][repo]. Feel free to browse through and steal code or inspiration.
 
-If you found this useful or spotted a bug, let me know on the blog's
-[issue tracker][issue]!
+If you found this useful or spotted a bug, let me know on the blog's [issue tracker][issue]!
 
 [repo]: https://github.com/Michael-F-Bryan/rust-closures-and-ffi
 [issue]: https://github.com/Michael-F-Bryan/adventures.michaelfbryan.com/issues
@@ -35,8 +25,7 @@ If you found this useful or spotted a bug, let me know on the blog's
 
 ## A Simple Example
 
-Let's look at a simple C function which adds two numbers and will let the caller
-know the result by invoking a callback.
+Let's look at a simple C function which adds two numbers and will let the caller know the result by invoking a callback.
 
 ```c
 // native/simple.c
@@ -51,12 +40,9 @@ void simple_add_two_numbers(int a, int b, AddCallback cb)
 ```
 
 {{% notice note %}}
-To help make things cleaner, I've pulled the callback's signature out into the
-`AddCallback` typedef.
+To help make things cleaner, I've pulled the callback's signature out into the `AddCallback` typedef.
 
-I don't know about you, but I always get confused when looking at the way to
-write function pointers in C, and writing it inline as a function's argument
-tends to turn its signature into a mess of `(`s and `*`s.
+I don't know about you, but I always get confused when looking at the way to write function pointers in C, and writing it inline as a function's argument tends to turn its signature into a mess of `(`s and `*`s.
 
 The equivalent without the `AddCallback` typedef would be this:
 
@@ -65,8 +51,7 @@ void simple_add_two_numbers(int a, int b, void (*cb)(int, void *)) { ... }
  ```
 {{% /notice %}}
 
-The straightforward way to use `simple_add_two_numbers()` from Rust is to
-define a function with the correct signature...
+The straightforward way to use `simple_add_two_numbers()` from Rust is to define a function with the correct signature...
 
 ```rust
 // src/simple.rs
@@ -98,8 +83,7 @@ fn main() {
 ```
 
 {{% notice note %}}
-To make the C function callable from Rust, we need to add the corresponding
-function declarations.
+To make the C function callable from Rust, we need to add the corresponding function declarations.
 
 ```rust
 // src/simple.rs
@@ -113,10 +97,7 @@ extern "C" {
 }
 ```
 
-As most resources involving FFI will mention, we need to use `unsafe` when
-invoking a native function because the `simple_add_two_numbers()` function
-was written in another language, and the Rust compiler has no way of knowing
-that it'll follow the borrow checker's rules.
+As most resources involving FFI will mention, we need to use `unsafe` when invoking a native function because the `simple_add_two_numbers()` function was written in another language, and the Rust compiler has no way of knowing that it'll follow the borrow checker's rules.
 {{% /notice %}}
 
 We can even run this code and see what it generates.
@@ -129,15 +110,11 @@ Adding 1 and 2
 Got 3!
 ```
 
-Okay, that's awesome, but what if you want to do something with the result? Say
-I need to go through a list of items and add them up.
+Okay, that's awesome, but what if you want to do something with the result? Say I need to go through a list of items and add them up.
 
-Our problem is that the callback function only accepts a single integer and
-doesn't return anything. That means there's no way to pass in a reference to
-some `total` counter so we can add the `result` to it.
+Our problem is that the callback function only accepts a single integer and doesn't return anything. That means there's no way to pass in a reference to some `total` counter so we can add the `result` to it.
 
-If you aren't able to access any state from the calling function, the only real
-way to pass information around is via a `static` mutable global variable.
+If you aren't able to access any state from the calling function, the only real way to pass information around is via a `static` mutable global variable.
 
 Here's one possible way to write it:
 
@@ -215,11 +192,9 @@ $ cargo run --example simple_with_global_variable
 The sum is 224
 ```
 
-You can see that this works but using a global variable isn't great, and as
-the compiler reminded us, it's prone to data races and other foot-guns.
+You can see that this works but using a global variable isn't great, and as the compiler reminded us, it's prone to data races and other foot-guns.
 
-If this were pure Rust, we'd just declare a `total` variable on the stack and
-use a closure to update the variable with the result.
+If this were pure Rust, we'd just declare a `total` variable on the stack and use a closure to update the variable with the result.
 
 ```rust
 fn main() {
@@ -231,26 +206,17 @@ fn main() {
 }
 ```
 
-The problem here isn't actually related to Rust. Whoever wrote the
-`simple_add_two_numbers()` function included a big design flaw... It's
-impossible for the callback to update state!
+The problem here isn't actually related to Rust. Whoever wrote the `simple_add_two_numbers()` function included a big design flaw... It's impossible for the callback to update state!
 
 ## A Better Adding Function
 
-Now we know the original native function was flawed, let's go about fixing
-it. If the original flaw is that our callback can't use any non-global state,
-we just need to give it a way to access state from the caller.
+Now we know the original native function was flawed, let's go about fixing it. If the original flaw is that our callback can't use any non-global state, we just need to give it a way to access state from the caller.
 
-Normally this state would be passed in by the caller as a pointer, but what
-type should we be using?
+Normally this state would be passed in by the caller as a pointer, but what type should we be using?
 
-In theory the caller may want to use their own custom struct as state
-(imagine we need to update a text field on a GUI program), so hard-coding a
-pointer to an integer won't really cut it.
+In theory the caller may want to use their own custom struct as state (imagine we need to update a text field on a GUI program), so hard-coding a pointer to an integer won't really cut it.
 
-Luckily, that's where C's `void *` pointer comes in. This says *"I've got a
-pointer to... something"* and to make that pointer all usable downstream code
-will need to cast it to the desired type.
+Luckily, that's where C's `void *` pointer comes in. This says *"I've got a pointer to... something"* and to make that pointer all usable downstream code will need to cast it to the desired type.
 
 Here is the amended function for adding numbers:
 
@@ -266,8 +232,7 @@ void better_add_two_numbers(int a, int b, AddCallback cb, void *user_data)
 }
 ```
 
-I've also taken the liberty of providing Rust declarations for
-`better_add_two_numbers()`.
+I've also taken the liberty of providing Rust declarations for `better_add_two_numbers()`.
 
 ```rust
 // src/better.rs
@@ -286,9 +251,7 @@ extern "C" {
 }
 ```
 
-It's actually pretty straightforward to use this `void *` user data argument
-for our counter.  Here's the equivalent of our `simple_with_global_variable`
-example.
+It's actually pretty straightforward to use this `void *` user data argument for our counter.  Here's the equivalent of our `simple_with_global_variable` example.
 
 ```rust
 // examples/better_with_counter_pointer.rs
@@ -328,17 +291,11 @@ unsafe extern "C" fn add_result_to_total(
 }
 ```
 
-If you squint, you'll notice that we didn't need to change much from the
-global variable version. The only extra work we needed to do was casting
-`total` to a `void *` when calling `better_add_two_numbers()` and then cast
-it back at the top of `add_result_to_total()`.
+If you squint, you'll notice that we didn't need to change much from the global variable version. The only extra work we needed to do was casting `total` to a `void *` when calling `better_add_two_numbers()` and then cast it back at the top of `add_result_to_total()`.
 
-Of course, there's no reason why we can only use a `c_int` for our
-`user_data`. For more complex scenarios you'll often need to use a custom
-type and update multiple members at a time.
+Of course, there's no reason why we can only use a `c_int` for our `user_data`. For more complex scenarios you'll often need to use a custom type and update multiple members at a time.
 
-For example, imagine we wanted to count the number of times the callback is
-invoked as well as the final total.
+For example, imagine we wanted to count the number of times the callback is invoked as well as the final total.
 
 First we create a new `Counter` type.
 
@@ -406,18 +363,11 @@ The result is Counter { total: 224, calls: 28 }
 
 ## Introducing Closures
 
-In Rust, a closure is just syntactic sugar for defining a new type with some
-sort of `call()` method. So in theory, we should be able to pass a closure to
-native code by "splitting" it into its data (instance of the anonymous type)
-and function (the `call()` method) parts.
+In Rust, a closure is just syntactic sugar for defining a new type with some sort of `call()` method. So in theory, we should be able to pass a closure to native code by "splitting" it into its data (instance of the anonymous type) and function (the `call()` method) parts.
 
-The easiest way to do this is by creating a "shim" function which is generic
-over one of the `Fn()` traits and will invoke the closure with the provided
-arguments. Then we can get the data bit by taking a reference to the closure
-variable and casting that to a `void *` pointer.
+The easiest way to do this is by creating a "shim" function which is generic over one of the `Fn()` traits and will invoke the closure with the provided arguments. Then we can get the data bit by taking a reference to the closure variable and casting that to a `void *` pointer.
 
-Using the last section's example, here is a function which satisfies the
-`AddCallback` signature and will treat the provided `user_data` as a closure.
+Using the last section's example, here is a function which satisfies the `AddCallback` signature and will treat the provided `user_data` as a closure.
 
 ```rust
 // src/better.rs
@@ -431,14 +381,9 @@ where
 }
 ```
 
-Now let's see how this `trampoline()` might be used in practice. Here I've
-created a simple integer variable, `got`, and a `closure` closure which will
-set `got` to the `result` given to us by `better_add_two_numbers()`.
+Now let's see how this `trampoline()` might be used in practice. Here I've created a simple integer variable, `got`, and a `closure` closure which will set `got` to the `result` given to us by `better_add_two_numbers()`.
 
-You can see that we've taken a reference to the `closure` variable (which is
-an instance of the anonymous struct `rustc` generated, and is currently
-sitting on the stack) and done a couple pointer casts to turn it into
-something we can use as our `user_data`.
+You can see that we've taken a reference to the `closure` variable (which is an instance of the anonymous struct `rustc` generated, and is currently sitting on the stack) and done a couple pointer casts to turn it into something we can use as our `user_data`.
 
 ```rust
 // src/better.rs
@@ -464,10 +409,7 @@ fn use_the_trampoline_function() {
 }
 ```
 
-Unfortunately, `rustc` will complain if you try to use this `trampoline()`
-function by itself because it can't infer the `F` type variable. The type
-variable is completely unrelated to any of the functions inputs or outputs,
-so there isn't any information available to type inference.
+Unfortunately, `rustc` will complain if you try to use this `trampoline()` function by itself because it can't infer the `F` type variable. The type variable is completely unrelated to any of the functions inputs or outputs, so there isn't any information available to type inference.
 
 ```console
 $ cargo test
@@ -485,14 +427,10 @@ For more information about this error, try `rustc --explain E0282`.
 error: could not compile `rust-closures-and-ffi`.
 ```
 
-To help things along, we can define a getter function which accepts a
-reference to the closure as an argument (allowing type inference to figure
-out what `F` is) and using [turbofish][turbofish] to return a version of
-`trampoline()` specialised for `F`.
+To help things along, we can define a getter function which accepts a reference to the closure as an argument (allowing type inference to figure out what `F` is) and using [turbofish][turbofish] to return a version of `trampoline()` specialised for `F`.
 
 {{% notice note %}}
-The technical terminology for this is to [*"instantiate"*][reference] a the
-`trampoline` function with the type, `F`.
+The technical terminology for this is to [*"instantiate"*][reference] a the `trampoline` function with the type, `F`.
 
 [reference]: https://doc.rust-lang.org/reference/items/functions.html#generic-functions
 {{% /notice %}}
@@ -535,11 +473,9 @@ And everything compiles with the new getter.
   }
 ```
 
-You can see I've written this as a test, so now we can be confident that
-`1 + 2` does in fact equal `3` 🎉
+You can see I've written this as a test, so now we can be confident that `1 + 2` does in fact equal `3` 🎉
 
-To tie everything together, if I were trying to provide a safe interface to
-`better_add_two_numbers()` it might be written like this:
+To tie everything together, if I were trying to provide a safe interface to `better_add_two_numbers()` it might be written like this:
 
 ```rust
 // better.rs
@@ -560,32 +496,18 @@ where
 ```
 
 {{% notice warning %}}
-A very important thing to note is the function pointer returned by
-`get_trampoline()` can **only** be used on the same closure that was passed in.
+A very important thing to note is the function pointer returned by `get_trampoline()` can **only** be used on the same closure that was passed in.
 
-This is because our specialised `trampoline()` function will blindly cast
-`user_data` to a pointer to that closure type without doing any type checks,
-so if you try to use it on anything else you're gonna have a bad time...
+This is because our specialised `trampoline()` function will blindly cast `user_data` to a pointer to that closure type without doing any type checks, so if you try to use it on anything else you're gonna have a bad time...
 
-It's important to make sure the callback is always an `unsafe` function,
-making it the caller's responsibility to ensure the correct `user_data` is
-used. You may sometimes need to compromise when the function signature is
-outside of your control, but the times you need to do this are usually far
-and few between, and you'll add big `SAFETY` comments where it's done.
+It's important to make sure the callback is always an `unsafe` function, making it the caller's responsibility to ensure the correct `user_data` is used. You may sometimes need to compromise when the function signature is outside of your control, but the times you need to do this are usually far and few between, and you'll add big `SAFETY` comments where it's done.
 {{% /notice %}}
 
 ## Conclusions
 
-While it may seem like a niche problem, and it is, when trying to write
-idiomatic bindings for a native library it's not uncommon to deal with
-callbacks.
+While it may seem like a niche problem, and it is, when trying to write idiomatic bindings for a native library it's not uncommon to deal with callbacks.
 
-In the past I used to use a slightly different version of `get_trampoline()`
-which would return *both* the `trampoline` function pointer and `user_data`,
-and it even [became part][split_closure] of my `ffi_helpers` crate. However,
-after [some lengthy discussion][ffi_helpers_3] with
-[`@danielhenrymantilla`][dhm], I've decided the above version is safer and
-helps prevent callers from accidentally creating aliased mutable pointers.
+In the past I used to use a slightly different version of `get_trampoline()` which would return *both* the `trampoline` function pointer and `user_data`, and it even [became part][split_closure] of my `ffi_helpers` crate. However, after [some lengthy discussion][ffi_helpers_3] with [`@danielhenrymantilla`][dhm], I've decided the above version is safer and helps prevent callers from accidentally creating aliased mutable pointers.
 
 {{% expand "(Original trampoline getter)" %}}
 

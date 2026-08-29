@@ -1,6 +1,7 @@
 ---
 title: FPS Counter
 date: '2019-09-03T08:50:00+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Rust
 - WebAssembly
@@ -8,13 +9,9 @@ series:
 - Adventures in Motion Control
 ---
 
-As mentioned in [the previous article][the-next-step] the next task is to
-implement our first proper `System`, the `FpsCounter`.
+As mentioned in [the previous article][the-next-step] the next task is to implement our first proper `System`, the `FpsCounter`.
 
-> A relatively easy, yet important, component is some sort of FPS counter.
-> Ideally there’ll be a bit of text in the corner showing the number of
-> `poll()`s per second and the average duration. That way we can get a better
-> feel for our simulator’s performance characteristics.
+> A relatively easy, yet important, component is some sort of FPS counter. Ideally there’ll be a bit of text in the corner showing the number of `poll()`s per second and the average duration. That way we can get a better feel for our simulator’s performance characteristics.
 
 An `FpsCounter` has two responsibilities,
 
@@ -23,10 +20,7 @@ An `FpsCounter` has two responsibilities,
 
 ## Creating The System
 
-Instead of making the `FpsCounter` part of our top-level `sim` application,
-it should be given its own crate. This means the `FpsCounter` won't need to care
-about JavaScript, and lets us maintain distinct layers of abstraction (see
-[*Top-Level Infrastructure - Layers*][layers] for more).
+Instead of making the `FpsCounter` part of our top-level `sim` application, it should be given its own crate. This means the `FpsCounter` won't need to care about JavaScript, and lets us maintain distinct layers of abstraction (see [*Top-Level Infrastructure - Layers*][layers] for more).
 
 First up, lets create the crate.
 
@@ -73,14 +67,10 @@ fn track_time_of_last_tick() {
 ```
 
 {{% notice note %}}
-The `aimc_hal::clock::DummyClock` type is a helper `Clock` that always
-returns the same `Duration`.
+The `aimc_hal::clock::DummyClock` type is a helper `Clock` that always returns the same `Duration`.
 {{% /notice %}}
 
-To make this test pass, we'll need to update our `FpsCounter` to track the last
-tick. It'll also need a source of time, we constrain the `In` type using
-`aimc_hal::clock::HasClock`. This means `input` will have a getter that yields
-a `Clock`.
+To make this test pass, we'll need to update our `FpsCounter` to track the last tick. It'll also need a source of time, we constrain the `In` type using `aimc_hal::clock::HasClock`. This means `input` will have a getter that yields a `Clock`.
 
 ```rust
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -95,11 +85,9 @@ impl<In: HasClock, Out> System<In, Out> for FpsCounter {
 }
 ```
 
-The next step is to calculate the corresponding FPS and send the result
-somewhere.
+The next step is to calculate the corresponding FPS and send the result somewhere.
 
-We'll wrap the calculated result in its own `Fps` struct, then make sure the
-`outputs` can handle it.
+We'll wrap the calculated result in its own `Fps` struct, then make sure the `outputs` can handle it.
 
 ```rust
 #[derive(Debug, Copy, Clone, Default, PartialEq)]
@@ -150,21 +138,15 @@ fn record_fps() {
 }
 ```
 
-Updating `FpsCounter::poll()` to make the test pass is left as an exercise for
-the reader.
+Updating `FpsCounter::poll()` to make the test pass is left as an exercise for the reader.
 
-A further extension would be to add an `average_poll_duration` field to `Fps`.
-That way `sim::App` can record when `App::poll()` starts and poll the
-`FpsCounter` as the last thing before `App::poll()` exits. Embedded systems
-won't generally have access to an allocator, so you may want to checkout
-[`arraydeque`][arraydeque] as a `#[no_std]` alternative.
+A further extension would be to add an `average_poll_duration` field to `Fps`. That way `sim::App` can record when `App::poll()` starts and poll the `FpsCounter` as the last thing before `App::poll()` exits. Embedded systems won't generally have access to an allocator, so you may want to checkout [`arraydeque`][arraydeque] as a `#[no_std]` alternative.
 
 ## Wiring up to the Application
 
 Now we've got an FPS counter it's time to show the FPS in our window.
 
-First, let's give the FPS counter somewhere to be displayed. This means adding
-a dummy element to `frontend/index.html`.
+First, let's give the FPS counter somewhere to be displayed. This means adding a dummy element to `frontend/index.html`.
 
 ```diff
  <body>
@@ -178,8 +160,7 @@ a dummy element to `frontend/index.html`.
  </body>
 ```
 
-The `Browser` will also need updating so it takes a reference to the
-`#fps-counter` span in its constructor.
+The `Browser` will also need updating so it takes a reference to the `#fps-counter` span in its constructor.
 
 ```rust
 // sim/src/browser.rs
@@ -210,8 +191,7 @@ impl Browser {
 }
 ```
 
-While we're at it, we should probably implement `fps_counter::FpsSink` for
-`Browser`...
+While we're at it, we should probably implement `fps_counter::FpsSink` for `Browser`...
 
 ```rust
 // sim/src/browser.rs
@@ -231,12 +211,9 @@ impl FpsSink for Browser {
 }
 ```
 
-We'll need to propagate possible errors now that constructing a `Browser` may
-fail.
+We'll need to propagate possible errors now that constructing a `Browser` may fail.
 
-The idiomatic way to do this is by returning a `Result<T, JsValue>` from a
-`#[wasm_bindgen]` function. That way, the shims generated by `wasm-bindgen`
-will be notified of failure and raise the `JsValue` as an exception.
+The idiomatic way to do this is by returning a `Result<T, JsValue>` from a `#[wasm_bindgen]` function. That way, the shims generated by `wasm-bindgen` will be notified of failure and raise the `JsValue` as an exception.
 
 ```rust
 // sim/src/lib.rs
@@ -250,8 +227,7 @@ pub fn setup_world(fps_div: &str) -> Result<App, JsValue> {
 }
 ```
 
-And of course `setup_world()`'s signature changed, so we'll need to pass in the
-`#fps-counter` selector from our JavaScript.
+And of course `setup_world()`'s signature changed, so we'll need to pass in the `#fps-counter` selector from our JavaScript.
 
 ```js
 // frontend/index.js
@@ -263,8 +239,7 @@ function init() {
 }
 ```
 
-With any luck, this should be everything required to wire the `FpsCounter` up
-to the UI.
+With any luck, this should be everything required to wire the `FpsCounter` up to the UI.
 
 Reloading the window shows some rapidly changing text in the top-left corner.
 
@@ -272,22 +247,15 @@ Reloading the window shows some rapidly changing text in the top-left corner.
 FPS: 55.56Hz
 ```
 
-The label itself isn't overly pleasing to look at, but it gets the job done.
-If the text itself seems to flicker, remember that we're updating it every
-time the `App` gets polled (about 60 times per second).
+The label itself isn't overly pleasing to look at, but it gets the job done. If the text itself seems to flicker, remember that we're updating it every time the `App` gets polled (about 60 times per second).
 
-As an exercise for the reader, try implementing a [moving average][mov-avg] to
-smooth that flicker out.
+As an exercise for the reader, try implementing a [moving average][mov-avg] to smooth that flicker out.
 
 ## The Next Step
 
-Now we've got a better feel for the work required to add new systems to the
-application and wire them up to the UI, the next step is probably going to be
-the *Communications* system.
+Now we've got a better feel for the work required to add new systems to the application and wire them up to the UI, the next step is probably going to be the *Communications* system.
 
-The real world tends to be messy with lots of places where errors can enter the
-*Communications* system, but lots of people have solved the problem in the past
-so we should be okay.
+The real world tends to be messy with lots of places where errors can enter the *Communications* system, but lots of people have solved the problem in the past so we should be okay.
 
 [the-next-step]: {{< ref "top-level-infrastructure/index.md#the-next-step" >}}
 [layers]: {{< ref "top-level-infrastructure/index.md#layers" >}}

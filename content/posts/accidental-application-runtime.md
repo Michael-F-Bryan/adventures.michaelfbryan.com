@@ -1,6 +1,7 @@
 ---
 title: The Accidental Application Runtime
 date: '2026-08-21T18:00:00+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Go
 - Software Architecture
@@ -300,24 +301,10 @@ The delivery contract is **in-process, memory-only, and backpressured**, but the
 
 Most of the subtlety is in shutdown and completion:
 
-- **A topic completes when every module publishing to it has returned.** At
-  that point the subscriber channels are closed, so
-  `for value := range subscription` is the natural consumption loop and
-  terminates by itself. Completion tracks module lifetimes, not channels.
-- **A finished subscriber stops participating.** If a module returns while
-  its siblings are still publishing, its abandoned subscription is dropped
-  (that's the `moduleDone` case above) rather than continuing to backpressure
-  the topic.
-- **Cancellation drains.** After the context is cancelled, the pump keeps
-  receiving but drops the values, so a publisher blocked in a bare send can
-  unwind and get on with its own shutdown. Yes, that means cancellation can
-  lose in-flight values; that's part of the contract, and it's why durable
-  facts don't live on the bus.
-- **Closing a channel you were handed is a fault backplane tolerates.** The
-  channels belong to the runtime, and a module has no business closing one,
-  but if it does, only that module's own later sends panic; the topic keeps
-  working for everyone else, and completion still waits for the module to
-  actually return.
+- **A topic completes when every module publishing to it has returned.** At that point the subscriber channels are closed, so `for value := range subscription` is the natural consumption loop and terminates by itself. Completion tracks module lifetimes, not channels.
+- **A finished subscriber stops participating.** If a module returns while its siblings are still publishing, its abandoned subscription is dropped (that's the `moduleDone` case above) rather than continuing to backpressure the topic.
+- **Cancellation drains.** After the context is cancelled, the pump keeps receiving but drops the values, so a publisher blocked in a bare send can unwind and get on with its own shutdown. Yes, that means cancellation can lose in-flight values; that's part of the contract, and it's why durable facts don't live on the bus.
+- **Closing a channel you were handed is a fault backplane tolerates.** The channels belong to the runtime, and a module has no business closing one, but if it does, only that module's own later sends panic; the topic keeps working for everyone else, and completion still waits for the module to actually return.
 
 This is a fan-out loop with a handful of `select` cases. What matters is having the behaviour implemented once and covered by tests. In the accidental runtime, each of those decisions was spread across five goroutines.
 
@@ -593,23 +580,11 @@ The generated graph is candid about a few things that hand-drawn diagrams tend t
 
 The library stays focused by keeping several responsibilities outside its boundary:
 
-- **Not a message broker.** Everything is in one process and one memory
-  space. No persistence, no replay, no acknowledgements, no QoS, no
-  cross-process transport. If a fact must survive a crash, put it in the
-  store and use the topic to wake people up.
-- **Not a resource-construction or lifecycle container.** Backplane does use
-  reflective, type-based dependency injection to bind values, but the caller
-  creates those resources, cleans them up, and passes them in.
-- **Not a process manager.** The module set is fixed before startup, modules
-  can't be individually restarted, and dynamic workers are a module's
-  private business.
-- **Not a rule that everything is a message.** Request/response work keeps
-  being function calls on resources, because that's the truthful contract
-  for it.
-- **Not for every application.** A stateless HTTP API in front of a database
-  has one job and doesn't need an application runtime; giving it one is
-  ceremony. This design earns its keep when there are several long-running
-  concurrent activities whose relationships have become hard to see.
+- **Not a message broker.** Everything is in one process and one memory space. No persistence, no replay, no acknowledgements, no QoS, no cross-process transport. If a fact must survive a crash, put it in the store and use the topic to wake people up.
+- **Not a resource-construction or lifecycle container.** Backplane does use reflective, type-based dependency injection to bind values, but the caller creates those resources, cleans them up, and passes them in.
+- **Not a process manager.** The module set is fixed before startup, modules can't be individually restarted, and dynamic workers are a module's private business.
+- **Not a rule that everything is a message.** Request/response work keeps being function calls on resources, because that's the truthful contract for it.
+- **Not for every application.** A stateless HTTP API in front of a database has one job and doesn't need an application runtime; giving it one is ceremony. This design earns its keep when there are several long-running concurrent activities whose relationships have become hard to see.
 
 This gives a monolith some properties I value in microservices: clear ownership, visible contracts, and components you can test alone. It doesn't provide independent deployment, scaling, or process-level fault isolation.
 

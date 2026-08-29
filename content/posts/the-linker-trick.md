@@ -1,6 +1,7 @@
 ---
 title: Link Time Dependency Injection
 publishDate: '2025-03-30T12:59:58+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Rust
 - WebAssembly

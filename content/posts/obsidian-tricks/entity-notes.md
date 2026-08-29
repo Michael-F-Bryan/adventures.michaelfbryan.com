@@ -1,6 +1,7 @@
 ---
 title: 'Obsidian Tricks: Entity Notes'
 date: '2025-07-23T12:00:00+08:00'
+lastmod: '2026-08-26T15:15:33+08:00'
 tags:
 - Obsidian
 - Knowledge Management
