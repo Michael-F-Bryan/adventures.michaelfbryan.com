@@ -5,7 +5,7 @@ description: Use when writing, backfilling, or auditing Hugo front-matter descri
 
 # Post metadata
 
-Front-matter metadata for this blog is chrome, not content: it speaks in Michael's voice but it is written for someone who has not read the post yet and is deciding whether to. Treat it as a filter, not a summary.
+Front-matter metadata for this blog is chrome, not content. A description should be a compact, factual account of what an article covers, written in Michael's ordinary voice — not an abstract, a conclusion, or promotional copy. Tags and series are reader navigation.
 
 ## Read the reference for the field you are working on
 
@@ -14,7 +14,7 @@ Front-matter metadata for this blog is chrome, not content: it speaks in Michael
 | `description` | [references/descriptions.md](references/descriptions.md) |
 | `tags` and `series` | [references/tags.md](references/tags.md) |
 
-Each one holds the measured constraints, the generation strategy, and the sub-agent prompt for its field. They are deliberately not summarised here. Do not generate metadata from this page alone.
+Each one holds the measured constraints, the generation strategy, and the sub-agent prompt for its field. They are deliberately not repeated here. Do not generate metadata from this page alone.
 
 ## Tools
 
